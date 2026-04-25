@@ -722,6 +722,28 @@ function DirectBookingCruiseContent() {
         });
     }, [isDolphinDayCruise, roomTypeCards, dolphinDayType]);
 
+    useEffect(() => {
+        if (!isDayCruise || roomTypeCards.length !== 1) return;
+
+        const onlyOption = roomTypeCards[0];
+        setRoomSelections((prev) => {
+            const first = prev[0] || createRoomSelection('day-single');
+            const alreadySelected =
+                prev.length === 1
+                && first.rate_card_id === onlyOption.id
+                && first.room_count === 1;
+
+            if (alreadySelected) return prev;
+
+            return [{
+                ...first,
+                rate_card_id: onlyOption.id,
+                room_type: onlyOption.room_type,
+                room_count: 1,
+            }];
+        });
+    }, [isDayCruise, roomTypeCards]);
+
     const loadTourOptions = useCallback(async () => {
         const options = await calculator.getTourOptions(form.cruise_name, form.schedule);
         setTourOptions(options);
