@@ -109,8 +109,7 @@ function AirportQuoteContent() {
   // 카테고리 선택 시 경로 옵션 업데이트 (B)
   useEffect(() => {
     if (selectedCategory2) {
-      loadRouteOptions(selectedCategory2).then(() => {/* noop */ });
-      // 동일 쿼리를 사용하지만 결과는 별도 상태에 저장 필요 → 별도 래퍼 사용
+      // B 서비스는 별도 상태(routeOptions2)에만 저장해야 A 서비스 옵션이 덮어써지지 않는다.
       (async () => {
         try {
           const { data, error } = await supabase
@@ -166,13 +165,6 @@ function AirportQuoteContent() {
       setSelectedAirportCode2('');
     }
   }, [selectedCategory2, selectedRoute2, selectedCarType2]);
-
-  // 픽업+샌딩 모드에서 첫 서비스 카테고리가 변경되면 추가 서비스 카테고리도 동기화
-  useEffect(() => {
-    if (applyType === 'both' && selectedCategory) {
-      setSelectedCategory2(selectedCategory);
-    }
-  }, [applyType, selectedCategory]);
 
   // 신청 종류 변경 시 카테고리 자동 설정
   useEffect(() => {
