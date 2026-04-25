@@ -161,14 +161,20 @@ export default function QuoteDetailPage() {
           } else if (item.service_type === 'hotel') {
             const { data: hotelData } = await supabase.from('hotel').select('*').eq('id', item.service_ref_id).maybeSingle();
             if (!hotelData) continue;
-            const hpc = item.options?.hotel_price_code || hotelData.hotel_price_code;
-            const hc = hotelData.hotel_code || item.options?.hotel_code;
-            const { data: pri } = hpc ? await supabase.from('hotel_price').select('*').eq('hotel_price_code', hpc) : { data: [] as any[] };
-            const priceList = (pri && pri.length > 0)
-              ? pri
-              : (hc ? (await supabase.from('hotel_price').select('*').eq('hotel_code', hc)).data || [] : []);
+            // hotel.hotel_code 컬럼에는 실제로 hotel_price_code 값이 저장됨 (저장 로직 참고)
+            const hpc = item.options?.hotel_price_code || hotelData.hotel_price_code || hotelData.hotel_code;
+            const hc = item.options?.hotel_code;
+            let pri: any[] = [];
+            if (hpc) {
+              const { data } = await supabase.from('hotel_price').select('*').eq('hotel_price_code', hpc);
+              pri = data || [];
+            }
+            if (pri.length === 0 && hc) {
+              const { data } = await supabase.from('hotel_price').select('*').eq('hotel_code', hc);
+              pri = data || [];
+            }
             detailed.hotels.push({
-              ...item, hotelInfo: hotelData, price: priceList?.[0],
+              ...item, hotelInfo: hotelData, price: pri?.[0],
               displayQuantity: hotelData.room_count || 1,
             });
           } else if (item.service_type === 'rentcar') {
