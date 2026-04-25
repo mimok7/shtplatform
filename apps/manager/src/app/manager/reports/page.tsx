@@ -1,11 +1,3 @@
-﻿import { PageWrapper, SectionBox } from '@sht/ui';
-
-export default function Page() {
-  return (
-    <PageWrapper>
-      <SectionBox title="리포트">
-        <p className="text-sm text-gray-500">준비 중인 기능입니다.</p>
-      </SectionBox>
-    </PageWrapper>
-  );
+export default function ReportsPage() {
+  return <div>리포트 페이지</div>;
 }

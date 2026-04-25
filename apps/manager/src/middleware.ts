@@ -1,41 +1,59 @@
+import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
-import { createServerClient, type CookieOptions } from '@supabase/ssr';
 
-const PUBLIC_PATHS = ['/login', '/signup', '/auth', '/api', '/_next', '/favicon.ico'];
+async function getUserWithTimeout(authClient: any, timeoutMs = 5000) {
+    const timeoutPromise = new Promise<never>((_, reject) => {
+        const timer = setTimeout(() => {
+            clearTimeout(timer);
+            reject(new Error('middleware_auth_timeout'));
+        }, timeoutMs);
+    });
+
+    return Promise.race([authClient.getUser(), timeoutPromise]);
+}
 
 export async function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
-  if (PUBLIC_PATHS.some((p) => pathname.startsWith(p)) || pathname === '/') {
-    return NextResponse.next();
-  }
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  const response = NextResponse.next();
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get: (name: string) => request.cookies.get(name)?.value,
-        set: (name: string, value: string, options: CookieOptions) =>
-          response.cookies.set({ name, value, ...options }),
-        remove: (name: string, options: CookieOptions) =>
-          response.cookies.set({ name, value: '', ...options, maxAge: 0 }),
-      },
-    },
-  );
+    if (!url || !key) {
+        return NextResponse.next({ request });
+    }
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    const url = request.nextUrl.clone();
-    url.pathname = '/login';
-    url.searchParams.set('redirectTo', pathname);
-    return NextResponse.redirect(url);
-  }
-  return response;
+    let response = NextResponse.next({ request });
+
+    const supabase = createServerClient(url, key, {
+        cookies: {
+            getAll() {
+                return request.cookies.getAll();
+            },
+            setAll(cookiesToSet) {
+                cookiesToSet.forEach(({ name, value, options }) => {
+                    request.cookies.set(name, value);
+                });
+
+                response = NextResponse.next({ request });
+
+                cookiesToSet.forEach(({ name, value, options }) => {
+                    response.cookies.set(name, value, options);
+                });
+            },
+        },
+    });
+
+    // 요청마다 현재 사용자 확인을 통해 만료 토큰을 자동 갱신한다.
+    // 다만 네트워크/토큰 이슈로 무한 대기하지 않도록 타임아웃을 둔다.
+    try {
+        await getUserWithTimeout(supabase.auth, 5000);
+    } catch (error) {
+        console.warn('[middleware] auth getUser timeout/failure:', error);
+    }
+
+    return response;
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+    matcher: [
+        '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    ],
 };

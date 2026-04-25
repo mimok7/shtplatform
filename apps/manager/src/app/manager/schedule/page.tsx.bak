@@ -1,0 +1,237 @@
+'use client';
+
+import React, { useEffect, useState } from 'react';
+import ManagerLayout from '@/components/ManagerLayout';
+import supabase from '@/lib/supabase';
+import ReservationDetailModal from '@/components/ReservationDetailModal';
+import { Calendar, Ship, Plane, Building, MapPin, Car, Filter, ChevronLeft, ChevronRight, Clock } from 'lucide-react';
+
+export default function ManagerSchedulePage() {
+  const [schedules, setSchedules] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [viewMode, setViewMode] = useState<'day' | 'week' | 'month'>('day');
+  const [typeFilter, setTypeFilter] = useState<'all' | string>('all');
+  const [selectedSchedule, setSelectedSchedule] = useState<any>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  useEffect(() => {
+    loadSchedules();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDate, viewMode]);
+
+  const getRange = (base: Date, mode: 'day' | 'week' | 'month') => {
+    const start = new Date(base);
+    const end = new Date(base);
+    if (mode === 'day') {
+      start.setHours(0, 0, 0, 0);
+      end.setHours(23, 59, 59, 999);
+    } else if (mode === 'week') {
+      const day = start.getDay();
+      const diffToMonday = (day === 0 ? -6 : 1) - day;
+      start.setDate(start.getDate() + diffToMonday);
+      start.setHours(0, 0, 0, 0);
+      end.setTime(start.getTime());
+      end.setDate(end.getDate() + 6);
+      end.setHours(23, 59, 59, 999);
+    } else {
+      start.setDate(1);
+      start.setHours(0, 0, 0, 0);
+      end.setMonth(start.getMonth() + 1, 0);
+      end.setHours(23, 59, 59, 999);
+    }
+    return { start, end };
+  };
+
+  const loadSchedules = async () => {
+    setLoading(true);
+    try {
+      const { start, end } = getRange(selectedDate, viewMode);
+      const [cruiseRes, airportRes, hotelRes, rentcarRes, tourRes] = await Promise.all([
+        supabase.from('reservation_cruise').select('*,reservation(*)').gte('checkin', start.toISOString().slice(0, 10)).lte('checkin', end.toISOString().slice(0, 10)),
+        supabase.from('reservation_airport').select('*,reservation(*)').gte('ra_datetime', start.toISOString().slice(0, 10)).lte('ra_datetime', end.toISOString().slice(0, 10)),
+        supabase.from('reservation_hotel').select('*,reservation(*)').gte('checkin_date', start.toISOString().slice(0, 10)).lte('checkin_date', end.toISOString().slice(0, 10)),
+        supabase.from('reservation_rentcar').select('*,reservation(*)').gte('pickup_datetime', start.toISOString().slice(0, 10)).lte('pickup_datetime', end.toISOString().slice(0, 10)),
+        supabase.from('reservation_tour').select('*,reservation(*)').gte('tour_date', start.toISOString().slice(0, 10)).lte('tour_date', end.toISOString().slice(0, 10))
+      ]);
+
+      const rows: any[] = [];
+      (cruiseRes.data || []).forEach((r: any) => rows.push({ table: 'cruise', row: r }));
+      (airportRes.data || []).forEach((r: any) => rows.push({ table: 'airport', row: r }));
+      (hotelRes.data || []).forEach((r: any) => rows.push({ table: 'hotel', row: r }));
+      (rentcarRes.data || []).forEach((r: any) => rows.push({ table: 'rentcar', row: r }));
+      (tourRes.data || []).forEach((r: any) => rows.push({ table: 'tour', row: r }));
+
+      const sch = rows.map(({ table, row }) => {
+        let scheduleDate: Date | null = null;
+        if (table === 'cruise' && row.checkin) scheduleDate = new Date(row.checkin + 'T09:00:00');
+        if (table === 'airport' && row.ra_datetime) scheduleDate = new Date(row.ra_datetime);
+        if (table === 'hotel' && row.checkin_date) scheduleDate = new Date(row.checkin_date + 'T15:00:00');
+        if (table === 'rentcar' && row.pickup_datetime) scheduleDate = new Date(row.pickup_datetime);
+        if (table === 'tour' && row.tour_date) scheduleDate = new Date(row.tour_date + 'T09:00:00');
+        return {
+          id: row.reservation?.re_id || row.reservation_id || null,
+          type: table === 'cruise' ? 'cruise' : table,
+          date: scheduleDate,
+          table,
+          row,
+          status: row.reservation?.re_status || 'pending'
+        };
+      }).filter(s => s.date);
+
+      sch.sort((a, b) => (a.date as Date).getTime() - (b.date as Date).getTime());
+      setSchedules(sch as any[]);
+    } catch (err) {
+      console.error(err);
+      setSchedules([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const isSameLocalDate = (d1: Date, d2: Date) => d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
+  const isDateInRange = (date: Date, start: Date, end: Date) => {
+    const t = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const s = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+    const e = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+    return t >= s && t <= e;
+  };
+
+  const filtered = schedules.filter(s => {
+    if (typeFilter !== 'all' && s.type !== typeFilter) return false;
+    if (!s.date) return false;
+    if (viewMode === 'day') return isSameLocalDate(s.date as Date, selectedDate);
+    const { start, end } = getRange(selectedDate, viewMode);
+    return isDateInRange(s.date as Date, start, end);
+  });
+
+  const getTypeIcon = (t: string) => {
+    switch (t) {
+      case 'cruise': return <Ship className="w-5 h-5 text-blue-600" />;
+      case 'airport': return <Plane className="w-5 h-5 text-green-600" />;
+      case 'hotel': return <Building className="w-5 h-5 text-purple-600" />;
+      case 'tour': return <MapPin className="w-5 h-5 text-orange-600" />;
+      case 'rentcar': return <Car className="w-5 h-5 text-red-600" />;
+      default: return <Clock className="w-5 h-5 text-gray-600" />;
+    }
+  };
+
+  const navigateDate = (dir: 'prev' | 'next') => {
+    const d = new Date(selectedDate);
+    if (viewMode === 'day') d.setDate(d.getDate() + (dir === 'next' ? 1 : -1));
+    else if (viewMode === 'week') d.setDate(d.getDate() + (dir === 'next' ? 7 : -7));
+    else d.setMonth(d.getMonth() + (dir === 'next' ? 1 : -1));
+    setSelectedDate(d);
+  };
+
+  const groupBy = (arr: any[], keyFn: (x: any) => string) => arr.reduce((acc: Record<string, any[]>, cur) => {
+    const k = keyFn(cur);
+    (acc[k] ||= []).push(cur);
+    return acc;
+  }, {});
+
+  const cruiseGroups = groupBy(filtered.filter(s => s.type === 'cruise'), s => (s.row?.room_price?.cruise) || '기타 크루즈');
+  const externalGroups = groupBy(filtered.filter(s => s.type !== 'cruise'), s => s.type || '기타');
+
+  if (loading) return (
+    <ManagerLayout title="예약 일정" activeTab="schedule">
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500 mx-auto" />
+      </div>
+    </ManagerLayout>
+  );
+
+  return (
+    <ManagerLayout title="예약 일정" activeTab="schedule">
+      <div className="space-y-6">
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-4">
+              <button onClick={() => navigateDate('prev')} className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200"><ChevronLeft className="w-5 h-5" /></button>
+              <h2 className="text-xl font-semibold">
+                {viewMode === 'day' ? selectedDate.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })
+                  : viewMode === 'week' ? (() => { const { start, end } = getRange(selectedDate, 'week'); return `${start.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })} - ${end.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })}`; })()
+                    : selectedDate.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long' })}
+              </h2>
+              <button onClick={() => setSelectedDate(new Date())} className="px-3 py-1 bg-blue-50 text-blue-600 rounded-lg border border-blue-200 text-sm font-medium hover:bg-blue-100">{viewMode === 'day' ? '오늘' : viewMode === 'week' ? '이번주' : '이번달'}</button>
+              <button onClick={() => navigateDate('next')} className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200"><ChevronRight className="w-5 h-5" /></button>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setViewMode('day')} className={`px-4 py-2 rounded-lg transition-colors ${viewMode === 'day' ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-700'}`}>일간</button>
+              <button onClick={() => setViewMode('week')} className={`px-4 py-2 rounded-lg transition-colors ${viewMode === 'week' ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-700'}`}>주간</button>
+              <button onClick={() => setViewMode('month')} className={`px-4 py-2 rounded-lg transition-colors ${viewMode === 'month' ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-700'}`}>월간</button>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Filter className="w-5 h-5 text-gray-600 mt-2" />
+            <div className="flex gap-2 flex-wrap">
+              <button onClick={() => setTypeFilter('all')} className={`px-3 py-1 rounded-full text-sm transition-colors ${typeFilter === 'all' ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-700'}`}>전체</button>
+              {['cruise', 'airport', 'hotel', 'tour', 'rentcar'].map(t => (
+                <button key={t} onClick={() => setTypeFilter(t)} className={`px-3 py-1 rounded-full text-sm transition-colors ${typeFilter === t ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-700'}`}>{t}</button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <h3 className="text-lg font-semibold mb-4"><Calendar className="w-6 h-6 inline-block mr-2 text-green-600" />예약 일정 ({filtered.length}건)</h3>
+
+          {filtered.length === 0 ? (
+            <div className="p-8 text-center">
+              <Calendar className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-600">예약된 일정이 없습니다</h3>
+            </div>
+          ) : (
+            <div className="space-y-8">
+              {Object.entries(cruiseGroups).map(([name, list]) => (
+                <div key={name}>
+                  <h4 className="text-md font-semibold mb-3 flex items-center gap-2"><Ship className="w-5 h-5 text-blue-600" />{name} ({(list as any[]).length}건)</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {(list as any[]).map(s => (
+                      <div key={s.id} className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-gray-50 border flex items-center justify-center">{getTypeIcon(s.type)}</div>
+                            <div className="text-sm font-medium">{s.row?.reservation?.name || '-'}</div>
+                          </div>
+                          <div>
+                            <button onClick={() => { setSelectedSchedule(s); setIsModalOpen(true); }} className="bg-blue-500 text-white px-3 py-1 rounded text-sm">상세</button>
+                          </div>
+                        </div>
+                        <div className="text-sm text-gray-600 mt-2">{(s.date as Date).toLocaleDateString('ko-KR')}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+
+              {Object.entries(externalGroups).map(([name, list]) => (
+                <div key={name}>
+                  <h4 className="text-md font-semibold mb-3 flex items-center gap-2">{getTypeIcon((list as any[])[0]?.type)}{name} ({(list as any[]).length}건)</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {(list as any[]).map(s => (
+                      <div key={s.id} className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-gray-50 border flex items-center justify-center">{getTypeIcon(s.type)}</div>
+                            <div className="text-sm font-medium">{s.row?.reservation?.name || '-'}</div>
+                          </div>
+                          <div>
+                            <button onClick={() => { setSelectedSchedule(s); setIsModalOpen(true); }} className="bg-blue-500 text-white px-3 py-1 rounded text-sm">상세</button>
+                          </div>
+                        </div>
+                        <div className="text-sm text-gray-600 mt-2">{(s.date as Date).toLocaleDateString('ko-KR')}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <ReservationDetailModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} reservation={selectedSchedule} title="예약 상세 정보" />
+    </ManagerLayout>
+  );
+}

@@ -1,0 +1,327 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 🎯 전역 카드 스타일 (bg-gray-50, border, shadow-sm, rounded-lg, p-4) */
+.card {
+  background-color: var(--card-bg);
+  border: 1px solid var(--card-border);
+  @apply shadow-sm rounded-lg p-4;
+}
+
+/* 🎯 사용자 정의 전역 변수 */
+:root {
+  --background: #f7fafc;
+  --foreground: #171717;
+  --card-bg: #f3f4f6;
+  --card-border: #e5e7eb;
+  --input-bg: #f9fafb;
+  --input-border: #e5e7eb;
+  --input-text: #374151;
+  --button-bg: #eff6ff;
+  --button-text: #475569;
+  --button-hover: #dbeafe;
+  --heading-text: #374151;
+}
+
+/* 🎯 HTML 및 폰트 초기화 */
+html,
+body {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  color: var(--foreground);
+  background: var(--background);
+  font-family: 'Pretendard', 'Arial', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color-scheme: light;
+}
+
+/* 🎯 매니저 패널 최대 너비 강제 적용 */
+#__next {
+  width: 100% !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* 🎯 최상위 컨테이너만 전체 너비 사용 */
+.min-h-screen {
+  width: 100% !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  box-sizing: border-box !important;
+}
+
+/* 🎯 테이블은 컨테이너 내에서 최대 너비 사용 */
+.overflow-x-auto {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+/* 🎯 body와 html에서 모든 여백 제거 */
+body,
+html {
+  margin: 0 !important;
+  padding: 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+/* 🎯 모든 div 컨테이너의 기본 box-sizing 설정 */
+* {
+  box-sizing: border-box !important;
+}
+
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* ✅ 입력창 기본 스타일 */
+input,
+textarea,
+select {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.375rem;
+  border: 1px solid var(--input-border);
+  background-color: var(--input-bg);
+  color: var(--input-text);
+}
+
+input.show-number-spinner[type="number"] {
+  appearance: auto;
+  -moz-appearance: auto;
+}
+
+input.show-number-spinner[type="number"]::-webkit-outer-spin-button,
+input.show-number-spinner[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: auto;
+  margin: 0;
+  opacity: 1;
+}
+
+/* ✅ 기본 버튼 스타일 - 더 작은 크기 + 옅은 색상 */
+@layer components {
+  .btn {
+    width: auto;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.375rem;
+    background-color: var(--button-bg);
+    color: var(--button-text);
+    font-weight: 500;
+    @apply shadow-sm transition text-xs;
+  }
+
+  .btn:hover {
+    background-color: var(--button-hover);
+  }
+
+  .btn-selected {
+    background-color: var(--button-hover);
+    color: var(--button-text);
+    border: 1px solid var(--button-text);
+    font-weight: 600;
+    font-size: 0.75rem;
+  }
+
+  /* 제목 크기 줄이기 + 옅은 색상 */
+  h1 {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--heading-text);
+  }
+
+  h2 {
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--heading-text);
+  }
+
+  h3 {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--heading-text);
+  }
+
+  .title-large {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--heading-text);
+  }
+
+  .title-medium {
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--heading-text);
+  }
+
+  .title-small {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--heading-text);
+  }
+
+  /* 모든 버튼 크기 일괄 축소 + 옅은 색상 */
+  button {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+  }
+
+  /* 링크 버튼 스타일 */
+  a button {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+  }
+
+  /* 특정 버튼 클래스들 오버라이드 - 옅은 색상 적용 */
+  .bg-blue-500 {
+    @apply bg-blue-400 text-xs px-2 py-1;
+  }
+
+  .bg-green-500 {
+    @apply bg-green-400 text-xs px-2 py-1;
+  }
+
+  .bg-gray-500 {
+    @apply bg-gray-400 text-xs px-2 py-1;
+  }
+
+  .bg-red-500 {
+    @apply bg-red-400 text-xs px-2 py-1;
+  }
+
+  .bg-yellow-500 {
+    @apply bg-yellow-300 text-xs px-2 py-1;
+  }
+
+  .bg-purple-500 {
+    @apply bg-purple-400 text-xs px-2 py-1;
+  }
+
+  .bg-indigo-500 {
+    @apply bg-indigo-400 text-xs px-2 py-1;
+  }
+
+  /* 텍스트 색상도 옅게 */
+  .text-blue-600 {
+    @apply text-blue-500;
+  }
+
+  .text-green-600 {
+    @apply text-green-500;
+  }
+
+  .text-red-600 {
+    @apply text-red-500;
+  }
+
+  .text-yellow-600 {
+    @apply text-yellow-500;
+  }
+
+  .text-purple-600 {
+    @apply text-purple-500;
+  }
+
+  .text-gray-900 {
+    @apply text-gray-700;
+  }
+
+  .text-gray-800 {
+    @apply text-gray-600;
+  }
+
+  /* 배경 색상도 옅게 */
+  .bg-blue-100 {
+    @apply bg-blue-50;
+  }
+
+  .bg-green-100 {
+    @apply bg-green-50;
+  }
+
+  .bg-red-100 {
+    @apply bg-red-50;
+  }
+
+  .bg-yellow-100 {
+    @apply bg-yellow-50;
+  }
+
+  .bg-purple-100 {
+    @apply bg-purple-50;
+  }
+
+  /* 테두리 색상도 옅게 */
+  .border-blue-300 {
+    @apply border-blue-200;
+  }
+
+  .border-green-300 {
+    @apply border-green-200;
+  }
+
+  .border-red-300 {
+    @apply border-red-200;
+  }
+
+  .border-gray-300 {
+    @apply border-gray-200;
+  }
+}
+
+/* ✅ 다크모드 (선택적) */
+.dark input,
+.dark textarea,
+.dark select {
+  @apply bg-gray-900 text-white border-gray-700;
+}
+
+.dark button {
+  @apply bg-gray-800 text-white hover:bg-gray-700;
+}
+
+/* 🎯 알림 팝업 애니메이션 - 오른쪽에서 부드럽게 등장 */
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-slideInRight {
+  animation: slideInRight 0.4s ease-out;
+}
+
+/* 🎯 알림 팝업 약간의 펄스 효과 (움직임 최소화) */
+@keyframes subtlePulse {
+
+  0%,
+  100% {
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  }
+
+  50% {
+    box-shadow: 0 20px 25px -5px rgba(220, 38, 38, 0.3), 0 10px 10px -5px rgba(220, 38, 38, 0.2);
+  }
+}
+
+.animate-subtlePulse {
+  animation: subtlePulse 2s ease-in-out infinite;
+}
