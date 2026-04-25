@@ -27,35 +27,44 @@ importers:
 
   apps/customer:
     dependencies:
-      '@hookform/resolvers':
-        specifier: ^3.9.1
-        version: 3.10.0(react-hook-form@7.73.1(react@19.2.5))
-      '@sht/auth':
-        specifier: workspace:*
-        version: link:../../packages/auth
-      '@sht/db':
-        specifier: workspace:*
-        version: link:../../packages/db
-      '@sht/domain':
-        specifier: workspace:*
-        version: link:../../packages/domain
-      '@sht/types':
-        specifier: workspace:*
-        version: link:../../packages/types
-      '@sht/ui':
-        specifier: workspace:*
-        version: link:../../packages/ui
       '@supabase/ssr':
-        specifier: ^0.5.2
-        version: 0.5.2(@supabase/supabase-js@2.104.1)
+        specifier: ^0.9.0
+        version: 0.9.0(@supabase/supabase-js@2.104.1)
       '@supabase/supabase-js':
-        specifier: ^2.46.1
+        specifier: ^2.52.1
         version: 2.104.1
       '@tanstack/react-query':
-        specifier: ^5.59.0
+        specifier: ^5.95.0
         version: 5.100.1(react@19.2.5)
+      csv-parse:
+        specifier: ^6.1.0
+        version: 6.2.1
+      csv-parser:
+        specifier: ^3.2.0
+        version: 3.2.0
+      date-fns:
+        specifier: ^4.1.0
+        version: 4.1.0
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.4.2
+      googleapis:
+        specifier: ^144.0.0
+        version: 144.0.0
+      html2canvas:
+        specifier: ^1.4.1
+        version: 1.4.1
+      html2pdf.js:
+        specifier: ^0.10.3
+        version: 0.10.3
+      jspdf:
+        specifier: ^4.0.0
+        version: 4.2.1
+      lucide-react:
+        specifier: ^0.525.0
+        version: 0.525.0(react@19.2.5)
       next:
-        specifier: ^15.0.3
+        specifier: ^15.5.15
         version: 15.5.15(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       react:
         specifier: ^19.0.0
@@ -63,12 +72,9 @@ importers:
       react-dom:
         specifier: ^19.0.0
         version: 19.2.5(react@19.2.5)
-      react-hook-form:
-        specifier: ^7.53.2
-        version: 7.73.1(react@19.2.5)
-      zod:
-        specifier: ^3.23.8
-        version: 3.25.76
+      zustand:
+        specifier: ^5.0.6
+        version: 5.0.12(@types/react@19.2.14)(react@19.2.5)
     devDependencies:
       '@sht/config':
         specifier: workspace:*

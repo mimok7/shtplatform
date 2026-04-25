@@ -1,72 +1,180 @@
-'use client';
-
-import { useState, type FormEvent } from 'react';
+"use client";
+import React, { useState } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { createSupabaseBrowserClient } from '@sht/db/browser';
-import { writeSessionCache } from '@sht/auth';
-import { PageWrapper, SectionBox } from '@sht/ui';
+import supabase from '@/lib/supabase';
+import { setCachedUser, clearCachedUser } from '@/lib/authCache';
+import { primeAuthCache } from '@/hooks/useAuth';
+import { clearInvalidSession, isInvalidRefreshTokenError } from '@/lib/authRecovery';
 
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = async (e: FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (loading) return;
     setLoading(true);
-    setError(null);
+
     try {
-      const supabase = createSupabaseBrowserClient();
-      const { data, error: signError } = await supabase.auth.signInWithPassword({ email, password });
-      if (signError) {
-        const msg = signError.message || '';
-        if (msg.includes('Invalid login credentials')) setError('이메일 또는 비밀번호가 올바르지 않습니다.');
-        else if (msg.includes('Email not confirmed')) setError('이메일 인증이 완료되지 않았습니다.');
-        else setError('로그인 실패: ' + msg);
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
+      if (error) {
+        if (isInvalidRefreshTokenError(error)) {
+          await clearInvalidSession();
+        }
+        if (
+          error.message.includes('Invalid login credentials') ||
+          error.message.includes('Email not confirmed') ||
+          error.message.includes('User not found')
+        ) {
+          alert('이메일 또는 비밀번호가 올바르지 않습니다. 비밀번호를 확인해주세요.');
+          return;
+        }
+        alert('로그인 실패: ' + error.message);
         return;
       }
-      if (!data.user) {
-        setError('로그인에 실패했습니다.');
+
+      const user = data.user;
+      if (!user) {
+        alert('로그인에 실패했습니다.');
         return;
       }
-      writeSessionCache(data.user);
-      router.replace('/mypage' as never);
+
+      // 로그인 직후 보호 페이지가 먼저 마운트돼도 인증 훅이 동일한 사용자를 보도록 캐시를 선반영한다.
+      setCachedUser(user);
+      primeAuthCache(user);
+      router.replace('/mypage');
+
     } catch (err) {
-      setError('로그인 처리 중 오류가 발생했습니다.');
-      console.error(err);
+      console.error('로그인 처리 오류:', err);
+      if (isInvalidRefreshTokenError(err)) {
+        await clearInvalidSession();
+      }
+      alert('로그인 처리 중 오류가 발생했습니다.');
     } finally {
       setLoading(false);
     }
   };
 
+  const performSiteDataClear = async () => {
+    try {
+      await fetch('/api/clear-site-data', { method: 'POST', cache: 'no-store' });
+      clearCachedUser();
+      try { await supabase.auth.signOut({ scope: 'local' }); } catch { }
+      try { localStorage.clear(); } catch { }
+      try { sessionStorage.clear(); } catch { }
+
+      // IndexedDB/Cache/ServiceWorker 정리
+      try {
+        if ('indexedDB' in window && indexedDB.databases) {
+          const dbs = await indexedDB.databases();
+          await Promise.all((dbs || []).map((db) => {
+            if (!db.name) return Promise.resolve();
+            return new Promise<void>((resolve) => {
+              const req = indexedDB.deleteDatabase(db.name as string);
+              req.onsuccess = () => resolve();
+              req.onerror = () => resolve();
+              req.onblocked = () => resolve();
+            });
+          }));
+        }
+      } catch { }
+      try {
+        if ('caches' in window) {
+          const keys = await caches.keys();
+          await Promise.all(keys.map((k) => caches.delete(k)));
+        }
+      } catch { }
+      try {
+        if ('serviceWorker' in navigator) {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(regs.map((reg) => reg.unregister()));
+        }
+      } catch { }
+
+      alert('초기화가 완료되었습니다. 페이지를 다시 로드합니다.');
+      window.location.href = '/';
+    } catch (err) {
+      console.error('사이트 데이터 초기화 오류:', err);
+      alert('초기화 중 오류가 발생했습니다. 다시 시도해주세요.');
+    }
+  };
+
+  const handleClearSiteData = async () => {
+    const ok = window.confirm(
+      'stayhalong 관련 쿠키/세션/저장소를 초기화합니다.\n진행하시겠습니까?'
+    );
+    if (!ok) return;
+
+    await performSiteDataClear();
+  };
+
   return (
-    <PageWrapper>
-      <div className="mx-auto max-w-md">
-        <SectionBox title="🔐 로그인 / 예약 확인">
-          <form onSubmit={handleSubmit} className="space-y-3">
-            <div>
-              <label className="mb-1 block text-sm text-gray-600">이메일</label>
-              <input type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full rounded border border-gray-200 px-3 py-2 text-sm" />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm text-gray-600">비밀번호</label>
-              <input type="password" autoComplete="current-password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} className="w-full rounded border border-gray-200 px-3 py-2 text-sm" />
-              <p className="mt-1 text-xs text-gray-500">6자 이상 입력해주세요.</p>
-            </div>
-            {error && <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-500">{error}</p>}
-            <button type="submit" disabled={loading} className="w-full rounded bg-brand-500 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-50">
-              {loading ? '처리 중…' : '로그인'}
-            </button>
-          </form>
-          <p className="mt-4 text-sm text-gray-600">
-            계정이 없으신가요? <Link href="/signup" className="text-brand-500 underline">회원가입</Link>
-          </p>
-        </SectionBox>
+    <div className="max-w-sm mx-auto mt-12 p-4 bg-white shadow rounded">
+      <div className="flex justify-start mb-4">
+        <Image src="/logo-full.png" alt="스테이하롱 전체 로고" width={320} height={80} unoptimized priority />
       </div>
-    </PageWrapper>
+      <h2 className="text-2xl font-bold mb-6 text-left">🔐 예약 신청/확인</h2>
+      <form onSubmit={handleLogin} className="space-y-4">
+        <input
+          id="login-email"
+          name="email"
+          type="email"
+          autoComplete="email"
+          placeholder="이메일"
+          className="w-full border p-2 rounded"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+        />
+        <p className="text-sm text-gray-700 mt-1">
+          견적 신청시 입력하신 이메일과 비밀번호를 입력해주세요.
+        </p>
+        <input
+          id="login-password"
+          name="password"
+          type="password"
+          autoComplete="current-password"
+          placeholder="비밀번호"
+          className="w-full border p-2 rounded"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+        />
+        <p className="text-sm text-gray-700 mt-1">비밀번호는 6자 이상 입력해주세요.</p>
+        <button
+          type="submit"
+          className="bg-blue-700 text-white w-full py-2 rounded hover:bg-blue-800 transition disabled:opacity-50"
+          disabled={loading}
+        >
+          {loading ? '처리 중...' : '예약 신청/확인'}
+        </button>
+      </form>
+
+      <div className="mt-4 text-left">
+        <p className="text-sm text-gray-700">
+          계정이 없으신가요?{' '}
+          <button
+            onClick={() => router.push('/signup')}
+            className="text-blue-700 hover:text-blue-800 underline"
+          >
+            신규예약
+          </button>
+        </p>
+      </div>
+
+      <div className="mt-6 pt-4 border-t border-gray-200">
+        <button
+          type="button"
+          onClick={handleClearSiteData}
+          className="w-full py-2 rounded bg-gray-100 text-gray-700 hover:bg-gray-200 transition text-sm"
+        >
+          stayhalong 데이터 초기화 (쿠키/세션/캐시)
+        </button>
+      </div>
+    </div>
   );
 }

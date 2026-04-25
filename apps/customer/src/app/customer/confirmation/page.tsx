@@ -1,87 +1,65 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
-import { PageWrapper, SectionBox, Spinner, UnifiedConfirmation } from '@sht/ui';
-import type { UnifiedQuoteData } from '@sht/ui';
-import { createSupabaseBrowserClient } from '@sht/db/browser';
-import { confirmation as confirmationDomain } from '@sht/domain';
+import { Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import ConfirmationGenerateModal from '@/components/ConfirmationGenerateModal';
+
+function CustomerConfirmationContent() {
+    const router = useRouter();
+    const searchParams = useSearchParams();
+    const quoteId = searchParams.get('quote_id') || '';
+
+    if (!quoteId) {
+        return (
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+                <div className="text-center">
+                    <div className="text-6xl mb-6">❌</div>
+                    <h2 className="text-2xl font-bold text-gray-900 mb-4">접근 오류</h2>
+                    <p className="text-gray-600 mb-6">예약 정보를 찾을 수 없습니다. 견적 번호를 확인해 주세요.</p>
+                    <button
+                        onClick={() => router.push('/')}
+                        className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    >
+                        홈으로 이동
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="min-h-screen bg-gray-50">
+            <ConfirmationGenerateModal
+                isOpen={true}
+                onClose={() => {
+                    if (window.history.length > 1) {
+                        window.close();
+                        router.back();
+                        return;
+                    }
+                    router.push('/mypage/confirmations');
+                }}
+                quoteId={quoteId}
+            />
+        </div>
+    );
+}
 
 export const dynamic = 'force-dynamic';
 
-function ConfirmationInner() {
-  const params = useSearchParams();
-  const quoteId = params?.get('quote_id') || '';
-  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
-  const [data, setData] = useState<UnifiedQuoteData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    if (!quoteId) {
-      setLoading(false);
-      return;
-    }
-    void confirmationDomain
-      .buildConfirmationData(supabase, quoteId)
-      .then((d) => {
-        if (cancelled) return;
-        setData(d);
-        if (!d) setError('확정서 데이터를 찾을 수 없습니다.');
-      })
-      .catch((e: Error) => {
-        if (!cancelled) setError(e.message);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [quoteId, supabase]);
-
-  return (
-    <PageWrapper>
-      <SectionBox
-        title="📄 예약 확정서"
-        right={
-          data && (
-            <button
-              type="button"
-              onClick={() => window.print()}
-              className="rounded bg-brand-500 px-3 py-1 text-xs text-white hover:bg-brand-600"
-            >
-              인쇄
-            </button>
-          )
-        }
-      >
-        {loading ? (
-          <Spinner />
-        ) : !quoteId ? (
-          <p className="text-sm text-red-500">quote_id 파라미터가 없습니다.</p>
-        ) : error ? (
-          <p className="text-sm text-red-500">{error}</p>
-        ) : data ? (
-          <UnifiedConfirmation data={data} />
-        ) : null}
-      </SectionBox>
-    </PageWrapper>
-  );
-}
-
 export default function CustomerConfirmationPage() {
-  return (
-    <Suspense
-      fallback={
-        <PageWrapper>
-          <Spinner />
-        </PageWrapper>
-      }
-    >
-      <ConfirmationInner />
-    </Suspense>
-  );
+    return (
+        <Suspense
+            fallback={
+                <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+                    <div className="text-center">
+                        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500 mx-auto mb-4" />
+                        <p className="text-gray-600">페이지를 불러오는 중...</p>
+                    </div>
+                </div>
+            }
+        >
+            <CustomerConfirmationContent />
+        </Suspense>
+    );
 }
-

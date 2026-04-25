@@ -1,18 +1,40 @@
-import '@sht/ui/styles.css';
-import './globals.css';
-import type { ReactNode } from 'react';
-import { QueryProvider } from '@sht/ui';
+import React from 'react';
+import { Inter } from 'next/font/google';
+import NewHomeHeader from '../components/new-home/NewHomeHeader';
+import NewHomeFooter from '../components/new-home/NewHomeFooter';
+import AlertProvider from '../components/AlertProvider';
+import ToastProvider from '../components/ToastProvider';
+import AuthInitializer from '../components/AuthInitializer';
+import QueryProvider from '../components/QueryProvider';
+import '../styles/globals.css';
+
+const inter = Inter({ subsets: ['latin'] });
 
 export const metadata = {
-  title: 'StayHalong Customer',
-  description: '스테이하롱 크루즈 예약 — 고객용',
+  title: 'SHT Customer',
+  description: 'SHT Customer Portal',
 };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html lang="ko">
-      <body className="min-h-screen bg-gray-50 text-gray-700 antialiased">
-        <QueryProvider>{children}</QueryProvider>
+      <body className={`${inter.className} bg-background text-foreground antialiased flex flex-col min-h-screen`}>
+        <QueryProvider>
+          <AlertProvider>
+            <ToastProvider>
+              <AuthInitializer />
+              <NewHomeHeader />
+              <main className="flex-1 w-full">
+                {children}
+              </main>
+              <NewHomeFooter />
+            </ToastProvider>
+          </AlertProvider>
+        </QueryProvider>
       </body>
     </html>
   );

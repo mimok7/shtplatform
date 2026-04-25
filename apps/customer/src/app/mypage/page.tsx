@@ -1,32 +1,163 @@
+'use client';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
+import PageWrapper from '../../components/PageWrapper';
+import SectionBox from '../../components/SectionBox';
 import Link from 'next/link';
-import { PageWrapper, SectionBox } from '@sht/ui';
+import supabase from '@/lib/supabase';
+import { clearCachedUser } from '@/lib/authCache';
+import { clearAuthCache } from '@/hooks/useAuth';
+import { clearInvalidSession, isInvalidRefreshTokenError } from '@/lib/authRecovery';
+import { useLoadingTimeout } from '@/hooks/useLoadingTimeout';
+import { getSessionUser } from '@/lib/authHelpers';
 
-const TILES: Array<{ href: string; title: string; desc: string }> = [
-  { href: '/mypage/quotes', title: '견적 관리', desc: '내 견적 목록 보기 / 새 견적 만들기' },
-  { href: '/mypage/reservations', title: '예약 관리', desc: '예약 내역과 상세 확인' },
-  { href: '/mypage/direct-booking', title: '직접 예약', desc: '크루즈/공항/호텔/투어/렌터카 바로 예약' },
-  { href: '/mypage/confirmations', title: '확정서', desc: '예약 확정서 다운로드' },
-  { href: '/mypage/profile', title: '프로필', desc: '연락처/여권 정보 관리' },
-];
+export default function MyPage() {
+  const router = useRouter();
+  const [user, setUser] = useState<any>(null);
+  const [userProfile, setUserProfile] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
-export default function MyPageHome() {
-  return (
-    <PageWrapper>
-      <SectionBox title="환영합니다 👋">
-        <p className="text-sm text-gray-600">스테이하롱 크루즈 예약 시스템입니다.</p>
-      </SectionBox>
-      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-        {TILES.map((t) => (
-          <Link
-            key={t.href}
-            href={t.href as never}
-            className="block rounded-lg border border-gray-200 bg-white p-4 transition hover:border-brand-500 hover:shadow-sm"
-          >
-            <div className="mb-1 text-base font-medium text-gray-700">{t.title}</div>
-            <div className="text-xs text-gray-500">{t.desc}</div>
-          </Link>
-        ))}
+  // 안전 타임아웃: 10초 이상 로딩 중이면 강제 해제
+  useLoadingTimeout(loading, setLoading, 10000);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadUserInfo = async () => {
+      try {
+        setLoading(true);
+
+        const { user, error: userError } = await getSessionUser(8000);
+
+        if (!mounted) return;
+
+        if (userError || !user) {
+          if (userError && isInvalidRefreshTokenError(userError)) {
+            await clearInvalidSession();
+          }
+          router.push('/login');
+          return;
+        }
+
+        // 사용자 프로필 정보 조회 (최소 필드만)
+        const { data: profile } = await supabase
+          .from('users')
+          .select('name')
+          .eq('id', user.id)
+          .maybeSingle();
+
+        if (!mounted) return;
+
+        setUser(user);
+        setUserProfile(profile);
+
+      } catch (error) {
+        if (isInvalidRefreshTokenError(error)) {
+          await clearInvalidSession();
+          if (mounted) router.push('/login');
+          return;
+        }
+        console.error('사용자 정보 로드 실패:', error);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+
+    loadUserInfo();
+
+    return () => { mounted = false; };
+  }, []); // ✅ [] 의존성 - 최초 1회만 (router 의존성 금지)
+
+  const getUserDisplayName = useCallback(() => {
+    if (userProfile?.name) return userProfile.name;
+    if (user?.email) {
+      return user.email.split('@')[0];
+    }
+    return '고객';
+  }, [userProfile, user]);
+
+  const handleLogout = useCallback(async () => {
+    try {
+      clearCachedUser();
+      clearAuthCache();
+      // Supabase SDK signOut 호출 시 세션 상태에 따라 403 로그가 남을 수 있어,
+      // 마이페이지 로그아웃은 로컬 세션/캐시 정리만 수행한다.
+      try {
+        for (const key of Object.keys(localStorage)) {
+          if (key.startsWith('sb-') && key.endsWith('-auth-token')) {
+            localStorage.removeItem(key);
+          }
+        }
+      } catch (error) {
+        console.error('localStorage 세션 정리 실패:', error);
+      }
+
+      try {
+        for (const key of Object.keys(sessionStorage)) {
+          if (key.startsWith('sb-') && key.endsWith('-auth-token')) {
+            sessionStorage.removeItem(key);
+          }
+        }
+      } catch (error) {
+        console.error('sessionStorage 세션 정리 실패:', error);
+      }
+
+      alert('로그아웃되었습니다.');
+      router.push('/login');
+    } catch (error) {
+      console.error('로그아웃 처리 실패:', error);
+      alert('로그아웃되었습니다.');
+      router.push('/login');
+    }
+  }, [router]);
+
+  const quickActions = useMemo(() => [
+    { icon: '🎯', label: '예약하기', href: '/mypage/direct-booking' },
+    { icon: '📋', label: '예약내역', href: '/mypage/reservations/list' },
+    { icon: '📍', label: '장소 추가', href: '/mypage/location-updates' },
+    { icon: '📄', label: '예약확인서', href: '/mypage/confirmations' },
+    { icon: '👤', label: '내 정보', href: '/mypage/profile' },
+  ], []);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
       </div>
+    );
+  }
+
+  return (
+    <PageWrapper title={`🌟 ${getUserDisplayName()}님 즐거운 하루 되세요 ^^`}>
+      <div className="mb-6 flex justify-end items-center gap-3">
+        <button
+          onClick={handleLogout}
+          className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors text-sm font-medium shadow-sm"
+        >
+          🚪 로그아웃
+        </button>
+      </div>
+
+      {/* 알림 기능 숨김 */}
+
+      <SectionBox title="원하는 서비스를 선택하세요">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          {quickActions.map((action, index) => {
+            return (
+              <Link key={index} href={action.href} className="group">
+                <div className="bg-white border border-gray-200 rounded-lg p-6 text-center hover:border-blue-500 hover:shadow-md transition-all duration-200">
+                  <div className="text-4xl mb-3 transform group-hover:scale-110 transition-transform duration-200">
+                    {action.icon}
+                  </div>
+                  <div className="text-sm font-medium text-gray-900 group-hover:text-blue-600 transition-colors">
+                    {action.label}
+                  </div>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      </SectionBox>
     </PageWrapper>
   );
 }

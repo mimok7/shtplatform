@@ -1,12 +1,18 @@
-import preset from '@sht/config/tailwind/preset.js';
-
 /** @type {import('tailwindcss').Config} */
 export default {
-  presets: [preset],
+  darkMode: false,
   content: [
-    './src/**/*.{ts,tsx}',
-    '../../packages/ui/src/**/*.{ts,tsx}',
+    './src/app/**/*.{js,ts,jsx,tsx}',
+    './src/components/**/*.{js,ts,jsx,tsx}',
+    './src/pages/**/*.{js,ts,jsx,tsx}',
   ],
-  theme: { extend: {} },
+  theme: {
+    extend: {
+      colors: {
+        background: 'var(--background)',
+        foreground: 'var(--foreground)',
+      },
+    },
+  },
   plugins: [],
 };
