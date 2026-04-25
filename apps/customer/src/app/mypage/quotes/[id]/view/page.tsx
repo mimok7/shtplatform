@@ -485,7 +485,7 @@ export default function QuoteDetailPage() {
                 unitPrice={it.unit_price}
                 quantity={it.displayQuantity}
                 total={it.total_price}
-                quantityUnit="대"
+                quantityUnit="명"
                 canViewPrice={canViewPrice}
               />
             ))}
