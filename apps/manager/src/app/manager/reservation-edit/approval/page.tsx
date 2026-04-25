@@ -37,6 +37,8 @@ const TABLE_SPECIFIC_EXCLUDED_FIELDS: Record<string, Set<string>> = {
     // 운영 스키마 캐시에 없는 컬럼 전송 방지
     reservation_airport: new Set(['ra_airport_name']),
     reservation_tour: new Set(['accommodation_info']),
+    // reservation_car_sht 에는 accommodation_info 컬럼이 없음 (change 테이블에만 존재) → 400 방지
+    reservation_car_sht: new Set(['accommodation_info']),
 };
 
 function normalizeReservationId(value?: string): string {
