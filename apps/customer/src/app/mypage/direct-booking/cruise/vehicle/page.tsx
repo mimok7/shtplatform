@@ -22,8 +22,10 @@ const carCategoryHardcoded = ['편도', '당일왕복', '다른날왕복'];
 const isShtVehicleType = (vehicleType?: string) =>
     !!vehicleType && vehicleType.includes('스테이하롱 셔틀 리무진');
 
+// 편도 선택 시 SHT 차량은 자동으로 단독 변형 사용 (좌석 선택 불필요)
+// 당일왕복/다른날왕복 SHT는 좌석 선택 모달을 거치도록 변경
 const shouldAutoSoloSht = (vehicleType?: string, wayType?: string) =>
-    isShtVehicleType(vehicleType) && (wayType === '편도' || wayType === '당일왕복');
+    isShtVehicleType(vehicleType) && wayType === '편도';
 
 const toVehicleDisplayType = (vehicleType?: string) => {
     if (!vehicleType) return '';
@@ -63,6 +65,8 @@ function CruiseVehicleContent() {
     const [pickupLocation, setPickupLocation] = useState('');
     const [dropoffLocation, setDropoffLocation] = useState('');
     const [locationInputError, setLocationInputError] = useState('');
+    // 편도 방향: 'pickup' (선착장으로 픽업) 또는 'dropoff' (선착장에서 드롭)
+    const [pyongdoDirection, setPyongdoDirection] = useState<'pickup' | 'dropoff' | ''>('');
 
     const [carTypeOptions, setCarTypeOptions] = useState<string[]>([]);
     const [routeOptions, setRouteOptions] = useState<string[]>([]);
@@ -519,6 +523,10 @@ function CruiseVehicleContent() {
             setIsShtCarModalOpen(true);
             return false;
         }
+        if (selectedCarCategory === '편도' && !pyongdoDirection) {
+            alert('편도 방향(픽업/드롭)을 선택해주세요.');
+            return false;
+        }
 
         let carCode = vehicleForm[0].car_code;
         if (!carCode) {
@@ -586,12 +594,6 @@ function CruiseVehicleContent() {
             const totalPrice = customTotalPrice !== undefined ? customTotalPrice : ((carPriceData.price || 0) * inputCount);
             const pickupDate = checkin ? new Date(checkin) : null;
             const pickupDateISO = pickupDate ? pickupDate.toISOString() : null;
-            let dropoffDateISO: string | null = null;
-            if (pickupDate) {
-                const dropoffDate = new Date(pickupDate);
-                dropoffDate.setDate(dropoffDate.getDate() + 1);
-                dropoffDateISO = dropoffDate.toISOString();
-            }
             const baseData = {
                 reservation_id: vehicleReId,
                 vehicle_number: selectedShtSeat?.vehicle || null,
@@ -600,22 +602,49 @@ function CruiseVehicleContent() {
                 passenger_count: inputCount,
                 unit_price: Math.round(totalPrice / (inputCount || 1))
             };
-            await supabase.from('reservation_car_sht').insert({
-                ...baseData,
-                usage_date: pickupDateISO,
-                sht_category: 'Pickup',
-                pickup_location: pickupLocation || null,
-                dropoff_location: pierLocation,
-                car_total_price: totalPrice
-            });
-            await supabase.from('reservation_car_sht').insert({
-                ...baseData,
-                usage_date: dropoffDateISO,
-                sht_category: 'Drop-off',
-                pickup_location: pierLocation,
-                dropoff_location: dropoffLocation || null,
-                car_total_price: 0
-            });
+
+            if (selectedCarCategory === '편도') {
+                // 편도: 한 방향만 행 1개 삽입
+                const isPickupDir = pyongdoDirection === 'pickup';
+                await supabase.from('reservation_car_sht').insert({
+                    ...baseData,
+                    usage_date: pickupDateISO,
+                    sht_category: isPickupDir ? 'Pickup' : 'Drop-off',
+                    pickup_location: isPickupDir ? (pickupLocation || null) : pierLocation,
+                    dropoff_location: isPickupDir ? pierLocation : (dropoffLocation || null),
+                    car_total_price: totalPrice
+                });
+            } else {
+                // 왕복: 2개 행 (Pickup + Drop-off)
+                let dropoffDateISO: string | null = null;
+                if (pickupDate) {
+                    if (selectedCarCategory === '당일왕복') {
+                        // 당일왕복: 픽업일 = 드롭일
+                        dropoffDateISO = pickupDate.toISOString();
+                    } else {
+                        // 다른날왕복: 드롭일 = 픽업일 + 1
+                        const dropoffDate = new Date(pickupDate);
+                        dropoffDate.setDate(dropoffDate.getDate() + 1);
+                        dropoffDateISO = dropoffDate.toISOString();
+                    }
+                }
+                await supabase.from('reservation_car_sht').insert({
+                    ...baseData,
+                    usage_date: pickupDateISO,
+                    sht_category: 'Pickup',
+                    pickup_location: pickupLocation || null,
+                    dropoff_location: pierLocation,
+                    car_total_price: totalPrice
+                });
+                await supabase.from('reservation_car_sht').insert({
+                    ...baseData,
+                    usage_date: dropoffDateISO,
+                    sht_category: 'Drop-off',
+                    pickup_location: pierLocation,
+                    dropoff_location: dropoffLocation || null,
+                    car_total_price: 0
+                });
+            }
             await supabase.from('reservation').update({ total_amount: totalPrice }).eq('re_id', vehicleReId);
         } else {
             const totalPrice = (carPriceData.price || 0) * inputCount;
@@ -798,6 +827,8 @@ function CruiseVehicleContent() {
                                                 setSelectedCarCategory(category);
                                                 setSelectedRoute('');
                                                 setCarTypeOptions([]);
+                                                // 편도 방향 초기화 (편도가 아닌 경우)
+                                                if (category !== '편도') setPyongdoDirection('');
                                                 const updatedVehicleForm = vehicleForm.map(v => ({
                                                     ...v,
                                                     car_category: category,
@@ -818,6 +849,35 @@ function CruiseVehicleContent() {
                                     ))}
                                 </div>
                             </div>
+
+                            {/* 편도 선택 시 방향 선택 */}
+                            {selectedCarCategory === '편도' && (
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">편도 방향</label>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => setPyongdoDirection('pickup')}
+                                            className={`px-4 py-2 border rounded-lg transition-colors ${pyongdoDirection === 'pickup'
+                                                ? 'bg-blue-500 text-white border-blue-500'
+                                                : 'bg-gray-50 border-gray-300 hover:bg-gray-100 text-gray-700'
+                                                }`}
+                                        >
+                                            픽업 (입국/호텔 → 선착장)
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setPyongdoDirection('dropoff')}
+                                            className={`px-4 py-2 border rounded-lg transition-colors ${pyongdoDirection === 'dropoff'
+                                                ? 'bg-blue-500 text-white border-blue-500'
+                                                : 'bg-gray-50 border-gray-300 hover:bg-gray-100 text-gray-700'
+                                                }`}
+                                        >
+                                            드롭 (선착장 → 공항/호텔)
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
 
                             {vehicleForm.map((vehicle, vehicleIndex) => (
                                 <div key={vehicleIndex} className="border border-green-200 rounded-lg p-4 bg-green-50">
@@ -874,14 +934,18 @@ function CruiseVehicleContent() {
                                                         const code = await getCarCode(normalizedCarType, vehicle.car_category, vehicle.route || selectedRoute);
                                                         handleVehicleChange(vehicleIndex, 'car_code', code);
                                                     }
+                                                    // 당일왕복/다른날왕복 + SHT → 좌석 선택 모달 자동 오픈 (필수)
                                                     if (
                                                         isShtVehicleType(normalizedCarType)
                                                         && !normalizedCarType.includes('단독')
-                                                        && !shouldAutoSoloSht(normalizedCarType, selectedWayType)
+                                                        && (selectedWayType === '당일왕복' || selectedWayType === '다른날왕복')
                                                         && !isShtExclusiveCruise
                                                     ) {
                                                         setIsModalReadOnly(false);
-                                                        setIsShtCarModalOpen(true);
+                                                        // 모달이 닫힌 상태에서 다시 열리도록 보장 (이전 선택 초기화)
+                                                        setSelectedShtSeat(null);
+                                                        // 비동기 setState 후 안정적으로 모달이 열리도록 다음 tick에 호출
+                                                        setTimeout(() => setIsShtCarModalOpen(true), 0);
                                                     }
                                                 }}
                                                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-green-500"
@@ -933,30 +997,36 @@ function CruiseVehicleContent() {
                             {/* 픽업/드롭오프 */}
                             <div className="space-y-4">
                                 <h3 className="text-lg font-semibold text-gray-800">📍 픽업/드롭오프 장소</h3>
-                                <p className="text-sm text-red-500">
-                                    * 편도시 픽업 장소, 드롭오프 장소 중에 하나만 입력하세요
-                                </p>
+                                {selectedCarCategory === '편도' && !pyongdoDirection && (
+                                    <p className="text-sm text-orange-600">* 위에서 편도 방향(픽업/드롭)을 먼저 선택해주세요.</p>
+                                )}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">픽업 장소</label>
-                                        <input
-                                            type="text"
-                                            value={pickupLocation}
-                                            onChange={(e) => handleLocationInput('pickup', e.target.value)}
-                                            placeholder="영문 대문자로 입력해 주세요"
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">드롭오프 장소</label>
-                                        <input
-                                            type="text"
-                                            value={dropoffLocation}
-                                            onChange={(e) => handleLocationInput('dropoff', e.target.value)}
-                                            placeholder="영문 대문자로 입력해 주세요"
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        />
-                                    </div>
+                                    {/* 픽업 장소: 왕복 또는 편도-pickup 일 때만 표시 */}
+                                    {(selectedCarCategory !== '편도' || pyongdoDirection === 'pickup') && (
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">픽업 장소</label>
+                                            <input
+                                                type="text"
+                                                value={pickupLocation}
+                                                onChange={(e) => handleLocationInput('pickup', e.target.value)}
+                                                placeholder="영문 대문자로 입력해 주세요"
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            />
+                                        </div>
+                                    )}
+                                    {/* 드롭 장소: 왕복 또는 편도-dropoff 일 때만 표시 */}
+                                    {(selectedCarCategory !== '편도' || pyongdoDirection === 'dropoff') && (
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">드롭오프 장소</label>
+                                            <input
+                                                type="text"
+                                                value={dropoffLocation}
+                                                onChange={(e) => handleLocationInput('dropoff', e.target.value)}
+                                                placeholder="영문 대문자로 입력해 주세요"
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            />
+                                        </div>
+                                    )}
                                 </div>
                                 {locationInputError && (
                                     <p className="text-sm text-red-500">{locationInputError}</p>
