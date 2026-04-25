@@ -156,15 +156,24 @@ function CruiseVehicleContent() {
             query = applyCruiseFilterToRentcarQuery(query);
             const { data, error } = await query.order('vehicle_type');
             if (error) throw error;
-            let uniqueCarTypes = [...new Set((data || []).map((d: any) => d.vehicle_type).filter(Boolean))] as string[];
-            // 'A/B/C' 변형 옵션 및 '단독' 옵션은 노출하지 않음 (일반 SHT 옵션 하나로 정규화)
-            // 사용자가 일반 '스테이하롱 셔틀 리무진'을 고르면 편도일 때만 자동 단독 변형됨
-            uniqueCarTypes = uniqueCarTypes.filter(t => !/스테이하롱 셔틀 리무진 [ABC]/.test(t) && t !== '스테이하롱 셔틀 리무진 단독');
+            const rawTypes = [...new Set((data || []).map((d: any) => d.vehicle_type).filter(Boolean))] as string[];
+            // SHT 변형(A/B/C/단독)은 표시 옵션에서 제외하고, 한 종류 이상 있으면 일반 '스테이하롱 셔틀 리무진' 1개로 통합 표시
+            const hasSht = rawTypes.some(t => isShtVehicleType(t));
+            let uniqueCarTypes = rawTypes.filter(t => !isShtVehicleType(t));
+            if (hasSht) uniqueCarTypes.push('스테이하롱 셔틀 리무진');
+            // 패키지 셔틀 리무진은 패키지 가능한 객실(FULL 프로모션 / 파라다이스 레거시 B,C)에서만 노출
+            const packageEligible = isFullPromoOrLegacyC || isParadiseLegacyB;
+            if (!packageEligible) {
+                uniqueCarTypes = uniqueCarTypes.filter(t => t !== '패키지 셔틀 리무진');
+            }
+            // 정렬 (안정적 표시)
+            uniqueCarTypes.sort();
+            console.log('[vehicle] loadCarTypeOptions', { wayType: wt, route: rt, cruiseName, rawTypes, uniqueCarTypes, packageEligible });
             setCarTypeOptions(uniqueCarTypes);
         } catch (error) {
             console.error('차량타입 옵션 조회 실패:', error);
         }
-    }, [selectedCarCategory, selectedRoute, applyCruiseFilterToRentcarQuery]);
+    }, [selectedCarCategory, selectedRoute, applyCruiseFilterToRentcarQuery, cruiseName, isFullPromoOrLegacyC, isParadiseLegacyB]);
 
     const getCarCode = useCallback(async (carType: string, carCategory: string, route?: string): Promise<string> => {
         try {
@@ -473,7 +482,7 @@ function CruiseVehicleContent() {
             setCarTypeOptions([]);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedCarCategory, selectedRoute]);
+    }, [selectedCarCategory, selectedRoute, cruiseName, isFullPromoOrLegacyC, isParadiseLegacyB]);
 
     // ── 단독 자동 처리 ──
     useEffect(() => {
@@ -925,7 +934,7 @@ function CruiseVehicleContent() {
                                         <div>
                                             <label className="block text-sm font-medium text-gray-600 mb-1">차량타입</label>
                                             <select
-                                                value={vehicle.car_type}
+                                                value={isShtVehicleType(vehicle.car_type) ? '스테이하롱 셔틀 리무진' : vehicle.car_type}
                                                 onChange={async (e) => {
                                                     const rawCarType = e.target.value;
                                                     const selectedWayType = vehicle.car_category || selectedCarCategory;
