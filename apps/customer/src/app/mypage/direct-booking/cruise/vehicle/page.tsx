@@ -178,11 +178,17 @@ function CruiseVehicleContent() {
     const getCarCode = useCallback(async (carType: string, carCategory: string, route?: string): Promise<string> => {
         try {
             const effectiveRoute = route || selectedRoute;
+            // 통합 SHT 라벨('스테이하롱 셔틀 리무진')은 DB에 없으므로 like 검색으로 대표 코드 1건 조회
+            const isAggregatedSht = carType === '스테이하롱 셔틀 리무진';
             let query = supabase
                 .from('rentcar_price')
                 .select('rent_code')
-                .eq('way_type', carCategory)
-                .eq('vehicle_type', carType);
+                .eq('way_type', carCategory);
+            if (isAggregatedSht) {
+                query = query.like('vehicle_type', '%스테이하롱 셔틀 리무진%');
+            } else {
+                query = query.eq('vehicle_type', carType);
+            }
             if (effectiveRoute) query = query.eq('route', effectiveRoute);
             query = applyCruiseFilterToRentcarQuery(query);
             const { data, error } = await query.limit(1);
@@ -244,7 +250,7 @@ function CruiseVehicleContent() {
                         .like('vehicle_type', '%스테이하롱 셔틀 리무진 단독%')
                         .eq('way_type', selectedCarCategory || '당일왕복')
                         .limit(1)
-                        .single();
+                        .maybeSingle();
                     totalFetchedPrice = soloData?.price || 5400000;
                 } else {
                     const seatTypes = new Set<string>();
@@ -264,7 +270,7 @@ function CruiseVehicleContent() {
                             .not('vehicle_type', 'like', '%단독%')
                             .eq('way_type', selectedCarCategory || '당일왕복')
                             .limit(1)
-                            .single();
+                            .maybeSingle();
                         if (typeData?.price) {
                             const sc = seats.filter(s => s.startsWith(seatType)).length;
                             totalFetchedPrice += typeData.price * sc;
