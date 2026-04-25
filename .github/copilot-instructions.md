@@ -1,5 +1,28 @@
 # Copilot Instructions for AI Agents
 
+## 🚨 매니저 3종 프로젝트 동시 수정 규칙 (최우선 - 필수)
+매니저(`apps/manager`) 관련 수정은 항상 아래 **3개 프로젝트**에 동일하게 반영해야 한다. 한쪽만 수정 금지.
+
+| 프로젝트 | 경로 | 수정 규칙 |
+|---------|------|----------|
+| **sht-manager** (단독 저장소) | `c:\Users\saint\SH_DATA\sht-manager` | 항상 동일 수정 |
+| **sht-manager1** (단독 저장소) | `c:\Users\saint\SH_DATA\sht-manager1` | **해당 메뉴/파일이 존재할 때만 수정. 없으면 스킵** |
+| **sht-platform/apps/manager** (모노레포) | `c:\Users\saint\SH_DATA\sht-platform\apps\manager` | 항상 동일 수정 |
+
+### 작업 절차
+1. 먼저 `sht-manager1`에 해당 메뉴/파일 존재 여부 확인 (`file_search` 또는 `list_dir` 활용)
+2. 존재하면 3개 프로젝트 모두 동일 수정, 존재하지 않으면 `sht-manager` + `sht-platform/apps/manager` 2개만 수정
+3. 미러링 시 바이트 단위 일치 확인 권장 (한글 인코딩 문제 방지)
+
+### 미러링 체크리스트
+- [ ] `sht-manager1`에 메뉴/파일 존재 여부 확인 완료
+- [ ] `sht-manager` 수정 완료
+- [ ] `sht-platform/apps/manager` 수정 완료
+- [ ] (해당 시) `sht-manager1` 수정 완료
+- [ ] 3개(또는 2개) 프로젝트 모두 동일한 코드/디자인 유지 확인
+
+> 참고: 고객(`apps/customer`) 수정은 `sht-customer` + `sht-platform/apps/customer` 2개 프로젝트 동시 수정 규칙을 따른다 (아래 "이중 프로젝트 동시 수정 규칙" 섹션).
+
 ## 프로젝트 개요
 **스테이하롱 크루즈 예약 시스템** - Next.js 15.3.5 App Router + Supabase PostgreSQL 기반 견적/예약 관리 웹앱.
 
