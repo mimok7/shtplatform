@@ -358,6 +358,14 @@ export default function LocationUpdatesPage() {
           if (!reservation) return;
 
           cfg.fields.forEach(field => {
+            if (type === 'car_sht' || type === 'sht' || type === 'sht_car') {
+              const rawCategory = String(serviceRow.sht_category || '').trim().toLowerCase();
+              const isPickupRow = rawCategory.includes('pickup') || rawCategory.includes('픽업');
+              const isDropoffRow = rawCategory.includes('drop') || rawCategory.includes('드롭');
+              if (isPickupRow && field.key === 'dropoff_location') return;
+              if (isDropoffRow && field.key === 'pickup_location') return;
+            }
+
             const value = serviceRow[field.key];
             const currentValue = typeof value === 'string' ? value : value == null ? '' : String(value);
             const fieldLabel =

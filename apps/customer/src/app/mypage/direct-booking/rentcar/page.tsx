@@ -12,6 +12,7 @@ import SectionBox from '@/components/SectionBox';
 interface VehicleData {
     id: number;
     wayType: string;
+    pyondoDirection: '' | 'pickup' | 'dropoff';
     route: string;
     carType: string;
     rentcar: any;
@@ -64,6 +65,7 @@ function RentcarDirectBookingContent() {
     const [vehicles, setVehicles] = useState<VehicleData[]>([{
         id: 1,
         wayType: '',
+        pyondoDirection: '',
         route: '',
         carType: '',
         rentcar: null,
@@ -216,11 +218,20 @@ function RentcarDirectBookingContent() {
     const handleWayTypeChange = useCallback(async (index: number, wayType: string) => {
         setVehicles(prev => {
             const updated = [...prev];
-            updated[index] = { ...updated[index], wayType, route: '', carType: '', rentcar: null, routeOptions: [], carTypeOptions: [], routeLoading: false };
+            updated[index] = { ...updated[index], wayType, pyondoDirection: '', route: '', carType: '', rentcar: null, routeOptions: [], carTypeOptions: [], routeLoading: false };
             return updated;
         });
         await loadInitialRoutes(index, wayType);
     }, [loadInitialRoutes]);
+
+    // 편도 방향 선택 (픽업/드롭)
+    const handlePyondoDirectionChange = (index: number, direction: 'pickup' | 'dropoff') => {
+        setVehicles(prev => {
+            const updated = [...prev];
+            updated[index] = { ...updated[index], pyondoDirection: direction };
+            return updated;
+        });
+    };
 
     // 경로 선택 시 차량 타입 로드
     const handleRouteChange = useCallback(async (index: number, route: string) => {
@@ -296,6 +307,7 @@ function RentcarDirectBookingContent() {
         const newVehicle: VehicleData = {
             id: newId,
             wayType: '',
+            pyondoDirection: '',
             route: '',
             carType: '',
             rentcar: null,
@@ -483,8 +495,37 @@ function RentcarDirectBookingContent() {
                                     </div>
                                 </div>
 
+                                {/* 편도 방향 선택 */}
+                                {vehicle.wayType === '편도' && (
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">📍 편도 방향 *</label>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => handlePyondoDirectionChange(index, 'pickup')}
+                                                className={`p-2 rounded-lg border text-sm font-medium transition-all ${vehicle.pyondoDirection === 'pickup'
+                                                    ? 'border-sky-500 bg-sky-50 text-sky-700'
+                                                    : 'border-gray-200 bg-white hover:border-sky-300 text-gray-700'
+                                                    }`}
+                                            >
+                                                픽업 (입국/호텔 → 목적지)
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => handlePyondoDirectionChange(index, 'dropoff')}
+                                                className={`p-2 rounded-lg border text-sm font-medium transition-all ${vehicle.pyondoDirection === 'dropoff'
+                                                    ? 'border-sky-500 bg-sky-50 text-sky-700'
+                                                    : 'border-gray-200 bg-white hover:border-sky-300 text-gray-700'
+                                                    }`}
+                                            >
+                                                드롭 (출발지 → 공항/호텔)
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
                                 {/* 경로 선택 */}
-                                {vehicle.wayType && (
+                                {vehicle.wayType && (vehicle.wayType !== '편도' || vehicle.pyondoDirection) && (
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-2">🛣️ 경로 *</label>
                                         {vehicle.routeLoading ? (
@@ -530,14 +571,11 @@ function RentcarDirectBookingContent() {
                                     </div>
                                 )}
 
-                                {/* 가격 정보 */}
-                                {vehicle.rentcar && (
+                                {/* 가격 정보 (요금 제거 - 탑승인원만 표시) */}
+                                {vehicle.rentcar && vehicle.rentcar.capacity && (
                                     <div className="bg-green-50 p-3 rounded-lg">
                                         <p className="text-sm text-green-700">
-                                            💰 요금: <strong>{parseInt(vehicle.rentcar.price || '0').toLocaleString()}동</strong>
-                                            {vehicle.rentcar.capacity && (
-                                                <span className="ml-3 text-gray-600">| 탑승인원: 최대 {vehicle.rentcar.capacity}인</span>
-                                            )}
+                                            👥 탑승인원: <strong>최대 {vehicle.rentcar.capacity}인</strong>
                                         </p>
                                     </div>
                                 )}
@@ -548,11 +586,19 @@ function RentcarDirectBookingContent() {
                                         {/* 가는 편 (픽업) */}
                                         <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
                                             <h4 className="font-semibold text-blue-800 mb-3">
-                                                {ROUND_TRIP_TYPES.includes(vehicle.wayType) ? '🚖 가는 편 (픽업)' : '🚖 이동 정보'}
+                                                {ROUND_TRIP_TYPES.includes(vehicle.wayType)
+                                                    ? '🚖 가는 편 (픽업)'
+                                                    : vehicle.wayType === '편도' && vehicle.pyondoDirection === 'dropoff'
+                                                        ? '🚖 드롭 정보'
+                                                        : vehicle.wayType === '편도' && vehicle.pyondoDirection === 'pickup'
+                                                            ? '🚖 픽업 정보'
+                                                            : '🚖 이동 정보'}
                                             </h4>
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                 <div className="md:col-span-2">
-                                                    <label className="block text-sm font-medium text-gray-700 mb-2">픽업 일시 *</label>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                        {vehicle.wayType === '편도' && vehicle.pyondoDirection === 'dropoff' ? '드롭 일시 *' : '픽업 일시 *'}
+                                                    </label>
                                                     <input
                                                         type="datetime-local"
                                                         value={vehicle.pickup_datetime}
@@ -565,7 +611,9 @@ function RentcarDirectBookingContent() {
                                                     </p>
                                                 </div>
                                                 <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-2">출발지 *</label>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                        {vehicle.wayType === '편도' && vehicle.pyondoDirection === 'dropoff' ? '드롭 출발지 *' : vehicle.wayType === '편도' && vehicle.pyondoDirection === 'pickup' ? '픽업 장소 *' : '출발지 *'}
+                                                    </label>
                                                     <input
                                                         type="text"
                                                         value={vehicle.pickup_location}
@@ -576,7 +624,9 @@ function RentcarDirectBookingContent() {
                                                     />
                                                 </div>
                                                 <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-2">목적지 *</label>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                        {vehicle.wayType === '편도' && vehicle.pyondoDirection === 'dropoff' ? '드롭 도착지 *' : vehicle.wayType === '편도' && vehicle.pyondoDirection === 'pickup' ? '드롭 장소 *' : '목적지 *'}
+                                                    </label>
                                                     <input
                                                         type="text"
                                                         value={vehicle.destination}

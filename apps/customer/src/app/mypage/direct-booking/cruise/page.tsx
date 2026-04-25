@@ -5,8 +5,6 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import supabase from '../../../../lib/supabase';
 import { refreshAuthBeforeSubmit } from '../../../../lib/authHelpers';
 import { useLoadingTimeout } from '../../../../hooks/useLoadingTimeout';
-import { hasInvalidLocationChars, normalizeLocationEnglishUpper } from '../../../../lib/locationInput';
-import ShtCarSeatMap from '../../../../components/ShtCarSeatMap';
 import {
     CruisePriceCalculator,
     CruiseRateCard,
@@ -133,7 +131,6 @@ function DirectBookingCruiseContent() {
     // 기존 예약 데이터 (수정 모드용)
     const [existingReservationId, setExistingReservationId] = useState<string | null>(null);
     const [existingCruiseId, setExistingCruiseId] = useState<string | null>(null);
-    const [existingVehicleReservationId, setExistingVehicleReservationId] = useState<string | null>(null);
     const [editDataLoaded, setEditDataLoaded] = useState(false);
 
     // ── 크루즈 예약 폼 상태 ──
@@ -147,31 +144,15 @@ function DirectBookingCruiseContent() {
         connecting_room: false,
         birthday_event: false,
         birthday_name: '',
-        pickup_location: '',
-        dropoff_location: '',
         child_extra_bed_count: 0,
     });
 
     // ── 객실(다중) 폼 상태 ──
     const [roomSelections, setRoomSelections] = useState<RoomSelection[]>([createRoomSelection('room-1')]);
 
-    // ── 차량 폼 상태 ──
-    const [vehicleForm, setVehicleForm] = useState([{
-        car_type: '',
-        car_category: '',
-        car_code: '',
-        route: '',
-        count: 1
-    }]);
-
     // ── 옵션 데이터 ──
     const [cruiseOptions, setCruiseOptions] = useState<string[]>([]);
     const [roomTypeCards, setRoomTypeCards] = useState<CruiseRateCard[]>([]);
-    const [carCategoryOptions, setCarCategoryOptions] = useState<string[]>([]);
-    const [carTypeOptions, setCarTypeOptions] = useState<string[]>([]);
-    const [routeOptions, setRouteOptions] = useState<string[]>([]);
-    const [selectedCarCategory, setSelectedCarCategory] = useState('');
-    const [selectedRoute, setSelectedRoute] = useState('');
 
     // 당일투어 옵션
     const [tourOptions, setTourOptions] = useState<CruiseTourOption[]>([]);
@@ -185,27 +166,8 @@ function DirectBookingCruiseContent() {
     const [showItinerary, setShowItinerary] = useState(false);
     const [showCancelPolicy, setShowCancelPolicy] = useState(false);
 
-    // 일정/차량구분 옵션
+    // 일정 옵션
     const scheduleOptions = ['1박2일', '2박3일', '당일'];
-    const carCategoryHardcoded = ['편도', '당일왕복', '다른날왕복'];
-
-    // 일정에 따라 사용 가능한 차량 카테고리 필터링
-    // 1박2일, 2박3일 선택 시 당일왕복 숨김
-    const getAvailableCarCategories = useMemo(() => {
-        const isMultiDay = form.schedule && ['1박2일', '2박3일'].includes(form.schedule);
-        return carCategoryHardcoded.filter(cat => !(isMultiDay && cat === '당일왕복'));
-    }, [form.schedule]);
-
-    // 고객 노출용 차량 타입 라벨 정규화 (내부 값은 유지)
-    const toVehicleDisplayType = (vehicleType?: string) => {
-        if (!vehicleType) return '';
-        return vehicleType === '스테이하롱 셔틀 리무진 단독'
-            ? '스테이하롱 셔틀 리무진'
-            : vehicleType;
-    };
-
-    const isShtVehicleType = (vehicleType?: string) =>
-        !!vehicleType && vehicleType.includes('스테이하롱 셔틀 리무진');
 
     const isCatherineHorizonCruise = useMemo(
         () => form.cruise_name === '캐서린 호라이즌 크루즈',
@@ -229,9 +191,6 @@ function DirectBookingCruiseContent() {
         return isWeekend ? '주말' : '평일';
     }, [form.checkin]);
 
-    const shouldAutoSoloSht = (vehicleType?: string, wayType?: string) =>
-        isShtVehicleType(vehicleType) && (wayType === '편도' || wayType === '당일왕복');
-
     // ── 가격 계산 결과 ──
     const [priceResult, setPriceResult] = useState<MultiRoomPriceResult | null>(null);
     const [priceLoading, setPriceLoading] = useState(false);
@@ -239,19 +198,9 @@ function DirectBookingCruiseContent() {
     // ── 로딩/UI 상태 ──
     const [loading, setLoading] = useState(false);
     const [user, setUser] = useState<any>(null);
-    const [locationInputError, setLocationInputError] = useState('');
 
     // 로딩 안전 타임아웃 (60초)
     useLoadingTimeout(loading, setLoading);
-
-    const handleLocationInput = (field: 'pickup_location' | 'dropoff_location', value: string) => {
-        const sanitized = normalizeLocationEnglishUpper(value);
-        setForm(prev => ({ ...prev, [field]: sanitized }));
-        setLocationInputError(hasInvalidLocationChars(value) ? '영문으로 입력해 주세요 ^^' : '');
-    };
-
-    const [isShtCarModalOpen, setIsShtCarModalOpen] = useState(false);
-    const [isModalReadOnly, setIsModalReadOnly] = useState(false);
 
     // 아동 생년월일 관련 상태
     const [isChildBirthDateModalOpen, setIsChildBirthDateModalOpen] = useState(false);
@@ -270,13 +219,6 @@ function DirectBookingCruiseContent() {
     const [childExtraBedBirthDates, setChildExtraBedBirthDates] = useState<string[]>(['', '', '']);
     const [tempChildExtraBedBirthDates, setTempChildExtraBedBirthDates] = useState<string[]>(['', '', '']);
     const [childExtraBedCount, setChildExtraBedCount] = useState(1);
-
-    // SHT 차량 좌석 선택 정보
-    const [selectedShtSeat, setSelectedShtSeat] = useState<{
-        vehicle: string;
-        seat: string;
-        category: string;
-    } | null>(null);
 
     // ── 인증 (MyPageLayout이 인증 가드를 담당. 여기서는 user state만 동기화) ──
     useEffect(() => {
@@ -424,135 +366,6 @@ function DirectBookingCruiseContent() {
                 }
             }
 
-            // 차량 정보 로드: 같은 견적의 차량 예약(별도 reservation)을 찾기
-            const { data: vehicleReservations } = await supabase
-                .from('reservation')
-                .select('re_id, re_type')
-                .eq('re_user_id', userId)
-                .eq('re_quote_id', quoteId)
-                .in('re_type', ['car', 'sht'])
-                .order('re_created_at', { ascending: false })
-                .limit(1);
-
-            const vehicleRes = vehicleReservations?.[0];
-            if (vehicleRes) {
-                setExistingVehicleReservationId(vehicleRes.re_id);
-
-                if (vehicleRes.re_type === 'sht') {
-                    // SHT 차량 로드
-                    const { data: shtData } = await supabase
-                        .from('reservation_car_sht')
-                        .select('*')
-                        .eq('reservation_id', vehicleRes.re_id)
-                        .limit(1)
-                        .maybeSingle();
-                    if (shtData) {
-                        // 기존에 저장된 좌석/차량번호를 복원해 수정 저장 시에도 동일 값이 유지되도록 처리
-                        if (shtData.vehicle_number || shtData.seat_number) {
-                            setSelectedShtSeat({
-                                vehicle: shtData.vehicle_number || '',
-                                seat: shtData.seat_number || '',
-                                category: 'roundtrip'
-                            });
-                        }
-
-                        const { data: rentcarData } = await supabase
-                            .from('rentcar_price')
-                            .select('way_type, route, vehicle_type')
-                            .eq('rent_code', shtData.car_price_code)
-                            .maybeSingle();
-
-                        setVehicleForm([{
-                            car_type: rentcarData?.vehicle_type || '스테이하롱 셔틀 리무진',
-                            car_category: rentcarData?.way_type || '당일왕복',
-                            route: rentcarData?.route || '',
-                            car_code: shtData.car_price_code || '',
-                            count: shtData.passenger_count || 1
-                        }]);
-                        setSelectedCarCategory(rentcarData?.way_type || '당일왕복');
-                        setSelectedRoute(rentcarData?.route || '');
-                        if (shtData.pickup_location) {
-                            setForm(prev => ({ ...prev, pickup_location: shtData.pickup_location || '' }));
-                        }
-                        if (shtData.dropoff_location) {
-                            setForm(prev => ({ ...prev, dropoff_location: shtData.dropoff_location || '' }));
-                        }
-                    }
-                } else {
-                    // 크루즈 차량 로드
-                    const { data: carData } = await supabase
-                        .from('reservation_cruise_car')
-                        .select('*')
-                        .eq('reservation_id', vehicleRes.re_id)
-                        .limit(1)
-                        .maybeSingle();
-                    if (carData) {
-                        const code = carData.rentcar_price_code || carData.car_price_code;
-                        const { data: rentcarData } = await supabase
-                            .from('rentcar_price')
-                            .select('way_type, route, vehicle_type')
-                            .eq('rent_code', code)
-                            .maybeSingle();
-
-                        setVehicleForm([{
-                            car_type: carData.vehicle_type || rentcarData?.vehicle_type || '',
-                            car_category: carData.way_type || rentcarData?.way_type || '',
-                            route: carData.route || rentcarData?.route || '',
-                            car_code: code || '',
-                            count: carData.car_count || carData.passenger_count || 1
-                        }]);
-                        if (carData.way_type || rentcarData?.way_type) {
-                            setSelectedCarCategory(carData.way_type || rentcarData?.way_type || '');
-                        }
-                        if (carData.route || rentcarData?.route) {
-                            setSelectedRoute(carData.route || rentcarData?.route || '');
-                        }
-                        if (carData.pickup_location) {
-                            setForm(prev => ({ ...prev, pickup_location: carData.pickup_location || '' }));
-                        }
-                        if (carData.dropoff_location) {
-                            setForm(prev => ({ ...prev, dropoff_location: carData.dropoff_location || '' }));
-                        }
-                    }
-                }
-            } else {
-                // 차량 예약이 없는 경우 - 크루즈 reservation_id로 직접 검색 (호환)
-                const { data: carData } = await supabase
-                    .from('reservation_cruise_car')
-                    .select('*')
-                    .eq('reservation_id', reservation.re_id)
-                    .limit(1)
-                    .maybeSingle();
-                if (carData) {
-                    const code = carData.rentcar_price_code || carData.car_price_code;
-                    const { data: rentcarData } = await supabase
-                        .from('rentcar_price')
-                        .select('way_type, route, vehicle_type')
-                        .eq('rent_code', code)
-                        .maybeSingle();
-
-                    setVehicleForm([{
-                        car_type: carData.vehicle_type || rentcarData?.vehicle_type || '',
-                        car_category: carData.way_type || rentcarData?.way_type || '',
-                        route: carData.route || rentcarData?.route || '',
-                        car_code: code || '',
-                        count: carData.car_count || carData.passenger_count || 1
-                    }]);
-                    if (carData.way_type || rentcarData?.way_type) {
-                        setSelectedCarCategory(carData.way_type || rentcarData?.way_type || '');
-                    }
-                    if (carData.route || rentcarData?.route) {
-                        setSelectedRoute(carData.route || rentcarData?.route || '');
-                    }
-                    if (carData.pickup_location) {
-                        setForm(prev => ({ ...prev, pickup_location: carData.pickup_location || '' }));
-                    }
-                    if (carData.dropoff_location) {
-                        setForm(prev => ({ ...prev, dropoff_location: carData.dropoff_location || '' }));
-                    }
-                }
-            }
-
             setEditDataLoaded(true);
             console.log('✅ 기존 예약 데이터 로드 완료');
         } catch (error) {
@@ -579,7 +392,6 @@ function DirectBookingCruiseContent() {
     useEffect(() => {
         if (form.schedule && form.checkin && form.cruise_name) {
             loadRoomTypes();
-            loadCarCategoryOptions();
             loadCruiseInfo();
             // 당일투어인 경우 옵션 로드
             if (form.schedule === '당일') {
@@ -590,7 +402,6 @@ function DirectBookingCruiseContent() {
             }
         } else {
             setRoomTypeCards([]);
-            setCarCategoryOptions([]);
             setTourOptions([]);
             setSelectedTourOptions([]);
             setCruiseInfoList([]);
@@ -598,40 +409,6 @@ function DirectBookingCruiseContent() {
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [form.schedule, form.checkin, form.cruise_name]);
-
-    // ── 일정 변경 시 선택된 차량 카테고리 검증 ──
-    useEffect(() => {
-        const isMultiDay = form.schedule && ['1박2일', '2박3일'].includes(form.schedule);
-        // 다일정(1박2일, 2박3일)이 선택되었는데 당일왕복이 선택된 경우 초기화
-        if (isMultiDay && selectedCarCategory === '당일왕복') {
-            setSelectedCarCategory('');
-            setSelectedRoute('');
-            setCarTypeOptions([]);
-            setVehicleForm(vehicleForm.map(v => ({
-                ...v,
-                car_category: '',
-                route: '',
-                car_type: '',
-                car_code: ''
-            })));
-        }
-    }, [form.schedule]);
-
-    // ── 크루즈 변경 시 차량 옵션 초기화 및 재로드 ──
-    useEffect(() => {
-        // 차량 카테고리가 선택된 상태면 경로/차량타입 옵션 재로드
-        if (selectedCarCategory) {
-            loadRouteOptions(selectedCarCategory);
-            setSelectedRoute('');
-            setCarTypeOptions([]);
-            setVehicleForm(vehicleForm.map(v => ({
-                ...v,
-                route: '',
-                car_type: '',
-                car_code: ''
-            })));
-        }
-    }, [form.cruise_name]);
 
     // ── 가격 자동 계산 (인원수 변경 시) ──
     useEffect(() => {
@@ -648,16 +425,6 @@ function DirectBookingCruiseContent() {
         selectedTourOptions,
         isCatherineHorizonCruise,
     ]);
-
-    // ── 차량 타입 로드 ──
-    useEffect(() => {
-        if (selectedCarCategory && selectedRoute) {
-            loadCarTypeOptions();
-        } else {
-            setCarTypeOptions([]);
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedCarCategory, selectedRoute]);
 
     // ── 데이터 로드 함수들 ──
 
@@ -890,217 +657,6 @@ function DirectBookingCruiseContent() {
         }
     }, [form.cruise_name, form.schedule, form.checkin, roomSelections, roomTypeCards, selectedTourOptions, isCatherineHorizonCruise]);
 
-    // 차량 관련 (rentcar_price 테이블 사용)
-    const loadCarCategoryOptions = useCallback(async () => {
-        setCarCategoryOptions(carCategoryHardcoded);
-    }, [carCategoryHardcoded]);
-
-    const applyCruiseFilterToRentcarQuery = useCallback((query: any) => {
-        const cruiseName = (form.cruise_name || '').trim();
-        if (!cruiseName) {
-            return query.eq('cruise', '공통');
-        }
-
-        return query.in('cruise', ['공통', cruiseName]);
-    }, [form.cruise_name]);
-
-    const loadRouteOptions = useCallback(async (wayType: string) => {
-        if (!wayType) return;
-        try {
-            let query = supabase
-                .from('rentcar_price')
-                .select('route')
-                .eq('way_type', wayType)
-                .like('route', '%하롱베이%');
-
-            query = applyCruiseFilterToRentcarQuery(query);
-
-            const { data, error } = await query.order('route');
-
-            if (error) throw error;
-            const uniqueRoutes = [...new Set((data || []).map((d: any) => d.route).filter(Boolean))] as string[];
-            setRouteOptions(uniqueRoutes);
-        } catch (error) {
-            console.error('차량 경로 옵션 조회 실패:', error);
-            setRouteOptions([]);
-        }
-    }, [applyCruiseFilterToRentcarQuery]);
-
-    const loadCarTypeOptions = useCallback(async (wayType?: string, route?: string) => {
-        const wt = wayType || selectedCarCategory;
-        const rt = route !== undefined ? route : selectedRoute;
-        try {
-            let query = supabase
-                .from('rentcar_price')
-                .select('vehicle_type')
-                .eq('way_type', wt);
-            if (rt) {
-                query = query.eq('route', rt);
-            } else {
-                // 경로 없는 경우(당일왕복/다른날왕복): 하롱베이 포함 경로의 차량만
-                query = query.like('route', '%하롱베이%');
-            }
-
-            query = applyCruiseFilterToRentcarQuery(query);
-
-            const { data, error } = await query.order('vehicle_type');
-
-            if (error) throw error;
-            let uniqueCarTypes = [...new Set((data || []).map((d: any) => d.vehicle_type).filter(Boolean))] as string[];
-            // 스테이하롱 셔틀 리무진 A/B/C 변형만 제외 (단돁은 표시)
-            uniqueCarTypes = uniqueCarTypes.filter(t => !/스테이하롱 셔틀 리무진 [ABC]/.test(t));
-
-            setCarTypeOptions(uniqueCarTypes);
-        } catch (error) {
-            console.error('차량타입 옵션 조회 실패:', error);
-        }
-    }, [selectedCarCategory, selectedRoute, applyCruiseFilterToRentcarQuery]);
-
-    const getCarCode = async (carType: string, carCategory: string, route?: string): Promise<string> => {
-        try {
-            const effectiveRoute = route || selectedRoute;
-            let query = supabase
-                .from('rentcar_price')
-                .select('rent_code')
-                .eq('way_type', carCategory)
-                .eq('vehicle_type', carType);
-            if (effectiveRoute) {
-                query = query.eq('route', effectiveRoute);
-            }
-
-            query = applyCruiseFilterToRentcarQuery(query);
-
-            const { data, error } = await query.limit(1);
-
-            if (error) throw error;
-            return data?.[0]?.rent_code || '';
-        } catch (error) {
-            console.error('rent_code 조회 실패:', error);
-            return '';
-        }
-    };
-
-    // ── 차량 관련 핸들러 ──
-
-    const handleAddVehicle = () => {
-        if (vehicleForm.length < 6) {
-            setVehicleForm([...vehicleForm, {
-                car_type: '',
-                car_category: selectedCarCategory || '',
-                route: selectedRoute || '',
-                car_code: '',
-                count: 1
-            }]);
-        }
-    };
-
-    const handleRemoveVehicle = (index: number) => {
-        if (vehicleForm.length > 1) {
-            setVehicleForm(vehicleForm.filter((_, i) => i !== index));
-        }
-    };
-
-    const handleVehicleChange = useCallback((index: number, field: string, value: any) => {
-        const newVehicleForm = [...vehicleForm];
-        (newVehicleForm[index] as any)[field] = value;
-
-        if (field === 'car_category') {
-            (newVehicleForm[index] as any).route = '';
-            (newVehicleForm[index] as any).car_type = '';
-            (newVehicleForm[index] as any).car_code = '';
-        }
-
-        if (field === 'route') {
-            (newVehicleForm[index] as any).car_type = '';
-            (newVehicleForm[index] as any).car_code = '';
-        }
-
-        setVehicleForm(newVehicleForm);
-    }, [vehicleForm]);
-
-    // SHT 좌석 선택 핸들러
-    const handleShtSeatSelect = useCallback((seatInfo: { vehicle: string; seat: string; category: string }) => {
-        setSelectedShtSeat(seatInfo);
-
-        if (seatInfo.seat) {
-            const seats = seatInfo.seat.split(',').map(s => s.trim().toUpperCase());
-            let totalPrice = 0;
-            const isAll = seats.includes('ALL');
-
-            // 좌석 수 계산 (ALL이면 전체 10석: C1 + A1~A6 + B1~B3)
-            const seatCount = isAll ? 10 : seats.length;
-
-            // rentcar_price 테이블에서 좌석 타입별 가격 동적 조회
-            const fetchShtPrices = async () => {
-                try {
-                    let totalFetchedPrice = 0;
-
-                    if (isAll) {
-                        // 단독 가격 조회
-                        const { data: soloData } = await supabase
-                            .from('rentcar_price')
-                            .select('price')
-                            .like('vehicle_type', '%스테이하롱 셔틀 리무진 단독%')
-                            .eq('way_type', selectedCarCategory || '당일왕복')
-                            .limit(1)
-                            .single();
-
-                        totalFetchedPrice = soloData?.price || 5400000; // 기본값
-                    } else {
-                        // 좌석 타입별 가격 조회
-                        const seatTypes = new Set<string>();
-                        seats.forEach(seat => {
-                            if (seat.startsWith('A')) seatTypes.add('A');
-                            else if (seat.startsWith('B')) seatTypes.add('B');
-                            else if (seat.startsWith('C')) seatTypes.add('C');
-                        });
-
-                        for (const seatType of seatTypes) {
-                            const typePattern = seatType === 'A' ? '%스테이하롱 셔틀 리무진 A%'
-                                : seatType === 'B' ? '%스테이하롱 셔틀 리무진 B%'
-                                    : '%스테이하롱 셔틀 리무진 C%';
-
-                            const { data: typeData } = await supabase
-                                .from('rentcar_price')
-                                .select('price')
-                                .like('vehicle_type', typePattern)
-                                .not('vehicle_type', 'like', '%단독%')
-                                .eq('way_type', selectedCarCategory || '당일왕복')
-                                .limit(1)
-                                .single();
-
-                            if (typeData?.price) {
-                                const seatCount = seats.filter(s => s.startsWith(seatType)).length;
-                                totalFetchedPrice += typeData.price * seatCount;
-                            }
-                        }
-                    }
-
-                    setVehicleForm(prev => {
-                        const newForm = [...prev];
-                        if (newForm[0]) {
-                            (newForm[0] as any).custom_price = totalFetchedPrice;
-                            newForm[0].count = seatCount;
-                        }
-                        return newForm;
-                    });
-                } catch (error) {
-                    console.error('SHT 가격 조회 실패:', error);
-                    // 실패 시 기본값으로 처리
-                    setVehicleForm(prev => {
-                        const newForm = [...prev];
-                        if (newForm[0]) {
-                            newForm[0].count = seatCount;
-                        }
-                        return newForm;
-                    });
-                }
-            };
-
-            fetchShtPrices();
-        }
-    }, [selectedCarCategory]);
-
     const updateRoomSelection = useCallback((localId: string, patch: Partial<RoomSelection>) => {
         setRoomSelections((prev) => prev.map((room) => room.local_id === localId ? { ...room, ...patch } : room));
     }, []);
@@ -1130,80 +686,6 @@ function DirectBookingCruiseContent() {
         if (!first) return null;
         return roomTypeCards.find((card) => card.id === first.rate_card_id) || null;
     }, [roomSelections, roomTypeCards]);
-
-    // ── 단독예약 전용 크루즈 판별 (엠바사더*, 아테나 프리미엄 크루즈) ──
-    const isShtExclusiveCruise = useMemo(() => {
-        const name = form.cruise_name ?? '';
-        return name.includes('엠바사더') || name === '아테나 프리미엄 크루즈';
-    }, [form.cruise_name]);
-
-    const hasShtSeatRequiredVehicle = useMemo(
-        () => vehicleForm.some(v =>
-            isShtVehicleType(v.car_type)
-            && !v.car_type?.includes('단독')
-            && !shouldAutoSoloSht(v.car_type, v.car_category || selectedCarCategory)
-            && v.count > 0
-        ),
-        [vehicleForm, selectedCarCategory]
-    );
-
-    // ── 단독예약 전용 크루즈 + 스테이하롱 셔틀 리무진 선택 시 자동 단독 처리 ──
-    useEffect(() => {
-        if (!isShtExclusiveCruise) return;
-        const hasSht = vehicleForm.some(v => v.car_type?.includes('스테이하롱 셔틀 리무진') && v.count > 0);
-        if (!hasSht) return;
-        // 단독(ALL) 자동 적용
-        handleShtSeatSelect({ vehicle: 'Vehicle 1', seat: 'ALL', category: 'roundtrip' });
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isShtExclusiveCruise, vehicleForm.map(v => v.car_type).join(',')]);
-
-    // ── 프로모션 FULL / 파라다이스 레거시 크루즈 B·C 객실 선택 시 차량 자동 설정 ──
-    useEffect(() => {
-        if (!selectedRateCard) return;
-
-        const isFullPromo = selectedRateCard.is_promotion && selectedRateCard.room_type?.includes('FULL');
-        const roomType = selectedRateCard.room_type?.trim() ?? '';
-        const isParadiseLegacy = selectedRateCard.cruise_name === '파라다이스 레거시 크루즈';
-        const isParadiseLegacyB = isParadiseLegacy && roomType.includes('B');
-        const isParadiseLegacyC = isParadiseLegacy && /C$/.test(roomType) && !roomType.includes('B');
-
-        if (isFullPromo || isParadiseLegacyC) {
-            // 패키지 셔틀 리무진 자동 선택
-            const autoSelect = async () => {
-                const defaultWayType = '당일왕복';
-                const defaultRoute = '하노이-하롱베이';
-                const code = await getCarCode('패키지 셔틀 리무진', defaultWayType, defaultRoute);
-                setSelectedCarCategory(defaultWayType);
-                setSelectedRoute(defaultRoute);
-                setVehicleForm([{
-                    car_type: '패키지 셔틀 리무진',
-                    car_category: defaultWayType,
-                    route: defaultRoute,
-                    car_code: code,
-                    count: 1
-                }]);
-            };
-            autoSelect();
-        } else if (isParadiseLegacyB) {
-            // 스테이하롱 셔틀 리무진 자동 선택 (좌석 선택은 고객이 직접)
-            const autoSelect = async () => {
-                const defaultWayType = '당일왕복';
-                const defaultRoute = '하노이-하롱베이';
-                const code = await getCarCode('스테이하롱 셔틀 리무진', defaultWayType, defaultRoute);
-                setSelectedCarCategory(defaultWayType);
-                setSelectedRoute(defaultRoute);
-                setVehicleForm([{
-                    car_type: '스테이하롱 셔틀 리무진',
-                    car_category: defaultWayType,
-                    route: defaultRoute,
-                    car_code: code,
-                    count: 1
-                }]);
-            };
-            autoSelect();
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedRateCard]);
 
     // ── 객실별 cruise_info 매칭 (한글/영문 room_type 모두 지원) ──
     const getCruiseInfoForRoom = useCallback((roomType: string, roomTypeEn?: string) => {
@@ -1265,7 +747,7 @@ function DirectBookingCruiseContent() {
     }, [cruiseInfoList]);
 
     // ── 예약 제출 ──
-    const handleReservationSubmit = async (e: React.FormEvent) => {
+    const handleReservationSubmit = async (e: React.FormEvent, mode: 'skip' | 'continue' = 'continue') => {
         e.preventDefault();
         try {
             setLoading(true);
@@ -1289,13 +771,6 @@ function DirectBookingCruiseContent() {
 
             if (!hasSelectedRooms) {
                 alert('최소 1개 객실을 선택해주세요.');
-                return;
-            }
-
-            if (hasShtSeatRequiredVehicle && !selectedShtSeat?.seat) {
-                alert('스하차량은 좌석 선택이 필수입니다. 좌석도를 열어 좌석을 선택하고 "좌석 선택 완료"를 눌러주세요.');
-                setIsModalReadOnly(false);
-                setIsShtCarModalOpen(true);
                 return;
             }
 
@@ -1409,229 +884,14 @@ function DirectBookingCruiseContent() {
                     if (insertCruiseError) throw insertCruiseError;
                 }
 
-                // ── 수정 모드: 차량 예약 업데이트/생성 ──
-                if (vehicleForm.length > 0 && vehicleForm[0].car_type) {
-                    let carCode = vehicleForm[0].car_code;
-                    if (!carCode && vehicleForm[0].car_type && vehicleForm[0].car_category) {
-                        carCode = await getCarCode(vehicleForm[0].car_type, vehicleForm[0].car_category, vehicleForm[0].route || selectedRoute);
-                    }
+                // ── 차량 예약은 별도 페이지(/cruise/vehicle)에서 처리 ──
 
-                    if (carCode) {
-                        const { data: carPriceData } = await supabase
-                            .from('rentcar_price')
-                            .select('*')
-                            .eq('rent_code', carCode)
-                            .maybeSingle();
-
-                        if (carPriceData) {
-                            const carType = vehicleForm[0].car_type || '';
-                            const inputCount = vehicleForm[0].count || 1;
-                            const isSht = carType.includes('스테이하롱 셔틀 리무진');
-                            const isShuttle = (carType.includes('셔틀') || carType.includes('크루즈 셔틀 리무진'))
-                                && !carType.includes('스테이하롱 셔틀 리무진 단독');
-                            const vehicleReservationType = isSht ? 'sht' : 'car';
-
-                            // 크루즈 선착장 정보 조회
-                            let pierLocation = '선착장';
-                            const { data: cruiseLocationData } = await supabase
-                                .from('cruise_location')
-                                .select('pier_location')
-                                .eq('kr_name', form.cruise_name)
-                                .maybeSingle();
-                            if (cruiseLocationData?.pier_location) {
-                                pierLocation = cruiseLocationData.pier_location;
-                            }
-
-                            if (existingVehicleReservationId) {
-                                // 기존 차량 예약 업데이트
-                                await supabase.from('reservation').update({
-                                    re_type: vehicleReservationType,
-                                    total_amount: 0
-                                }).eq('re_id', existingVehicleReservationId);
-
-                                if (isSht) {
-                                    const customTotalPrice = (vehicleForm[0] as any).custom_price;
-                                    const totalPrice = customTotalPrice !== undefined ? customTotalPrice : ((carPriceData.price || 0) * inputCount);
-                                    const pickupLoc = form.pickup_location || null;
-                                    const dropoffLoc = form.dropoff_location || null;
-                                    const pickupDate = form.checkin ? new Date(form.checkin) : null;
-                                    const pickupDateISO = pickupDate ? pickupDate.toISOString() : null;
-                                    let dropoffDateISO: string | null = null;
-                                    if (pickupDate) {
-                                        const dropoffDate = new Date(pickupDate);
-                                        dropoffDate.setDate(dropoffDate.getDate() + 1);
-                                        dropoffDateISO = dropoffDate.toISOString();
-                                    }
-
-                                    // 기존 SHT 데이터 삭제 후 재생성
-                                    await supabase.from('reservation_car_sht').delete().eq('reservation_id', existingVehicleReservationId);
-                                    // 기존 cruise_car 데이터도 정리
-                                    await supabase.from('reservation_cruise_car').delete().eq('reservation_id', existingVehicleReservationId);
-
-                                    const baseData = {
-                                        reservation_id: existingVehicleReservationId,
-                                        vehicle_number: selectedShtSeat?.vehicle || null,
-                                        seat_number: selectedShtSeat?.seat || null,
-                                        car_price_code: carPriceData?.rent_code || 'C013',
-                                        passenger_count: inputCount,
-                                        unit_price: Math.round(totalPrice / (inputCount || 1))
-                                    };
-
-                                    await supabase.from('reservation_car_sht').insert({
-                                        ...baseData,
-                                        usage_date: pickupDateISO,
-                                        sht_category: 'Pickup',
-                                        pickup_location: pickupLoc,
-                                        dropoff_location: pierLocation,
-                                        car_total_price: totalPrice
-                                    });
-                                    await supabase.from('reservation_car_sht').insert({
-                                        ...baseData,
-                                        usage_date: dropoffDateISO,
-                                        sht_category: 'Drop-off',
-                                        pickup_location: pierLocation,
-                                        dropoff_location: dropoffLoc,
-                                        car_total_price: 0
-                                    });
-
-                                    await supabase.from('reservation').update({ total_amount: totalPrice }).eq('re_id', existingVehicleReservationId);
-                                } else {
-                                    const totalPrice = (carPriceData.price || 0) * inputCount;
-                                    const pickupLoc = form.pickup_location || null;
-                                    const dropoffLoc = form.dropoff_location || null;
-                                    const editCarCat = vehicleForm[0]?.car_category || selectedCarCategory || '';
-                                    let editReturnDatetime: string | null = null;
-                                    if (editCarCat === '당일왕복') {
-                                        editReturnDatetime = form.checkin || null;
-                                    } else if (editCarCat === '다른날왕복' && form.checkin) {
-                                        const rd = new Date(form.checkin);
-                                        rd.setDate(rd.getDate() + (form.schedule === '2박3일' ? 2 : 1));
-                                        editReturnDatetime = rd.toISOString().split('T')[0];
-                                    }
-
-                                    // 기존 데이터 삭제 후 재생성
-                                    await supabase.from('reservation_cruise_car').delete().eq('reservation_id', existingVehicleReservationId);
-                                    await supabase.from('reservation_car_sht').delete().eq('reservation_id', existingVehicleReservationId);
-
-                                    await supabase.from('reservation_cruise_car').insert({
-                                        reservation_id: existingVehicleReservationId,
-                                        car_price_code: carPriceData.rent_code,
-                                        rentcar_price_code: carPriceData.rent_code,
-                                        way_type: carPriceData.way_type || vehicleForm[0]?.car_category || null,
-                                        route: carPriceData.route || vehicleForm[0]?.route || null,
-                                        vehicle_type: carPriceData.vehicle_type || vehicleForm[0]?.car_type || null,
-                                        rental_type: carPriceData.rental_type || null,
-                                        car_count: isShuttle ? 0 : inputCount,
-                                        passenger_count: isShuttle ? inputCount : 0,
-                                        pickup_datetime: form.checkin || null,
-                                        pickup_location: pickupLoc,
-                                        dropoff_location: dropoffLoc,
-                                        return_datetime: editReturnDatetime,
-                                        unit_price: carPriceData.price || 0,
-                                        car_total_price: totalPrice
-                                    });
-
-                                    await supabase.from('reservation').update({ total_amount: totalPrice }).eq('re_id', existingVehicleReservationId);
-                                }
-                            } else {
-                                // 기존 차량 예약이 없는 경우 신규 생성
-                                const { data: vehicleReservation, error: vehicleResError } = await supabase
-                                    .from('reservation')
-                                    .insert({
-                                        re_user_id: user.id,
-                                        re_quote_id: quoteId,
-                                        re_type: vehicleReservationType,
-                                        re_status: 'pending',
-                                        re_created_at: new Date().toISOString(),
-                                        total_amount: 0
-                                    })
-                                    .select()
-                                    .single();
-
-                                if (vehicleResError) throw vehicleResError;
-
-                                if (isSht) {
-                                    const customTotalPrice = (vehicleForm[0] as any).custom_price;
-                                    const totalPrice = customTotalPrice !== undefined ? customTotalPrice : ((carPriceData.price || 0) * inputCount);
-                                    const pickupLoc = form.pickup_location || null;
-                                    const dropoffLoc = form.dropoff_location || null;
-                                    const pickupDate = form.checkin ? new Date(form.checkin) : null;
-                                    const pickupDateISO = pickupDate ? pickupDate.toISOString() : null;
-                                    let dropoffDateISO: string | null = null;
-                                    if (pickupDate) {
-                                        const dropoffDate = new Date(pickupDate);
-                                        dropoffDate.setDate(dropoffDate.getDate() + 1);
-                                        dropoffDateISO = dropoffDate.toISOString();
-                                    }
-
-                                    const baseData = {
-                                        reservation_id: vehicleReservation.re_id,
-                                        vehicle_number: selectedShtSeat?.vehicle || null,
-                                        seat_number: selectedShtSeat?.seat || null,
-                                        car_price_code: carPriceData?.rent_code || 'C013',
-                                        passenger_count: inputCount,
-                                        unit_price: Math.round(totalPrice / (inputCount || 1))
-                                    };
-
-                                    await supabase.from('reservation_car_sht').insert({
-                                        ...baseData,
-                                        usage_date: pickupDateISO,
-                                        sht_category: 'Pickup',
-                                        pickup_location: pickupLoc,
-                                        dropoff_location: pierLocation,
-                                        car_total_price: totalPrice
-                                    });
-                                    await supabase.from('reservation_car_sht').insert({
-                                        ...baseData,
-                                        usage_date: dropoffDateISO,
-                                        sht_category: 'Drop-off',
-                                        pickup_location: pierLocation,
-                                        dropoff_location: dropoffLoc,
-                                        car_total_price: 0
-                                    });
-
-                                    await supabase.from('reservation').update({ total_amount: totalPrice }).eq('re_id', vehicleReservation.re_id);
-                                } else {
-                                    const totalPrice = (carPriceData.price || 0) * inputCount;
-                                    const pickupLoc = form.pickup_location || null;
-                                    const dropoffLoc = form.dropoff_location || null;
-                                    const newCarCat = vehicleForm[0]?.car_category || selectedCarCategory || '';
-                                    let newReturnDatetime: string | null = null;
-                                    if (newCarCat === '당일왕복') {
-                                        newReturnDatetime = form.checkin || null;
-                                    } else if (newCarCat === '다른날왕복' && form.checkin) {
-                                        const rd = new Date(form.checkin);
-                                        rd.setDate(rd.getDate() + (form.schedule === '2박3일' ? 2 : 1));
-                                        newReturnDatetime = rd.toISOString().split('T')[0];
-                                    }
-
-                                    await supabase.from('reservation_cruise_car').insert({
-                                        reservation_id: vehicleReservation.re_id,
-                                        car_price_code: carPriceData.rent_code,
-                                        rentcar_price_code: carPriceData.rent_code,
-                                        way_type: carPriceData.way_type || vehicleForm[0]?.car_category || null,
-                                        route: carPriceData.route || vehicleForm[0]?.route || null,
-                                        vehicle_type: carPriceData.vehicle_type || vehicleForm[0]?.car_type || null,
-                                        rental_type: carPriceData.rental_type || null,
-                                        car_count: isShuttle ? 0 : inputCount,
-                                        passenger_count: isShuttle ? inputCount : 0,
-                                        pickup_datetime: form.checkin || null,
-                                        pickup_location: pickupLoc,
-                                        dropoff_location: dropoffLoc,
-                                        return_datetime: newReturnDatetime,
-                                        unit_price: carPriceData.price || 0,
-                                        car_total_price: totalPrice
-                                    });
-
-                                    await supabase.from('reservation').update({ total_amount: totalPrice }).eq('re_id', vehicleReservation.re_id);
-                                }
-                            }
-                        }
-                    }
+                if (mode === 'continue') {
+                    router.push(`/mypage/direct-booking/cruise/vehicle?reservationId=${existingReservationId}&quoteId=${quoteId || ''}`);
+                } else {
+                    alert('예약이 성공적으로 수정되었습니다!');
+                    router.push('/mypage/direct-booking?completed=cruise');
                 }
-
-                alert('예약이 성공적으로 수정되었습니다!');
-                router.push('/mypage/direct-booking?completed=cruise');
                 return;
             }
 
@@ -1685,162 +945,8 @@ function DirectBookingCruiseContent() {
 
             if (cruiseError) throw cruiseError;
 
-            // 크루즈 선착장 정보 조회
-            let pierLocation = '선착장';
-            const { data: cruiseLocationData } = await supabase
-                .from('cruise_location')
-                .select('pier_location')
-                .eq('kr_name', form.cruise_name)
-                .maybeSingle();
-
-            if (cruiseLocationData?.pier_location) {
-                pierLocation = cruiseLocationData.pier_location;
-            }
-
-            // ── 차량 예약 저장 (기존 로직 유지) ──
-            if (vehicleForm.length > 0 && vehicleForm[0].car_type) {
-                let carCode = vehicleForm[0].car_code;
-                if (!carCode && vehicleForm[0].car_type && vehicleForm[0].car_category) {
-                    carCode = await getCarCode(vehicleForm[0].car_type, vehicleForm[0].car_category, vehicleForm[0].route || selectedRoute);
-                }
-
-                if (!carCode) {
-                    alert('선택한 차량의 가격 정보를 찾을 수 없습니다.');
-                    throw new Error('차량 코드를 찾을 수 없습니다');
-                }
-
-                const { data: carPriceData } = await supabase
-                    .from('rentcar_price')
-                    .select('*')
-                    .eq('rent_code', carCode)
-                    .maybeSingle();
-
-                if (carPriceData) {
-                    const carType = vehicleForm[0].car_type || '';
-                    const inputCount = vehicleForm[0].count || 1;
-                    const isSht = carType.includes('스테이하롱 셔틀 리무진');
-                    const isShuttle = (carType.includes('셔틀') || carType.includes('크루즈 셔틀 리무진'))
-                        && !carType.includes('스테이하롱 셔틀 리무진 단독');
-
-                    const vehicleReservationType = isSht ? 'sht' : 'car';
-
-                    const { data: vehicleReservation, error: vehicleResError } = await supabase
-                        .from('reservation')
-                        .insert({
-                            re_user_id: user.id,
-                            re_quote_id: quoteId,
-                            re_type: vehicleReservationType,
-                            re_status: 'pending',
-                            re_created_at: new Date().toISOString(),
-                            total_amount: 0
-                        })
-                        .select()
-                        .single();
-
-                    if (vehicleResError) throw vehicleResError;
-
-                    if (isSht) {
-                        const customTotalPrice = (vehicleForm[0] as any).custom_price;
-                        const totalPrice = customTotalPrice !== undefined ? customTotalPrice : ((carPriceData.price || 0) * inputCount);
-
-                        const pickupLoc = form.pickup_location || null;
-                        const dropoffLoc = form.dropoff_location || null;
-
-                        // 왕복 예약: Pickup + Drop-off 두 행을 동시에 생성
-                        const pickupDate = form.checkin ? new Date(form.checkin) : null;
-                        const pickupDateISO = pickupDate ? pickupDate.toISOString() : null;
-
-                        // 드롭오프 날짜 = 픽업 다음날
-                        let dropoffDateISO: string | null = null;
-                        if (pickupDate) {
-                            const dropoffDate = new Date(pickupDate);
-                            dropoffDate.setDate(dropoffDate.getDate() + 1);
-                            dropoffDateISO = dropoffDate.toISOString();
-                        }
-
-                        const baseData = {
-                            reservation_id: vehicleReservation.re_id,
-                            vehicle_number: selectedShtSeat?.vehicle || null,
-                            seat_number: selectedShtSeat?.seat || null,
-                            car_price_code: carPriceData?.rent_code || 'C013',
-                            passenger_count: inputCount,
-                            unit_price: Math.round(totalPrice / (inputCount || 1))
-                        };
-
-                        // Pickup 행 (가격 포함, 픽업 당일)
-                        const { error: pickupError } = await supabase
-                            .from('reservation_car_sht')
-                            .insert({
-                                ...baseData,
-                                usage_date: pickupDateISO,
-                                sht_category: 'Pickup',
-                                pickup_location: pickupLoc,
-                                dropoff_location: pierLocation,
-                                car_total_price: totalPrice
-                            });
-                        if (pickupError) throw pickupError;
-
-                        // Drop-off 행 (가격 0, 픽업 다음날)
-                        const { error: dropoffError } = await supabase
-                            .from('reservation_car_sht')
-                            .insert({
-                                ...baseData,
-                                usage_date: dropoffDateISO,
-                                sht_category: 'Drop-off',
-                                pickup_location: pierLocation,
-                                dropoff_location: dropoffLoc,
-                                car_total_price: 0
-                            });
-                        if (dropoffError) throw dropoffError;
-
-                        await supabase
-                            .from('reservation')
-                            .update({ total_amount: totalPrice })
-                            .eq('re_id', vehicleReservation.re_id);
-                    } else {
-                        const totalPrice = (carPriceData.price || 0) * inputCount;
-                        const pickupLoc = form.pickup_location || null;
-                        const dropoffLoc = form.dropoff_location || null;
-                        const mainCarCat = vehicleForm[0]?.car_category || selectedCarCategory || '';
-                        let mainReturnDatetime: string | null = null;
-                        if (mainCarCat === '당일왕복') {
-                            mainReturnDatetime = form.checkin || null;
-                        } else if (mainCarCat === '다른날왕복' && form.checkin) {
-                            const rd = new Date(form.checkin);
-                            rd.setDate(rd.getDate() + (form.schedule === '2박3일' ? 2 : 1));
-                            mainReturnDatetime = rd.toISOString().split('T')[0];
-                        }
-
-                        const carReservationData = {
-                            reservation_id: vehicleReservation.re_id,
-                            car_price_code: carPriceData.rent_code,
-                            rentcar_price_code: carPriceData.rent_code,
-                            way_type: carPriceData.way_type || vehicleForm[0]?.car_category || null,
-                            route: carPriceData.route || vehicleForm[0]?.route || null,
-                            vehicle_type: carPriceData.vehicle_type || vehicleForm[0]?.car_type || null,
-                            rental_type: carPriceData.rental_type || null,
-                            car_count: isShuttle ? 0 : inputCount,
-                            passenger_count: isShuttle ? inputCount : 0,
-                            pickup_datetime: form.checkin || null,
-                            pickup_location: pickupLoc,
-                            dropoff_location: dropoffLoc,
-                            return_datetime: mainReturnDatetime,
-                            unit_price: carPriceData.price || 0,
-                            car_total_price: totalPrice
-                        };
-
-                        const { error: carError } = await supabase
-                            .from('reservation_cruise_car')
-                            .insert(carReservationData);
-                        if (carError) throw carError;
-
-                        await supabase
-                            .from('reservation')
-                            .update({ total_amount: totalPrice })
-                            .eq('re_id', vehicleReservation.re_id);
-                    }
-                }
-            }
+            // 크루즈 선착장 정보 조회 (참고용 - 차량 페이지에서 사용)
+            // 차량 예약 저장은 별도 페이지(/cruise/vehicle)에서 처리
 
             // 알림 생성
             try {
@@ -1852,8 +958,12 @@ function DirectBookingCruiseContent() {
                 console.error('알림 생성 실패:', notificationError);
             }
 
-            alert('예약이 성공적으로 완료되었습니다!');
-            router.push('/mypage/direct-booking?completed=cruise');
+            if (mode === 'continue') {
+                router.push(`/mypage/direct-booking/cruise/vehicle?reservationId=${newReservation.re_id}&quoteId=${quoteId || ''}`);
+            } else {
+                alert('예약이 성공적으로 완료되었습니다!');
+                router.push('/mypage/direct-booking?completed=cruise');
+            }
         } catch (error) {
             console.error('예약 저장 오류:', error);
             alert('예약 저장 중 오류가 발생했습니다.');
@@ -2002,7 +1112,7 @@ function DirectBookingCruiseContent() {
             {/* 메인 컨텐츠 */}
             <div className="container mx-auto px-4 py-6">
                 <div className="max-w-4xl mx-auto">
-                    <form onSubmit={handleReservationSubmit} className="bg-white rounded-xl shadow-lg p-6">
+                    <form onSubmit={(e) => handleReservationSubmit(e, 'continue')} className="bg-white rounded-xl shadow-lg p-6">
                         <h2 className="text-xl font-bold text-gray-800 mb-4">📝 크루즈 {isEditMode ? '예약 수정' : '예약'}</h2>
 
                         <div className="bg-blue-50 rounded-lg p-4 mb-4 border border-blue-200">
@@ -2325,269 +1435,9 @@ function DirectBookingCruiseContent() {
                             )}
 
 
-                            {/* ── 차량 선택 영역 ── */}
-                            <div className="space-y-3">
-                                <h3 className="text-lg font-semibold text-gray-800">🚗 차량 선택</h3>
-
-                                {/* 차량 자동 선택 안내 - 패키지 셔틀 리무진 (FULL 프로모션 또는 C 객실) */}
-                                {(
-                                    (selectedRateCard?.is_promotion && selectedRateCard?.room_type?.includes('FULL')) ||
-                                    (selectedRateCard?.cruise_name === '파라다이스 레거시 크루즈' &&
-                                        /C$/.test(selectedRateCard?.room_type?.trim() ?? '') &&
-                                        !(selectedRateCard?.room_type || '').includes('B'))
-                                ) && (
-                                        <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg">
-                                            <div className="flex items-center gap-2 text-sm text-orange-700">
-                                                <span>🎁</span>
-                                                <span>선택하신 객실에 <strong>패키지 셔틀 리무진 왕복</strong>이 자동 선택됩니다.</span>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                {/* 차량 자동 선택 안내 - 스테이하롱 셔틀 리무진 (파라다이스 레거시 크루즈 B 객실) */}
-                                {selectedRateCard?.cruise_name === '파라다이스 레거시 크루즈' &&
-                                    (selectedRateCard?.room_type || '').includes('B') && (
-                                        <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg">
-                                            <div className="flex items-center justify-between gap-2 text-sm text-orange-700">
-                                                <div className="flex items-center gap-2">
-                                                    <span>🎁</span>
-                                                    <span>선택하신 객실에 <strong>스테이하롱 셔틀 리무진 왕복</strong>이 자동 선택됩니다.(원하는 좌석을 선택 하세요)</span>
-                                                </div>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        setIsModalReadOnly(false);
-                                                        setIsShtCarModalOpen(true);
-                                                    }}
-                                                    className="px-3 py-1 bg-blue-600 text-white rounded border border-blue-700 text-sm hover:bg-blue-700 transition-colors shadow-sm whitespace-nowrap"
-                                                    disabled={!form.checkin}
-                                                >
-                                                    🚐 좌석 선택
-                                                </button>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                <div className="mb-4 flex justify-between items-center">
-                                    <h4 className="text-sm font-medium text-gray-700">차량 선택 정보</h4>
-                                    {vehicleForm.some(v => isShtVehicleType(v.car_type) && v.count > 0) && (
-                                        isShtExclusiveCruise ? (
-                                            <span className="px-3 py-1 bg-orange-100 text-orange-700 border border-orange-300 rounded text-sm font-medium">
-                                                🔒 단독 예약 자동 적용
-                                            </span>
-                                        ) : (
-                                            // 파라다이스 레거시 B 객실은 배너에 좌석 선택 버튼이 있으므로 중복 표시 안 함
-                                            !(selectedRateCard?.cruise_name === '파라다이스 레거시 크루즈' &&
-                                                (selectedRateCard?.room_type || '').includes('B')) && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        setIsModalReadOnly(false);
-                                                        setIsShtCarModalOpen(true);
-                                                    }}
-                                                    className="px-3 py-1 bg-blue-600 text-white rounded border border-blue-700 text-sm hover:bg-blue-700 transition-colors shadow-sm"
-                                                    disabled={!form.checkin}
-                                                >
-                                                    🚐 스하차량 좌석도 선택
-                                                </button>
-                                            )
-                                        )
-                                    )}
-                                </div>
-
-                                {hasShtSeatRequiredVehicle && (
-                                    <div className={`mb-3 text-sm px-3 py-2 rounded border ${selectedShtSeat?.seat
-                                        ? 'bg-green-50 text-green-700 border-green-200'
-                                        : 'bg-red-50 text-red-700 border-red-200'
-                                        }`}>
-                                        {selectedShtSeat?.seat
-                                            ? `✅ 좌석 선택 완료: ${selectedShtSeat.vehicle} / ${selectedShtSeat.seat}`
-                                            : '⚠️ 스하차량 좌석이 아직 저장되지 않았습니다. 좌석도에서 선택 후 "좌석 선택 완료"를 눌러주세요.'}
-                                    </div>
-                                )}
-
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">이용방식</label>
-                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                                        {getAvailableCarCategories.map(category => (
-                                            <button
-                                                key={category}
-                                                type="button"
-                                                onClick={async () => {
-                                                    setSelectedCarCategory(category);
-                                                    setSelectedRoute('');
-                                                    setCarTypeOptions([]);
-                                                    const updatedVehicleForm = vehicleForm.map(v => ({
-                                                        ...v,
-                                                        car_category: category,
-                                                        route: '',
-                                                        car_type: '',
-                                                        car_code: ''
-                                                    }));
-                                                    setVehicleForm(updatedVehicleForm);
-                                                    await loadRouteOptions(category);
-                                                }}
-                                                className={`px-4 py-2 border rounded-lg transition-colors ${selectedCarCategory === category
-                                                    ? 'bg-blue-500 text-white border-blue-500'
-                                                    : 'bg-gray-50 border-gray-300 hover:bg-gray-100 text-gray-700'
-                                                    }`}
-                                            >
-                                                {category}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                {vehicleForm.map((vehicle, vehicleIndex) => (
-                                    <div key={vehicleIndex} className="border border-green-200 rounded-lg p-4 bg-green-50">
-                                        <div className="flex items-center justify-between mb-3">
-                                            <h4 className="font-semibold text-gray-800">차량 {vehicleIndex + 1}</h4>
-                                            {vehicleForm.length > 1 && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleRemoveVehicle(vehicleIndex)}
-                                                    className="text-red-600 hover:text-red-800 text-sm"
-                                                >
-                                                    삭제
-                                                </button>
-                                            )}
-                                        </div>
-
-                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                            {selectedCarCategory && (
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-600 mb-1">경로</label>
-                                                    <select
-                                                        value={vehicle.route || ''}
-                                                        onChange={async (e) => {
-                                                            const selectedRouteValue = e.target.value;
-                                                            setSelectedRoute(selectedRouteValue);
-                                                            handleVehicleChange(vehicleIndex, 'route', selectedRouteValue);
-
-                                                            if (selectedCarCategory && selectedRouteValue) {
-                                                                await loadCarTypeOptions(selectedCarCategory, selectedRouteValue);
-                                                            }
-                                                        }}
-                                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-green-500"
-                                                        disabled={!vehicle.car_category}
-                                                    >
-                                                        <option value="">경로 선택</option>
-                                                        {routeOptions.map(route => (
-                                                            <option key={route} value={route}>{route}</option>
-                                                        ))}
-                                                    </select>
-                                                </div>
-                                            )}
-
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-600 mb-1">차량타입</label>
-                                                <select
-                                                    value={vehicle.car_type}
-                                                    onChange={async (e) => {
-                                                        const selectedCarType = e.target.value;
-                                                        const selectedWayType = vehicle.car_category || selectedCarCategory;
-                                                        const normalizedCarType = shouldAutoSoloSht(selectedCarType, selectedWayType)
-                                                            ? '스테이하롱 셔틀 리무진 단독'
-                                                            : selectedCarType;
-
-                                                        handleVehicleChange(vehicleIndex, 'car_type', normalizedCarType);
-
-                                                        if (normalizedCarType && vehicle.car_category) {
-                                                            const code = await getCarCode(normalizedCarType, vehicle.car_category, vehicle.route || selectedRoute);
-                                                            handleVehicleChange(vehicleIndex, 'car_code', code);
-                                                        }
-
-                                                        // 스테이하롱 셔틀 리무진 선택 시 좌석 선택 모달 자동 오픈
-                                                        if (
-                                                            isShtVehicleType(normalizedCarType)
-                                                            && !normalizedCarType.includes('단독')
-                                                            && !shouldAutoSoloSht(normalizedCarType, selectedWayType)
-                                                            && !isShtExclusiveCruise
-                                                        ) {
-                                                            setIsModalReadOnly(false);
-                                                            setIsShtCarModalOpen(true);
-                                                        }
-                                                    }}
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-green-500"
-                                                    disabled={!vehicle.car_category || !vehicle.route}
-                                                >
-                                                    <option value="">
-                                                        {!vehicle.car_category ? '이용방식을 먼저 선택하세요' : (!vehicle.route ? '경로를 먼저 선택하세요' : '차량타입 선택')}
-                                                    </option>
-                                                    {carTypeOptions.map(carType => (
-                                                        <option key={carType} value={carType}>{toVehicleDisplayType(carType)}</option>
-                                                    ))}
-                                                </select>
-                                            </div>
-
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-600 mb-1">
-                                                    {vehicle.car_type && ((vehicle.car_type.includes('셔틀') || vehicle.car_type.includes('크루즈 셔틀 리무진')) && !vehicle.car_type.includes('스테이하롱 셔틀 리무진 단독'))
-                                                        ? '인원수'
-                                                        : '차량수'
-                                                    }
-                                                </label>
-                                                <input
-                                                    type="number" min="0"
-                                                    value={vehicle.count || ''}
-                                                    placeholder="수량 입력"
-                                                    onChange={(e) => {
-                                                        const inputValue = parseInt(e.target.value);
-                                                        if (e.target.value === '' || inputValue >= 0) {
-                                                            handleVehicleChange(vehicleIndex, 'count', inputValue || 0);
-                                                        }
-                                                    }}
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-green-500"
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-
-                                {vehicleForm.length < 3 && (
-                                    <button
-                                        type="button"
-                                        onClick={handleAddVehicle}
-                                        className="w-full border-2 border-dashed border-green-300 rounded-lg p-4 text-green-600 hover:border-green-400 hover:text-green-700 transition-colors"
-                                    >
-                                        + 차량 추가 (최대 3개)
-                                    </button>
-                                )}
-                            </div>
-
                             {/* 추가 정보 */}
                             <div className="space-y-4">
                                 <h3 className="text-lg font-semibold text-gray-800">📝 추가 정보</h3>
-                                <p className="text-sm text-red-500">
-                                    * 편도시 픽업 장소, 드롭오프 장소 중에 하나만 입력하세요
-                                </p>
-
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">픽업 장소</label>
-                                        <input
-                                            type="text"
-                                            value={form.pickup_location}
-                                            onChange={(e) => handleLocationInput('pickup_location', e.target.value)}
-                                            placeholder="영문 대문자로 입력해 주세요"
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">드롭오프 장소</label>
-                                        <input
-                                            type="text"
-                                            value={form.dropoff_location}
-                                            onChange={(e) => handleLocationInput('dropoff_location', e.target.value)}
-                                            placeholder="영문 대문자로 입력해 주세요"
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        />
-                                    </div>
-                                </div>
-
-                                {locationInputError && (
-                                    <p className="text-sm text-red-500">{locationInputError}</p>
-                                )}
 
                                 {/* 커넥팅룸 신청 */}
                                 {(form.schedule === '1박2일' || form.schedule === '2박3일') && (
@@ -2718,7 +1568,7 @@ function DirectBookingCruiseContent() {
 
 
                         {/* 제출 버튼 */}
-                        <div className="flex justify-end gap-4 mt-6">
+                        <div className="flex flex-col sm:flex-row justify-end gap-3 mt-6">
                             <button
                                 type="button"
                                 onClick={() => router.push('/mypage/direct-booking')}
@@ -2727,13 +1577,24 @@ function DirectBookingCruiseContent() {
                                 취소
                             </button>
                             <button
+                                type="button"
+                                disabled={loading || !priceResult}
+                                onClick={(e) => handleReservationSubmit(e as any, 'skip')}
+                                className="px-6 py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:bg-gray-400"
+                            >
+                                {loading ? '저장 중...' : '차량 없이 예약 완료'}
+                            </button>
+                            <button
                                 type="submit"
                                 disabled={loading || !priceResult}
                                 className="px-6 py-3 bg-sky-600 text-white rounded-lg hover:bg-sky-700 disabled:bg-gray-400"
                             >
-                                {loading ? '예약 중...' : isEditMode ? (priceResult ? '수정 완료' : '객실을 선택하세요') : (priceResult ? '예약 완료' : '객실을 선택하세요')}
+                                {loading ? '저장 중...' : '차량 선택 →'}
                             </button>
                         </div>
+                        <p className="mt-3 text-sm text-sky-700 bg-sky-50 border border-sky-200 rounded-lg px-4 py-3 text-center">
+                            🚗 크루즈 선착장 이동 전용차량 예약시 <strong>차량 선택</strong>을 클릭 하세요 ^^
+                        </p>
                     </form>
                 </div>
             </div>
@@ -2912,19 +1773,6 @@ function DirectBookingCruiseContent() {
                         </div>
                     </div>
                 </div>
-            )}
-
-            {/* SHT 차량 좌석도 모달 */}
-            {isShtCarModalOpen && (
-                <ShtCarSeatMap
-                    isOpen={isShtCarModalOpen}
-                    onClose={() => setIsShtCarModalOpen(false)}
-                    usageDate={form.checkin}
-                    onSeatSelect={handleShtSeatSelect}
-                    readOnly={isModalReadOnly}
-                    requiredSeats={vehicleForm.find(v => v.car_type?.includes('스테이하롱 셔틀 리무진'))?.count || 1}
-                    preventCloseWithoutSave={true}
-                />
             )}
         </div>
     );
