@@ -1,395 +1,393 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import ManagerLayout from '@/components/ManagerLayout';
 import supabase from '@/lib/supabase';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 타입 정의
-// ─────────────────────────────────────────────────────────────────────────────
-
-type CruiseInfoRow = {
+type CruiseLocation = {
     id: string;
-    cruise_code: string | null;
-    cruise_name: string | null;
-    name: string | null;
-    description: string | null;
-    duration: string | null;
-    category: string | null;
-    star_rating: string | null;
-    capacity: string | null;
-    awards: string | null;
-    cruise_image: string | null;
-    facilities: any;
-    inclusions: string | null;
-    exclusions: string | null;
-    itinerary: any;
-    cancellation_policy: any;
-    updated_at: string | null;
+    kr_name: string;
+    en_name: string;
+    pier_location: string | null;
+    pier_map_url: string | null;
+    tour_schedule_url: string | null;
+    details: string | null;
 };
 
-type CruiseForm = {
-    cruise_name: string;
-    name: string;
-    category: string;
-    duration: string;
-    description: string;
-    star_rating: string;
-    capacity: string;
-    awards: string;
-    cruise_image: string;
-    inclusions: string;
-    exclusions: string;
-    facilities_text: string;
-    itinerary_text: string;
-    cancellation_policy_text: string;
+const EMPTY_FORM: Omit<CruiseLocation, 'id'> = {
+    kr_name: '',
+    en_name: '',
+    pier_location: '',
+    pier_map_url: '',
+    tour_schedule_url: '',
+    details: '',
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 유틸
-// ─────────────────────────────────────────────────────────────────────────────
+const normalizeName = (value: string | null | undefined) => (value || '').trim().toLowerCase();
 
-const arrayToText = (value: any): string => {
-    if (!value) return '';
-    if (Array.isArray(value)) return value.map((v) => String(v ?? '').trim()).filter(Boolean).join('\n');
-    if (typeof value === 'string') return value;
-    return '';
-};
-
-const textToArray = (text: string): string[] =>
-    Array.from(new Set(text.split(/\r?\n|,/).map((v) => v.trim()).filter(Boolean)));
-
-const jsonToText = (value: any): string => {
-    if (value === null || value === undefined) return '';
-    if (typeof value === 'string') return value;
-    try { return JSON.stringify(value, null, 2); } catch { return ''; }
-};
-
-const rowToCruiseForm = (ref: CruiseInfoRow, cruiseName: string): CruiseForm => ({
-    cruise_name: cruiseName,
-    name: ref.name || '',
-    category: ref.category || '',
-    duration: ref.duration || '',
-    description: ref.description || '',
-    star_rating: ref.star_rating || '',
-    capacity: ref.capacity || '',
-    awards: ref.awards || '',
-    cruise_image: ref.cruise_image || '',
-    inclusions: ref.inclusions || '',
-    exclusions: ref.exclusions || '',
-    facilities_text: arrayToText(ref.facilities),
-    itinerary_text: jsonToText(ref.itinerary),
-    cancellation_policy_text: jsonToText(ref.cancellation_policy),
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// 페이지
-// ─────────────────────────────────────────────────────────────────────────────
-
-export default function CruiseInfoManagePage() {
-    const [rows, setRows] = useState<CruiseInfoRow[]>([]);
+export default function CruiseInfoPage() {
+    const [rows, setRows] = useState<CruiseLocation[]>([]);
+    const [rateCardCruiseNames, setRateCardCruiseNames] = useState<Set<string>>(new Set());
     const [loading, setLoading] = useState(true);
-    const [forms, setForms] = useState<Record<string, CruiseForm>>({});
-    const [savingKey, setSavingKey] = useState<string>('');
+    const [saving, setSaving] = useState(false);
+    const [backfilling, setBackfilling] = useState(false);
+    const [backfillResult, setBackfillResult] = useState<string>('');
+    const [search, setSearch] = useState('');
 
-    // ── 데이터 로드 ──
-    const loadData = useCallback(async () => {
+    // 모달 상태
+    const [modalOpen, setModalOpen] = useState(false);
+    const [editTarget, setEditTarget] = useState<CruiseLocation | null>(null);
+    const [form, setForm] = useState<Omit<CruiseLocation, 'id'>>(EMPTY_FORM);
+    const [formError, setFormError] = useState('');
+
+    const load = useCallback(async () => {
         setLoading(true);
-        try {
-            const { data, error } = await supabase
-                .from('cruise_info')
-                .select('id, cruise_code, cruise_name, name, description, duration, category, star_rating, capacity, awards, cruise_image, facilities, inclusions, exclusions, itinerary, cancellation_policy, updated_at')
-                .order('cruise_name', { ascending: true })
-                .order('updated_at', { ascending: false })
-                .limit(2000);
+        const [locationRes, rateCardRes] = await Promise.all([
+            supabase
+                .from('cruise_location')
+                .select('id, kr_name, en_name, pier_location, pier_map_url, tour_schedule_url, details')
+                .order('kr_name'),
+            supabase
+                .from('cruise_rate_card')
+                .select('cruise_name')
+                .not('cruise_name', 'is', null),
+        ]);
 
-            if (error) { alert(`데이터 조회 실패: ${error.message}`); return; }
-
-            const arr = (data || []) as CruiseInfoRow[];
-            setRows(arr);
-
-            // 크루즈별 대표 행(첫 행) 기준으로 폼 초기화
-            const seen = new Set<string>();
-            const nextForms: Record<string, CruiseForm> = {};
-            for (const r of arr) {
-                const key = r.cruise_name || '';
-                if (!key || seen.has(key)) continue;
-                seen.add(key);
-                nextForms[key] = rowToCruiseForm(r, key);
-            }
-            setForms(nextForms);
-        } finally {
-            setLoading(false);
+        if (!locationRes.error) {
+            setRows(locationRes.data || []);
         }
+
+        if (!rateCardRes.error) {
+            const names = new Set<string>();
+            (rateCardRes.data || []).forEach((row: any) => {
+                const key = normalizeName(row?.cruise_name);
+                if (key) names.add(key);
+            });
+            setRateCardCruiseNames(names);
+        }
+        setLoading(false);
     }, []);
 
-    useEffect(() => { loadData(); }, [loadData]);
+    useEffect(() => { load(); }, [load]);
 
-    // ── distinct 크루즈 목록 ──
-    const cruiseList = useMemo(() => {
-        const seen = new Set<string>();
-        return rows.filter((r) => { const k = r.cruise_name || ''; if (!k || seen.has(k)) return false; seen.add(k); return true; });
-    }, [rows]);
+    const openAdd = () => {
+        setEditTarget(null);
+        setForm(EMPTY_FORM);
+        setFormError('');
+        setModalOpen(true);
+    };
 
-    // ── 공통 정보 저장 (bulk-common API) ──
-    const handleSave = async (cruiseName: string) => {
-        const form = forms[cruiseName];
-        if (!form) return;
-        if (!form.cruise_name.trim()) { alert('크루즈명을 입력하세요.'); return; }
-        setSavingKey(cruiseName);
+    const openEdit = (row: CruiseLocation) => {
+        setEditTarget(row);
+        setForm({
+            kr_name: row.kr_name,
+            en_name: row.en_name,
+            pier_location: row.pier_location ?? '',
+            pier_map_url: row.pier_map_url ?? '',
+            tour_schedule_url: row.tour_schedule_url ?? '',
+            details: row.details ?? '',
+        });
+        setFormError('');
+        setModalOpen(true);
+    };
+
+    const handleSave = async () => {
+        if (!form.kr_name.trim() || !form.en_name.trim()) {
+            setFormError('한글명과 영문명은 필수 항목입니다.');
+            return;
+        }
+        setSaving(true);
+        setFormError('');
         try {
-            const res = await fetch('/api/manager/cruise-room/bulk-common', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    cruise_name: cruiseName,
-                    new_cruise_name: form.cruise_name.trim(),
-                    name: form.name,
-                    category: form.category,
-                    duration: form.duration,
-                    description: form.description,
-                    star_rating: form.star_rating,
-                    capacity: form.capacity,
-                    awards: form.awards,
-                    cruise_image: form.cruise_image,
-                    inclusions: form.inclusions,
-                    exclusions: form.exclusions,
-                    facilities: textToArray(form.facilities_text),
-                    itinerary: form.itinerary_text || null,
-                    cancellation_policy: form.cancellation_policy_text || null,
-                }),
-            });
-            const json = await res.json();
-            if (!res.ok || !json.success) { alert(`저장 실패: ${json.error || res.statusText}`); return; }
-            alert(`저장 완료 (${json.updated_count}건 적용)`);
-            await loadData();
-        } catch (e: any) {
-            alert(`저장 오류: ${e?.message || e}`);
+            if (editTarget) {
+                const { error } = await supabase
+                    .from('cruise_location')
+                    .update({
+                        kr_name: form.kr_name.trim(),
+                        en_name: form.en_name.trim(),
+                        pier_location: form.pier_location?.trim() || null,
+                        pier_map_url: form.pier_map_url?.trim() || null,
+                        tour_schedule_url: form.tour_schedule_url?.trim() || null,
+                        details: form.details?.trim() || null,
+                    })
+                    .eq('id', editTarget.id);
+                if (error) throw error;
+            } else {
+                const { error } = await supabase
+                    .from('cruise_location')
+                    .insert({
+                        kr_name: form.kr_name.trim(),
+                        en_name: form.en_name.trim(),
+                        pier_location: form.pier_location?.trim() || null,
+                        pier_map_url: form.pier_map_url?.trim() || null,
+                        tour_schedule_url: form.tour_schedule_url?.trim() || null,
+                        details: form.details?.trim() || null,
+                    });
+                if (error) throw error;
+            }
+            setModalOpen(false);
+            await load();
+        } catch (err: any) {
+            setFormError(err?.message || '저장 중 오류가 발생했습니다.');
         } finally {
-            setSavingKey('');
+            setSaving(false);
         }
     };
 
-    // ── 신규 크루즈 추가 ──
-    const handleAddCruise = async () => {
-        const cruiseName = prompt('새 크루즈명을 입력하세요');
-        if (!cruiseName?.trim()) return;
-        const roomName = prompt('임시 객실명을 입력하세요 (예: Standard Room)');
-        if (!roomName?.trim()) return;
-        try {
-            const res = await fetch('/api/manager/cruise-room/upsert', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ cruise_name: cruiseName.trim(), room_name: roomName.trim(), name: cruiseName.trim() }),
-            });
-            const json = await res.json();
-            if (!res.ok || !json.success) { alert(`추가 실패: ${json.error}`); return; }
-            await loadData();
-        } catch (e: any) { alert(`오류: ${e?.message}`); }
+    const handleDelete = async (row: CruiseLocation) => {
+        if (!confirm(`"${row.kr_name}" 항목을 삭제하시겠습니까?`)) return;
+        const { error } = await supabase.from('cruise_location').delete().eq('id', row.id);
+        if (error) { alert('삭제 실패: ' + error.message); return; }
+        await load();
     };
 
-    const update = (key: string, patch: Partial<CruiseForm>) =>
-        setForms((prev) => ({ ...prev, [key]: { ...prev[key], ...patch } }));
+    const handleBackfillPierLocation = async () => {
+        if (!confirm('현재 선착장으로 남아있는 SHT 차량의 픽업/드랍 위치를 최신 크루즈 선착장으로 보정하시겠습니까?')) {
+            return;
+        }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // 렌더링
-    // ─────────────────────────────────────────────────────────────────────
+        setBackfilling(true);
+        setBackfillResult('');
+        try {
+            const res = await fetch('/api/admin/cruise-pier-backfill', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+            });
+            const json = await res.json();
+            if (!res.ok || !json?.success) {
+                throw new Error(json?.error || '선착장 보정 처리에 실패했습니다.');
+            }
+
+            const msg = `보정 완료: ${json.updatedCount}건 (대상 ${json.targetCount}건)`;
+            setBackfillResult(msg);
+            alert(msg);
+        } catch (err: any) {
+            const message = err?.message || '선착장 보정 처리 중 오류가 발생했습니다.';
+            setBackfillResult(`오류: ${message}`);
+            alert(message);
+        } finally {
+            setBackfilling(false);
+        }
+    };
+
+    const filtered = rows.filter(r =>
+        r.kr_name.includes(search)
+        || r.en_name.toLowerCase().includes(search.toLowerCase())
+        || (r.pier_location || '').includes(search)
+        || (r.pier_map_url || '').toLowerCase().includes(search.toLowerCase())
+        || (r.tour_schedule_url || '').toLowerCase().includes(search.toLowerCase())
+        || (r.details || '').includes(search)
+    );
+
+    const hasRateCard = (row: CruiseLocation) => {
+        const krKey = normalizeName(row.kr_name);
+        const enKey = normalizeName(row.en_name);
+        return rateCardCruiseNames.has(krKey) || rateCardCruiseNames.has(enKey);
+    };
 
     return (
-        <ManagerLayout title="🚢 크루즈 정보 관리" activeTab="cruise-info">
-            <div className="space-y-4">
-                {/* 상단 컨트롤 */}
-                <div className="bg-white rounded-lg border border-gray-200 p-4 flex flex-wrap items-center gap-3">
-                    <span className="text-sm text-gray-600">등록된 크루즈: <b>{cruiseList.length}개</b></span>
-                    <button type="button" onClick={handleAddCruise}
-                        className="px-3 py-1.5 text-xs bg-blue-50 text-blue-600 rounded border border-blue-200 hover:bg-blue-100">
-                        ➕ 새 크루즈 추가
-                    </button>
-                    <button type="button" onClick={loadData}
-                        className="px-3 py-1.5 text-xs bg-gray-50 text-gray-600 rounded border border-gray-200 hover:bg-gray-100">
-                        🔄 새로고침
-                    </button>
-                    <span className="ml-auto text-xs text-gray-400">
-                        * 저장 시 같은 크루즈명의 모든 객실 행에 공통 정보가 일괄 적용됩니다.
-                    </span>
+        <ManagerLayout title="크루즈 정보" activeTab="cruise-info">
+            <div className="p-4 w-full">
+                {/* 헤더 */}
+                <div className="flex items-center justify-between mb-4">
+                    <div>
+                        <h1 className="text-lg font-semibold text-gray-700">🚢 크루즈 정보 관리</h1>
+                        <p className="text-xs text-gray-500 mt-0.5">크루즈 로케이션(cruise_location) 데이터를 관리합니다.</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={handleBackfillPierLocation}
+                            disabled={backfilling}
+                            className="px-3 py-1.5 text-xs bg-emerald-500 text-white rounded-md hover:bg-emerald-600 transition-colors font-medium disabled:opacity-50"
+                        >
+                            {backfilling ? '보정 중...' : '기존 선착장 보정'}
+                        </button>
+                        <button
+                            onClick={openAdd}
+                            className="px-3 py-1.5 text-xs bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors font-medium"
+                        >
+                            + 추가
+                        </button>
+                    </div>
                 </div>
 
-                {loading ? (
-                    <div className="bg-white rounded-lg border border-gray-200 p-16 text-center text-sm text-gray-500">로딩 중...</div>
-                ) : cruiseList.length === 0 ? (
-                    <div className="bg-white rounded-lg border border-gray-200 p-16 text-center text-sm text-gray-500">등록된 크루즈가 없습니다.</div>
-                ) : (
-                    cruiseList.map((row) => {
-                        const key = row.cruise_name || '';
-                        const form = forms[key];
-                        if (!form) return null;
-                        const isSaving = savingKey === key;
-                        return (
-                            <CruiseInfoCard
-                                key={key}
-                                cruiseName={key}
-                                form={form}
-                                saving={isSaving}
-                                onChange={(patch) => update(key, patch)}
-                                onSave={() => handleSave(key)}
-                            />
-                        );
-                    })
+                {backfillResult && (
+                    <p className="mb-3 text-xs text-gray-600 bg-emerald-50 border border-emerald-100 rounded-md px-3 py-2">
+                        {backfillResult}
+                    </p>
                 )}
-            </div>
-        </ManagerLayout>
-    );
-}
 
-// ─────────────────────────────────────────────────────────────────────────────
-// CruiseInfoCard — 크루즈 1개 공통 정보 편집 카드
-// ─────────────────────────────────────────────────────────────────────────────
+                {/* 검색 */}
+                <div className="mb-3">
+                    <input
+                        type="text"
+                        placeholder="크루즈명 / 영문명 / 선착장 / 맵 / 스케줄 / 디테일 검색..."
+                        value={search}
+                        onChange={e => setSearch(e.target.value)}
+                        className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-300"
+                    />
+                </div>
 
-function CruiseInfoCard({
-    cruiseName,
-    form,
-    saving,
-    onChange,
-    onSave,
-}: {
-    cruiseName: string;
-    form: CruiseForm;
-    saving: boolean;
-    onChange: (patch: Partial<CruiseForm>) => void;
-    onSave: () => void;
-}) {
-    const [open, setOpen] = useState(true);
+                {/* 카드 목록 */}
+                <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-3">
+                    {loading ? (
+                        <div className="flex justify-center items-center h-40">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
+                        </div>
+                    ) : filtered.length === 0 ? (
+                        <div className="text-center py-12 text-sm text-gray-400">데이터가 없습니다.</div>
+                    ) : (
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                            {filtered.map((row) => (
+                                <div key={row.id} className="relative rounded-lg border border-gray-200 bg-gray-50/40 p-4">
+                                    {hasRateCard(row) && (
+                                        <div className="absolute right-3 top-3">
+                                            <span className="inline-flex items-center rounded-full bg-blue-500 px-2.5 py-1 text-[10px] font-semibold text-white">
+                                                RATE CARD
+                                            </span>
+                                        </div>
+                                    )}
 
-    return (
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-            {/* 헤더 */}
-            <div className="flex items-center justify-between px-5 py-3 bg-gray-50 border-b border-gray-200">
-                <button type="button" onClick={() => setOpen((v) => !v)}
-                    className="flex items-center gap-2 text-sm font-semibold text-gray-700 hover:text-blue-600">
-                    <span>{open ? '▼' : '▶'}</span>
-                    <span>🚢 {cruiseName}</span>
-                    {form.star_rating && <span className="text-xs text-yellow-600 font-normal">{form.star_rating}</span>}
-                    {form.duration && <span className="text-xs text-gray-500 font-normal">{form.duration}</span>}
-                </button>
-                <button type="button" onClick={onSave} disabled={saving}
-                    className="px-3 py-1.5 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50">
-                    {saving ? '저장 중...' : '💾 저장'}
-                </button>
-            </div>
+                                    <div className="pr-24">
+                                        <h3 className="text-sm font-semibold text-gray-800">{row.kr_name}</h3>
+                                        <p className="text-xs text-gray-500 mt-1">{row.en_name}</p>
+                                    </div>
 
-            {open && (
-                <div className="p-5 space-y-4">
-                    {/* 기본 정보 */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        <Field label="크루즈명 (한글)" value={form.cruise_name} onChange={(v) => onChange({ cruise_name: v })} className="md:col-span-2" />
-                        <Field label="크루즈명 (영문)" value={form.name} onChange={(v) => onChange({ name: v })} className="md:col-span-2" />
-                        <Field label="등급" value={form.star_rating} onChange={(v) => onChange({ star_rating: v })} placeholder="6성급" />
-                        <Field label="카테고리" value={form.category} onChange={(v) => onChange({ category: v })} />
-                        <Field label="기간" value={form.duration} onChange={(v) => onChange({ duration: v })} placeholder="1박2일" />
-                        <Field label="수용 인원" value={form.capacity} onChange={(v) => onChange({ capacity: v })} placeholder="160명" />
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <Field label="수상 이력" value={form.awards} onChange={(v) => onChange({ awards: v })} />
-                        <Field label="대표 이미지 URL" value={form.cruise_image} onChange={(v) => onChange({ cruise_image: v })} />
-                    </div>
+                                    <div className="mt-3 space-y-2 text-xs">
+                                        <div>
+                                            <p className="text-gray-400">선착장</p>
+                                            <p className="text-gray-700">{row.pier_location || '-'}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-gray-400">맵 URL</p>
+                                            <p className="text-gray-700 break-all">{row.pier_map_url || '-'}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-gray-400">스케줄 URL</p>
+                                            <p className="text-gray-700 break-all">{row.tour_schedule_url || '-'}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-gray-400">디테일</p>
+                                            <p className="text-gray-700 whitespace-pre-wrap">{row.details || '-'}</p>
+                                        </div>
+                                    </div>
 
-                    {/* 크루즈 설명 + 시설 */}
-                    <TextArea label="크루즈 설명" rows={3} value={form.description} onChange={(v) => onChange({ description: v })} />
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <TextArea
-                            label="시설 목록 (한 줄에 하나씩)"
-                            rows={7}
-                            value={form.facilities_text}
-                            onChange={(v) => onChange({ facilities_text: v })}
-                            placeholder={'온수 수영장\n엘리베이터 (전 층)\n의료 센터'}
-                        />
-                        <TextArea label="✅ 포함 사항" rows={7} value={form.inclusions} onChange={(v) => onChange({ inclusions: v })} />
-                        <TextArea label="❌ 불포함 사항" rows={7} value={form.exclusions} onChange={(v) => onChange({ exclusions: v })} />
-                    </div>
-
-                    {/* 대표 이미지 미리보기 */}
-                    {form.cruise_image && (
-                        <div className="flex items-center gap-3">
-                            <img
-                                src={form.cruise_image}
-                                alt={form.cruise_name}
-                                className="h-24 w-auto rounded-md border border-gray-200 object-cover"
-                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                            />
-                            <span className="text-xs text-gray-400">대표 이미지 미리보기</span>
+                                    <div className="mt-4 flex justify-end gap-1.5">
+                                        <button
+                                            onClick={() => openEdit(row)}
+                                            className="px-2.5 py-1 text-xs bg-blue-50 text-blue-600 rounded hover:bg-blue-100 transition-colors"
+                                        >
+                                            수정
+                                        </button>
+                                        <button
+                                            onClick={() => handleDelete(row)}
+                                            className="px-2.5 py-1 text-xs bg-red-50 text-red-500 rounded hover:bg-red-100 transition-colors"
+                                        >
+                                            삭제
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
                         </div>
                     )}
+                </div>
 
-                    {/* 일정표 / 취소 규정 */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <details open className="rounded border border-gray-200">
-                            <summary className="cursor-pointer px-3 py-2 text-xs text-gray-600 bg-gray-50 select-none">
-                                📋 일정표 (JSON 또는 텍스트)
-                            </summary>
-                            <div className="p-3">
-                                <TextArea
-                                    rows={10}
-                                    value={form.itinerary_text}
-                                    onChange={(v) => onChange({ itinerary_text: v })}
-                                    placeholder={'[\n  {"day": 1, "title": "1일차", "schedule": [{"time": "08:00", "activity": "탑승 시작"}]}\n]'}
+                <p className="text-xs text-gray-400 mt-2">총 {filtered.length}건 {search && `(전체 ${rows.length}건 중 필터)`}</p>
+            </div>
+
+            {/* 추가/수정 모달 */}
+            {modalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+                    <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4 p-5">
+                        <h2 className="text-base font-semibold text-gray-700 mb-4">
+                            {editTarget ? '✏️ 크루즈 정보 수정' : '➕ 크루즈 정보 추가'}
+                        </h2>
+
+                        <div className="space-y-3">
+                            <div>
+                                <label className="block text-xs font-medium text-gray-600 mb-1">한글명 <span className="text-red-400">*</span></label>
+                                <input
+                                    type="text"
+                                    value={form.kr_name}
+                                    onChange={e => setForm(f => ({ ...f, kr_name: e.target.value }))}
+                                    placeholder="예: 엠버서더 크루즈"
+                                    className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-300"
                                 />
                             </div>
-                        </details>
-                        <details open className="rounded border border-gray-200">
-                            <summary className="cursor-pointer px-3 py-2 text-xs text-gray-600 bg-gray-50 select-none">
-                                📜 취소 규정 (JSON 또는 텍스트)
-                            </summary>
-                            <div className="p-3">
-                                <TextArea
-                                    rows={10}
-                                    value={form.cancellation_policy_text}
-                                    onChange={(v) => onChange({ cancellation_policy_text: v })}
-                                    placeholder={'[\n  {"condition": "보딩코드 발급 전", "penalty": "수수료 없는 무료 취소"}\n]'}
+                            <div>
+                                <label className="block text-xs font-medium text-gray-600 mb-1">영문명 <span className="text-red-400">*</span></label>
+                                <input
+                                    type="text"
+                                    value={form.en_name}
+                                    onChange={e => setForm(f => ({ ...f, en_name: e.target.value }))}
+                                    placeholder="예: Ambassador Cruise"
+                                    className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-300"
                                 />
                             </div>
-                        </details>
+                            <div>
+                                <label className="block text-xs font-medium text-gray-600 mb-1">선착장</label>
+                                <input
+                                    type="text"
+                                    value={form.pier_location ?? ''}
+                                    onChange={e => setForm(f => ({ ...f, pier_location: e.target.value }))}
+                                    placeholder="예: Tuan Chau, Ha Long"
+                                    className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-300"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-medium text-gray-600 mb-1">맵 URL</label>
+                                <input
+                                    type="text"
+                                    value={form.pier_map_url ?? ''}
+                                    onChange={e => setForm(f => ({ ...f, pier_map_url: e.target.value }))}
+                                    placeholder="예: https://maps.google.com/..."
+                                    className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-300"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-medium text-gray-600 mb-1">투어 스케줄</label>
+                                <input
+                                    type="text"
+                                    value={form.tour_schedule_url ?? ''}
+                                    onChange={e => setForm(f => ({ ...f, tour_schedule_url: e.target.value }))}
+                                    placeholder="예: https://.../schedule"
+                                    className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-300"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-medium text-gray-600 mb-1">디테일</label>
+                                <textarea
+                                    value={form.details ?? ''}
+                                    onChange={e => setForm(f => ({ ...f, details: e.target.value }))}
+                                    placeholder="선착장 상세 설명"
+                                    rows={3}
+                                    className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-300"
+                                />
+                            </div>
+                        </div>
+
+                        {formError && (
+                            <p className="mt-2 text-xs text-red-500">{formError}</p>
+                        )}
+
+                        <div className="flex justify-end gap-2 mt-5">
+                            <button
+                                onClick={() => setModalOpen(false)}
+                                className="px-3 py-1.5 text-xs text-gray-600 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
+                            >
+                                취소
+                            </button>
+                            <button
+                                onClick={handleSave}
+                                disabled={saving}
+                                className="px-4 py-1.5 text-xs bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors disabled:opacity-50"
+                            >
+                                {saving ? '저장 중...' : '저장'}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
-        </div>
-    );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// 공용 UI 컴포넌트
-// ─────────────────────────────────────────────────────────────────────────────
-
-function Field({ label, value, onChange, className = '', placeholder }: {
-    label: string; value: string; onChange: (v: string) => void; className?: string; placeholder?: string;
-}) {
-    return (
-        <div className={className}>
-            <label className="block text-xs text-gray-500 mb-1">{label}</label>
-            <input
-                type="text"
-                value={value}
-                onChange={(e) => onChange(e.target.value)}
-                placeholder={placeholder}
-                className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-md focus:ring-1 focus:ring-blue-400 focus:outline-none"
-            />
-        </div>
-    );
-}
-
-function TextArea({ label, rows = 3, value, onChange, placeholder }: {
-    label?: string; rows?: number; value: string; onChange: (v: string) => void; placeholder?: string;
-}) {
-    return (
-        <div>
-            {label && <label className="block text-xs text-gray-500 mb-1">{label}</label>}
-            <textarea
-                rows={rows}
-                value={value}
-                onChange={(e) => onChange(e.target.value)}
-                placeholder={placeholder}
-                className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-md focus:ring-1 focus:ring-blue-400 focus:outline-none font-mono"
-            />
-        </div>
+        </ManagerLayout>
     );
 }
