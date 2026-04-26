@@ -227,6 +227,31 @@ function extractSnapshotChangedFields(snapshotData: any, baseTable?: string) {
     return rows;
 }
 
+/* ─── 실제로 변경된 requested 행만 추출 (snapshot.original과 비교) ─── */
+function filterActuallyChangedRequestedRows(
+    requestedRows: any[],
+    originalRows: any[],
+    baseTable?: string,
+): any[] {
+    if (!Array.isArray(requestedRows) || requestedRows.length === 0) return [];
+    const tableExcluded = (baseTable && TABLE_SPECIFIC_EXCLUDED_FIELDS[baseTable]) || new Set<string>();
+
+    const originalByKey = new Map<string, any>();
+    (originalRows || []).forEach((row: any, idx: number) => {
+        const key = String(row?.id || row?.way_type || idx);
+        originalByKey.set(key, row);
+    });
+
+    return requestedRows.filter((row: any, idx: number) => {
+        const key = String(row?.id || row?.way_type || idx);
+        const original = originalByKey.get(key) || {};
+        return Object.keys(row || {}).some((k) => {
+            if (EXCLUDED_FIELDS.has(k) || tableExcluded.has(k)) return false;
+            return normalizeValue(original?.[k]) !== normalizeValue(row?.[k]);
+        });
+    });
+}
+
 function isHeaderLikeChangedRow(row: { field: unknown; before: unknown; after: unknown }): boolean {
     const f = normalizeValue(row.field).trim();
     const b = normalizeValue(row.before).trim();
@@ -287,6 +312,13 @@ export default function ReservationEditApprovalPage() {
     const [airportTempRows, setAirportTempRows] = useState<any[]>([]);
     const [detailLoading, setDetailLoading] = useState(false);
 
+    // 상세 패널 상단 표시용: 크루즈명 / 체크인 / 차종
+    const [reservationContext, setReservationContext] = useState<{
+        cruiseName?: string;
+        checkin?: string;
+        vehicleTypes?: string[];
+    } | null>(null);
+
     const [managerNote, setManagerNote] = useState('');
     const [processing, setProcessing] = useState(false);
     const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
@@ -324,6 +356,58 @@ export default function ReservationEditApprovalPage() {
         }
     }, [statusFilter]);
 
+    const loadReservationContext = useCallback(async (reservationId: string) => {
+        try {
+            // 1) reservation_cruise: room_price_code, checkin
+            const { data: rc } = await supabase
+                .from('reservation_cruise')
+                .select('room_price_code, checkin')
+                .eq('reservation_id', reservationId)
+                .maybeSingle();
+
+            let cruiseName = '';
+            const checkin = rc?.checkin || '';
+            if (rc?.room_price_code) {
+                const { data: card } = await supabase
+                    .from('cruise_rate_card')
+                    .select('cruise_name')
+                    .eq('id', rc.room_price_code)
+                    .maybeSingle();
+                cruiseName = card?.cruise_name || '';
+            }
+
+            // 2) reservation_cruise_car: car_price_code 목록 → 차종 조회
+            const { data: cars } = await supabase
+                .from('reservation_cruise_car')
+                .select('car_price_code')
+                .eq('reservation_id', reservationId);
+            const carCodes = Array.from(new Set((cars || []).map((c: any) => c?.car_price_code).filter(Boolean)));
+            const vehicleTypes: string[] = [];
+            if (carCodes.length > 0) {
+                const { data: cps } = await supabase
+                    .from('car_price')
+                    .select('car_code, car_type')
+                    .in('car_code', carCodes);
+                (cps || []).forEach((p: any) => { if (p?.car_type) vehicleTypes.push(p.car_type); });
+                // car_price에서 못 찾은 코드는 rentcar_price 조회
+                const found = new Set((cps || []).map((p: any) => p?.car_code));
+                const missing = carCodes.filter((c) => !found.has(c));
+                if (missing.length > 0) {
+                    const { data: rps } = await supabase
+                        .from('rentcar_price')
+                        .select('rent_code, vehicle_type')
+                        .in('rent_code', missing);
+                    (rps || []).forEach((p: any) => { if (p?.vehicle_type) vehicleTypes.push(p.vehicle_type); });
+                }
+            }
+
+            setReservationContext({ cruiseName, checkin, vehicleTypes });
+        } catch (err) {
+            console.error('예약 컨텍스트 조회 실패:', err);
+            setReservationContext(null);
+        }
+    }, []);
+
     const loadComparison = useCallback(async (row: ChangeRequestRow) => {
         setSelectedRequest(row);
         setManagerNote(row.manager_note || '');
@@ -332,12 +416,15 @@ export default function ReservationEditApprovalPage() {
         setTempData(null);
         setAirportBaseRows([]);
         setAirportTempRows([]);
+        setReservationContext(null);
 
         try {
             const mapping = SERVICE_TABLE_MAP[row.re_type];
             if (!mapping) return;
 
             const safeReservationId = normalizeReservationId(row.reservation_id);
+            // 컨텍스트(크루즈명/체크인/차종) 비동기 로드
+            loadReservationContext(safeReservationId);
             if (row.re_type === 'airport') {
                 const [baseRowsRes, tempRowsRes] = await Promise.all([
                     supabase.from(mapping.baseTable).select('*').eq('reservation_id', safeReservationId).order('created_at', { ascending: false }),
@@ -370,7 +457,7 @@ export default function ReservationEditApprovalPage() {
         } finally {
             setDetailLoading(false);
         }
-    }, []);
+    }, [loadReservationContext]);
 
     useEffect(() => { loadRequests(); }, [loadRequests]);
 
@@ -457,7 +544,12 @@ export default function ReservationEditApprovalPage() {
             const baseRows = Array.isArray(currentRows) ? currentRows : [];
             const processedIds = new Set<string>();
 
-            for (const requestedRow of snapshotRequestedRows) {
+            // ✅ 실제로 변경된 행만 필터링 (픽업/드롭 독립 승인)
+            const originalRowsForDiff = Array.isArray(req.snapshot_data?.original) ? req.snapshot_data.original : [];
+            const actuallyChanged = filterActuallyChangedRequestedRows(snapshotRequestedRows, originalRowsForDiff, mapping.baseTable);
+            const rowsToProcess = actuallyChanged.length > 0 ? actuallyChanged : snapshotRequestedRows;
+
+            for (const requestedRow of rowsToProcess) {
                 const payload: Record<string, any> = {};
                 let target: any = null;
 
@@ -478,13 +570,13 @@ export default function ReservationEditApprovalPage() {
                 });
                 if (Object.keys(payload).length === 0) continue;
 
+                // ✅ 기존 행이 있을 때만 UPDATE — 없으면 스킵 (잡아 INSERT로 새 행 추가 금지)
                 if (target?.id) {
                     processedIds.add(target.id);
                     const { error } = await supabase.from(mapping.baseTable).update(payload).eq('id', target.id);
                     if (error) throw error;
                 } else {
-                    const { error } = await supabase.from(mapping.baseTable).insert({ reservation_id: safeReservationId, ...payload });
-                    if (error) throw error;
+                    console.warn('⚠️ 매칭되는 기존 행을 찾지 못해 스킵:', { way_type: requestedRow?.way_type, id: requestedRow?.id });
                 }
             }
 
@@ -623,22 +715,26 @@ export default function ReservationEditApprovalPage() {
                 const airportRequestedRows = snapshotRequestedRows.length > 0 ? snapshotRequestedRows : airportTempRows;
 
                 if ((mapping.baseTable === 'reservation_airport' || mapping.baseTable === 'reservation_cruise_car') && airportRequestedRows.length > 0) {
-                    // ✅ 픽업/드롭 독립 처리: 기존 행 조회 → 매칭되는 행만 UPDATE → 매칭 안 되는 행은 INSERT
+                    // ✅ 픽업/드롭 독립 처리: 기존 행 조회 → 매칭되는 행만 UPDATE (매칭 안 되면 스킵 — 새 행 추가 금지)
                     const { data: currentRows, error: currentRowsError } = await supabase
                         .from(mapping.baseTable).select('*').eq('reservation_id', safeReservationId);
                     if (currentRowsError) throw currentRowsError;
                     const baseRows = Array.isArray(currentRows) ? currentRows : [];
                     const processedIds = new Set<string>();
 
-                    for (const requestedRow of airportRequestedRows) {
+                    // ✅ 실제로 변경된 행만 필터링 (건당 승인: 픽업만 수정 시 드롭 행은 건들지 않음)
+                    const originalRowsForDiff = Array.isArray(selectedRequest.snapshot_data?.original)
+                        ? selectedRequest.snapshot_data.original : [];
+                    const actuallyChanged = filterActuallyChangedRequestedRows(airportRequestedRows, originalRowsForDiff, mapping.baseTable);
+                    const rowsToProcess = actuallyChanged.length > 0 ? actuallyChanged : airportRequestedRows;
+
+                    for (const requestedRow of rowsToProcess) {
                         const payload: Record<string, any> = {};
                         let target: any = null;
-                        let matchedById = false;
 
                         // 1️⃣ id로 정확히 매칭
                         if (requestedRow?.id) {
                             target = baseRows.find((r: any) => r?.id === requestedRow.id);
-                            matchedById = true;
                         }
                         // 2️⃣ id가 없으면 way_type으로 매칭 (픽업/드롭 구분)
                         if (!target && requestedRow?.way_type) {
@@ -655,14 +751,13 @@ export default function ReservationEditApprovalPage() {
 
                         if (Object.keys(payload).length === 0) continue;
 
-                        // ✅ UPDATE 또는 INSERT
+                        // ✅ 기존 행이 있을 때만 UPDATE — 없으면 스킵 (새 행 추가 금지)
                         if (target?.id) {
                             processedIds.add(target.id);
                             const { error: updateErr } = await supabase.from(mapping.baseTable).update(payload).eq('id', target.id);
                             if (updateErr) throw updateErr;
                         } else {
-                            const { error: insertErr } = await supabase.from(mapping.baseTable).insert({ reservation_id: safeReservationId, ...payload });
-                            if (insertErr) throw insertErr;
+                            console.warn('⚠️ 매칭되는 기존 행을 찾지 못해 스킵:', { way_type: requestedRow?.way_type, id: requestedRow?.id });
                         }
                     }
 
@@ -894,12 +989,31 @@ export default function ReservationEditApprovalPage() {
                                     {' · '}신청: {new Date(selectedRequest.submitted_at).toLocaleString('ko-KR')}
                                     {' · '}{userMap[selectedRequest.requester_user_id]?.name || '-'}
                                 </p>
+                                {reservationContext && (reservationContext.cruiseName || reservationContext.checkin || (reservationContext.vehicleTypes?.length || 0) > 0) && (
+                                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                                        {reservationContext.cruiseName && (
+                                            <span className="px-2 py-1 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-100">
+                                                🚢 크루즈: <strong>{reservationContext.cruiseName}</strong>
+                                            </span>
+                                        )}
+                                        {reservationContext.checkin && (
+                                            <span className="px-2 py-1 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-100">
+                                                📅 체크인: <strong>{String(reservationContext.checkin).slice(0, 10)}</strong>
+                                            </span>
+                                        )}
+                                        {reservationContext.vehicleTypes && reservationContext.vehicleTypes.length > 0 && (
+                                            <span className="px-2 py-1 rounded-md bg-amber-50 text-amber-700 border border-amber-100">
+                                                🚙 차종: <strong>{Array.from(new Set(reservationContext.vehicleTypes)).join(', ')}</strong>
+                                            </span>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                             <div className="flex items-center gap-2">
                                 <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_MAP[selectedRequest.status]?.cls || ''}`}>
                                     {STATUS_MAP[selectedRequest.status]?.label || selectedRequest.status}
                                 </span>
-                                <button onClick={() => { setSelectedRequest(null); setBaseData(null); setTempData(null); }}
+                                <button onClick={() => { setSelectedRequest(null); setBaseData(null); setTempData(null); setReservationContext(null); }}
                                     className="text-xs text-gray-400 hover:text-gray-600 px-2 py-0.5 border border-gray-200 rounded">✕ 닫기</button>
                             </div>
                         </div>
