@@ -24,6 +24,7 @@ export default function ManagerQuotesPage() {
   const { user } = useRole();
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [search, setSearch] = useState('');
+  const [searchResults, setSearchResults] = useState<Quote[]>([]);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [filter, setFilter] = useState<string>(typeof window !== 'undefined' ? (new URLSearchParams(window.location.search).get('filter') || 'submitted') : 'submitted');
@@ -33,6 +34,10 @@ export default function ManagerQuotesPage() {
   const [selectedQuotes, setSelectedQuotes] = useState<Set<string>>(new Set());
   const [isDeleting, setIsDeleting] = useState(false);
   const [syncingApproval, setSyncingApproval] = useState(false);
+  const [loadedDaysCount, setLoadedDaysCount] = useState(3);
+  const [canLoadMore, setCanLoadMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
 
   // 초기 로딩 (권한 체크 제거)
   useEffect(() => {
@@ -44,6 +49,9 @@ export default function ManagerQuotesPage() {
 
   const handleFilterChange = async (newFilter: string) => {
     setFilter(newFilter);
+    setLoadedDaysCount(3); // 필터 변경 시 초기화
+    setSearch('');
+    setSearchResults([]);
     // 필터 변경 시 즉시 조회 시작 (새 필터 값 전달)
     await loadQuotes(newFilter);
     await loadStats();
@@ -102,10 +110,32 @@ export default function ManagerQuotesPage() {
     try {
       await syncQuotesLinkedToReservations();
       const currentFilter = filterOverride !== undefined ? filterOverride : filter;
+      
+      // 최근 loadedDaysCount일 범위 계산
+      const now = new Date();
+      const startDate = new Date(now.getTime() - loadedDaysCount * 24 * 60 * 60 * 1000);
+      const startDateStr = startDate.toISOString().split('T')[0];
+      
       let q = supabase.from('quote').select('id, title, status, user_id, created_at, approved_at, total_price').order('created_at', { ascending: false });
       if (currentFilter !== 'all') q = q.eq('status', currentFilter as any);
+      
+      // 날짜 범위 필터
+      q = q.gte('created_at', startDateStr);
+      
       const { data, error } = await q;
       if (error) throw error;
+
+      // 전체 데이터 중 더 로드할 데이터가 있는지 확인하기 위해 한 건 더 조회
+      let hasMore = false;
+      try {
+        const checkDate = new Date(startDate.getTime() - 1 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        let checkQ = supabase.from('quote').select('id', { count: 'exact', head: true });
+        if (currentFilter !== 'all') checkQ = checkQ.eq('status', currentFilter as any);
+        checkQ = checkQ.lt('created_at', startDateStr);
+        const { count } = await checkQ;
+        hasMore = (count || 0) > 0;
+      } catch (e) { /* noop */ }
+      setCanLoadMore(hasMore);
 
       const enriched = await Promise.all((data || []).map(async (item: any) => {
         let nickname = item?.user_id ? `${String(item.user_id).slice(0, 8)}...` : '알 수 없음';
@@ -117,8 +147,61 @@ export default function ManagerQuotesPage() {
       }));
 
       setQuotes(enriched as Quote[]);
+      setSearchResults([]);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
+  }
+
+  async function handleLoadMore() {
+    setLoadingMore(true);
+    try {
+      const newDaysCount = loadedDaysCount + 3;
+      setLoadedDaysCount(newDaysCount);
+      await loadQuotes();
+    } catch (e) {
+      console.error(e);
+      setLoadedDaysCount(loadedDaysCount); // 롤백
+    } finally {
+      setLoadingMore(false);
+    }
+  }
+
+  async function handleSearch(searchTerm: string) {
+    setSearch(searchTerm);
+    if (!searchTerm.trim()) {
+      setSearchResults([]);
+      return;
+    }
+
+    setSearchLoading(true);
+    try {
+      const s = searchTerm.trim().toLowerCase();
+      
+      // 전체 DB에서 검색 (날짜 제한 없음)
+      const { data, error } = await supabase
+        .from('quote')
+        .select('id, title, status, user_id, created_at, approved_at, total_price')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      // 메모리에서 필터링
+      const enriched = await Promise.all((data || []).map(async (item: any) => {
+        let nickname = item?.user_id ? `${String(item.user_id).slice(0, 8)}...` : '알 수 없음';
+        try {
+          const { data: u } = await supabase.from('users').select('name, email').eq('id', item.user_id).single();
+          if (u) nickname = u.name || (u.email ? u.email.split('@')[0] : nickname);
+        } catch (_e) { /* ignore */ }
+        return { ...item, user_nickname: nickname };
+      }));
+
+      const filtered = (enriched as Quote[]).filter(q => {
+        return (String(q.user_nickname || '')).toLowerCase().includes(s) || (String(q.title || '')).toLowerCase().includes(s) || (String(q.id || '')).toLowerCase().includes(s);
+      });
+
+      setSearchResults(filtered);
+    } catch (e) { console.error(e); }
+    finally { setSearchLoading(false); }
   }
 
   async function loadStats() {
@@ -247,11 +330,7 @@ export default function ManagerQuotesPage() {
     }
   };
 
-  const filteredQuotes = quotes.filter(q => {
-    if (!search.trim()) return true;
-    const s = search.trim().toLowerCase();
-    return (String(q.user_nickname || '')).toLowerCase().includes(s) || (String(q.title || '')).toLowerCase().includes(s) || (String(q.id || '')).toLowerCase().includes(s);
-  });
+  const filteredQuotes = search.trim() ? searchResults : quotes;
 
   return (
     <ManagerLayout title="견적 관리" activeTab="quotes">
@@ -293,12 +372,13 @@ export default function ManagerQuotesPage() {
             </div>
 
             <div className="md:max-w-xs w-full">
-              <h4 className="text-md font-semibold mb-2">고객/견적 검색</h4>
+              <h4 className="text-md font-semibold mb-2">고객/견적 검색 (전체)</h4>
               <div className="relative">
-                <input value={search} onChange={e => setSearch(e.target.value)} className="w-full px-4 py-2 border rounded-lg pr-10" placeholder="이름, 이메일, 견적ID 검색..." />
-                {search && <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">✕</button>}
+                <input value={search} onChange={e => handleSearch(e.target.value)} disabled={searchLoading} className="w-full px-4 py-2 border rounded-lg pr-10 disabled:bg-gray-100" placeholder="이름, 이메일, 견적ID 검색..." />
+                {search && <button onClick={() => handleSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">✕</button>}
               </div>
-              {search && <p className="text-sm text-gray-500 mt-1">"{search}" 검색 결과: {filteredQuotes.length}건</p>}
+              {searchLoading && <p className="text-sm text-gray-500 mt-1">검색 중...</p>}
+              {search && !searchLoading && <p className="text-sm text-gray-500 mt-1">"{search}" 검색 결과: {filteredQuotes.length}건</p>}
             </div>
           </div>
           <div className="mt-3 flex justify-end">
@@ -314,7 +394,10 @@ export default function ManagerQuotesPage() {
 
         {/* list */}
         <div className="space-y-3">
-          {filteredQuotes.length === 0 ? (
+          {/* 로딩 상태 표시 */}
+          {loading && <div className="bg-white rounded border p-8 text-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div><p className="mt-4 text-gray-600">데이터를 불러오는 중...</p></div>}
+
+          {!loading && filteredQuotes.length === 0 ? (
             <div className="bg-white rounded border p-8 text-center">
               <div className="text-4xl">📋</div>
               <p className="text-gray-500">조건에 맞는 견적이 없습니다.</p>
@@ -323,7 +406,7 @@ export default function ManagerQuotesPage() {
           ) : (
             <>
               {/* 전체 선택 및 삭제 버튼 */}
-              <div className="bg-white rounded border p-3 flex items-center justify-between">
+              {filteredQuotes.length > 0 && <div className="bg-white rounded border p-3 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
@@ -348,6 +431,7 @@ export default function ManagerQuotesPage() {
                     </button>
                   )}
                 </div>
+              </div>}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
@@ -385,8 +469,29 @@ export default function ManagerQuotesPage() {
                   </div>
                 ))}
               </div>
+
+              {/* 더 불러오기 버튼 - 검색 중이 아니고 추가로 로드할 데이터가 있을 때만 표시 */}
+              {!search && canLoadMore && (
+                <div className="flex justify-center mt-4">
+                  <button
+                    onClick={handleLoadMore}
+                    disabled={loadingMore}
+                    className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-60"
+                  >
+                    {loadingMore ? '불러오는 중...' : `📥 더 불러오기 (최근 ${loadedDaysCount + 3}일 표시)`}
+                  </button>
+                </div>
+              )}
+
+              {/* 로딩 범위 표시 - 검색 중이 아닐 때만 */}
+              {!search && (
+                <div className="text-center text-xs text-gray-500 mt-2">
+                  최근 {loadedDaysCount}일치의 견적을 표시하고 있습니다.
+                </div>
+              )}
             </>
           )}
+        </div>
         </div>
 
         <div className="bg-yellow-50 border border-yellow-200 rounded p-4">
