@@ -260,38 +260,52 @@ function CruiseReservationContent() {
         }
     };
 
-    // 모든 룸 정보 로드 및 중복 제거
+    // 모든 룸 정보 로드 및 중복 제거 (N+1 → 2 batched queries)
     const loadAllRoomInfo = async (roomItems: any[]) => {
         try {
-            const allRoomsData = [];
-            const roomPriceDataList = [];
+            // 1) 모든 room id를 한 번에 조회
+            const roomIds = Array.from(new Set(roomItems.map((r: any) => r.service_ref_id).filter(Boolean)));
+            if (roomIds.length === 0) {
+                setRoomsData([]);
+                setRoomPriceInfo([]);
+                return;
+            }
+            const { data: roomRows } = await supabase
+                .from('room')
+                .select('*')
+                .in('id', roomIds);
+            const roomMap: Record<string, any> = {};
+            (roomRows || []).forEach((r: any) => { if (r?.id) roomMap[r.id] = r; });
 
-            // 각 room item에 대해 정보 조회
-            for (const roomItem of roomItems) {
-                // room 테이블에서 룸 정보 조회
-                const { data: roomData } = await supabase
-                    .from('room')
+            // 2) 모든 rate card 정보를 한 번에 조회
+            const roomCodes = Array.from(new Set((roomRows || []).map((r: any) => r.room_code).filter(Boolean)));
+            const rateMap: Record<string, any[]> = {};
+            if (roomCodes.length > 0) {
+                const { data: rateRows } = await supabase
+                    .from('cruise_rate_card')
                     .select('*')
-                    .eq('id', roomItem.service_ref_id)
-                    .single();
+                    .in('id', roomCodes);
+                (rateRows || []).forEach((rc: any) => {
+                    const key = String(rc.id);
+                    if (!rateMap[key]) rateMap[key] = [];
+                    rateMap[key].push(rc);
+                });
+            }
 
-                if (roomData) {
-                    // cruise_rate_card 테이블에서 가격 정보 조회
-                    const { data: rateCardData } = await supabase
-                        .from('cruise_rate_card')
-                        .select('*')
-                        .eq('id', roomData.room_code);
-
-                    if (rateCardData && rateCardData.length > 0) {
-                        // quote_item 정보와 함께 저장
-                        allRoomsData.push({
-                            ...roomData,
-                            quoteItem: roomItem,
-                            priceInfo: rateCardData[0] // 첫 번째 가격 정보 사용
-                        });
-
-                        roomPriceDataList.push(...rateCardData);
-                    }
+            // 3) 메모리 상에서 조립
+            const allRoomsData: any[] = [];
+            const roomPriceDataList: any[] = [];
+            for (const roomItem of roomItems) {
+                const roomData = roomMap[roomItem.service_ref_id];
+                if (!roomData) continue;
+                const rateCardData = rateMap[roomData.room_code] || [];
+                if (rateCardData.length > 0) {
+                    allRoomsData.push({
+                        ...roomData,
+                        quoteItem: roomItem,
+                        priceInfo: rateCardData[0],
+                    });
+                    roomPriceDataList.push(...rateCardData);
                 }
             }
 
