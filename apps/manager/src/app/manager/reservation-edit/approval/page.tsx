@@ -555,6 +555,45 @@ export default function ReservationEditApprovalPage() {
 
     useEffect(() => { loadRequests(); }, [loadRequests]);
 
+    /* ── 카드 뷰용: reservation_id별 크루즈명 일괄 fetch ── */
+    const [cruiseInfoByRes, setCruiseInfoByRes] = useState<Record<string, { cruiseName?: string; checkin?: string }>>({});
+    useEffect(() => {
+        if (requests.length === 0) return;
+        const resIds = Array.from(new Set(requests.map(r => normalizeReservationId(r.reservation_id)).filter(Boolean)));
+        const missing = resIds.filter(id => !(id in cruiseInfoByRes));
+        if (missing.length === 0) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const { data: cruiseRows } = await supabase
+                    .from('reservation_cruise')
+                    .select('reservation_id, room_price_code, checkin')
+                    .in('reservation_id', missing);
+                const codes = Array.from(new Set((cruiseRows || []).map((c: any) => c?.room_price_code).filter(Boolean)));
+                const codeToName = new Map<string, string>();
+                if (codes.length > 0) {
+                    const { data: cards } = await supabase
+                        .from('cruise_rate_card')
+                        .select('id, cruise_name')
+                        .in('id', codes);
+                    (cards || []).forEach((c: any) => { if (c?.id) codeToName.set(c.id, c.cruise_name || ''); });
+                }
+                const next: Record<string, { cruiseName?: string; checkin?: string }> = {};
+                missing.forEach(id => { next[id] = {}; });
+                (cruiseRows || []).forEach((c: any) => {
+                    next[c.reservation_id] = {
+                        cruiseName: c.room_price_code ? codeToName.get(c.room_price_code) || '' : '',
+                        checkin: c.checkin || '',
+                    };
+                });
+                if (!cancelled) setCruiseInfoByRes(prev => ({ ...prev, ...next }));
+            } catch (err) {
+                console.error('크루즈 정보 일괄 조회 실패:', err);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [requests]);
+
     /* ── 그룹화: 날짜 → 사용자 ── */
     const groupedRequests = useMemo((): GroupedDate[] => {
         const dateMap = new Map<string, Map<string, ChangeRequestRow[]>>();
@@ -620,6 +659,7 @@ export default function ReservationEditApprovalPage() {
         req: ChangeRequestRow,
         userId: string | undefined,
         noteOverride?: string,
+        rowFilter?: (r: any) => boolean,
     ) => {
         const mapping = SERVICE_TABLE_MAP[req.re_type];
         if (!mapping) throw new Error(`지원하지 않는 서비스 타입: ${req.re_type}`);
@@ -643,7 +683,12 @@ export default function ReservationEditApprovalPage() {
             // ✅ 실제로 변경된 행만 필터링 (픽업/드롭 독립 승인)
             const originalRowsForDiff = Array.isArray(req.snapshot_data?.original) ? req.snapshot_data.original : [];
             const actuallyChanged = filterActuallyChangedRequestedRows(snapshotRequestedRows, originalRowsForDiff, mapping.baseTable);
-            const rowsToProcess = actuallyChanged.length > 0 ? actuallyChanged : snapshotRequestedRows;
+            const candidateRows = actuallyChanged.length > 0 ? actuallyChanged : snapshotRequestedRows;
+            // ✅ rowFilter 적용 (카드별 단행 승인)
+            const rowsToProcess = rowFilter ? candidateRows.filter(rowFilter) : candidateRows;
+            if (rowsToProcess.length === 0) {
+                throw new Error('처리할 대상 행이 없습니다.');
+            }
 
             for (const requestedRow of rowsToProcess) {
                 const payload: Record<string, any> = {};
@@ -1007,124 +1052,210 @@ export default function ReservationEditApprovalPage() {
                                     </div>
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 px-1">
                                         {dateGroup.users.flatMap(userGroup =>
-                                            userGroup.rows.map(row => {
-                                                const st = STATUS_MAP[row.status] || STATUS_MAP.cancelled;
-                                                const isPending = row.status === 'pending';
-                                                const changedRows = getSnapshotChangedRows(row);
-                                                return (
-                                                    <div key={row.id}
-                                                        className="border rounded-lg bg-white hover:shadow-md transition-all p-3 space-y-2 text-xs">
-                                                        {/* 헤더: 서비스 타입 + 상태 */}
-                                                        <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                                                            <span className="font-semibold text-gray-800">
-                                                                {TYPE_NAME_MAP[row.re_type] || row.re_type}
-                                                            </span>
-                                                            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${st.cls}`}>{st.label}</span>
-                                                        </div>
+                                            userGroup.rows.flatMap(row => {
+                                                // ── 카드 펼치기: multi-row 타입은 snapshot.requested 행별로 카드 분리 ──
+                                                const mapping = SERVICE_TABLE_MAP[row.re_type];
+                                                const isMulti = !!(mapping?.isMultiRow);
+                                                const requestedArr: any[] = Array.isArray(row.snapshot_data?.requested) ? row.snapshot_data.requested : [];
+                                                const originalArr: any[] = Array.isArray(row.snapshot_data?.original) ? row.snapshot_data.original : [];
+                                                const cardEntries: Array<{ requestedRow?: any; originalRow?: any; subIdx?: number }> =
+                                                    isMulti && requestedArr.length > 0
+                                                        ? requestedArr.map((rr, i) => ({
+                                                            requestedRow: rr,
+                                                            originalRow: originalArr.find((o: any) => o?.id === rr?.id) || originalArr[i],
+                                                            subIdx: i,
+                                                        }))
+                                                        : [{}];
 
-                                                        {/* 사용자 정보 */}
-                                                        <div className="text-[11px] text-gray-600">
-                                                            <div>👤 {userMap[row.requester_user_id]?.name || '-'}</div>
-                                                            <div className="text-gray-500">{userMap[row.requester_user_id]?.email || '-'}</div>
-                                                        </div>
+                                                return cardEntries.map((entry) => {
+                                                    const st = STATUS_MAP[row.status] || STATUS_MAP.cancelled;
+                                                    const isPending = row.status === 'pending';
+                                                    const cardKey = entry.requestedRow ? `${row.id}::${entry.requestedRow.id ?? entry.subIdx}` : row.id;
 
-                                                        {/* 예약 정보 */}
-                                                        <div className="text-[11px] text-gray-500">
-                                                            <div>📅 {new Date(row.submitted_at).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</div>
-                                                            <div>🔗 예약: {row.reservation_id.slice(0, 8)}...</div>
-                                                        </div>
+                                                    // ── 변경 필드 계산 ──
+                                                    let changedRows: { field: string; before: any; after: any }[] = [];
+                                                    if (entry.requestedRow) {
+                                                        const orig = entry.originalRow || {};
+                                                        const req = entry.requestedRow || {};
+                                                        const fields = new Set<string>([...Object.keys(orig), ...Object.keys(req)]);
+                                                        const norm = (v: any) => v === null || v === undefined ? '' : String(v);
+                                                        fields.forEach(f => {
+                                                            if (['id', 'reservation_id', 'created_at', 'updated_at'].includes(f)) return;
+                                                            if (norm(orig[f]) !== norm(req[f])) changedRows.push({ field: f, before: orig[f], after: req[f] });
+                                                        });
+                                                    } else {
+                                                        changedRows = getSnapshotChangedRows(row);
+                                                    }
 
-                                                        {/* 변경 내역 */}
-                                                        {changedRows.length > 0 ? (
-                                                            <div className="bg-gray-50 rounded p-2 space-y-1 max-h-40 overflow-y-auto">
-                                                                {changedRows.map((cr, i) => (
-                                                                    <div key={i} className="text-[10px]">
-                                                                        <div className="text-gray-700 font-medium">{getFieldLabel(cr.field)}</div>
-                                                                        <div className="flex items-center gap-1 text-gray-600">
-                                                                            <span className="line-through truncate max-w-[45%]">{formatDisplayValue(cr.before) || '-'}</span>
-                                                                            <span className="text-gray-400">→</span>
-                                                                            <span className="text-orange-700 font-medium truncate flex-1">{formatDisplayValue(cr.after)}</span>
-                                                                        </div>
-                                                                    </div>
-                                                                ))}
-                                                                {changedRows.length > 8 && (
-                                                                    <div className="text-[10px] text-gray-400 pt-1">외 {changedRows.length - 8}개 변경…</div>
+                                                    // ── 서브타입 라벨 (픽업/드롭/객실 등) ──
+                                                    let subLabel = '';
+                                                    const rr = entry.requestedRow || {};
+                                                    if (row.re_type === 'airport') {
+                                                        const w = String(rr.way_type || '').toLowerCase();
+                                                        if (w === 'pickup' || w.includes('픽업')) subLabel = '🛬 픽업';
+                                                        else if (w === 'sending' || w === 'drop' || w === 'dropoff' || w.includes('샌딩') || w.includes('드롭')) subLabel = '🛫 샌딩';
+                                                    } else if (row.re_type === 'sht') {
+                                                        const c = String(rr.sht_category || rr.category || '').toLowerCase();
+                                                        if (c.includes('pickup') || c.includes('픽업')) subLabel = '🛬 픽업';
+                                                        else if (c.includes('drop') || c.includes('드롭')) subLabel = '🛫 드롭';
+                                                        else if (entry.subIdx !== undefined) subLabel = `🚐 ${entry.subIdx + 1}호차`;
+                                                    } else if (row.re_type === 'cruise_car' && entry.subIdx !== undefined) {
+                                                        subLabel = `🚙 차량 ${entry.subIdx + 1}`;
+                                                    }
+
+                                                    // ── 사용일자 추출 ──
+                                                    const cruiseInfo = cruiseInfoByRes[normalizeReservationId(row.reservation_id)] || {};
+                                                    const pickFirst = (...keys: string[]) => {
+                                                        const src = entry.requestedRow || requestedArr[0] || originalArr[0] || {};
+                                                        for (const k of keys) if (src && src[k]) return src[k];
+                                                        return '';
+                                                    };
+                                                    let usageDate = '';
+                                                    if (row.re_type === 'airport') usageDate = pickFirst('ra_datetime');
+                                                    else if (row.re_type === 'sht' || row.re_type === 'cruise_car') usageDate = pickFirst('pickup_datetime', 'usage_date');
+                                                    else if (row.re_type === 'cruise') usageDate = cruiseInfo.checkin || pickFirst('checkin');
+                                                    else if (row.re_type === 'hotel') usageDate = pickFirst('checkin_date');
+                                                    else if (row.re_type === 'rentcar') usageDate = pickFirst('pickup_datetime');
+                                                    else if (row.re_type === 'tour') usageDate = pickFirst('usage_date', 'tour_date');
+                                                    const usageDateStr = usageDate
+                                                        ? new Date(usageDate).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+                                                        : '';
+
+                                                    return (
+                                                        <div key={cardKey}
+                                                            className="border rounded-lg bg-white hover:shadow-md transition-all p-3 space-y-2 text-xs">
+                                                            {/* ① 고객명 (최상단) */}
+                                                            <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+                                                                <div className="font-bold text-gray-800 text-sm">
+                                                                    👤 {userMap[row.requester_user_id]?.name || '-'}
+                                                                </div>
+                                                                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${st.cls}`}>{st.label}</span>
+                                                            </div>
+                                                            <div className="text-[10px] text-gray-500 -mt-1">{userMap[row.requester_user_id]?.email || '-'}</div>
+
+                                                            {/* ② 서비스명 + 서브타입 */}
+                                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                                <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 font-medium text-[11px]">
+                                                                    {TYPE_NAME_MAP[row.re_type] || row.re_type}
+                                                                </span>
+                                                                {subLabel && (
+                                                                    <span className="px-1.5 py-0.5 rounded bg-orange-50 text-orange-700 text-[11px] font-medium">{subLabel}</span>
                                                                 )}
                                                             </div>
-                                                        ) : (
-                                                            <div className="text-[11px] text-gray-400 italic">변경 사항 없음</div>
-                                                        )}
 
-                                                        {/* 고객 메모 */}
-                                                        {row.customer_note && (
-                                                            <div className="text-[10px] text-blue-600 bg-blue-50 rounded p-1.5 border border-blue-100">
-                                                                💬 {row.customer_note}
-                                                            </div>
-                                                        )}
+                                                            {/* ③ 크루즈명 + ④ 사용일자 */}
+                                                            {(cruiseInfo.cruiseName || usageDateStr) && (
+                                                                <div className="flex flex-wrap gap-1.5">
+                                                                    {cruiseInfo.cruiseName && (
+                                                                        <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[10px]">🚢 {cruiseInfo.cruiseName}</span>
+                                                                    )}
+                                                                    {usageDateStr && (
+                                                                        <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[10px]">📅 {usageDateStr}</span>
+                                                                    )}
+                                                                </div>
+                                                            )}
 
-                                                        {/* 매니저 메모 (이미 처리된 경우) */}
-                                                        {row.manager_note && (
-                                                            <div className="text-[10px] text-gray-600 bg-gray-100 rounded p-1.5 border border-gray-200">
-                                                                📝 {row.manager_note}
+                                                            {/* 신청일 + 예약 ID */}
+                                                            <div className="text-[10px] text-gray-400">
+                                                                신청 {new Date(row.submitted_at).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                                                {' · '}🔗 {row.reservation_id.slice(0, 8)}
                                                             </div>
-                                                        )}
 
-                                                        {/* 승인/반려 버튼 */}
-                                                        {isPending ? (
-                                                            <div className="flex gap-2 pt-2 border-t border-gray-100">
-                                                                <button
-                                                                    onClick={async () => {
-                                                                        if (!confirm('이 수정 요청을 승인하시겠습니까?')) return;
-                                                                        setProcessing(true);
-                                                                        try {
-                                                                            const { data: { user } } = await supabase.auth.getUser();
-                                                                            await applySingleApprove(row, user?.id, null);
-                                                                        } catch (err: any) {
-                                                                            alert(`승인 실패: ${err?.message || '오류'}`);
-                                                                        } finally {
-                                                                            setProcessing(false);
-                                                                        }
-                                                                    }}
-                                                                    disabled={processing}
-                                                                    className="flex-1 px-2 py-1.5 text-[11px] rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-60 font-medium"
-                                                                >
-                                                                    ✅ 승인
-                                                                </button>
-                                                                <button
-                                                                    onClick={async () => {
-                                                                        if (!confirm('이 수정 요청을 반려하시겠습니까?')) return;
-                                                                        setProcessing(true);
-                                                                        try {
-                                                                            const { data: { user } } = await supabase.auth.getUser();
-                                                                            const upd: Record<string, any> = {
-                                                                                status: 'rejected',
-                                                                                reviewed_at: new Date().toISOString(),
-                                                                                manager_note: null
-                                                                            };
-                                                                            if (user?.id) upd.reviewed_by = user.id;
-                                                                            const { error } = await supabase.from('reservation_change_request').update(upd).eq('id', row.id);
-                                                                            if (error) throw error;
-                                                                            alert('수정 요청을 반려했습니다.');
-                                                                            await loadRequests();
-                                                                        } catch (err: any) {
-                                                                            alert(`반려 실패: ${err?.message || '오류'}`);
-                                                                        } finally {
-                                                                            setProcessing(false);
-                                                                        }
-                                                                    }}
-                                                                    disabled={processing}
-                                                                    className="flex-1 px-2 py-1.5 text-[11px] rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-60 font-medium"
-                                                                >
-                                                                    ❌ 반려
-                                                                </button>
-                                                            </div>
-                                                        ) : row.reviewed_at ? (
-                                                            <div className="text-[10px] text-gray-500 pt-2 border-t border-gray-100">
-                                                                처리: {new Date(row.reviewed_at).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                                                            </div>
-                                                        ) : null}
-                                                    </div>
-                                                );
+                                                            {/* 변경 내역 */}
+                                                            {changedRows.length > 0 ? (
+                                                                <div className="bg-gray-50 rounded p-2 space-y-1 max-h-40 overflow-y-auto">
+                                                                    {changedRows.slice(0, 8).map((cr, i) => (
+                                                                        <div key={i} className="text-[10px]">
+                                                                            <div className="text-gray-700 font-medium">{getFieldLabel(cr.field)}</div>
+                                                                            <div className="flex items-center gap-1 text-gray-600">
+                                                                                <span className="line-through truncate max-w-[45%]">{formatDisplayValue(cr.before) || '-'}</span>
+                                                                                <span className="text-gray-400">→</span>
+                                                                                <span className="text-orange-700 font-medium truncate flex-1">{formatDisplayValue(cr.after)}</span>
+                                                                            </div>
+                                                                        </div>
+                                                                    ))}
+                                                                    {changedRows.length > 8 && (
+                                                                        <div className="text-[10px] text-gray-400 pt-1">외 {changedRows.length - 8}개 변경…</div>
+                                                                    )}
+                                                                </div>
+                                                            ) : (
+                                                                <div className="text-[11px] text-gray-400 italic">변경 사항 없음</div>
+                                                            )}
+
+                                                            {/* 고객 메모 */}
+                                                            {row.customer_note && (
+                                                                <div className="text-[10px] text-blue-600 bg-blue-50 rounded p-1.5 border border-blue-100">
+                                                                    💬 {row.customer_note}
+                                                                </div>
+                                                            )}
+
+                                                            {/* 매니저 메모 */}
+                                                            {row.manager_note && (
+                                                                <div className="text-[10px] text-gray-600 bg-gray-100 rounded p-1.5 border border-gray-200">
+                                                                    📝 {row.manager_note}
+                                                                </div>
+                                                            )}
+
+                                                            {/* 승인/반려 (카드별) */}
+                                                            {isPending ? (
+                                                                <div className="flex gap-2 pt-2 border-t border-gray-100">
+                                                                    <button
+                                                                        onClick={async () => {
+                                                                            if (!confirm(entry.requestedRow ? '이 카드의 변경만 승인하시겠습니까?' : '이 수정 요청을 승인하시겠습니까?')) return;
+                                                                            setProcessing(true);
+                                                                            try {
+                                                                                const { data: { user } } = await supabase.auth.getUser();
+                                                                                const filter = entry.requestedRow
+                                                                                    ? (r: any) => r?.id === entry.requestedRow.id
+                                                                                    : undefined;
+                                                                                await applySingleApprove(row, user?.id, null, filter);
+                                                                            } catch (err: any) {
+                                                                                alert(`승인 실패: ${err?.message || '오류'}`);
+                                                                            } finally {
+                                                                                setProcessing(false);
+                                                                            }
+                                                                        }}
+                                                                        disabled={processing}
+                                                                        className="flex-1 px-2 py-1.5 text-[11px] rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-60 font-medium"
+                                                                    >
+                                                                        ✅ 승인
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={async () => {
+                                                                            if (!confirm('이 수정 요청을 반려하시겠습니까?')) return;
+                                                                            setProcessing(true);
+                                                                            try {
+                                                                                const { data: { user } } = await supabase.auth.getUser();
+                                                                                const upd: Record<string, any> = {
+                                                                                    status: 'rejected',
+                                                                                    reviewed_at: new Date().toISOString(),
+                                                                                    manager_note: null
+                                                                                };
+                                                                                if (user?.id) upd.reviewed_by = user.id;
+                                                                                const { error } = await supabase.from('reservation_change_request').update(upd).eq('id', row.id);
+                                                                                if (error) throw error;
+                                                                                alert('수정 요청을 반려했습니다.');
+                                                                                await loadRequests();
+                                                                            } catch (err: any) {
+                                                                                alert(`반려 실패: ${err?.message || '오류'}`);
+                                                                            } finally {
+                                                                                setProcessing(false);
+                                                                            }
+                                                                        }}
+                                                                        disabled={processing}
+                                                                        className="flex-1 px-2 py-1.5 text-[11px] rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-60 font-medium"
+                                                                    >
+                                                                        ❌ 반려
+                                                                    </button>
+                                                                </div>
+                                                            ) : row.reviewed_at ? (
+                                                                <div className="text-[10px] text-gray-500 pt-2 border-t border-gray-100">
+                                                                    처리: {new Date(row.reviewed_at).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                                                </div>
+                                                            ) : null}
+                                                        </div>
+                                                    );
+                                                });
                                             })
                                         )}
                                     </div>
