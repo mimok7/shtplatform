@@ -555,24 +555,56 @@ export default function ReservationEditApprovalPage() {
 
     useEffect(() => { loadRequests(); }, [loadRequests]);
 
-    /* ── 카드 뷰용: reservation_id별 크루즈명 + 사용일자 일괄 fetch ── */
+    /* ── 카드 뷰용: quote_id 기반 크루즈명 + 사용일자 일괄 fetch ── */
     const [cruiseInfoByRes, setCruiseInfoByRes] = useState<Record<string, { cruiseName?: string; checkin?: string; usageDate?: string }>>({});
     useEffect(() => {
         if (requests.length === 0) return;
-        // (reservation_id, re_type) 페어 추출
-        const pairs = requests.map(r => ({ id: normalizeReservationId(r.reservation_id), reType: r.re_type })).filter(p => p.id);
-        const uniqIds = Array.from(new Set(pairs.map(p => p.id)));
+        const uniqIds = Array.from(new Set(requests.map(r => normalizeReservationId(r.reservation_id)).filter(Boolean)));
         const missing = uniqIds.filter(id => !(id in cruiseInfoByRes));
         if (missing.length === 0) return;
         let cancelled = false;
         (async () => {
             try {
-                // 1) 크루즈 정보 (모든 reservation에 대해 시도, 없으면 빈값)
-                const { data: cruiseRows } = await supabase
-                    .from('reservation_cruise')
-                    .select('reservation_id, room_price_code, checkin')
-                    .in('reservation_id', missing);
-                const codes = Array.from(new Set((cruiseRows || []).map((c: any) => c?.room_price_code).filter(Boolean)));
+                // 1) 요청된 reservation_id → re_quote_id, re_type 매핑
+                const { data: resvRows } = await supabase
+                    .from('reservation')
+                    .select('re_id, re_quote_id, re_type')
+                    .in('re_id', missing);
+                const resvMetaById = new Map<string, { quoteId?: string; reType?: string }>();
+                (resvRows || []).forEach((r: any) => {
+                    resvMetaById.set(r.re_id, { quoteId: r.re_quote_id, reType: r.re_type });
+                });
+                const quoteIds = Array.from(new Set((resvRows || []).map((r: any) => r.re_quote_id).filter(Boolean)));
+
+                // 2) 같은 견적 내 모든 형제 예약 조회 (re_type별 묶음)
+                const siblingsByQuote: Record<string, Record<string, string[]>> = {};
+                if (quoteIds.length > 0) {
+                    const { data: siblings } = await supabase
+                        .from('reservation')
+                        .select('re_id, re_quote_id, re_type')
+                        .in('re_quote_id', quoteIds);
+                    (siblings || []).forEach((s: any) => {
+                        if (!s.re_quote_id || !s.re_type) return;
+                        const q = (siblingsByQuote[s.re_quote_id] ||= {});
+                        (q[s.re_type] ||= []).push(s.re_id);
+                    });
+                }
+
+                // 3) 같은 견적 내 cruise 예약 → reservation_cruise → cruise_name
+                const cruiseResIds = Array.from(new Set(
+                    Object.values(siblingsByQuote).flatMap(m => m['cruise'] || [])
+                ));
+                const cruiseByResId = new Map<string, { roomPriceCode?: string; checkin?: string }>();
+                if (cruiseResIds.length > 0) {
+                    const { data: cruiseRows } = await supabase
+                        .from('reservation_cruise')
+                        .select('reservation_id, room_price_code, checkin')
+                        .in('reservation_id', cruiseResIds);
+                    (cruiseRows || []).forEach((c: any) => {
+                        cruiseByResId.set(c.reservation_id, { roomPriceCode: c.room_price_code, checkin: c.checkin });
+                    });
+                }
+                const codes = Array.from(new Set(Array.from(cruiseByResId.values()).map(v => v.roomPriceCode).filter(Boolean) as string[]));
                 const codeToName = new Map<string, string>();
                 if (codes.length > 0) {
                     const { data: cards } = await supabase
@@ -581,45 +613,58 @@ export default function ReservationEditApprovalPage() {
                         .in('id', codes);
                     (cards || []).forEach((c: any) => { if (c?.id) codeToName.set(c.id, c.cruise_name || ''); });
                 }
-                const next: Record<string, { cruiseName?: string; checkin?: string; usageDate?: string }> = {};
-                missing.forEach(id => { next[id] = {}; });
-                (cruiseRows || []).forEach((c: any) => {
-                    next[c.reservation_id] = {
-                        ...next[c.reservation_id],
-                        cruiseName: c.room_price_code ? codeToName.get(c.room_price_code) || '' : '',
-                        checkin: c.checkin || '',
-                    };
-                });
 
-                // 2) re_type별 사용일자 일괄 fetch
-                const typeIdMap: Record<string, string[]> = {};
-                pairs.forEach(p => {
-                    if (!missing.includes(p.id)) return;
-                    if (!typeIdMap[p.reType]) typeIdMap[p.reType] = [];
-                    if (!typeIdMap[p.reType].includes(p.id)) typeIdMap[p.reType].push(p.id);
-                });
+                // 4) 각 request의 re_type 서비스 테이블에서 사용일자 직접 조회 (quote_id 검증)
                 const typeQuery: Record<string, { table: string; col: string }> = {
                     airport: { table: 'reservation_airport', col: 'ra_datetime' },
                     sht: { table: 'reservation_car_sht', col: 'pickup_datetime' },
+                    car_sht: { table: 'reservation_car_sht', col: 'pickup_datetime' },
+                    sht_car: { table: 'reservation_car_sht', col: 'pickup_datetime' },
+                    car: { table: 'reservation_car_sht', col: 'pickup_datetime' },
                     cruise_car: { table: 'reservation_cruise_car', col: 'pickup_datetime' },
                     cruise: { table: 'reservation_cruise', col: 'checkin' },
                     hotel: { table: 'reservation_hotel', col: 'checkin_date' },
                     rentcar: { table: 'reservation_rentcar', col: 'pickup_datetime' },
                     tour: { table: 'reservation_tour', col: 'usage_date' },
                 };
-                await Promise.all(Object.entries(typeIdMap).map(async ([reType, ids]) => {
-                    const q = typeQuery[reType];
-                    if (!q || ids.length === 0) return;
+                const typeToIds: Record<string, Set<string>> = {};
+                missing.forEach(id => {
+                    const meta = resvMetaById.get(id);
+                    const t = meta?.reType;
+                    if (!t || !typeQuery[t]) return;
+                    (typeToIds[t] ||= new Set()).add(id);
+                });
+                const usageDateById = new Map<string, string>();
+                await Promise.all(Object.entries(typeToIds).map(async ([t, idSet]) => {
+                    const q = typeQuery[t];
+                    const ids = Array.from(idSet);
+                    if (ids.length === 0) return;
                     try {
                         const { data: rows } = await supabase.from(q.table).select(`reservation_id, ${q.col}`).in('reservation_id', ids);
                         (rows || []).forEach((r: any) => {
                             const v = r?.[q.col];
-                            if (v && r?.reservation_id) {
-                                next[r.reservation_id] = { ...next[r.reservation_id], usageDate: v };
-                            }
+                            if (v && r?.reservation_id) usageDateById.set(r.reservation_id, v);
                         });
                     } catch (e) { /* noop */ }
                 }));
+
+                // 5) 최종 매핑
+                const next: Record<string, { cruiseName?: string; checkin?: string; usageDate?: string }> = {};
+                missing.forEach(id => {
+                    const meta = resvMetaById.get(id);
+                    const quoteId = meta?.quoteId;
+                    let cruiseName = '';
+                    let checkin = '';
+                    if (quoteId && siblingsByQuote[quoteId]?.['cruise']) {
+                        for (const cruiseResId of siblingsByQuote[quoteId]['cruise']) {
+                            const cd = cruiseByResId.get(cruiseResId);
+                            if (cd?.roomPriceCode) cruiseName = codeToName.get(cd.roomPriceCode) || cruiseName;
+                            if (cd?.checkin) checkin = cd.checkin;
+                            if (cruiseName) break;
+                        }
+                    }
+                    next[id] = { cruiseName, checkin, usageDate: usageDateById.get(id) || '' };
+                });
 
                 if (!cancelled) setCruiseInfoByRes(prev => ({ ...prev, ...next }));
             } catch (err) {
@@ -1236,10 +1281,10 @@ export default function ReservationEditApprovalPage() {
                                                             {field ? (
                                                                 <div className="bg-gray-50 rounded p-2 text-[12px]">
                                                                     <div className="text-gray-700 font-medium mb-1">{getFieldLabel(field)}</div>
-                                                                    <div className="flex items-center gap-2 text-gray-600">
-                                                                        <span className="line-through truncate flex-1">{formatDisplayValue(before) || '-'}</span>
-                                                                        <span className="text-gray-400">→</span>
-                                                                        <span className="text-orange-700 font-semibold truncate flex-1">{formatDisplayValue(after) || '-'}</span>
+                                                                    <div className="flex items-start gap-2 text-gray-600">
+                                                                        <span className="line-through flex-1 break-words whitespace-pre-wrap">{formatDisplayValue(before) || '-'}</span>
+                                                                        <span className="text-gray-400 mt-0.5">→</span>
+                                                                        <span className="text-orange-700 font-semibold flex-1 break-words whitespace-pre-wrap">{formatDisplayValue(after) || '-'}</span>
                                                                     </div>
                                                                 </div>
                                                             ) : (
