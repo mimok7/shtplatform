@@ -463,17 +463,10 @@ export default function ManagerSidebar({ activeTab, userEmail, onLogout, userRol
                                 />
                                 <NavItem
                                     icon="🚢"
-                                    label="크루즈 정보"
+                                    label="크루즈 안내·객실 관리"
                                     path="/manager/cruise-info"
                                     isActive={activeTab === 'cruise-info'}
                                     onClick={() => handleNavigation('/manager/cruise-info')}
-                                />
-                                <NavItem
-                                    icon="🛏️"
-                                    label="크루즈 룸"
-                                    path="/manager/cruise-room"
-                                    isActive={activeTab === 'cruise-room'}
-                                    onClick={() => handleNavigation('/manager/cruise-room')}
                                 />
                             </GroupCard>
                         </div>
