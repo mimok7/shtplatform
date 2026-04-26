@@ -259,7 +259,7 @@ export default function PricingManagement() {
     if (!confirm('정말 삭제하시겠습니까?')) return;
 
     try {
-      const table = activeTab === 'room' ? 'cruise_rate_card' : 'car_price';
+      const table = activeTab === 'room' ? 'cruise_rate_card' : 'rentcar_price';
 
       const { error } = await supabase
         .from(table)
@@ -278,7 +278,7 @@ export default function PricingManagement() {
 
   const duplicatePriceRange = async (priceData: any) => {
     try {
-      const table = activeTab === 'room' ? 'cruise_rate_card' : 'car_price';
+      const table = activeTab === 'room' ? 'cruise_rate_card' : 'rentcar_price';
       const { id, created_at, updated_at, ...copyData } = priceData;
 
       // 새로운 날짜 범위로 복사

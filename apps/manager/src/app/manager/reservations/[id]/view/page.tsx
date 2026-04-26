@@ -181,12 +181,12 @@ function ReservationViewContent() {
 
             // 가격 테이블 매핑 정보
             const priceMap: Record<string, { table: string; codeKey: string; codeColumn: string }> = {
-                cruise: { table: 'room_price', codeKey: 'room_price_code', codeColumn: 'room_code' },
+                cruise: { table: 'cruise_rate_card', codeKey: 'room_price_code', codeColumn: 'id' },
                 airport: { table: 'airport_price', codeKey: 'airport_price_code', codeColumn: 'airport_code' },
                 hotel: { table: 'hotel_price', codeKey: 'hotel_price_code', codeColumn: 'hotel_price_code' },
                 rentcar: { table: 'rentcar_price', codeKey: 'rentcar_price_code', codeColumn: 'rent_code' },
                 tour: { table: 'tour_pricing', codeKey: 'tour_price_code', codeColumn: 'pricing_id' },
-                cruise_car: { table: 'car_price', codeKey: 'car_price_code', codeColumn: 'car_code' }
+                cruise_car: { table: 'rentcar_price', codeKey: 'car_price_code', codeColumn: 'rent_code' }
             };
 
             // 서비스 상세 가격 정보 조회 (각 행 별 해당 코드로 모든 가격 행 로드)
@@ -924,7 +924,7 @@ function ReservationViewContent() {
                             Array.isArray(reservation.serviceDetailsExtra) ? reservation.serviceDetailsExtra : [reservation.serviceDetailsExtra],
                             'cruise_car',
                             reservation.serviceExtraPriceDetails,
-                            'car_price'
+                            'rentcar_price'
                         )}
                     </div>
                 )}

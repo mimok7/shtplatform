@@ -837,7 +837,7 @@ function ManagerComprehensiveQuoteForm() {
                     } else if (item.service_type === 'car') {
                         const { data: carData } = await supabase.from('car').select('*').eq('id', item.service_ref_id).single();
                         if (carData) {
-                            const { data: priceData } = await supabase.from('car_price').select('*').eq('car_code', carData.car_code);
+                            const { data: priceData } = await supabase.from('rentcar_price').select('*').eq('rent_code', carData.car_code);
                             const unit = (priceData && priceData[0] && (priceData[0].price ?? priceData[0].base_price)) ?? item.unit_price ?? 0;
                             const count = item.quantity ?? carData.car_count ?? 1;
                             const calcTotal = Number(unit || 0) * Number(count || 1);

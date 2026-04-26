@@ -81,9 +81,9 @@ export default function ManagerConfirmationGeneratePage() {
               case 'cruise_car':
                 if (item?.car_price_code) {
                   const { data: priceInfo } = await supabase
-                    .from('car_price')
+                    .from('rentcar_price')
                     .select('*')
-                    .eq('car_code', item.car_price_code)
+                    .eq('rent_code', item.car_price_code)
                     .single();
                   priceData = priceInfo;
                 }

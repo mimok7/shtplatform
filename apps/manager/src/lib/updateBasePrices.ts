@@ -53,9 +53,9 @@ export const updateCarBasePrices = async () => {
             if (!car.car_code) return;
 
             const { data: priceData, error: priceError } = await supabase
-                .from('car_price')
+                .from('rentcar_price')
                 .select('price')
-                .eq('car_code', car.car_code)
+                .eq('rent_code', car.car_code)
                 .single();
 
             if (priceError || !priceData) return;

@@ -55,11 +55,11 @@ export async function getCarPriceCode(
   input: CarPriceCodeInput,
 ): Promise<string | null> {
   const { data, error } = await supabase
-    .from('car_price')
+    .from('rentcar_price')
     .select('code')
     .eq('schedule_code', input.schedule_code)
     .eq('cruise_code', input.cruise_code)
-    .eq('car_code', input.car_code)
+    .eq('rent_code', input.car_code)
     .eq('car_category_code', input.car_category_code)
     .limit(1)
     .single();

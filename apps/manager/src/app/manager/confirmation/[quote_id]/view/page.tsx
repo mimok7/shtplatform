@@ -34,7 +34,7 @@ function ManagerConfirmationViewClient() {
           const { data } = await supabase.from('cruise_rate_card').select('*').eq('id', item.room_price_code).single();
           price = data;
         } else if (type === 'cruise_car' && item.car_price_code) {
-          const { data } = await supabase.from('car_price').select('*').eq('car_code', item.car_price_code).single();
+          const { data } = await supabase.from('rentcar_price').select('*').eq('rent_code', item.car_price_code).single();
           price = data;
         } else if (type === 'airport' && item.airport_price_code) {
           const { data } = await supabase.from('airport_price').select('*').eq('airport_code', item.airport_price_code).single();

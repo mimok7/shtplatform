@@ -18,7 +18,7 @@ export function CarCategorySelect({ scheduleCode, cruiseCode, value, onChange }:
   useEffect(() => {
     if (scheduleCode && cruiseCode) {
       supabase
-        .from('car_price')
+        .from('rentcar_price')
         .select('car_category_code')
         .eq('schedule_code', scheduleCode)
         .eq('cruise_code', cruiseCode)
@@ -71,8 +71,8 @@ export function CarInfoSelect({
   useEffect(() => {
     if (scheduleCode && cruiseCode && categoryCode) {
       supabase
-        .from('car_price')
-        .select('car_code')
+        .from('rentcar_price')
+        .select('rent_code')
         .eq('schedule_code', scheduleCode)
         .eq('cruise_code', cruiseCode)
         .eq('car_category_code', categoryCode)

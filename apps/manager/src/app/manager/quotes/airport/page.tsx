@@ -217,7 +217,7 @@ function RightDetailsCard() {
                         } else if (item.service_type === 'car') {
                             const { data: carInfo } = await supabase.from('car').select('*').eq('id', item.service_ref_id).single();
                             if (carInfo) {
-                                const { data: priceInfo } = await supabase.from('car_price').select('*').eq('car_code', carInfo.car_code);
+                                const { data: priceInfo } = await supabase.from('rentcar_price').select('*').eq('rent_code', carInfo.car_code);
                                 detailed.cars.push({ item, carInfo, priceInfo: priceInfo || [] });
                             }
                         } else if (item.service_type === 'airport') {

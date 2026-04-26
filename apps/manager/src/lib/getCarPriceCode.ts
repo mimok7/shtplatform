@@ -12,11 +12,11 @@ export async function getCarPriceCode({
   car_category_code: string;
 }): Promise<string | null> {
   const { data, error } = await supabase
-    .from('car_price')
+    .from('rentcar_price')
     .select('code')
     .eq('schedule_code', schedule_code)
     .eq('cruise_code', cruise_code)
-    .eq('car_code', car_code)
+    .eq('rent_code', car_code)
     .eq('car_category_code', car_category_code)
     .limit(1)
     .single();

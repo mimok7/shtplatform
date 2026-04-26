@@ -385,9 +385,9 @@ export default function ReservationEditApprovalPage() {
             const vehicleTypes: string[] = [];
             if (carCodes.length > 0) {
                 const { data: cps } = await supabase
-                    .from('car_price')
+                    .from('rentcar_price')
                     .select('car_code, car_type')
-                    .in('car_code', carCodes);
+                    .in('rent_code', carCodes);
                 (cps || []).forEach((p: any) => { if (p?.car_type) vehicleTypes.push(p.car_type); });
                 // car_price에서 못 찾은 코드는 rentcar_price 조회
                 const found = new Set((cps || []).map((p: any) => p?.car_code));

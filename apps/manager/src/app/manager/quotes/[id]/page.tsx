@@ -428,9 +428,9 @@ export default function QuoteDetailPage() {
             if (carData) {
               console.log('✅ 차량 정보:', carData);
               const { data: priceData } = await supabase
-                .from('car_price')
+                .from('rentcar_price')
                 .select('*')
-                .eq('car_code', carData.car_code);
+                .eq('rent_code', carData.car_code);
 
               detailed.cars.push({
                 ...item,

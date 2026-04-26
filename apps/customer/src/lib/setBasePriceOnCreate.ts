@@ -19,7 +19,7 @@ export const setBasePriceAndSyncQuoteItem = async (
                 priceCodeField = 'id';
                 break;
             case 'car':
-                priceTable = 'car_price';
+                priceTable = 'rentcar_price';
                 priceCodeField = 'car_code';
                 break;
             case 'airport':

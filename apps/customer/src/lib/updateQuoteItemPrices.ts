@@ -84,9 +84,9 @@ export async function updateQuoteItemPrices(quoteId: string): Promise<boolean> {
           }
 
           const { data: priceData, error: priceError } = await supabase
-            .from('car_price')
+            .from('rentcar_price')
             .select('price')
-            .eq('car_code', carData.car_code)
+            .eq('rent_code', carData.car_code)
             .limit(1);
 
           if (priceError || !priceData || priceData.length === 0) {

@@ -131,7 +131,7 @@ function ManagerConfirmationClient() {
       if (cruiseCarDetails.length > 0) {
         const carPriceCodes = cruiseCarDetails.map(c => c.car_price_code).filter(Boolean);
         const { data: carPriceData } = carPriceCodes.length > 0 ?
-          await supabase.from('car_price').select('*').in('car_code', carPriceCodes) :
+          await supabase.from('rentcar_price').select('*').in('rent_code', carPriceCodes) :
           { data: [] };
         const { data: carData } = carPriceCodes.length > 0 ?
           await supabase.from('car').select('*').in('car_code', carPriceCodes) :
@@ -260,7 +260,7 @@ function ManagerConfirmationClient() {
         selectFields = ['id', 'room_type', 'room_type_en', 'price_adult', 'schedule_type', 'cruise_name', 'valid_from', 'valid_to', 'season_name'];
         break;
       case 'car':
-        table = 'car_price';
+        table = 'rentcar_price';
         codeField = 'car_code';
         selectFields = ['car_code', 'car_category', 'car_type', 'price', 'cruise', 'schedule', 'passenger_count'];
         break;

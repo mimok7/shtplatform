@@ -456,7 +456,7 @@ export default function QuoteDetailPage() {
 
           switch (type) {
             case 'room': tableName = 'cruise_rate_card'; codeField = 'id'; break;
-            case 'car': tableName = 'car_price'; codeField = 'car_code'; break;
+            case 'car': tableName = 'rentcar_price'; codeField = 'rent_code'; break;
             case 'airport': tableName = 'airport_price'; codeField = 'airport_code'; break;
             case 'hotel': tableName = 'hotel_price'; codeField = 'hotel_price_code'; break;
             case 'rentcar': tableName = 'rentcar_price'; codeField = 'rent_code'; break;

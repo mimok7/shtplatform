@@ -870,9 +870,9 @@ function CruiseReservationEditContent() {
                             console.log('🔍 차량 가격 조회:', car.car_price_code);
 
                             const { data: carPriceLegacy } = await supabase
-                                .from('car_price')
+                                .from('rentcar_price')
                                 .select('cruise, car_type, car_category, car_code, price')
-                                .eq('car_code', car.car_price_code)
+                                .eq('rent_code', car.car_price_code)
                                 .maybeSingle();
 
                             let carPrice = carPriceLegacy;

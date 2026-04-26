@@ -90,9 +90,9 @@ export async function addCarToQuote(
         let unitPrice = 0;
         try {
             const { data: priceRow } = await supabase
-                .from('car_price')
+                .from('rentcar_price')
                 .select('price')
-                .eq('car_code', carData.car_code)
+                .eq('rent_code', carData.car_code)
                 .maybeSingle();
 
             if (priceRow && priceRow.price != null) {

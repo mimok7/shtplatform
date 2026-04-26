@@ -70,7 +70,7 @@ export function useQuotes(userId: string | undefined) {
 export function usePriceOptions(service: 'room' | 'car' | 'airport' | 'hotel' | 'tour' | 'rentcar') {
     const tableMap = {
         room: 'cruise_rate_card',
-        car: 'car_price',
+        car: 'rentcar_price',
         airport: 'airport_price',
         hotel: 'hotel_price',
         tour: 'tour_pricing',

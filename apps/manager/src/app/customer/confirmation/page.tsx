@@ -154,7 +154,7 @@ function CustomerConfirmationClient() {
             ]));
 
             const carPriceResult = carPriceCodes.length > 0 ?
-                await supabase.from('car_price').select('*').in('car_code', carPriceCodes) :
+                await supabase.from('rentcar_price').select('*').in('rent_code', carPriceCodes) :
                 { data: [] };
             const carPriceData = (carPriceResult?.data || []) as any[];
 
@@ -365,7 +365,7 @@ function CustomerConfirmationClient() {
                 selectFields = ['id', 'cruise_name', 'schedule_type', 'room_type', 'price_adult', 'price_child', 'price_infant', 'valid_from', 'valid_to'];
                 break;
             case 'car':
-                table = 'car_price';
+                table = 'rentcar_price';
                 codeField = 'car_code';
                 selectFields = ['car_code', 'car_category', 'car_type', 'price', 'cruise', 'schedule', 'passenger_count'];
                 break;

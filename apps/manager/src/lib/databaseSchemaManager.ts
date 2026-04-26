@@ -14,7 +14,7 @@ export async function extractDatabaseSchema() {
             'users', 'quote', 'quote_item', 'reservation', 'reservation_cruise',
             'reservation_airport', 'reservation_hotel', 'reservation_rentcar',
             'reservation_tour', 'reservation_car_sht', 'airport', 'hotel',
-            'rentcar', 'room', 'car', 'tour', 'cruise_rate_card', 'car_price',
+            'rentcar', 'room', 'car', 'tour', 'cruise_rate_card', 'rentcar_price',
             'airport_price', 'hotel_price', 'rentcar_price', 'tour_pricing'
         ];
 

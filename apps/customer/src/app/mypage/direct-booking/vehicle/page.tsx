@@ -71,7 +71,7 @@ function DirectBookingVehicleContent() {
     const loadVehiclePriceOptions = async () => {
         try {
             const { data, error } = await supabase
-                .from('car_price')
+                .from('rentcar_price')
                 .select('*')
                 .order('car_type, route');
 
