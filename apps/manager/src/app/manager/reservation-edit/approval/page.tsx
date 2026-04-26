@@ -555,7 +555,7 @@ export default function ReservationEditApprovalPage() {
 
     useEffect(() => { loadRequests(); }, [loadRequests]);
 
-    /* ── 카드 뷰용: quote_id 기반 크루즈명 + 사용일자 일괄 fetch ── */
+    /* ── 카드 뷰용: quote_id 기반 크루즈명 + 모든 서비스 테이블 일괄 조회로 사용일자 수집 (예약 통합 상세 모달 패턴) ── */
     const [cruiseInfoByRes, setCruiseInfoByRes] = useState<Record<string, { cruiseName?: string; checkin?: string; usageDate?: string }>>({});
     useEffect(() => {
         if (requests.length === 0) return;
@@ -565,35 +565,33 @@ export default function ReservationEditApprovalPage() {
         let cancelled = false;
         (async () => {
             try {
-                // 1) 요청된 reservation_id → re_quote_id, re_type 매핑
+                // 1) reservation 메타 (re_quote_id, re_type)
                 const { data: resvRows } = await supabase
                     .from('reservation')
                     .select('re_id, re_quote_id, re_type')
                     .in('re_id', missing);
-                const resvMetaById = new Map<string, { quoteId?: string; reType?: string }>();
+                const resvMetaById = new Map<string, { quoteId?: string }>();
                 (resvRows || []).forEach((r: any) => {
-                    resvMetaById.set(r.re_id, { quoteId: r.re_quote_id, reType: r.re_type });
+                    resvMetaById.set(r.re_id, { quoteId: r.re_quote_id });
                 });
                 const quoteIds = Array.from(new Set((resvRows || []).map((r: any) => r.re_quote_id).filter(Boolean)));
 
-                // 2) 같은 견적 내 모든 형제 예약 조회 (re_type별 묶음)
-                const siblingsByQuote: Record<string, Record<string, string[]>> = {};
+                // 2) 같은 견적 내 cruise 형제 예약 → cruise_name
+                const siblingCruiseByQuote = new Map<string, string[]>();
                 if (quoteIds.length > 0) {
                     const { data: siblings } = await supabase
                         .from('reservation')
                         .select('re_id, re_quote_id, re_type')
-                        .in('re_quote_id', quoteIds);
+                        .in('re_quote_id', quoteIds)
+                        .eq('re_type', 'cruise');
                     (siblings || []).forEach((s: any) => {
-                        if (!s.re_quote_id || !s.re_type) return;
-                        const q = (siblingsByQuote[s.re_quote_id] ||= {});
-                        (q[s.re_type] ||= []).push(s.re_id);
+                        if (!s.re_quote_id) return;
+                        const list = siblingCruiseByQuote.get(s.re_quote_id) || [];
+                        list.push(s.re_id);
+                        siblingCruiseByQuote.set(s.re_quote_id, list);
                     });
                 }
-
-                // 3) 같은 견적 내 cruise 예약 → reservation_cruise → cruise_name
-                const cruiseResIds = Array.from(new Set(
-                    Object.values(siblingsByQuote).flatMap(m => m['cruise'] || [])
-                ));
+                const cruiseResIds = Array.from(new Set(Array.from(siblingCruiseByQuote.values()).flat()));
                 const cruiseByResId = new Map<string, { roomPriceCode?: string; checkin?: string }>();
                 if (cruiseResIds.length > 0) {
                     const { data: cruiseRows } = await supabase
@@ -614,49 +612,38 @@ export default function ReservationEditApprovalPage() {
                     (cards || []).forEach((c: any) => { if (c?.id) codeToName.set(c.id, c.cruise_name || ''); });
                 }
 
-                // 4) 각 request의 re_type 서비스 테이블에서 사용일자 직접 조회 (quote_id 검증)
-                const typeQuery: Record<string, { table: string; col: string }> = {
-                    airport: { table: 'reservation_airport', col: 'ra_datetime' },
-                    sht: { table: 'reservation_car_sht', col: 'pickup_datetime' },
-                    car_sht: { table: 'reservation_car_sht', col: 'pickup_datetime' },
-                    sht_car: { table: 'reservation_car_sht', col: 'pickup_datetime' },
-                    car: { table: 'reservation_car_sht', col: 'pickup_datetime' },
-                    cruise_car: { table: 'reservation_cruise_car', col: 'pickup_datetime' },
-                    cruise: { table: 'reservation_cruise', col: 'checkin' },
-                    hotel: { table: 'reservation_hotel', col: 'checkin_date' },
-                    rentcar: { table: 'reservation_rentcar', col: 'pickup_datetime' },
-                    tour: { table: 'reservation_tour', col: 'usage_date' },
-                };
-                const typeToIds: Record<string, Set<string>> = {};
-                missing.forEach(id => {
-                    const meta = resvMetaById.get(id);
-                    const t = meta?.reType;
-                    if (!t || !typeQuery[t]) return;
-                    (typeToIds[t] ||= new Set()).add(id);
-                });
+                // 3) 사용일자: 모든 서비스 테이블을 reservation_id 기준으로 일괄 조회 (예약 통합 상세 모달과 동일 패턴)
                 const usageDateById = new Map<string, string>();
-                await Promise.all(Object.entries(typeToIds).map(async ([t, idSet]) => {
-                    const q = typeQuery[t];
-                    const ids = Array.from(idSet);
-                    if (ids.length === 0) return;
-                    try {
-                        const { data: rows } = await supabase.from(q.table).select(`reservation_id, ${q.col}`).in('reservation_id', ids);
-                        (rows || []).forEach((r: any) => {
-                            const v = r?.[q.col];
-                            if (v && r?.reservation_id) usageDateById.set(r.reservation_id, v);
-                        });
-                    } catch (e) { /* noop */ }
-                }));
+                const setIfEmpty = (id: string, v?: string | null) => {
+                    if (!id || !v) return;
+                    if (!usageDateById.has(id)) usageDateById.set(id, String(v));
+                };
+                const [airRes, shtRes, ccarRes, cruiseUseRes, hotelRes, rentRes, tourRes] = await Promise.all([
+                    supabase.from('reservation_airport').select('reservation_id, ra_datetime').in('reservation_id', missing),
+                    supabase.from('reservation_car_sht').select('reservation_id, pickup_datetime').in('reservation_id', missing),
+                    supabase.from('reservation_cruise_car').select('reservation_id, pickup_datetime').in('reservation_id', missing),
+                    supabase.from('reservation_cruise').select('reservation_id, checkin').in('reservation_id', missing),
+                    supabase.from('reservation_hotel').select('reservation_id, checkin_date').in('reservation_id', missing),
+                    supabase.from('reservation_rentcar').select('reservation_id, pickup_datetime').in('reservation_id', missing),
+                    supabase.from('reservation_tour').select('reservation_id, usage_date').in('reservation_id', missing),
+                ]);
+                (airRes.data || []).forEach((r: any) => setIfEmpty(r.reservation_id, r.ra_datetime));
+                (shtRes.data || []).forEach((r: any) => setIfEmpty(r.reservation_id, r.pickup_datetime));
+                (ccarRes.data || []).forEach((r: any) => setIfEmpty(r.reservation_id, r.pickup_datetime));
+                (cruiseUseRes.data || []).forEach((r: any) => setIfEmpty(r.reservation_id, r.checkin));
+                (hotelRes.data || []).forEach((r: any) => setIfEmpty(r.reservation_id, r.checkin_date));
+                (rentRes.data || []).forEach((r: any) => setIfEmpty(r.reservation_id, r.pickup_datetime));
+                (tourRes.data || []).forEach((r: any) => setIfEmpty(r.reservation_id, r.usage_date));
 
-                // 5) 최종 매핑
+                // 4) 최종 매핑
                 const next: Record<string, { cruiseName?: string; checkin?: string; usageDate?: string }> = {};
                 missing.forEach(id => {
                     const meta = resvMetaById.get(id);
                     const quoteId = meta?.quoteId;
                     let cruiseName = '';
                     let checkin = '';
-                    if (quoteId && siblingsByQuote[quoteId]?.['cruise']) {
-                        for (const cruiseResId of siblingsByQuote[quoteId]['cruise']) {
+                    if (quoteId && siblingCruiseByQuote.has(quoteId)) {
+                        for (const cruiseResId of siblingCruiseByQuote.get(quoteId)!) {
                             const cd = cruiseByResId.get(cruiseResId);
                             if (cd?.roomPriceCode) cruiseName = codeToName.get(cd.roomPriceCode) || cruiseName;
                             if (cd?.checkin) checkin = cd.checkin;
@@ -1311,6 +1298,8 @@ export default function ReservationEditApprovalPage() {
                                                                                     ? (r: any) => r?.id === entry.requestedRow.id
                                                                                     : undefined;
                                                                                 await applySingleApprove(row, user?.id, null, filter);
+                                                                                // 최적화: 전체 리로드 없이 해당 행 상태만 교체 → 승인 버튼 자동 숨김
+                                                                                setRequests(prev => prev.map(r => r.id === row.id ? { ...r, status: 'approved', reviewed_at: new Date().toISOString() } : r));
                                                                             } catch (err: any) {
                                                                                 alert(`승인 실패: ${err?.message || '오류'}`);
                                                                             } finally {
@@ -1336,8 +1325,8 @@ export default function ReservationEditApprovalPage() {
                                                                                 if (user?.id) upd.reviewed_by = user.id;
                                                                                 const { error } = await supabase.from('reservation_change_request').update(upd).eq('id', row.id);
                                                                                 if (error) throw error;
-                                                                                alert('수정 요청을 반려했습니다.');
-                                                                                await loadRequests();
+                                                                                // 최적화: 전체 리로드 없이 해당 행만 상태 교체
+                                                                                setRequests(prev => prev.map(r => r.id === row.id ? { ...r, status: 'rejected', reviewed_at: new Date().toISOString() } : r));
                                                                             } catch (err: any) {
                                                                                 alert(`반려 실패: ${err?.message || '오류'}`);
                                                                             } finally {
