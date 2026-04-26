@@ -141,30 +141,36 @@ export default function CruiseRoomReviewPage() {
     }
 
     setSaving(true);
-    const payload = {
-      cruise_name: form.cruise_name.trim() || null,
-      room_name: form.room_name.trim() || null,
-      description: form.description.trim() || null,
-      room_description: form.room_description.trim() || null,
-      room_image: form.room_image.trim() || null,
-      images: textToImages(form.images_text),
-      updated_at: new Date().toISOString(),
-    };
+    try {
+      const response = await fetch('/api/manager/cruise-room/upsert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: selectedId,
+          cruise_name: form.cruise_name,
+          room_name: form.room_name,
+          description: form.description,
+          room_description: form.room_description,
+          room_image: form.room_image,
+          images: textToImages(form.images_text),
+        }),
+      });
 
-    const { error } = await supabase
-      .from('cruise_info')
-      .update(payload)
-      .eq('id', selectedId);
+      const result = await response.json();
+      if (!response.ok || !result?.success) {
+        throw new Error(result?.error || '저장 중 오류가 발생했습니다.');
+      }
 
-    setSaving(false);
-
-    if (error) {
-      alert(`저장 실패: ${error.message}`);
-      return;
+      await loadRows();
+      if (result?.id) {
+        setSelectedId(result.id);
+      }
+      alert('저장되었습니다.');
+    } catch (error: any) {
+      alert(`저장 실패: ${error?.message || '알 수 없는 오류'}`);
+    } finally {
+      setSaving(false);
     }
-
-    await loadRows();
-    alert('저장되었습니다.');
   };
 
   const applyDraftToForm = () => {
