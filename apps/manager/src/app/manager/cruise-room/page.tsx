@@ -326,7 +326,7 @@ export default function CruiseRoomReviewPage() {
                 rows={8}
                 value={draftInput}
                 onChange={(e) => setDraftInput(e.target.value)}
-                placeholder="{\"extracted\":[...]}"
+                placeholder='{"extracted":[...]}'
                 className="w-full px-3 py-2 text-sm border border-gray-200 rounded-md font-mono"
               />
               {draftError && <p className="text-xs text-red-500">{draftError}</p>}
