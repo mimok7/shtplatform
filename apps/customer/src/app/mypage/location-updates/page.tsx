@@ -125,9 +125,9 @@ const RE_TYPE_CANONICAL_MAP: Record<string, string> = {
   rentcar: 'rentcar',
   tour: 'tour',
   cruise: 'cruise',
-  car_sht: 'car_sht',
-  sht_car: 'car_sht',
-  sht: 'car_sht',
+  car_sht: 'sht',
+  sht_car: 'sht',
+  sht: 'sht',
   car: 'cruise_car',
   cruise_car: 'cruise_car'
 };
@@ -138,8 +138,19 @@ const CHANGE_TABLE_MAP: Record<string, string> = {
   rentcar: 'reservation_change_rentcar',
   tour: 'reservation_change_tour',
   cruise: 'reservation_change_cruise',
+  sht: 'reservation_change_car_sht',
   car_sht: 'reservation_change_car_sht',
   cruise_car: 'reservation_change_cruise_car'
+};
+
+const RE_TYPE_ALIAS_MAP: Record<string, string[]> = {
+  airport: ['airport'],
+  hotel: ['hotel'],
+  rentcar: ['rentcar'],
+  tour: ['tour'],
+  cruise: ['cruise'],
+  sht: ['sht', 'car_sht', 'sht_car'],
+  cruise_car: ['cruise_car', 'car']
 };
 
 const REQUEST_STATUS_LABEL: Record<string, string> = {
@@ -445,7 +456,7 @@ export default function LocationUpdatesPage() {
         }, {} as Record<string, string>)
       );
 
-      const canonicalTypes = Array.from(new Set(Object.values(RE_TYPE_CANONICAL_MAP)));
+      const canonicalTypes = Array.from(new Set(Object.keys(RE_TYPE_CANONICAL_MAP)));
       const { data: reqRows, error: reqError } = await supabase
         .from('reservation_change_request')
         .select('id, reservation_id, re_type, status, submitted_at, reviewed_at, customer_note, manager_note')
@@ -626,7 +637,7 @@ export default function LocationUpdatesPage() {
             .from('reservation_change_request')
             .select('id')
             .eq('reservation_id', rowUpdate.reservationId)
-            .eq('re_type', canonicalType)
+            .in('re_type', RE_TYPE_ALIAS_MAP[canonicalType] || [canonicalType])
             .eq('status', 'pending')
             .maybeSingle();
 
