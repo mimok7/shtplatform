@@ -716,7 +716,8 @@ export default function ManagerSchedulePage() {
       const [roomPricesById, roomPricesByType, roomPricesLegacy, tourPrices, hotelPrices, rentPrices, airportPrices, carPrices] = await Promise.all([
         cruiseCodes.length > 0 ? supabase.from('cruise_rate_card').select('id, cruise_name, room_type, price_adult, price_child, price_infant, price_extra_bed, price_single, price_child_extra_bed').in('id', cruiseCodes) : Promise.resolve({ data: [] }),
         cruiseCodes.length > 0 ? supabase.from('cruise_rate_card').select('id, cruise_name, room_type, price_adult, price_child, price_infant, price_extra_bed, price_single, price_child_extra_bed').in('room_type', cruiseCodes) : Promise.resolve({ data: [] }),
-        cruiseCodes.length > 0 ? supabase.from('room_price').select('room_code, cruise, room_type, room_category, price').in('room_code', cruiseCodes) : Promise.resolve({ data: [] }),
+        // legacy room_price 테이블은 더 이상 사용하지 않음 (404 방지)
+        Promise.resolve({ data: [] }),
         tourCodes.length > 0 ? supabase.from('tour_pricing').select('pricing_id, price_per_person, tour_id').in('pricing_id', tourCodes) : Promise.resolve({ data: [] }),
         hotelCodes.length > 0 ? supabase.from('hotel_price').select('hotel_price_code, base_price, hotel_name, room_name').in('hotel_price_code', hotelCodes) : Promise.resolve({ data: [] }),
         rentCodes.length > 0 ? supabase.from('rentcar_price').select('rent_code, vehicle_type, way_type, route, price, category').in('rent_code', rentCodes) : Promise.resolve({ data: [] }),
@@ -1938,20 +1939,7 @@ export default function ManagerSchedulePage() {
         if (typeKey && !rpMergedMap.has(typeKey)) rpMergedMap.set(typeKey, rp);
       }
 
-      // legacy room_price 폴백: cruise_rate_card에 없는 코드를 room_price 테이블에서 조회 (검색 모드 포함)
-      const foundInRpMap = new Set<string>(Array.from(rpMergedMap.keys()).map(k => k.toLowerCase()));
-      const legacyCruiseCodes = cruiseCodes.filter(code => !foundInRpMap.has(String(code).trim().toLowerCase()));
-      if (legacyCruiseCodes.length > 0) {
-        const { data: legacyRows } = await supabase
-          .from('room_price')
-          .select('room_code, cruise, room_type')
-          .in('room_code', legacyCruiseCodes);
-        for (const lp of legacyRows || []) {
-          const code = String(lp.room_code || '').trim();
-          if (!code || rpMergedMap.has(code)) continue;
-          rpMergedMap.set(code, { id: code, cruise_name: lp.cruise || undefined, room_type: lp.room_type || undefined });
-        }
-      }
+      // legacy room_price 테이블은 더 이상 사용하지 않음 (cruise_rate_card로 통합)
 
       // cruise_info에서 room_name 조회
       const cruiseNames = Array.from(new Set(Array.from(rpMergedMap.values()).map(rp => rp.cruise_name).filter(Boolean)));

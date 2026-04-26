@@ -535,10 +535,9 @@ export default function BulkReservationPage() {
             // car_price_code에는 rentcar_price.rent_code 값이 저장됨
             const cruiseCarCodes = cruiseCarData.map((c: any) => c.rentcar_price_code || c.car_price_code).filter(Boolean);
 
-            const [roomPrices, roomPricesByRoomType, roomPricesLegacy, tourPrices, hotelPrices, rentPrices, airportPrices, carPrices] = await Promise.all([
+            const [roomPrices, roomPricesByRoomType, tourPrices, hotelPrices, rentPrices, airportPrices, carPrices] = await Promise.all([
                 cruiseCodes.length > 0 ? supabase.from('cruise_rate_card').select('id, cruise_name, room_type, price_adult, price_child, price_infant, price_extra_bed, price_single, price_child_extra_bed').in('id', cruiseCodes) : Promise.resolve({ data: [] }),
                 cruiseCodes.length > 0 ? supabase.from('cruise_rate_card').select('id, cruise_name, room_type, price_adult, price_child, price_infant, price_extra_bed, price_single, price_child_extra_bed').in('room_type', cruiseCodes) : Promise.resolve({ data: [] }),
-                cruiseCodes.length > 0 ? supabase.from('room_price').select('room_code, cruise, room_type, room_category, price').in('room_code', cruiseCodes) : Promise.resolve({ data: [] }),
                 tourCodes.length > 0 ? supabase.from('tour_pricing').select('pricing_id, price_per_person, tour:tour_id(tour_name, tour_code)').in('pricing_id', tourCodes) : Promise.resolve({ data: [] }),
                 hotelCodes.length > 0 ? supabase.from('hotel_price').select('hotel_price_code, base_price, hotel_name, room_name').in('hotel_price_code', hotelCodes) : Promise.resolve({ data: [] }),
                 rentCodes.length > 0 ? supabase.from('rentcar_price').select('rent_code, vehicle_type, way_type, route, price').in('rent_code', rentCodes) : Promise.resolve({ data: [] }),
@@ -552,62 +551,6 @@ export default function BulkReservationPage() {
                 if (r?.room_type && !roomPriceMap.has(r.room_type)) {
                     roomPriceMap.set(r.room_type, r);
                 }
-            });
-            const getLegacyCategoryKey = (category?: string) => {
-                const c = String(category || '').trim();
-                if (c.includes('아동') && c.includes('엑스트라')) return 'price_child_extra_bed';
-                if (c.includes('유아')) return 'price_infant';
-                if (c.includes('아동')) return 'price_child';
-                if (c.includes('엑스트라')) return 'price_extra_bed';
-                if (c.includes('싱글')) return 'price_single';
-                return 'price_adult';
-            };
-
-            const legacyRoomByCode = new Map<string, any>();
-            (roomPricesLegacy.data || []).forEach((row: any) => {
-                const code = row?.room_code;
-                if (!code) return;
-
-                const current = legacyRoomByCode.get(code) || {
-                    id: code,
-                    cruise_name: row?.cruise || undefined,
-                    room_type: row?.room_type || undefined,
-                    price_adult: 0,
-                    price_child: 0,
-                    price_infant: 0,
-                    price_extra_bed: 0,
-                    price_single: 0,
-                    price_child_extra_bed: 0,
-                };
-
-                const priceKey = getLegacyCategoryKey(row?.room_category);
-                current[priceKey] = Number(row?.price || 0);
-
-                if (!current.cruise_name && row?.cruise) current.cruise_name = row.cruise;
-                if (!current.room_type && row?.room_type) current.room_type = row.room_type;
-
-                legacyRoomByCode.set(code, current);
-            });
-
-            legacyRoomByCode.forEach((legacy, code) => {
-                const existing: any = roomPriceMap.get(code);
-                if (!existing) {
-                    roomPriceMap.set(code, legacy);
-                    return;
-                }
-
-                // cruise_rate_card가 일부 필드 누락인 경우 room_price 값으로 보강
-                if (!existing.cruise_name && legacy.cruise_name) existing.cruise_name = legacy.cruise_name;
-                if (!existing.room_type && legacy.room_type) existing.room_type = legacy.room_type;
-
-                if (!Number(existing.price_adult) && Number(legacy.price_adult)) existing.price_adult = legacy.price_adult;
-                if (!Number(existing.price_child) && Number(legacy.price_child)) existing.price_child = legacy.price_child;
-                if (!Number(existing.price_infant) && Number(legacy.price_infant)) existing.price_infant = legacy.price_infant;
-                if (!Number(existing.price_extra_bed) && Number(legacy.price_extra_bed)) existing.price_extra_bed = legacy.price_extra_bed;
-                if (!Number(existing.price_single) && Number(legacy.price_single)) existing.price_single = legacy.price_single;
-                if (!Number(existing.price_child_extra_bed) && Number(legacy.price_child_extra_bed)) existing.price_child_extra_bed = legacy.price_child_extra_bed;
-
-                roomPriceMap.set(code, existing);
             });
             const tourPriceMap = new Map((tourPrices.data || []).map((r: any) => [r.pricing_id, r]));
             const hotelPriceMap = new Map((hotelPrices.data || []).map((r: any) => [r.hotel_price_code, r]));
