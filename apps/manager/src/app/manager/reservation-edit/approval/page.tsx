@@ -555,16 +555,19 @@ export default function ReservationEditApprovalPage() {
 
     useEffect(() => { loadRequests(); }, [loadRequests]);
 
-    /* ── 카드 뷰용: reservation_id별 크루즈명 일괄 fetch ── */
-    const [cruiseInfoByRes, setCruiseInfoByRes] = useState<Record<string, { cruiseName?: string; checkin?: string }>>({});
+    /* ── 카드 뷰용: reservation_id별 크루즈명 + 사용일자 일괄 fetch ── */
+    const [cruiseInfoByRes, setCruiseInfoByRes] = useState<Record<string, { cruiseName?: string; checkin?: string; usageDate?: string }>>({});
     useEffect(() => {
         if (requests.length === 0) return;
-        const resIds = Array.from(new Set(requests.map(r => normalizeReservationId(r.reservation_id)).filter(Boolean)));
-        const missing = resIds.filter(id => !(id in cruiseInfoByRes));
+        // (reservation_id, re_type) 페어 추출
+        const pairs = requests.map(r => ({ id: normalizeReservationId(r.reservation_id), reType: r.re_type })).filter(p => p.id);
+        const uniqIds = Array.from(new Set(pairs.map(p => p.id)));
+        const missing = uniqIds.filter(id => !(id in cruiseInfoByRes));
         if (missing.length === 0) return;
         let cancelled = false;
         (async () => {
             try {
+                // 1) 크루즈 정보 (모든 reservation에 대해 시도, 없으면 빈값)
                 const { data: cruiseRows } = await supabase
                     .from('reservation_cruise')
                     .select('reservation_id, room_price_code, checkin')
@@ -578,17 +581,49 @@ export default function ReservationEditApprovalPage() {
                         .in('id', codes);
                     (cards || []).forEach((c: any) => { if (c?.id) codeToName.set(c.id, c.cruise_name || ''); });
                 }
-                const next: Record<string, { cruiseName?: string; checkin?: string }> = {};
+                const next: Record<string, { cruiseName?: string; checkin?: string; usageDate?: string }> = {};
                 missing.forEach(id => { next[id] = {}; });
                 (cruiseRows || []).forEach((c: any) => {
                     next[c.reservation_id] = {
+                        ...next[c.reservation_id],
                         cruiseName: c.room_price_code ? codeToName.get(c.room_price_code) || '' : '',
                         checkin: c.checkin || '',
                     };
                 });
+
+                // 2) re_type별 사용일자 일괄 fetch
+                const typeIdMap: Record<string, string[]> = {};
+                pairs.forEach(p => {
+                    if (!missing.includes(p.id)) return;
+                    if (!typeIdMap[p.reType]) typeIdMap[p.reType] = [];
+                    if (!typeIdMap[p.reType].includes(p.id)) typeIdMap[p.reType].push(p.id);
+                });
+                const typeQuery: Record<string, { table: string; col: string }> = {
+                    airport: { table: 'reservation_airport', col: 'ra_datetime' },
+                    sht: { table: 'reservation_car_sht', col: 'pickup_datetime' },
+                    cruise_car: { table: 'reservation_cruise_car', col: 'pickup_datetime' },
+                    cruise: { table: 'reservation_cruise', col: 'checkin' },
+                    hotel: { table: 'reservation_hotel', col: 'checkin_date' },
+                    rentcar: { table: 'reservation_rentcar', col: 'pickup_datetime' },
+                    tour: { table: 'reservation_tour', col: 'usage_date' },
+                };
+                await Promise.all(Object.entries(typeIdMap).map(async ([reType, ids]) => {
+                    const q = typeQuery[reType];
+                    if (!q || ids.length === 0) return;
+                    try {
+                        const { data: rows } = await supabase.from(q.table).select(`reservation_id, ${q.col}`).in('reservation_id', ids);
+                        (rows || []).forEach((r: any) => {
+                            const v = r?.[q.col];
+                            if (v && r?.reservation_id) {
+                                next[r.reservation_id] = { ...next[r.reservation_id], usageDate: v };
+                            }
+                        });
+                    } catch (e) { /* noop */ }
+                }));
+
                 if (!cancelled) setCruiseInfoByRes(prev => ({ ...prev, ...next }));
             } catch (err) {
-                console.error('크루즈 정보 일괄 조회 실패:', err);
+                console.error('카드 부가정보 일괄 조회 실패:', err);
             }
         })();
         return () => { cancelled = true; };
@@ -1053,12 +1088,16 @@ export default function ReservationEditApprovalPage() {
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 px-1">
                                         {dateGroup.users.flatMap(userGroup =>
                                             userGroup.rows.flatMap(row => {
-                                                // ── 카드 펼치기: multi-row 타입은 snapshot.requested 행별로 카드 분리 ──
+                                                // ── 1단계: row → row entries (multi-row면 snapshot.requested 행별로) ──
                                                 const mapping = SERVICE_TABLE_MAP[row.re_type];
-                                                const isMulti = !!(mapping?.isMultiRow);
+                                                const isMulti = !!mapping && (
+                                                    mapping.baseTable === 'reservation_airport'
+                                                    || mapping.baseTable === 'reservation_cruise_car'
+                                                    || mapping.baseTable === 'reservation_car_sht'
+                                                );
                                                 const requestedArr: any[] = Array.isArray(row.snapshot_data?.requested) ? row.snapshot_data.requested : [];
                                                 const originalArr: any[] = Array.isArray(row.snapshot_data?.original) ? row.snapshot_data.original : [];
-                                                const cardEntries: Array<{ requestedRow?: any; originalRow?: any; subIdx?: number }> =
+                                                const rowEntries: Array<{ requestedRow?: any; originalRow?: any; subIdx?: number }> =
                                                     isMulti && requestedArr.length > 0
                                                         ? requestedArr.map((rr, i) => ({
                                                             requestedRow: rr,
@@ -1067,13 +1106,11 @@ export default function ReservationEditApprovalPage() {
                                                         }))
                                                         : [{}];
 
-                                                return cardEntries.map((entry) => {
-                                                    const st = STATUS_MAP[row.status] || STATUS_MAP.cancelled;
-                                                    const isPending = row.status === 'pending';
-                                                    const cardKey = entry.requestedRow ? `${row.id}::${entry.requestedRow.id ?? entry.subIdx}` : row.id;
-
-                                                    // ── 변경 필드 계산 ──
-                                                    let changedRows: { field: string; before: any; after: any }[] = [];
+                                                // ── 2단계: 각 row entry를 변경필드별로 다시 펼침 ──
+                                                type FieldCard = { entry: typeof rowEntries[number]; field: string; before: any; after: any };
+                                                const cards: FieldCard[] = [];
+                                                rowEntries.forEach((entry) => {
+                                                    let changed: { field: string; before: any; after: any }[] = [];
                                                     if (entry.requestedRow) {
                                                         const orig = entry.originalRow || {};
                                                         const req = entry.requestedRow || {};
@@ -1081,13 +1118,25 @@ export default function ReservationEditApprovalPage() {
                                                         const norm = (v: any) => v === null || v === undefined ? '' : String(v);
                                                         fields.forEach(f => {
                                                             if (['id', 'reservation_id', 'created_at', 'updated_at'].includes(f)) return;
-                                                            if (norm(orig[f]) !== norm(req[f])) changedRows.push({ field: f, before: orig[f], after: req[f] });
+                                                            if (norm(orig[f]) !== norm(req[f])) changed.push({ field: f, before: orig[f], after: req[f] });
                                                         });
                                                     } else {
-                                                        changedRows = getSnapshotChangedRows(row);
+                                                        changed = getSnapshotChangedRows(row);
                                                     }
+                                                    if (changed.length === 0) {
+                                                        cards.push({ entry, field: '', before: null, after: null });
+                                                    } else {
+                                                        changed.forEach(c => cards.push({ entry, ...c }));
+                                                    }
+                                                });
 
-                                                    // ── 서브타입 라벨 (픽업/드롭/객실 등) ──
+                                                return cards.map((card, cardIdx) => {
+                                                    const { entry, field, before, after } = card;
+                                                    const st = STATUS_MAP[row.status] || STATUS_MAP.cancelled;
+                                                    const isPending = row.status === 'pending';
+                                                    const cardKey = `${row.id}::${entry.requestedRow?.id ?? entry.subIdx ?? 'na'}::${field || 'none'}::${cardIdx}`;
+
+                                                    // ── 서브타입 라벨 ──
                                                     let subLabel = '';
                                                     const rr = entry.requestedRow || {};
                                                     if (row.re_type === 'airport') {
@@ -1103,7 +1152,7 @@ export default function ReservationEditApprovalPage() {
                                                         subLabel = `🚙 차량 ${entry.subIdx + 1}`;
                                                     }
 
-                                                    // ── 사용일자 추출 ──
+                                                    // ── 사용일자 ──
                                                     const cruiseInfo = cruiseInfoByRes[normalizeReservationId(row.reservation_id)] || {};
                                                     const pickFirst = (...keys: string[]) => {
                                                         const src = entry.requestedRow || requestedArr[0] || originalArr[0] || {};
@@ -1111,12 +1160,12 @@ export default function ReservationEditApprovalPage() {
                                                         return '';
                                                     };
                                                     let usageDate = '';
-                                                    if (row.re_type === 'airport') usageDate = pickFirst('ra_datetime');
-                                                    else if (row.re_type === 'sht' || row.re_type === 'cruise_car') usageDate = pickFirst('pickup_datetime', 'usage_date');
+                                                    if (row.re_type === 'airport') usageDate = pickFirst('ra_datetime') || cruiseInfo.usageDate || '';
+                                                    else if (row.re_type === 'sht' || row.re_type === 'cruise_car') usageDate = pickFirst('pickup_datetime', 'usage_date') || cruiseInfo.usageDate || '';
                                                     else if (row.re_type === 'cruise') usageDate = cruiseInfo.checkin || pickFirst('checkin');
-                                                    else if (row.re_type === 'hotel') usageDate = pickFirst('checkin_date');
-                                                    else if (row.re_type === 'rentcar') usageDate = pickFirst('pickup_datetime');
-                                                    else if (row.re_type === 'tour') usageDate = pickFirst('usage_date', 'tour_date');
+                                                    else if (row.re_type === 'hotel') usageDate = pickFirst('checkin_date') || cruiseInfo.usageDate || '';
+                                                    else if (row.re_type === 'rentcar') usageDate = pickFirst('pickup_datetime') || cruiseInfo.usageDate || '';
+                                                    else if (row.re_type === 'tour') usageDate = pickFirst('usage_date', 'tour_date') || cruiseInfo.usageDate || '';
                                                     const usageDateStr = usageDate
                                                         ? new Date(usageDate).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
                                                         : '';
@@ -1124,7 +1173,7 @@ export default function ReservationEditApprovalPage() {
                                                     return (
                                                         <div key={cardKey}
                                                             className="border rounded-lg bg-white hover:shadow-md transition-all p-3 space-y-2 text-xs">
-                                                            {/* ① 고객명 (최상단) */}
+                                                            {/* ① 고객명 */}
                                                             <div className="flex items-center justify-between border-b border-gray-100 pb-2">
                                                                 <div className="font-bold text-gray-800 text-sm">
                                                                     👤 {userMap[row.requester_user_id]?.name || '-'}
@@ -1133,13 +1182,18 @@ export default function ReservationEditApprovalPage() {
                                                             </div>
                                                             <div className="text-[10px] text-gray-500 -mt-1">{userMap[row.requester_user_id]?.email || '-'}</div>
 
-                                                            {/* ② 서비스명 + 서브타입 */}
+                                                            {/* ② 서비스 + 서브타입 + 변경필드 */}
                                                             <div className="flex items-center gap-1.5 flex-wrap">
                                                                 <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 font-medium text-[11px]">
                                                                     {TYPE_NAME_MAP[row.re_type] || row.re_type}
                                                                 </span>
                                                                 {subLabel && (
                                                                     <span className="px-1.5 py-0.5 rounded bg-orange-50 text-orange-700 text-[11px] font-medium">{subLabel}</span>
+                                                                )}
+                                                                {field && (
+                                                                    <span className="px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 text-[11px] font-medium">
+                                                                        ✏️ {getFieldLabel(field)}
+                                                                    </span>
                                                                 )}
                                                             </div>
 
@@ -1161,22 +1215,15 @@ export default function ReservationEditApprovalPage() {
                                                                 {' · '}🔗 {row.reservation_id.slice(0, 8)}
                                                             </div>
 
-                                                            {/* 변경 내역 */}
-                                                            {changedRows.length > 0 ? (
-                                                                <div className="bg-gray-50 rounded p-2 space-y-1 max-h-40 overflow-y-auto">
-                                                                    {changedRows.slice(0, 8).map((cr, i) => (
-                                                                        <div key={i} className="text-[10px]">
-                                                                            <div className="text-gray-700 font-medium">{getFieldLabel(cr.field)}</div>
-                                                                            <div className="flex items-center gap-1 text-gray-600">
-                                                                                <span className="line-through truncate max-w-[45%]">{formatDisplayValue(cr.before) || '-'}</span>
-                                                                                <span className="text-gray-400">→</span>
-                                                                                <span className="text-orange-700 font-medium truncate flex-1">{formatDisplayValue(cr.after)}</span>
-                                                                            </div>
-                                                                        </div>
-                                                                    ))}
-                                                                    {changedRows.length > 8 && (
-                                                                        <div className="text-[10px] text-gray-400 pt-1">외 {changedRows.length - 8}개 변경…</div>
-                                                                    )}
+                                                            {/* 변경 내역 (단일 필드) */}
+                                                            {field ? (
+                                                                <div className="bg-gray-50 rounded p-2 text-[11px]">
+                                                                    <div className="text-gray-700 font-medium mb-1">{getFieldLabel(field)}</div>
+                                                                    <div className="flex items-center gap-2 text-gray-600">
+                                                                        <span className="line-through truncate flex-1">{formatDisplayValue(before) || '-'}</span>
+                                                                        <span className="text-gray-400">→</span>
+                                                                        <span className="text-orange-700 font-semibold truncate flex-1">{formatDisplayValue(after) || '-'}</span>
+                                                                    </div>
                                                                 </div>
                                                             ) : (
                                                                 <div className="text-[11px] text-gray-400 italic">변경 사항 없음</div>
@@ -1196,7 +1243,7 @@ export default function ReservationEditApprovalPage() {
                                                                 </div>
                                                             )}
 
-                                                            {/* 승인/반려 (카드별) */}
+                                                            {/* 승인/반려 (대기 상태만) */}
                                                             {isPending ? (
                                                                 <div className="flex gap-2 pt-2 border-t border-gray-100">
                                                                     <button
