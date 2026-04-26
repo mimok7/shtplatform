@@ -17,6 +17,8 @@ type Quote = {
   approved_at?: string | null;
   total_price?: number | null;
   user_nickname?: string | null;
+  has_reservation?: boolean;
+  reservation_count?: number;
 };
 
 export default function ManagerQuotesPage() {
@@ -57,28 +59,33 @@ export default function ManagerQuotesPage() {
     await loadStats();
   };
 
-  async function syncQuotesLinkedToReservations() {
-    setSyncingApproval(true);
+  async function fetchReservedQuoteIds(): Promise<Set<string>> {
     try {
-      const { data: reservationRows, error: reservationError } = await supabase
+      const { data, error } = await supabase
         .from('reservation')
         .select('re_quote_id')
         .not('re_quote_id', 'is', null);
-
-      if (reservationError) throw reservationError;
-
-      const reservedQuoteKeys = new Set(
-        (reservationRows || [])
+      if (error) throw error;
+      return new Set(
+        (data || [])
           .map((row: any) => String(row.re_quote_id || '').trim())
           .filter(Boolean)
       );
+    } catch (e) {
+      console.error('예약 연결 조회 실패:', e);
+      return new Set();
+    }
+  }
 
-      if (reservedQuoteKeys.size === 0) return { updated: 0 };
+  async function syncQuotesLinkedToReservations() {
+    setSyncingApproval(true);
+    try {
+      const reservedQuoteKeys = await fetchReservedQuoteIds();
+      if (reservedQuoteKeys.size === 0) return { updated: 0, targeted: 0, remaining: 0 };
 
       const { data: quoteRows, error: quoteError } = await supabase
         .from('quote')
         .select('id, status');
-
       if (quoteError) throw quoteError;
 
       const targetIds = (quoteRows || [])
@@ -90,16 +97,22 @@ export default function ManagerQuotesPage() {
         .map((q: any) => q.id)
         .filter(Boolean);
 
-      if (targetIds.length === 0) return { updated: 0 };
+      if (targetIds.length === 0) return { updated: 0, targeted: 0, remaining: 0 };
 
-      const { error: updateError } = await supabase
+      // RLS 등으로 일부만 업데이트되는 경우를 감지하기 위해 .select()로 반환 행 수 확인
+      const { data: updatedRows, error: updateError } = await supabase
         .from('quote')
         .update({ status: 'approved', approved_at: new Date().toISOString() })
-        .in('id', targetIds);
-
+        .in('id', targetIds)
+        .select('id');
       if (updateError) throw updateError;
 
-      return { updated: targetIds.length };
+      const updatedCount = (updatedRows || []).length;
+      const remaining = targetIds.length - updatedCount;
+      if (remaining > 0) {
+        console.warn('일부 견적 승인 동기화 실패 (RLS 등):', { targeted: targetIds.length, updated: updatedCount, remaining, targetIds });
+      }
+      return { updated: updatedCount, targeted: targetIds.length, remaining };
     } finally {
       setSyncingApproval(false);
     }
@@ -137,13 +150,18 @@ export default function ManagerQuotesPage() {
       } catch (e) { /* noop */ }
       setCanLoadMore(hasMore);
 
+      // 예약 연결 조회 (예약 리본 표시용)
+      const reservedQuoteKeys = await fetchReservedQuoteIds();
+
       const enriched = await Promise.all((data || []).map(async (item: any) => {
         let nickname = item?.user_id ? `${String(item.user_id).slice(0, 8)}...` : '알 수 없음';
         try {
           const { data: u } = await supabase.from('users').select('name, email').eq('id', item.user_id).single();
           if (u) nickname = u.name || (u.email ? u.email.split('@')[0] : nickname);
         } catch (_e) { /* ignore */ }
-        return { ...item, user_nickname: nickname };
+        const idKey = String(item.id || '').trim();
+        const has_reservation = reservedQuoteKeys.has(idKey);
+        return { ...item, user_nickname: nickname, has_reservation };
       }));
 
       setQuotes(enriched as Quote[]);
@@ -185,6 +203,9 @@ export default function ManagerQuotesPage() {
 
       if (error) throw error;
 
+      // 예약 연결 조회 (예약 리본 표시용)
+      const reservedQuoteKeys = await fetchReservedQuoteIds();
+
       // 메모리에서 필터링
       const enriched = await Promise.all((data || []).map(async (item: any) => {
         let nickname = item?.user_id ? `${String(item.user_id).slice(0, 8)}...` : '알 수 없음';
@@ -192,7 +213,9 @@ export default function ManagerQuotesPage() {
           const { data: u } = await supabase.from('users').select('name, email').eq('id', item.user_id).single();
           if (u) nickname = u.name || (u.email ? u.email.split('@')[0] : nickname);
         } catch (_e) { /* ignore */ }
-        return { ...item, user_nickname: nickname };
+        const idKey = String(item.id || '').trim();
+        const has_reservation = reservedQuoteKeys.has(idKey);
+        return { ...item, user_nickname: nickname, has_reservation };
       }));
 
       const filtered = (enriched as Quote[]).filter(q => {
@@ -221,7 +244,13 @@ export default function ManagerQuotesPage() {
     try {
       const result = await syncQuotesLinkedToReservations();
       await Promise.all([loadQuotes(), loadStats()]);
-      alert(`예약 연동 승인 동기화 완료: ${result.updated}건 변경`);
+      const remaining = (result as any).remaining ?? 0;
+      const targeted = (result as any).targeted ?? result.updated;
+      if (remaining > 0) {
+        alert(`예약 연동 승인 동기화: 대상 ${targeted}건 중 ${result.updated}건 변경, ${remaining}건 실패\n(권한/RLS 문제로 일부 견적이 승인되지 않았습니다. 콘솔을 확인하세요.)`);
+      } else {
+        alert(`예약 연동 승인 동기화 완료: ${result.updated}건 변경`);
+      }
     } catch (e) {
       console.error(e);
       alert('예약 연동 승인 동기화 중 오류가 발생했습니다.');
@@ -435,7 +464,12 @@ export default function ManagerQuotesPage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                 {filteredQuotes.map(q => (
-                  <div key={q.id} className={`bg-white rounded border p-4 flex flex-col justify-between ${selectedQuotes.has(q.id) ? 'ring-2 ring-blue-500' : ''}`}>
+                  <div key={q.id} className={`relative bg-white rounded border p-4 flex flex-col justify-between overflow-hidden ${selectedQuotes.has(q.id) ? 'ring-2 ring-blue-500' : ''} ${q.has_reservation ? 'border-pink-300' : ''}`}>
+                    {q.has_reservation && (
+                      <div className="absolute top-0 right-0 bg-gradient-to-l from-pink-500 to-rose-500 text-white text-[10px] font-bold px-3 py-1 rounded-bl-lg shadow-md z-10">
+                        🎫 예약
+                      </div>
+                    )}
                     <div>
                       <div className="flex items-start gap-3 mb-2">
                         <input
