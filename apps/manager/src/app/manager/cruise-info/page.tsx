@@ -17,6 +17,8 @@ export default function CruiseInfoPage() {
   const [rows, setRows] = useState<CruiseLocation[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [backfilling, setBackfilling] = useState(false);
+  const [backfillResult, setBackfillResult] = useState<string>('');
   const [search, setSearch] = useState('');
 
   // 모달 상태
@@ -87,6 +89,35 @@ export default function CruiseInfoPage() {
     await load();
   };
 
+  const handleBackfillPierLocation = async () => {
+    if (!confirm('현재 선착장으로 남아있는 SHT 차량의 픽업/드랍 위치를 최신 크루즈 선착장으로 보정하시겠습니까?')) {
+      return;
+    }
+
+    setBackfilling(true);
+    setBackfillResult('');
+    try {
+      const res = await fetch('/api/admin/cruise-pier-backfill', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const json = await res.json();
+      if (!res.ok || !json?.success) {
+        throw new Error(json?.error || '선착장 보정 처리에 실패했습니다.');
+      }
+
+      const msg = `보정 완료: ${json.updatedCount}건 (대상 ${json.targetCount}건)`;
+      setBackfillResult(msg);
+      alert(msg);
+    } catch (err: any) {
+      const message = err?.message || '선착장 보정 처리 중 오류가 발생했습니다.';
+      setBackfillResult(`오류: ${message}`);
+      alert(message);
+    } finally {
+      setBackfilling(false);
+    }
+  };
+
   const filtered = rows.filter(r =>
     r.kr_name.includes(search) || r.en_name.toLowerCase().includes(search.toLowerCase()) || (r.pier_location || '').includes(search)
   );
@@ -100,13 +131,28 @@ export default function CruiseInfoPage() {
             <h1 className="text-lg font-semibold text-gray-700">🚢 크루즈 정보 관리</h1>
             <p className="text-xs text-gray-500 mt-0.5">크루즈 로케이션(cruise_location) 데이터를 관리합니다.</p>
           </div>
-          <button
-            onClick={openAdd}
-            className="px-3 py-1.5 text-xs bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors font-medium"
-          >
-            + 추가
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleBackfillPierLocation}
+              disabled={backfilling}
+              className="px-3 py-1.5 text-xs bg-emerald-500 text-white rounded-md hover:bg-emerald-600 transition-colors font-medium disabled:opacity-50"
+            >
+              {backfilling ? '보정 중...' : '기존 선착장 보정'}
+            </button>
+            <button
+              onClick={openAdd}
+              className="px-3 py-1.5 text-xs bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors font-medium"
+            >
+              + 추가
+            </button>
+          </div>
         </div>
+
+        {backfillResult && (
+          <p className="mb-3 text-xs text-gray-600 bg-emerald-50 border border-emerald-100 rounded-md px-3 py-2">
+            {backfillResult}
+          </p>
+        )}
 
         {/* 검색 */}
         <div className="mb-3">
