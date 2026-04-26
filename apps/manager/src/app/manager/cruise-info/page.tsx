@@ -9,9 +9,19 @@ type CruiseLocation = {
   kr_name: string;
   en_name: string;
   pier_location: string | null;
+  pier_map_url: string | null;
+  tour_schedule_url: string | null;
+  details: string | null;
 };
 
-const EMPTY_FORM: Omit<CruiseLocation, 'id'> = { kr_name: '', en_name: '', pier_location: '' };
+const EMPTY_FORM: Omit<CruiseLocation, 'id'> = {
+  kr_name: '',
+  en_name: '',
+  pier_location: '',
+  pier_map_url: '',
+  tour_schedule_url: '',
+  details: '',
+};
 
 export default function CruiseInfoPage() {
   const [rows, setRows] = useState<CruiseLocation[]>([]);
@@ -31,7 +41,7 @@ export default function CruiseInfoPage() {
     setLoading(true);
     const { data, error } = await supabase
       .from('cruise_location')
-      .select('id, kr_name, en_name, pier_location')
+      .select('id, kr_name, en_name, pier_location, pier_map_url, tour_schedule_url, details')
       .order('kr_name');
     if (!error) setRows(data || []);
     setLoading(false);
@@ -48,7 +58,14 @@ export default function CruiseInfoPage() {
 
   const openEdit = (row: CruiseLocation) => {
     setEditTarget(row);
-    setForm({ kr_name: row.kr_name, en_name: row.en_name, pier_location: row.pier_location ?? '' });
+    setForm({
+      kr_name: row.kr_name,
+      en_name: row.en_name,
+      pier_location: row.pier_location ?? '',
+      pier_map_url: row.pier_map_url ?? '',
+      tour_schedule_url: row.tour_schedule_url ?? '',
+      details: row.details ?? '',
+    });
     setFormError('');
     setModalOpen(true);
   };
@@ -64,13 +81,27 @@ export default function CruiseInfoPage() {
       if (editTarget) {
         const { error } = await supabase
           .from('cruise_location')
-          .update({ kr_name: form.kr_name.trim(), en_name: form.en_name.trim(), pier_location: form.pier_location?.trim() || null })
+          .update({
+            kr_name: form.kr_name.trim(),
+            en_name: form.en_name.trim(),
+            pier_location: form.pier_location?.trim() || null,
+            pier_map_url: form.pier_map_url?.trim() || null,
+            tour_schedule_url: form.tour_schedule_url?.trim() || null,
+            details: form.details?.trim() || null,
+          })
           .eq('id', editTarget.id);
         if (error) throw error;
       } else {
         const { error } = await supabase
           .from('cruise_location')
-          .insert({ kr_name: form.kr_name.trim(), en_name: form.en_name.trim(), pier_location: form.pier_location?.trim() || null });
+          .insert({
+            kr_name: form.kr_name.trim(),
+            en_name: form.en_name.trim(),
+            pier_location: form.pier_location?.trim() || null,
+            pier_map_url: form.pier_map_url?.trim() || null,
+            tour_schedule_url: form.tour_schedule_url?.trim() || null,
+            details: form.details?.trim() || null,
+          });
         if (error) throw error;
       }
       setModalOpen(false);
@@ -119,12 +150,17 @@ export default function CruiseInfoPage() {
   };
 
   const filtered = rows.filter(r =>
-    r.kr_name.includes(search) || r.en_name.toLowerCase().includes(search.toLowerCase()) || (r.pier_location || '').includes(search)
+    r.kr_name.includes(search)
+    || r.en_name.toLowerCase().includes(search.toLowerCase())
+    || (r.pier_location || '').includes(search)
+    || (r.pier_map_url || '').toLowerCase().includes(search.toLowerCase())
+    || (r.tour_schedule_url || '').toLowerCase().includes(search.toLowerCase())
+    || (r.details || '').includes(search)
   );
 
   return (
     <ManagerLayout title="크루즈 정보" activeTab="cruise-info">
-      <div className="p-4 max-w-4xl mx-auto">
+      <div className="p-4 w-full">
         {/* 헤더 */}
         <div className="flex items-center justify-between mb-4">
           <div>
@@ -158,7 +194,7 @@ export default function CruiseInfoPage() {
         <div className="mb-3">
           <input
             type="text"
-            placeholder="크루즈명 / 영문명 / 선착장 검색..."
+            placeholder="크루즈명 / 영문명 / 선착장 / 맵 / 스케줄 / 디테일 검색..."
             value={search}
             onChange={e => setSearch(e.target.value)}
             className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-300"
@@ -166,7 +202,7 @@ export default function CruiseInfoPage() {
         </div>
 
         {/* 테이블 */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-x-auto">
           {loading ? (
             <div className="flex justify-center items-center h-40">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
@@ -174,12 +210,15 @@ export default function CruiseInfoPage() {
           ) : filtered.length === 0 ? (
             <div className="text-center py-12 text-sm text-gray-400">데이터가 없습니다.</div>
           ) : (
-            <table className="w-full text-sm">
+            <table className="w-full text-sm min-w-[1200px]">
               <thead>
                 <tr className="bg-gray-50 text-xs text-gray-500 border-b border-gray-100">
                   <th className="px-4 py-2.5 text-left font-medium">한글명</th>
                   <th className="px-4 py-2.5 text-left font-medium">영문명</th>
                   <th className="px-4 py-2.5 text-left font-medium">선착장</th>
+                  <th className="px-4 py-2.5 text-left font-medium">맵 URL</th>
+                  <th className="px-4 py-2.5 text-left font-medium">스케줄 URL</th>
+                  <th className="px-4 py-2.5 text-left font-medium">디테일</th>
                   <th className="px-4 py-2.5 text-center font-medium w-24">관리</th>
                 </tr>
               </thead>
@@ -189,6 +228,9 @@ export default function CruiseInfoPage() {
                     <td className="px-4 py-2.5 text-gray-700 font-medium">{row.kr_name}</td>
                     <td className="px-4 py-2.5 text-gray-500">{row.en_name}</td>
                     <td className="px-4 py-2.5 text-gray-500">{row.pier_location || <span className="text-gray-300">-</span>}</td>
+                    <td className="px-4 py-2.5 text-gray-500 break-all">{row.pier_map_url || <span className="text-gray-300">-</span>}</td>
+                    <td className="px-4 py-2.5 text-gray-500 break-all">{row.tour_schedule_url || <span className="text-gray-300">-</span>}</td>
+                    <td className="px-4 py-2.5 text-gray-500">{row.details || <span className="text-gray-300">-</span>}</td>
                     <td className="px-4 py-2.5 text-center">
                       <button
                         onClick={() => openEdit(row)}
@@ -249,6 +291,36 @@ export default function CruiseInfoPage() {
                   value={form.pier_location ?? ''}
                   onChange={e => setForm(f => ({ ...f, pier_location: e.target.value }))}
                   placeholder="예: Tuan Chau, Ha Long"
+                  className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-300"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">맵 URL</label>
+                <input
+                  type="text"
+                  value={form.pier_map_url ?? ''}
+                  onChange={e => setForm(f => ({ ...f, pier_map_url: e.target.value }))}
+                  placeholder="예: https://maps.google.com/..."
+                  className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-300"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">스케줄 URL</label>
+                <input
+                  type="text"
+                  value={form.tour_schedule_url ?? ''}
+                  onChange={e => setForm(f => ({ ...f, tour_schedule_url: e.target.value }))}
+                  placeholder="예: https://.../schedule"
+                  className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-300"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">디테일</label>
+                <textarea
+                  value={form.details ?? ''}
+                  onChange={e => setForm(f => ({ ...f, details: e.target.value }))}
+                  placeholder="선착장 상세 설명"
+                  rows={3}
                   className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-300"
                 />
               </div>
