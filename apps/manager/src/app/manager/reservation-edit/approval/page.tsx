@@ -1166,32 +1166,49 @@ export default function ReservationEditApprovalPage() {
                                                     else if (row.re_type === 'hotel') usageDate = pickFirst('checkin_date') || cruiseInfo.usageDate || '';
                                                     else if (row.re_type === 'rentcar') usageDate = pickFirst('pickup_datetime') || cruiseInfo.usageDate || '';
                                                     else if (row.re_type === 'tour') usageDate = pickFirst('usage_date', 'tour_date') || cruiseInfo.usageDate || '';
-                                                    const usageDateStr = usageDate
-                                                        ? new Date(usageDate).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
-                                                        : '';
+                                                    const rawUsageDate = String(usageDate || '').trim();
+                                                    const hasTimeInUsageDate = /([T\s]\d{2}:\d{2})|(:\d{2})/.test(rawUsageDate) || /[zZ]$|[+-]\d{2}:?\d{2}$/.test(rawUsageDate);
+                                                    let usageDateStr = '';
+                                                    if (rawUsageDate) {
+                                                        if (!hasTimeInUsageDate && /^\d{4}-\d{2}-\d{2}$/.test(rawUsageDate)) {
+                                                            usageDateStr = rawUsageDate;
+                                                        } else {
+                                                            const parsed = new Date(rawUsageDate);
+                                                            usageDateStr = Number.isNaN(parsed.getTime())
+                                                                ? rawUsageDate.replace('T', ' ').slice(0, 16)
+                                                                : parsed.toLocaleString('ko-KR', {
+                                                                    timeZone: 'Asia/Seoul',
+                                                                    year: '2-digit',
+                                                                    month: '2-digit',
+                                                                    day: '2-digit',
+                                                                    hour: '2-digit',
+                                                                    minute: '2-digit'
+                                                                });
+                                                        }
+                                                    }
 
                                                     return (
                                                         <div key={cardKey}
-                                                            className="border rounded-lg bg-white hover:shadow-md transition-all p-3 space-y-2 text-xs">
+                                                            className="border rounded-lg bg-white hover:shadow-md transition-all p-3 space-y-2 text-sm">
                                                             {/* ① 고객명 */}
                                                             <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                                                                <div className="font-bold text-gray-800 text-sm">
+                                                                <div className="font-bold text-gray-800 text-base">
                                                                     👤 {userMap[row.requester_user_id]?.name || '-'}
                                                                 </div>
-                                                                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${st.cls}`}>{st.label}</span>
+                                                                <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-medium ${st.cls}`}>{st.label}</span>
                                                             </div>
-                                                            <div className="text-[10px] text-gray-500 -mt-1">{userMap[row.requester_user_id]?.email || '-'}</div>
+                                                            <div className="text-[11px] text-gray-500 -mt-1">{userMap[row.requester_user_id]?.email || '-'}</div>
 
                                                             {/* ② 서비스 + 서브타입 + 변경필드 */}
                                                             <div className="flex items-center gap-1.5 flex-wrap">
-                                                                <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 font-medium text-[11px]">
+                                                                <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 font-medium text-[12px]">
                                                                     {TYPE_NAME_MAP[row.re_type] || row.re_type}
                                                                 </span>
                                                                 {subLabel && (
-                                                                    <span className="px-1.5 py-0.5 rounded bg-orange-50 text-orange-700 text-[11px] font-medium">{subLabel}</span>
+                                                                    <span className="px-1.5 py-0.5 rounded bg-orange-50 text-orange-700 text-[12px] font-medium">{subLabel}</span>
                                                                 )}
                                                                 {field && (
-                                                                    <span className="px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 text-[11px] font-medium">
+                                                                    <span className="px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 text-[12px] font-medium">
                                                                         ✏️ {getFieldLabel(field)}
                                                                     </span>
                                                                 )}
@@ -1201,23 +1218,23 @@ export default function ReservationEditApprovalPage() {
                                                             {(cruiseInfo.cruiseName || usageDateStr) && (
                                                                 <div className="flex flex-wrap gap-1.5">
                                                                     {cruiseInfo.cruiseName && (
-                                                                        <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[10px]">🚢 {cruiseInfo.cruiseName}</span>
+                                                                        <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[11px]">🚢 {cruiseInfo.cruiseName}</span>
                                                                     )}
                                                                     {usageDateStr && (
-                                                                        <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[10px]">📅 {usageDateStr}</span>
+                                                                        <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[11px]">📅 {usageDateStr}</span>
                                                                     )}
                                                                 </div>
                                                             )}
 
                                                             {/* 신청일 + 예약 ID */}
-                                                            <div className="text-[10px] text-gray-400">
+                                                            <div className="text-[11px] text-gray-400">
                                                                 신청 {new Date(row.submitted_at).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
                                                                 {' · '}🔗 {row.reservation_id.slice(0, 8)}
                                                             </div>
 
                                                             {/* 변경 내역 (단일 필드) */}
                                                             {field ? (
-                                                                <div className="bg-gray-50 rounded p-2 text-[11px]">
+                                                                <div className="bg-gray-50 rounded p-2 text-[12px]">
                                                                     <div className="text-gray-700 font-medium mb-1">{getFieldLabel(field)}</div>
                                                                     <div className="flex items-center gap-2 text-gray-600">
                                                                         <span className="line-through truncate flex-1">{formatDisplayValue(before) || '-'}</span>
@@ -1226,19 +1243,12 @@ export default function ReservationEditApprovalPage() {
                                                                     </div>
                                                                 </div>
                                                             ) : (
-                                                                <div className="text-[11px] text-gray-400 italic">변경 사항 없음</div>
-                                                            )}
-
-                                                            {/* 고객 메모 */}
-                                                            {row.customer_note && (
-                                                                <div className="text-[10px] text-blue-600 bg-blue-50 rounded p-1.5 border border-blue-100">
-                                                                    💬 {row.customer_note}
-                                                                </div>
+                                                                <div className="text-[12px] text-gray-400 italic">변경 사항 없음</div>
                                                             )}
 
                                                             {/* 매니저 메모 */}
                                                             {row.manager_note && (
-                                                                <div className="text-[10px] text-gray-600 bg-gray-100 rounded p-1.5 border border-gray-200">
+                                                                <div className="text-[11px] text-gray-600 bg-gray-100 rounded p-1.5 border border-gray-200">
                                                                     📝 {row.manager_note}
                                                                 </div>
                                                             )}
