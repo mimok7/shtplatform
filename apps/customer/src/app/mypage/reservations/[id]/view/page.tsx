@@ -639,10 +639,22 @@ function ReservationViewInner() {
             }
           }
 
+          let pierLocation: string | null = null;
+          if (cruiseName) {
+            const { data: cruiseLocation } = await supabase
+              .from('cruise_location')
+              .select('pier_location')
+              .or(`en_name.eq.${cruiseName},kr_name.eq.${cruiseName}`)
+              .limit(1)
+              .maybeSingle();
+            pierLocation = cruiseLocation?.pier_location || null;
+          }
+
           setCruiseInfo({
             cruise_name: cruiseName,
             schedule: scheduleInfo,
             checkin: checkinDate,
+            pier_location: pierLocation,
             total_guest_count: totalGuests
           });
 
@@ -878,6 +890,10 @@ function ReservationViewInner() {
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-bold text-blue-600 shrink-0">🗓️ 승선일:</span>
                         <span className="text-sm text-gray-900">{cruiseInfo.checkin ? formatValue('checkin', cruiseInfo.checkin) : '-'}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-blue-600 shrink-0">🛳️ 선착장:</span>
+                        <span className="text-sm text-gray-900">{cruiseInfo.pier_location || '-'}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-bold text-blue-600 shrink-0">👥 총 탑승 인원:</span>

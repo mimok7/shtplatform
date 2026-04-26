@@ -345,7 +345,7 @@ export default function CruiseInfoPage() {
                                 />
                             </div>
                             <div>
-                                <label className="block text-xs font-medium text-gray-600 mb-1">스케줄 URL</label>
+                                <label className="block text-xs font-medium text-gray-600 mb-1">투어 스케줄</label>
                                 <input
                                     type="text"
                                     value={form.tour_schedule_url ?? ''}
