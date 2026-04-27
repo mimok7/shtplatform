@@ -2607,14 +2607,25 @@ export default function ManagerSchedulePage() {
     });
   }
 
-  // 중복 제거 (re_id + service_table + phase 조합으로 — 픽업/리턴 카드 구분)
+  // 중복 제거: 동일 상세행(id)만 제거하고, 같은 예약의 다건 상세는 유지
   const uniqueSchedules = filteredSchedules.filter((schedule, index, self) =>
-    index === self.findIndex(s =>
-      s.re_id === schedule.re_id
-      && s.service_table === schedule.service_table
-      && (s.segment_type || '') === (schedule.segment_type || '')
-      && (s.rentcar_phase || '') === (schedule.rentcar_phase || '')
-    )
+    index === self.findIndex((s) => {
+      const sRowId = s?.service_row?.id || '';
+      const rowId = schedule?.service_row?.id || '';
+      if (sRowId && rowId) {
+        return s.re_id === schedule.re_id
+          && s.service_table === schedule.service_table
+          && sRowId === rowId
+          && (s.segment_type || '') === (schedule.segment_type || '')
+          && (s.rentcar_phase || '') === (schedule.rentcar_phase || '');
+      }
+      return s.re_id === schedule.re_id
+        && s.service_table === schedule.service_table
+        && (s.segment_type || '') === (schedule.segment_type || '')
+        && (s.rentcar_phase || '') === (schedule.rentcar_phase || '')
+        && (s.schedule_time || '') === (schedule.schedule_time || '')
+        && (s.location || '') === (schedule.location || '');
+    })
   );
 
   // 서비스 타입별 그룹
