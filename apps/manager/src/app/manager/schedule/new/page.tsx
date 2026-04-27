@@ -3049,12 +3049,18 @@ export default function ManagerSchedulePage() {
                 <span className="text-sm text-green-600">{reservation.discount}</span>
               </div>
             )}
-            {reservation.requestNote && (
-              <div className="flex items-start gap-2 mt-2 pt-2 border-t border-gray-200">
-                <span className="font-semibold text-orange-600 text-xs whitespace-nowrap">📝</span>
-                <span className="text-sm text-gray-700 leading-relaxed">{reservation.requestNote}</span>
-              </div>
-            )}
+            {reservation.requestNote && (() => {
+              const filtered = reservation.requestNote
+                .replace(/\[CHILD_OLDER_COUNTS:[^\]]*\]\s*/gi, '')
+                .replace(/\[옵션\s*\d+\][\s\S]*?(?=\n|$)/g, '')
+                .trim();
+              return filtered ? (
+                <div className="flex items-start gap-2 mt-2 pt-2 border-t border-gray-200">
+                  <span className="font-semibold text-orange-600 text-xs whitespace-nowrap">📝</span>
+                  <span className="text-sm text-gray-700 leading-relaxed">{filtered}</span>
+                </div>
+              ) : null;
+            })()}
           </div>
         </div>
       );
