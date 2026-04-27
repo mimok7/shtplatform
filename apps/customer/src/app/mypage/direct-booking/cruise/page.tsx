@@ -130,7 +130,6 @@ function DirectBookingCruiseContent() {
 
     // 기존 예약 데이터 (수정 모드용)
     const [existingReservationId, setExistingReservationId] = useState<string | null>(null);
-    const [existingCruiseId, setExistingCruiseId] = useState<string | null>(null);
     const [editDataLoaded, setEditDataLoaded] = useState(false);
 
     // ── 크루즈 예약 폼 상태 ──
@@ -269,7 +268,7 @@ function DirectBookingCruiseContent() {
 
             setExistingReservationId(reservation.re_id);
 
-            // reservation_cruise 상세 조회
+            // reservation_cruise 상세 조회 (안내용 - 첫 행 기준)
             const { data: cruiseData, error: cruiseError } = await supabase
                 .from('reservation_cruise')
                 .select('*')
@@ -282,8 +281,6 @@ function DirectBookingCruiseContent() {
                 console.warn('크루즈 예약 상세 조회 실패:', cruiseError);
                 return;
             }
-
-            setExistingCruiseId(cruiseData.id);
 
             // cruise_rate_card 정보 조회
             let cruiseName = '';
@@ -801,8 +798,8 @@ function DirectBookingCruiseContent() {
                 const roomTypeLabel = form.schedule === '당일'
                     ? `[옵션 ${idx + 1}] ${r.rate_card.season_name || r.rate_card.room_type}`
                     : isCatherineHorizonCruise
-                    ? `[구성 ${idx + 1}] ${r.rate_card.room_type}`
-                    : `[객실 ${idx + 1}] ${r.rate_card.room_type} x${r.selection.room_count}`;
+                        ? `[구성 ${idx + 1}] ${r.rate_card.room_type}`
+                        : `[객실 ${idx + 1}] ${r.rate_card.room_type} x${r.selection.room_count}`;
                 return `${roomTypeLabel} | 성인 ${r.selection.adult_count}, 아동 ${r.selection.child_count}, 아동엑베 ${r.selection.child_extra_bed_count}, 유아 ${r.selection.infant_count}, 성인엑베 ${r.selection.extra_bed_count}, 싱글 ${r.selection.single_count}`;
             });
 
@@ -832,6 +829,34 @@ function DirectBookingCruiseContent() {
             ].filter(Boolean).join('\n');
 
             // ===== 수정 모드: 기존 예약 업데이트 =====
+            // ── reservation_cruise 다중 행 생성: 객실(room_results)별로 1행씩 ──
+            const buildCruiseRows = (reservationId: string) => {
+                const accommodationInfoJson = JSON.stringify(priceResult!.price_breakdown.room_selections);
+                return priceResult!.room_results.map((r, idx) => {
+                    const isPrimary = idx === 0;
+                    return {
+                        reservation_id: reservationId,
+                        room_price_code: r.rate_card.id,
+                        checkin: form.checkin,
+                        guest_count: r.selection.adult_count + r.selection.child_count + r.selection.child_extra_bed_count + r.selection.infant_count + r.selection.extra_bed_count + r.selection.single_count,
+                        adult_count: r.selection.adult_count,
+                        child_count: r.selection.child_count,
+                        child_extra_bed_count: r.selection.child_extra_bed_count,
+                        infant_count: r.selection.infant_count,
+                        extra_bed_count: r.selection.extra_bed_count,
+                        single_count: r.selection.single_count,
+                        room_count: isCatherineHorizonCruise ? null : r.selection.room_count,
+                        unit_price: r.rate_card.price_adult,
+                        room_total_price: r.total,
+                        connecting_room: isPrimary ? form.connecting_room : false,
+                        birthday_event: isPrimary ? form.birthday_event : false,
+                        birthday_name: isPrimary ? (form.birthday_name || null) : null,
+                        accommodation_info: isPrimary ? accommodationInfoJson : null,
+                        request_note: isPrimary ? sharedRequestNote : null,
+                    };
+                });
+            };
+
             if (isEditMode && existingReservationId) {
                 // reservation 테이블 업데이트
                 const { error: updateResError } = await supabase
@@ -849,40 +874,18 @@ function DirectBookingCruiseContent() {
 
                 if (updateResError) throw updateResError;
 
-                // reservation_cruise 테이블 업데이트
-                const cruiseUpdateData = {
-                    room_price_code: priceResult!.primary_rate_card.id,
-                    checkin: form.checkin,
-                    guest_count: totalPax,
-                    adult_count: priceResult.total_adult_count,
-                    child_count: priceResult.total_child_count,
-                    child_extra_bed_count: priceResult.total_child_extra_bed_count,
-                    infant_count: priceResult.total_infant_count,
-                    extra_bed_count: priceResult.total_extra_bed_count,
-                    single_count: priceResult.total_single_count,
-                    room_count: isCatherineHorizonCruise ? null : priceResult.total_room_count,
-                    unit_price: priceResult!.primary_rate_card.price_adult,
-                    room_total_price: priceResult!.grand_total,
-                    connecting_room: form.connecting_room,
-                    birthday_event: form.birthday_event,
-                    birthday_name: form.birthday_name || null,
-                    accommodation_info: JSON.stringify(priceResult.price_breakdown.room_selections),
-                    request_note: sharedRequestNote,
-                };
+                // 기존 reservation_cruise 행 모두 삭제 후 객실 수 만큼 재삽입
+                const { error: deleteCruiseError } = await supabase
+                    .from('reservation_cruise')
+                    .delete()
+                    .eq('reservation_id', existingReservationId);
+                if (deleteCruiseError) throw deleteCruiseError;
 
-                if (existingCruiseId) {
-                    const { error: updateCruiseError } = await supabase
-                        .from('reservation_cruise')
-                        .update(cruiseUpdateData)
-                        .eq('id', existingCruiseId);
-                    if (updateCruiseError) throw updateCruiseError;
-                } else {
-                    const { error: insertCruiseError } = await supabase
-                        .from('reservation_cruise')
-                        .update(cruiseUpdateData)
-                        .eq('reservation_id', existingReservationId);
-                    if (insertCruiseError) throw insertCruiseError;
-                }
+                const cruiseRows = buildCruiseRows(existingReservationId);
+                const { error: insertCruiseError } = await supabase
+                    .from('reservation_cruise')
+                    .insert(cruiseRows);
+                if (insertCruiseError) throw insertCruiseError;
 
                 // ── 차량 예약은 별도 페이지(/cruise/vehicle)에서 처리 ──
 
@@ -917,31 +920,11 @@ function DirectBookingCruiseContent() {
 
             if (reservationError) throw reservationError;
 
-            // reservation_cruise 상세 저장 (cruise_rate_card 기반)
-            const cruiseReservationData = {
-                reservation_id: newReservation.re_id,
-                room_price_code: priceResult!.primary_rate_card.id,
-                checkin: form.checkin,
-                guest_count: totalPax,
-                adult_count: priceResult.total_adult_count,
-                child_count: priceResult.total_child_count,
-                child_extra_bed_count: priceResult.total_child_extra_bed_count,
-                infant_count: priceResult.total_infant_count,
-                extra_bed_count: priceResult.total_extra_bed_count,
-                single_count: priceResult.total_single_count,
-                room_count: isCatherineHorizonCruise ? null : priceResult.total_room_count,
-                unit_price: priceResult!.primary_rate_card.price_adult,
-                room_total_price: priceResult!.grand_total,
-                connecting_room: form.connecting_room,
-                birthday_event: form.birthday_event,
-                birthday_name: form.birthday_name || null,
-                accommodation_info: JSON.stringify(priceResult.price_breakdown.room_selections),
-                request_note: sharedRequestNote,
-            };
-
+            // reservation_cruise 다중 행 저장 (객실 수 만큼)
+            const cruiseRows = buildCruiseRows(newReservation.re_id);
             const { error: cruiseError } = await supabase
                 .from('reservation_cruise')
-                .insert(cruiseReservationData);
+                .insert(cruiseRows);
 
             if (cruiseError) throw cruiseError;
 

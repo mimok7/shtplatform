@@ -581,7 +581,7 @@ export default function ProfilePage() {
                     </div>
                 </SectionBox>
 
-                <SectionBox title="� 여권 사진">
+                <div className="hidden"><SectionBox title="🛂 여권 사진">
                     <div className="space-y-3">
                         <p className="text-sm text-gray-600">
                             여권 사진은 여러 장 업로드할 수 있으며, 예약 확인 및 승선코드 처리용으로 사용됩니다.
@@ -651,8 +651,8 @@ export default function ProfilePage() {
                         )}
                     </div>
                 </SectionBox>
-
-                <SectionBox title="🎫 승선코드">
+                </div>
+                <div className="hidden"><SectionBox title="🎫 승선코드">
                     <div className="space-y-3">
                         <p className="text-sm text-gray-600">
                             매니저가 발급/등록한 승선코드입니다.<br />승선코드는 매니저가 발급하므로 직접 업로드할 수 없습니다.
@@ -686,8 +686,8 @@ export default function ProfilePage() {
                         )}
                     </div>
                 </SectionBox>
-
-                <SectionBox title="�🔒 비밀번호 변경">
+                </div>
+                <SectionBox title="🔒 비밀번호 변경">
                     <div className="space-y-4">
                         {pwError && (
                             <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
