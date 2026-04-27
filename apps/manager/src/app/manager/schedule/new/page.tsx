@@ -1835,6 +1835,10 @@ export default function ManagerSchedulePage() {
       const cruiseCodes = Array.from(
         new Set((cruiseRows || []).map((r: any) => r.room_price_code).filter(Boolean))
       );
+      // cruise_rate_card.id 는 uuid 컬럼이므로, 레거시 비-UUID 코드를 섞어서 .in('id', ...) 호출하면
+      // 청크 전체가 'invalid input syntax for type uuid' 에러로 실패해 매핑이 통째로 비게 됨
+      const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const cruiseCodesUuid = cruiseCodes.filter((c: any) => UUID_RE.test(String(c || '')));
       const tourCodes = Array.from(
         new Set((tourRows || []).map((r: any) => r.tour_price_code).filter(Boolean))
       );
@@ -1900,8 +1904,8 @@ export default function ManagerSchedulePage() {
       };
 
       const [rpByIdRes, rpByTypeRes, tpDataRes, airportPriceRes, hotelPriceRes, rentPriceRes] = await Promise.all([
-        cruiseCodes.length > 0
-          ? fetchInChunked('cruise_rate_card', 'id, cruise_name, room_type', 'id', cruiseCodes)
+        cruiseCodesUuid.length > 0
+          ? fetchInChunked('cruise_rate_card', 'id, cruise_name, room_type', 'id', cruiseCodesUuid)
           : Promise.resolve({ data: [] as any[] }),
         cruiseCodes.length > 0
           ? fetchInChunked('cruise_rate_card', 'id, cruise_name, room_type', 'room_type', cruiseCodes)
