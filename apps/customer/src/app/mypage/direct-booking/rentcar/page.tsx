@@ -378,6 +378,26 @@ function RentcarDirectBookingContent() {
                 return;
             }
 
+            // 신규 렌트카 예약 전 users 행을 보정하여 이메일/역할 유실을 방지
+            const { data: existingUser } = await supabase
+                .from('users')
+                .select('id, role, email')
+                .eq('id', freshUser.id)
+                .maybeSingle();
+
+            if (!existingUser || existingUser.role === 'guest' || !existingUser.email) {
+                const { error: userUpsertError } = await supabase
+                    .from('users')
+                    .upsert({
+                        id: freshUser.id,
+                        email: freshUser.email || existingUser?.email || null,
+                        role: existingUser?.role === 'guest' || !existingUser?.role ? 'member' : existingUser.role,
+                        updated_at: new Date().toISOString()
+                    }, { onConflict: 'id' });
+
+                if (userUpsertError) throw userUpsertError;
+            }
+
             const buildRentcarData = (vehicle: VehicleData, reservationId: string) => {
                 const isRoundTrip = ROUND_TRIP_TYPES.includes(vehicle.wayType);
                 return {
@@ -423,7 +443,7 @@ function RentcarDirectBookingContent() {
             const { data: reservationData, error: reservationError } = await supabase
                 .from('reservation')
                 .insert({
-                    re_user_id: user.id,
+                    re_user_id: freshUser.id,
                     re_quote_id: quoteId,
                     re_type: 'rentcar',
                     re_status: 'pending'
