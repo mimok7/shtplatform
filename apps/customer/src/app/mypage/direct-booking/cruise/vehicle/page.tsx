@@ -500,6 +500,14 @@ function CruiseVehicleContent() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [reservationId]);
 
+    // ── 이용방식 변경 시 경로 옵션 자동 로드 (페이지 복귀 포함) ──
+    useEffect(() => {
+        if (selectedCarCategory) {
+            loadRouteOptions(selectedCarCategory);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedCarCategory, cruiseName]);
+
     // ── 차량 타입 로드 ──
     useEffect(() => {
         if (selectedCarCategory && selectedRoute) {
@@ -1044,13 +1052,13 @@ function CruiseVehicleContent() {
                                 </div>
                             ))}
 
-                            {vehicleForm.length < 3 && (
+                            {vehicleForm.length < 6 && (
                                 <button
                                     type="button"
                                     onClick={handleAddVehicle}
                                     className="w-full border-2 border-dashed border-green-300 rounded-lg p-4 text-green-600 hover:border-green-400 hover:text-green-700 transition-colors"
                                 >
-                                    + 차량 추가 (최대 3개)
+                                    + 차량 추가 (최대 6대)
                                 </button>
                             )}
 
