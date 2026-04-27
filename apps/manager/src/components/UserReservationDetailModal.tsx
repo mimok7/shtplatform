@@ -101,7 +101,7 @@ const getFilteredNoteText = (note: any): string => {
         .replace(/\[CHILD_OLDER_COUNTS:[^\]]*\]\s*/gi, '')
         .trim();
 
-    const hiddenLinePattern = /^(?:비고\s*:\s*)?(?:\[(?:객실|구성)\s*\d+\]|(?:객실|구성)\s*\d+\b)/;
+    const hiddenLinePattern = /^(?:비고\s*:\s*)?(?:\[(?:객실|구성|옵션)\s*\d+\]|(?:객실|구성)\s*\d+\b)/
 
     const lines = sanitizedNote
         .split('\n')
