@@ -176,7 +176,8 @@ interface SHRCReservation {
 export default function ManagerSchedulePage() {
   const [schedules, setSchedules] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  // ?ㅻ뒛 ?좎쭨濡?珥덇린??  const today = new Date();
+  // ?ㅻ뒛 ?좎쭨濡?珥덇린??
+  const today = new Date();
   const [selectedDate, setSelectedDate] = useState(today);
   const datePickerRef = useRef<HTMLInputElement | null>(null);
   const [viewMode, setViewMode] = useState<'day' | 'week' | 'month'>('day');
@@ -240,7 +241,8 @@ export default function ManagerSchedulePage() {
     setActiveSearchQuery(searchQuery);
   };
 
-  // 寃??珥덇린??  const handleClearSearch = () => {
+  // 寃??珥덇린??
+  const handleClearSearch = () => {
     setSearchQuery('');
     setActiveSearchQuery('');
   };
@@ -808,8 +810,8 @@ export default function ManagerSchedulePage() {
             ...r,
             serviceType: 'cruise',
             status: reservationMap.get(r.reservation_id)?.re_status,
-            cruise: info?.cruise_name || '?щ（利?,
-            cruiseName: info?.cruise_name || '?щ（利?,
+            cruise: info?.cruise_name || '?щ（利?',
+            cruiseName: info?.cruise_name || '?щ（利?',
             roomType: info?.room_type || r.room_price_code,
             checkin: r.checkin,
             adult: adultCount,
@@ -1117,13 +1119,13 @@ export default function ManagerSchedulePage() {
         ]);
 
         console.log('??DB 議고쉶 寃곌낵:');
-        console.log('  sh_r (?щ（利?:', shRData.data?.length || 0, '嫄?, shRData.error ? `??${shRData.error.message}` : '');
-        console.log('  sh_c (李⑤웾):', shCData.data?.length || 0, '嫄?, shCData.error ? `??${shCData.error.message}` : '');
-        console.log('  sh_cc (?ㅽ븯李⑤웾):', shCCData.data?.length || 0, '嫄?, shCCData.error ? `??${shCCData.error.message}` : '');
-        console.log('  sh_p (怨듯빆):', shPData.data?.length || 0, '嫄?, shPData.error ? `??${shPData.error.message}` : '');
-        console.log('  sh_h (?명뀛):', shHData.data?.length || 0, '嫄?, shHData.error ? `??${shHData.error.message}` : '');
-        console.log('  sh_t (?ъ뼱):', shTData.data?.length || 0, '嫄?, shTData.error ? `??${shTData.error.message}` : '');
-        console.log('  sh_rc (?뚰듃移?:', shRCData.data?.length || 0, '嫄?, shRCData.error ? `??${shRCData.error.message}` : '');
+        console.log('  sh_r (?щ（利?:', shRData.data?.length || 0, '嫄?', shRData.error ? `??${shRData.error.message}` : '');
+        console.log('  sh_c (李⑤웾):', shCData.data?.length || 0, '嫄?', shCData.error ? `??${shCData.error.message}` : '');
+        console.log('  sh_cc (?ㅽ븯李⑤웾):', shCCData.data?.length || 0, '嫄?', shCCData.error ? `??${shCCData.error.message}` : '');
+        console.log('  sh_p (怨듯빆):', shPData.data?.length || 0, '嫄?', shPData.error ? `??${shPData.error.message}` : '');
+        console.log('  sh_h (?명뀛):', shHData.data?.length || 0, '嫄?', shHData.error ? `??${shHData.error.message}` : '');
+        console.log('  sh_t (?ъ뼱):', shTData.data?.length || 0, '嫄?', shTData.error ? `??${shTData.error.message}` : '');
+        console.log('  sh_rc (?뚰듃移?:', shRCData.data?.length || 0, '嫄?', shRCData.error ? `??${shRCData.error.message}` : '');
 
         // ?щ（利??곗씠???섑뵆 濡쒓퉭 (?좎쭨 ?뺤떇 ?뺤씤??
         if (shRData.data && shRData.data.length > 0) {
@@ -1136,10 +1138,11 @@ export default function ManagerSchedulePage() {
         // sh_m ?ъ슜???뺣낫 議고쉶 (紐⑤뱺 ?곗씠??
         const usersDataResult = await fetchAllRows('sh_m');
         const usersData = usersDataResult.data;
-        console.log('?뫁 sh_m ?ъ슜???뺣낫:', usersData?.length || 0, '嫄?);
+        console.log('?뫁 sh_m ?ъ슜???뺣낫:', usersData?.length || 0, '嫄?');
         const userMap = new Map((usersData || []).map((u: any) => [u.order_id, { korean_name: u.korean_name, english_name: u.english_name, email: u.email }]));
 
-        // ?곗씠??留ㅽ븨 諛??⑹튂湲?        const allData = [
+        // ?곗씠??留ㅽ븨 諛??⑹튂湲?
+        const allData = [
           ...(shRData.data || []).map((r: any) => {
             const user = userMap.get(r.order_id);
             return {
@@ -1306,14 +1309,14 @@ export default function ManagerSchedulePage() {
           })
         ];
 
-        console.log('?뱤 ?꾩껜 濡쒕뱶???곗씠??', allData.length, '嫄?);
-        console.log('  - ?щ（利?', shRData.data?.length || 0, '嫄?);
-        console.log('  - 李⑤웾:', shCData.data?.length || 0, '嫄?);
-        console.log('  - ?ㅽ븯李⑤웾:', shCCData.data?.length || 0, '嫄?);
-        console.log('  - 怨듯빆:', shPData.data?.length || 0, '嫄?);
-        console.log('  - ?명뀛:', shHData.data?.length || 0, '嫄?);
-        console.log('  - ?ъ뼱:', shTData.data?.length || 0, '嫄?);
-        console.log('  - ?뚰듃移?', shRCData.data?.length || 0, '嫄?);
+        console.log('?뱤 ?꾩껜 濡쒕뱶???곗씠??', allData.length, '嫄?');
+        console.log('  - ?щ（利?', shRData.data?.length || 0, '嫄?');
+        console.log('  - 李⑤웾:', shCData.data?.length || 0, '嫄?');
+        console.log('  - ?ㅽ븯李⑤웾:', shCCData.data?.length || 0, '嫄?');
+        console.log('  - 怨듯빆:', shPData.data?.length || 0, '嫄?');
+        console.log('  - ?명뀛:', shHData.data?.length || 0, '嫄?');
+        console.log('  - ?ъ뼱:', shTData.data?.length || 0, '嫄?');
+        console.log('  - ?뚰듃移?', shRCData.data?.length || 0, '嫄?');
 
         // ?곗씠???섑뵆 ?뺤씤 (?좎쭨 ?꾨뱶 以묒젏 ?뺤씤)
         const cruiseSample = allData.filter(d => d.cruise)[0];
@@ -1340,13 +1343,13 @@ export default function ManagerSchedulePage() {
         };
 
         const todayData = {
-          ?щ（利? allData.filter(d => d.cruise && matchesToday(d.checkin)).length,
-          李⑤웾: allData.filter(d => d.carType && d.pickupDatetime && matchesToday(d.pickupDatetime)).length,
-          ?ㅽ븯李⑤웾: allData.filter(d => d.vehicleNumber && matchesToday(d.boardingDate)).length,
-          怨듯빆: allData.filter(d => d.airportName && matchesToday(d.date)).length,
-          ?명뀛: allData.filter(d => d.hotelName && matchesToday(d.checkinDate)).length,
-          ?ъ뼱: allData.filter(d => d.tourName && matchesToday(d.startDate)).length,
-          ?뚰듃移? allData.filter(d => d.carCode && d.pickupDate && matchesToday(d.pickupDate)).length
+          cruise: allData.filter(d => d.cruise && matchesToday(d.checkin)).length,
+          car: allData.filter(d => d.carType && d.pickupDatetime && matchesToday(d.pickupDatetime)).length,
+          sht: allData.filter(d => d.vehicleNumber && matchesToday(d.boardingDate)).length,
+          airport: allData.filter(d => d.airportName && matchesToday(d.date)).length,
+          hotel: allData.filter(d => d.hotelName && matchesToday(d.checkinDate)).length,
+          tour: allData.filter(d => d.tourName && matchesToday(d.startDate)).length,
+          rentcar: allData.filter(d => d.carCode && d.pickupDate && matchesToday(d.pickupDate)).length
         };
         console.log('?뱟 ?ㅻ뒛(2025-11-14) ?좎쭨 臾몄옄??寃??', todayData);
 
@@ -1359,7 +1362,7 @@ export default function ManagerSchedulePage() {
           d.checkin.includes('11-2025')
         ));
 
-        console.log('占?2025??11???щ（利??곗씠??', nov2025Cruise.length, '嫄?);
+        console.log('占?2025??11???щ（利??곗씠??', nov2025Cruise.length, '嫄?');
         if (nov2025Cruise.length > 0) {
           console.log('   ?좎쭨 ?뺤떇 ?섑뵆:');
           nov2025Cruise.slice(0, 10).forEach((d, idx) => {
@@ -1370,7 +1373,7 @@ export default function ManagerSchedulePage() {
         // ?ㅼ젣 ?ㅻ뒛 ?곗씠???섑뵆 異쒕젰 (?щ（利??뺤씤)
         const todayCruise = allData.filter(d => d.cruise && matchesToday(d.checkin));
         if (todayCruise.length > 0) {
-          console.log('?슓 ?ㅻ뒛 ?щ（利??곗씠??', todayCruise.length, '嫄?);
+          console.log('?슓 ?ㅻ뒛 ?щ（利??곗씠??', todayCruise.length, '嫄?');
           todayCruise.forEach((d, idx) => {
             console.log(`   [${idx + 1}] ${d.orderId} - checkin: "${d.checkin}"`);
           });
@@ -1378,14 +1381,14 @@ export default function ManagerSchedulePage() {
           console.log('???ㅻ뒛 ?щ（利??곗씠??臾몄옄??寃???ㅽ뙣');
         }
 
-        console.log('?벀 留ㅽ븨???꾩껜 ?곗씠??', allData.length, '嫄?);
-        console.log('   - ?щ（利?', allData.filter(d => d.cruise).length, '嫄?);
-        console.log('   - 李⑤웾:', allData.filter(d => d.carType && d.pickupDatetime).length, '嫄?);
-        console.log('   - ?ㅽ븯李⑤웾:', allData.filter(d => d.vehicleNumber).length, '嫄?);
-        console.log('   - 怨듯빆:', allData.filter(d => d.airportName).length, '嫄?);
-        console.log('   - ?명뀛:', allData.filter(d => d.hotelName).length, '嫄?);
-        console.log('   - ?ъ뼱:', allData.filter(d => d.tourName).length, '嫄?);
-        console.log('   - ?뚰듃移?', allData.filter(d => d.carCode && d.pickupDate).length, '嫄?);
+        console.log('?벀 留ㅽ븨???꾩껜 ?곗씠??', allData.length, '嫄?');
+        console.log('   - ?щ（利?', allData.filter(d => d.cruise).length, '嫄?');
+        console.log('   - 李⑤웾:', allData.filter(d => d.carType && d.pickupDatetime).length, '嫄?');
+        console.log('   - ?ㅽ븯李⑤웾:', allData.filter(d => d.vehicleNumber).length, '嫄?');
+        console.log('   - 怨듯빆:', allData.filter(d => d.airportName).length, '嫄?');
+        console.log('   - ?명뀛:', allData.filter(d => d.hotelName).length, '嫄?');
+        console.log('   - ?ъ뼱:', allData.filter(d => d.tourName).length, '嫄?');
+        console.log('   - ?뚰듃移?', allData.filter(d => d.carCode && d.pickupDate).length, '嫄?');
 
         setGoogleSheetsData(allData);
       } else {
@@ -1648,7 +1651,7 @@ export default function ManagerSchedulePage() {
   };
 
   const formatPrice = (price: number): string => {
-    return price.toLocaleString('ko-KR') + '??;
+    return price.toLocaleString('ko-KR') + '??';
   };
 
   const isPastDate = (dateStr: string): boolean => {
@@ -1829,7 +1832,8 @@ export default function ManagerSchedulePage() {
         new Set((cruiseRows || []).map((r: any) => r.room_price_code).filter(Boolean))
       );
       // cruise_rate_card.id ??uuid 而щ읆?대?濡? ?덇굅??鍮?UUID 肄붾뱶瑜??욎뼱??.in('id', ...) ?몄텧?섎㈃
-      // 泥?겕 ?꾩껜媛 'invalid input syntax for type uuid' ?먮윭濡??ㅽ뙣??留ㅽ븨???듭㎏濡?鍮꾧쾶 ??      const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      // 泥?겕 ?꾩껜媛 'invalid input syntax for type uuid' ?먮윭濡??ㅽ뙣??留ㅽ븨???듭㎏濡?鍮꾧쾶 ??
+      const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       const cruiseCodesUuid = cruiseCodes.filter((c: any) => UUID_RE.test(String(c || '')));
       const tourCodes = Array.from(
         new Set((tourRows || []).map((r: any) => r.tour_price_code).filter(Boolean))
@@ -2125,7 +2129,8 @@ export default function ManagerSchedulePage() {
         usersById = new Map((usersData || []).map(u => [u.id, u]));
       }
 
-      // ?ㅼ?以?媛앹껜濡?蹂??      const result: any[] = [];
+      // ?ㅼ?以?媛앹껜濡?蹂??
+      const result: any[] = [];
       const hasTimezone = (value: string) => /[zZ]$|[+-]\d{2}:?\d{2}$/.test(value);
       const parseKstDateTime = (value: any): Date | null => {
         if (!value) return null;
@@ -2216,7 +2221,7 @@ export default function ManagerSchedulePage() {
             }
             // ?덉빟 ??hotel_category???명뀛紐???ν븯???⑦꽩
             location = row.hotel_category || null;
-            if (row.nights) duration = `${row.nights}諛?;
+            if (row.nights) duration = `${row.nights}諛?`;
           } else if (table === 'reservation_rentcar') {
             if (row.rentcar_price_code) {
               const rentCode = String(row.rentcar_price_code || '').trim();
@@ -2448,11 +2453,11 @@ export default function ManagerSchedulePage() {
 
   const getTypeName = (type: string) => {
     switch (type) {
-      case 'cruise': return '?щ（利?;
+      case 'cruise': return '?щ（利?';
       case 'airport': return '怨듯빆';
       case 'hotel': return '?명뀛';
       case 'tour': return '?ъ뼱';
-      case 'rentcar': return '?뚰듃移?;
+      case 'rentcar': return '?뚰듃移?';
       case 'car': return '?ъ감';
       case 'vehicle': return '?ъ감';
       case 'sht': return '?ㅽ븯李⑤웾';
@@ -2528,7 +2533,7 @@ export default function ManagerSchedulePage() {
       row?.room ||
       '';
     const code = row?.room_price_code || '';
-    const left = cruise || (code ? `肄붾뱶:${code}` : '?щ（利?);
+    const left = cruise || (code ? `肄붾뱶:${code}` : '?щ（利?');
     const right = roomType;
     return [left, right].filter(Boolean).join(' ');
   };
@@ -2579,7 +2584,8 @@ export default function ManagerSchedulePage() {
     return true;
   });
 
-  // DB 寃?? 寃?됱뼱媛 ?덉쑝硫??좎쭨 ?꾪꽣瑜?臾댁떆?섍퀬 ?꾩껜(DB)?먯꽌 寃??  let filteredSchedules = typeFilteredSchedules;
+  // DB 寃?? 寃?됱뼱媛 ?덉쑝硫??좎쭨 ?꾪꽣瑜?臾댁떆?섍퀬 ?꾩껜(DB)?먯꽌 寃??
+  let filteredSchedules = typeFilteredSchedules;
   if (activeSearchQuery.trim()) {
     const query = activeSearchQuery.toLowerCase().trim();
     filteredSchedules = typeFilteredSchedules.filter(schedule => {
@@ -2657,7 +2663,7 @@ export default function ManagerSchedulePage() {
     const day = String(d.getDate()).padStart(2, '0');
     return `${y}-${m}-${day}`;
   };
-  const weekdayShort = ['??, '??, '??, '??, '紐?, '湲?, '??];
+  const weekdayShort = ['??', '??', '??', '??', '紐?', '湲?', '??'];
   const formatDateLabel = (d: Date) => {
     const dateStr = d.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' });
     return `${dateStr} (${weekdayShort[d.getDay()]})`;
@@ -2682,7 +2688,8 @@ export default function ManagerSchedulePage() {
     viewMode
   });
 
-  // Google Sheets ?곗씠???꾪꽣留?  let filteredGoogleSheets = googleSheetsData.filter(reservation => {
+  // Google Sheets ?곗씠???꾪꽣留?
+  let filteredGoogleSheets = googleSheetsData.filter(reservation => {
     let targetDate: Date | null = null;
     let dateType = '';
     let dateFieldValue = '';
@@ -2691,7 +2698,7 @@ export default function ManagerSchedulePage() {
     if (reservation.checkin) {
       // ?щ（利??곗씠??      dateFieldValue = reservation.checkin;
       targetDate = parseDate(reservation.checkin);
-      dateType = '?щ（利?泥댄겕??;
+      dateType = '?щ（利?泥댄겕??';
     } else if (reservation.pickupDatetime) {
       // 李⑤웾 ?곗씠??      dateFieldValue = reservation.pickupDatetime;
       targetDate = parseDate(reservation.pickupDatetime);
@@ -2699,7 +2706,7 @@ export default function ManagerSchedulePage() {
     } else if (reservation.boardingDate) {
       // ?ㅽ븯李⑤웾 ?곗씠??      dateFieldValue = reservation.boardingDate;
       targetDate = parseDate(reservation.boardingDate);
-      dateType = '?ㅽ븯李⑤웾 ?뱀감??;
+      dateType = '?ㅽ븯李⑤웾 ?뱀감??';
     } else if (reservation.date) {
       // 怨듯빆 ?곗씠??      dateFieldValue = reservation.date;
       targetDate = parseDate(reservation.date);
@@ -2707,32 +2714,33 @@ export default function ManagerSchedulePage() {
     } else if (reservation.checkinDate) {
       // ?명뀛 ?곗씠??      dateFieldValue = reservation.checkinDate;
       targetDate = parseDate(reservation.checkinDate);
-      dateType = '?명뀛 泥댄겕??;
+      dateType = '?명뀛 泥댄겕??';
     } else if (reservation.startDate) {
       // ?ъ뼱 ?곗씠??      dateFieldValue = reservation.startDate;
       targetDate = parseDate(reservation.startDate);
-      dateType = '?ъ뼱 ?쒖옉??;
+      dateType = '?ъ뼱 ?쒖옉??';
     } else if (reservation.pickupDate) {
       // ?뚰듃移??곗씠??      dateFieldValue = reservation.pickupDate;
       targetDate = parseDate(reservation.pickupDate);
-      dateType = '?뚰듃移??뱀감??;
+      dateType = '?뚰듃移??뱀감??';
     }
 
     // ?좎쭨媛 ?녿뒗 ?곗씠?곕뒗 ?꾪꽣留곸뿉???쒖쇅
     if (!targetDate) {
-      const serviceType = reservation.cruise ? '?щ（利? :
+      const serviceType = reservation.cruise ? '?щ（利?' :
         reservation.carType && reservation.pickupDatetime ? '李⑤웾' :
           reservation.vehicleNumber ? '?ㅽ븯李⑤웾' :
             reservation.airportName ? '怨듯빆' :
               reservation.hotelName ? '?명뀛' :
                 reservation.tourName ? '?ъ뼱' :
-                  reservation.carCode && reservation.pickupDate ? '?뚰듃移? : '誘명솗??;
+                  reservation.carCode && reservation.pickupDate ? '?뚰듃移?' : '誘명솗??';
       // 留ㅼ슦 ?쒕Ъ寃뚮쭔 濡쒓퉭 (0.1% ?뺣쪧)
       if (Math.random() < 0.001) {
         console.log(`?좑툘 ?좎쭨 ?녿뒗 ${serviceType} ?쒖쇅:`, reservation.orderId);
       }
       return false; // ???좎쭨 ?놁쑝硫??쒖떆 ?덊븿
-    }    // ?좎쭨 踰붿쐞 ?꾪꽣留?    if (viewMode === 'day') {
+    }    // ?좎쭨 踰붿쐞 ?꾪꽣留?
+    if (viewMode === 'day') {
       const result = isSameLocalDate(targetDate, selectedDate);
       return result;
     }
@@ -2753,7 +2761,7 @@ export default function ManagerSchedulePage() {
         ?뚯떛寃곌낵: formatLocalDate(targetDate),
         踰붿쐞?쒖옉: formatLocalDate(start),
         踰붿쐞醫낅즺: formatLocalDate(end),
-        留ㅼ묶: result ? '?? : '??
+        留ㅼ묶: result ? '??' : '??'
       });
     }
 
@@ -2764,7 +2772,8 @@ export default function ManagerSchedulePage() {
   if (activeSearchQuery.trim()) {
     const query = activeSearchQuery.toLowerCase().trim();
     filteredGoogleSheets = googleSheetsData.filter(item => {
-      // 紐⑤뱺 ?꾨뱶?먯꽌 寃??      const searchFields = [
+      // 紐⑤뱺 ?꾨뱶?먯꽌 寃??
+      const searchFields = [
         item.orderId,
         item.customerName,
         item.customerEnglishName,
@@ -2795,8 +2804,8 @@ export default function ManagerSchedulePage() {
 
   // ?꾪꽣留?寃곌낵 濡쒓퉭
   console.log('?뵇 ?꾪꽣留?寃곌낵:');
-  console.log('  ?꾩껜?곗씠??', googleSheetsData.length, '嫄?);
-  console.log('  ?꾪꽣留곹썑:', filteredGoogleSheets.length, '嫄?);
+  console.log('  ?꾩껜?곗씠??', googleSheetsData.length, '嫄?');
+  console.log('  ?꾪꽣留곹썑:', filteredGoogleSheets.length, '嫄?');
   console.log('  ?꾩옱 ?좏깮 ?좎쭨:', toLocalDateString(selectedDate));
   console.log('  酉곕え??', viewMode);
 
@@ -2812,7 +2821,7 @@ export default function ManagerSchedulePage() {
   };
   console.log('  ?쒕퉬?ㅻ퀎 ?꾪꽣留?寃곌낵:');
   Object.entries(filteredServiceCounts).forEach(([type, count]) => {
-    if (count > 0) console.log(`    ${type}: ${count}嫄?);
+    if (count > 0) console.log(`    ${type}: ${count}嫄?`);
   });
 
   const navigateDate = (direction: 'prev' | 'next') => {
@@ -2852,7 +2861,8 @@ export default function ManagerSchedulePage() {
     input.click();
   };
 
-  // Google Sheets ?곗씠??????뺤씤 ?⑥닔??  const isCruiseData = (item: any): item is SHRReservation => {
+  // Google Sheets ?곗씠??????뺤씤 ?⑥닔??
+  const isCruiseData = (item: any): item is SHRReservation => {
     return 'checkin' in item && 'cruise' in item;
   };
 
@@ -2895,18 +2905,19 @@ export default function ManagerSchedulePage() {
   // ?쒕퉬????낅퀎 ?꾩씠肄?諛??대쫫
   const getServiceInfo = (type: string) => {
     const serviceMap: Record<string, { icon: React.ReactNode; name: string; color: string }> = {
-      cruise: { icon: <Ship className="w-5 h-5" />, name: '?щ（利?, color: 'blue' },
+      cruise: { icon: <Ship className="w-5 h-5" />, name: '?щ（利?', color: 'blue' },
       car: { icon: <Car className="w-5 h-5" />, name: '李⑤웾', color: 'blue' },
       vehicle: { icon: <Car className="w-5 h-5" />, name: '?ㅽ븯李⑤웾', color: 'purple' },
       airport: { icon: <Plane className="w-5 h-5" />, name: '怨듯빆', color: 'green' },
       hotel: { icon: <Building className="w-5 h-5" />, name: '?명뀛', color: 'orange' },
       tour: { icon: <MapPin className="w-5 h-5" />, name: '?ъ뼱', color: 'red' },
-      rentcar: { icon: <Car className="w-5 h-5" />, name: '?뚰듃移?, color: 'indigo' }
+      rentcar: { icon: <Car className="w-5 h-5" />, name: '?뚰듃移?', color: 'indigo' }
     };
     return serviceMap[type] || { icon: <Calendar className="w-5 h-5" />, name: '湲고?', color: 'gray' };
   };
 
-  // ?쒕퉬?ㅻ퀎 洹몃９??  const groupedByService = filteredGoogleSheets.reduce((acc: Record<string, any[]>, reservation) => {
+  // ?쒕퉬?ㅻ퀎 洹몃９??
+  const groupedByService = filteredGoogleSheets.reduce((acc: Record<string, any[]>, reservation) => {
     const serviceType = getServiceType(reservation);
     (acc[serviceType] ||= []).push(reservation);
     return acc;
@@ -2914,13 +2925,13 @@ export default function ManagerSchedulePage() {
 
   // ?꾪꽣留?寃곌낵 濡쒓렇
   console.log('?뵇 ?꾪꽣留?寃곌낵:');
-  console.log('  ?꾩껜?곗씠??', googleSheetsData.length, '嫄?);
-  console.log('  ?꾪꽣留곹썑:', filteredGoogleSheets.length, '嫄?);
+  console.log('  ?꾩껜?곗씠??', googleSheetsData.length, '嫄?');
+  console.log('  ?꾪꽣留곹썑:', filteredGoogleSheets.length, '嫄?');
   console.log('  ?꾩옱 ?좏깮 ?좎쭨:', selectedDate.toISOString().split('T')[0]);
   console.log('  酉곕え??', viewMode);
   console.log('  ?쒕퉬?ㅻ퀎 ?꾪꽣留?寃곌낵:');
   Object.entries(groupedByService).forEach(([type, items]) => {
-    console.log(`    ${type}: ${items.length}嫄?);
+    console.log(`    ${type}: ${items.length}嫄?`);
   });
 
   // ?꾪꽣留곷맂 ?곗씠???섑뵆 ?뺤씤 (泥섏쓬 3媛?
@@ -2933,8 +2944,10 @@ export default function ManagerSchedulePage() {
     });
   }
 
-  // Google Sheets ?덉빟 移대뱶 ?뚮뜑留?  const renderGoogleSheetsCard = (reservation: any, index: number) => {
-    // 1. ?щ（利??곗씠??    if (isCruiseData(reservation)) {
+  // Google Sheets ?덉빟 移대뱶 ?뚮뜑留?
+  const renderGoogleSheetsCard = (reservation: any, index: number) => {
+    // 1. ?щ（利??곗씠??
+    if (isCruiseData(reservation)) {
       const checkinDate = parseDate(reservation.checkin);
       const isPast = isPastDate(reservation.checkin);
 
@@ -2988,7 +3001,7 @@ export default function ManagerSchedulePage() {
               </div>
             )}
             <div className="flex items-start gap-2">
-              <span className="font-semibold text-gray-500 text-xs mt-0.5">?щ（利?/span>
+              <span className="font-semibold text-gray-500 text-xs mt-0.5">?щ（利?</span>
               <span className="text-sm font-bold text-blue-700 break-words">{reservation.cruise}</span>
             </div>
             <div className="flex items-start gap-2">
@@ -3004,17 +3017,17 @@ export default function ManagerSchedulePage() {
             <div className="flex items-center gap-2">
               <span className="font-semibold text-gray-500 text-xs">?몄썝</span>
               <span className="text-sm">
-                {reservation.adult > 0 && `?뫅 ${reservation.adult}紐?}
-                {reservation.child > 0 && ` ?뫔 ${reservation.child}紐?}
-                {reservation.toddler > 0 && ` ?띁 ${reservation.toddler}紐?}
+                {reservation.adult > 0 && `?뫅 ${reservation.adult}紐?`}
+                {reservation.child > 0 && ` ?뫔 ${reservation.child}紐?`}
+                {reservation.toddler > 0 && ` ?띁 ${reservation.toddler}紐?`}
                 {reservation.adult === 0 && reservation.child === 0 && reservation.toddler === 0 && (
                   <span className="text-gray-400">-</span>
                 )}
               </span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="font-semibold text-gray-500 text-xs">媛앹떎??/span>
-              <span className="text-sm">{reservation.roomCount}媛?/span>
+              <span className="font-semibold text-gray-500 text-xs">媛앹떎??</span>
+              <span className="text-sm">{reservation.roomCount}媛?</span>
             </div>
             {reservation.discount && (
               <div className="flex items-center gap-2">
@@ -3033,7 +3046,8 @@ export default function ManagerSchedulePage() {
       );
     }
 
-    // 2. ?ㅽ븯李⑤웾 ?곗씠??    else if (isVehicleData(reservation)) {
+    // 2. ?ㅽ븯李⑤웾 ?곗씠??
+    else if (isVehicleData(reservation)) {
       console.log('?슇 ?ㅽ븯李⑤웾 ?뚮뜑留?', {
         orderId: reservation.orderId,
         boardingDate: reservation.boardingDate,
@@ -3101,7 +3115,7 @@ export default function ManagerSchedulePage() {
             )}
             {reservation.cruiseInfo && (
               <div className="flex items-start gap-2 mb-1 pb-1 border-b border-gray-100">
-                <span className="font-semibold text-gray-500 text-xs mt-0.5">?щ（利?/span>
+                <span className="font-semibold text-gray-500 text-xs mt-0.5">?щ（利?</span>
                 <span className="text-sm text-purple-700 font-medium break-words">{reservation.cruiseInfo}</span>
               </div>
             )}
@@ -3132,7 +3146,8 @@ export default function ManagerSchedulePage() {
       );
     }
 
-    // 3. 怨듯빆 ?곗씠??    else if (isAirportData(reservation)) {
+    // 3. 怨듯빆 ?곗씠??
+    else if (isAirportData(reservation)) {
       const serviceDate = parseDate(reservation.date);
       const isPast = isPastDate(reservation.date);
       const rawStopover = String(reservation.stopover || '').trim();
@@ -3208,8 +3223,8 @@ export default function ManagerSchedulePage() {
             </div>
             {reservation.carrierCount > 0 && (
               <div className="flex items-center gap-2">
-                <span className="font-semibold text-gray-500 text-xs">罹먮━??/span>
-                <span className="text-sm">?㎡ {reservation.carrierCount}媛?/span>
+                <span className="font-semibold text-gray-500 text-xs">罹먮━??</span>
+                <span className="text-sm">?㎡ {reservation.carrierCount}媛?</span>
               </div>
             )}
           </div>
@@ -3217,7 +3232,8 @@ export default function ManagerSchedulePage() {
       );
     }
 
-    // 4. ?명뀛 ?곗씠??    else if (isHotelData(reservation)) {
+    // 4. ?명뀛 ?곗씠??
+    else if (isHotelData(reservation)) {
       const checkinDate = parseDate(reservation.checkinDate);
       const isPast = isPastDate(reservation.checkinDate);
 
@@ -3280,14 +3296,14 @@ export default function ManagerSchedulePage() {
             <div className="flex items-center gap-2">
               <span className="font-semibold text-gray-500 text-xs">?몄썝</span>
               <span className="text-sm">
-                {reservation.adult > 0 && `?뫅 ${reservation.adult}紐?}
-                {reservation.child > 0 && ` ?뫔 ${reservation.child}紐?}
-                {reservation.toddler > 0 && ` ?띁 ${reservation.toddler}紐?}
+                {reservation.adult > 0 && `?뫅 ${reservation.adult}紐?`}
+                {reservation.child > 0 && ` ?뫔 ${reservation.child}紐?`}
+                {reservation.toddler > 0 && ` ?띁 ${reservation.toddler}紐?`}
               </span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="font-semibold text-gray-500 text-xs">媛앹떎??/span>
-              <span className="text-sm">{reservation.roomCount}媛?/span>
+              <span className="font-semibold text-gray-500 text-xs">媛앹떎??</span>
+              <span className="text-sm">{reservation.roomCount}媛?</span>
             </div>
             {reservation.breakfastService && (
               <div className="flex items-center gap-2">
@@ -3300,7 +3316,8 @@ export default function ManagerSchedulePage() {
       );
     }
 
-    // 5. ?ъ뼱 ?곗씠??    else if (isTourData(reservation)) {
+    // 5. ?ъ뼱 ?곗씠??
+    else if (isTourData(reservation)) {
       const startDate = parseDate(reservation.startDate);
       const isPast = isPastDate(reservation.startDate);
 
@@ -3359,7 +3376,7 @@ export default function ManagerSchedulePage() {
             </div>
             <div className="flex items-center gap-2">
               <span className="font-semibold text-gray-500 text-xs">?몄썝</span>
-              <span className="text-sm">?뫁 {reservation.participants}紐?/span>
+              <span className="text-sm">?뫁 {reservation.participants}紐?</span>
             </div>
             {reservation.pickupLocation && (
               <div className="flex items-start gap-2">
@@ -3378,7 +3395,8 @@ export default function ManagerSchedulePage() {
       );
     }
 
-    // 6. ?뚰듃移??곗씠??    else if (isRentcarData(reservation)) {
+    // 6. ?뚰듃移??곗씠??
+    else if (isRentcarData(reservation)) {
       const pickupDate = parseDate(reservation.pickupDate);
       const isPast = isPastDate(reservation.pickupDate);
 
@@ -3776,7 +3794,7 @@ export default function ManagerSchedulePage() {
                             )}
                             <div className="flex items-center gap-2">
                               <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${schedule.re_status === 'confirmed' ? 'bg-green-100 text-green-800' : schedule.re_status === 'pending' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'}`}>
-                                {schedule.re_status === 'confirmed' ? '?뺤젙' : schedule.re_status === 'pending' ? '?湲? : '痍⑥냼'}
+                                {schedule.re_status === 'confirmed' ? '?뺤젙' : schedule.re_status === 'pending' ? '?湲?' : '痍⑥냼'}
                               </span>
                               <button
                                 onClick={() => {
@@ -3830,7 +3848,7 @@ export default function ManagerSchedulePage() {
                                         )}
                                         <div className="flex items-center gap-2">
                                           <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${schedule.re_status === 'confirmed' ? 'bg-green-100 text-green-800' : schedule.re_status === 'pending' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'}`}>
-                                            {schedule.re_status === 'confirmed' ? '?뺤젙' : schedule.re_status === 'pending' ? '?湲? : '痍⑥냼'}
+                                            {schedule.re_status === 'confirmed' ? '?뺤젙' : schedule.re_status === 'pending' ? '?湲?' : '痍⑥냼'}
                                           </span>
                                           <button onClick={() => {
                                             if (schedule.users?.id) {
@@ -3876,7 +3894,7 @@ export default function ManagerSchedulePage() {
                                     )}
                                     <div className="flex items-center gap-2">
                                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${schedule.re_status === 'confirmed' ? 'bg-green-100 text-green-800' : schedule.re_status === 'pending' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'}`}>
-                                        {schedule.re_status === 'confirmed' ? '?뺤젙' : schedule.re_status === 'pending' ? '?湲? : '痍⑥냼'}
+                                        {schedule.re_status === 'confirmed' ? '?뺤젙' : schedule.re_status === 'pending' ? '?湲?' : '痍⑥냼'}
                                       </span>
                                       <button onClick={() => {
                                         if (schedule.users?.id) {
@@ -3968,7 +3986,7 @@ export default function ManagerSchedulePage() {
                               <div className="space-y-4">
                                 {Object.entries(
                                   reservationArray.reduce((acc: Record<string, any[]>, reservation) => {
-                                    const category = reservation.category || '誘몃텇瑜?;
+                                    const category = reservation.category || '誘몃텇瑜?';
                                     (acc[category] ||= []).push(reservation);
                                     return acc;
                                   }, {})
@@ -4017,7 +4035,8 @@ export default function ManagerSchedulePage() {
                             let date: Date | null = null;
 
                             if (reservation.checkin) {
-                              date = parseDate(reservation.checkin); // ?щ（利?                            } else if (reservation.pickupDatetime) {
+                              date = parseDate(reservation.checkin); // ?щ（利?
+                              } else if (reservation.pickupDatetime) {
                               date = parseDate(reservation.pickupDatetime); // 李⑤웾
                             } else if (reservation.boardingDate) {
                               date = parseDate(reservation.boardingDate); // ?ㅽ븯李⑤웾
@@ -4028,7 +4047,8 @@ export default function ManagerSchedulePage() {
                             } else if (reservation.startDate) {
                               date = parseDate(reservation.startDate); // ?ъ뼱
                             } else if (reservation.pickupDate) {
-                              date = parseDate(reservation.pickupDate); // ?뚰듃移?                            }
+                              date = parseDate(reservation.pickupDate); // ?뚰듃移?
+                              }
 
                             if (date) {
                               const key = toKey(date);
@@ -4042,7 +4062,8 @@ export default function ManagerSchedulePage() {
                             const d = new Date(dateKey + 'T00:00:00');
                             const reservationArray = Array.isArray(reservations) ? reservations : [];
 
-                            // ?좎쭨蹂꾨줈 ?쒕퉬????낅퀎 洹몃９??                            const serviceGroups = reservationArray.reduce((acc: Record<string, any[]>, reservation) => {
+                            // ?좎쭨蹂꾨줈 ?쒕퉬????낅퀎 洹몃９??
+                            const serviceGroups = reservationArray.reduce((acc: Record<string, any[]>, reservation) => {
                               const serviceType = getServiceType(reservation);
                               (acc[serviceType] ||= []).push(reservation);
                               return acc;
@@ -4083,7 +4104,7 @@ export default function ManagerSchedulePage() {
                                             <div className="space-y-4">
                                               {Object.entries(
                                                 serviceReservationArray.reduce((acc: Record<string, any[]>, reservation) => {
-                                                  const category = reservation.category || '誘몃텇瑜?;
+                                                  const category = reservation.category || '誘몃텇瑜?';
                                                   (acc[category] ||= []).push(reservation);
                                                   return acc;
                                                 }, {})
@@ -4147,7 +4168,7 @@ export default function ManagerSchedulePage() {
                                   <div className="space-y-4">
                                     {Object.entries(
                                       reservationArray.reduce((acc: Record<string, any[]>, reservation) => {
-                                        const category = reservation.category || '誘몃텇瑜?;
+                                        const category = reservation.category || '誘몃텇瑜?';
                                         (acc[category] ||= []).push(reservation);
                                         return acc;
                                       }, {})
