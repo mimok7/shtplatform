@@ -863,7 +863,7 @@ ${totalAmount > 0 ? `${formatAmount(totalAmount)}동` : '-'}
 
     return (
         <ManagerLayout title="카페 안내" activeTab="cafe-guide">
-            <div className="max-w-6xl mx-auto space-y-4">
+            <div className="w-full space-y-4">
                 <div className="bg-white rounded-lg border p-4">
                     <h2 className="text-lg font-semibold text-gray-800">예약 조회 그룹 안내</h2>
                     <p className="text-sm text-gray-600 mt-1">
