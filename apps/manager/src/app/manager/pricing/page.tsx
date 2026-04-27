@@ -361,42 +361,42 @@ export default function PricingManagement() {
                 <tr>
                   {(activeTab === 'room' || activeTab === 'car') && (
                     <>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-green-800 uppercase tracking-wider bg-gray-50">
                         일정
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-green-800 uppercase tracking-wider bg-gray-50">
                         크루즈
                       </th>
                     </>
                   )}
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-green-800 uppercase tracking-wider bg-gray-50">
                     {activeTab === 'room' && '객실'}
                     {activeTab === 'car' && '차량'}
                     {activeTab === 'hotel' && '호텔'}
                     {activeTab === 'tour' && '투어'}
                   </th>
                   {activeTab === 'hotel' && (
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-green-800 uppercase tracking-wider">
                       객실타입
                     </th>
                   )}
                   {activeTab === 'tour' && (
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-green-800 uppercase tracking-wider">
                       참가자타입
                     </th>
                   )}
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-green-800 uppercase tracking-wider">
                     기간
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-green-800 uppercase tracking-wider">
                     가격
                   </th>
                   {activeTab === 'room' && (
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-green-800 uppercase tracking-wider">
                       결제방식
                     </th>
                   )}
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-green-800 uppercase tracking-wider">
                     운영
                   </th>
                 </tr>
@@ -745,7 +745,7 @@ export default function PricingManagement() {
         {/* 가격 통계 */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <div className="bg-white p-4 rounded-lg shadow">
-            <div className="text-sm font-medium text-gray-500">
+            <div className="text-sm font-medium text-green-800">
               {activeTab === 'room' ? '객실 가격 설정' : '차량 가격 설정'}
             </div>
             <div className="text-2xl font-bold text-blue-600">
@@ -753,7 +753,7 @@ export default function PricingManagement() {
             </div>
           </div>
           <div className="bg-white p-4 rounded-lg shadow">
-            <div className="text-sm font-medium text-gray-500">평균 가격</div>
+            <div className="text-sm font-medium text-green-800">평균 가격</div>
             <div className="text-2xl font-bold text-green-600">
               {formatCurrency(
                 (activeTab === 'room' ? roomPrices : carPrices).reduce((sum, price) => sum + price.price, 0) /
@@ -762,7 +762,7 @@ export default function PricingManagement() {
             </div>
           </div>
           <div className="bg-white p-4 rounded-lg shadow">
-            <div className="text-sm font-medium text-gray-500">최고 가격</div>
+            <div className="text-sm font-medium text-green-800">최고 가격</div>
             <div className="text-2xl font-bold text-red-600">
               {formatCurrency(
                 Math.max(...(activeTab === 'room' ? roomPrices : carPrices).map(price => price.price), 0)

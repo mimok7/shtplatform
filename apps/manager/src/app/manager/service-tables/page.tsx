@@ -870,8 +870,8 @@ export default function ManagerServiceTablesPage() {
                     </div>
                 </div>
                 <div className="flex flex-col gap-1 text-sm text-gray-700 mt-1">
-                    <div className="flex items-center gap-2"><span className="font-semibold text-gray-500 text-xs">고객</span><span className="text-sm">{userName}</span></div>
-                    <div className="flex items-center gap-2"><span className="font-semibold text-gray-500 text-xs">이메일</span><span className="text-sm">{userEmail || '-'}</span></div>
+                    <div className="flex items-center gap-2"><span className="font-semibold text-green-800 text-xs">고객</span><span className="text-sm">{userName}</span></div>
+                    <div className="flex items-center gap-2"><span className="font-semibold text-green-800 text-xs">이메일</span><span className="text-sm">{userEmail || '-'}</span></div>
                     {whenStr && (
                         <div className="flex items-center gap-2 mt-1">
                             <Calendar className="w-4 h-4 text-gray-400" />
@@ -1575,12 +1575,12 @@ export default function ManagerServiceTablesPage() {
                                                         {getTableColumns('cruise').map((column) => (
                                                             <th
                                                                 key={column.key}
-                                                                className={`px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider ${column.width} bg-gray-50`}
+                                                                className={`px-6 py-3 text-left text-xs font-medium text-green-800 uppercase tracking-wider ${column.width} bg-gray-50`}
                                                             >
                                                                 {column.label}
                                                             </th>
                                                         ))}
-                                                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-20 bg-gray-50">
+                                                        <th className="px-6 py-3 text-center text-xs font-medium text-green-800 uppercase tracking-wider w-20 bg-gray-50">
                                                             상세
                                                         </th>
                                                     </tr>
@@ -1640,12 +1640,12 @@ export default function ManagerServiceTablesPage() {
                                                         {getTableColumns('cruise_car').map((column) => (
                                                             <th
                                                                 key={column.key}
-                                                                className={`px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider ${column.width} bg-gray-50`}
+                                                                className={`px-6 py-3 text-left text-xs font-medium text-green-800 uppercase tracking-wider ${column.width} bg-gray-50`}
                                                             >
                                                                 {column.label}
                                                             </th>
                                                         ))}
-                                                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-20 bg-gray-50">
+                                                        <th className="px-6 py-3 text-center text-xs font-medium text-green-800 uppercase tracking-wider w-20 bg-gray-50">
                                                             상세
                                                         </th>
                                                     </tr>
@@ -1705,12 +1705,12 @@ export default function ManagerServiceTablesPage() {
                                                         {getTableColumns('sht_car').map((column) => (
                                                             <th
                                                                 key={column.key}
-                                                                className={`px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider ${column.width} bg-gray-50`}
+                                                                className={`px-6 py-3 text-left text-xs font-medium text-green-800 uppercase tracking-wider ${column.width} bg-gray-50`}
                                                             >
                                                                 {column.label}
                                                             </th>
                                                         ))}
-                                                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-20 bg-gray-50">
+                                                        <th className="px-6 py-3 text-center text-xs font-medium text-green-800 uppercase tracking-wider w-20 bg-gray-50">
                                                             상세
                                                         </th>
                                                     </tr>
@@ -1770,12 +1770,12 @@ export default function ManagerServiceTablesPage() {
                                                         {getTableColumns('rentcar').map((column) => (
                                                             <th
                                                                 key={column.key}
-                                                                className={`px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider ${column.width} bg-gray-50`}
+                                                                className={`px-6 py-3 text-left text-xs font-medium text-green-800 uppercase tracking-wider ${column.width} bg-gray-50`}
                                                             >
                                                                 {column.label}
                                                             </th>
                                                         ))}
-                                                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-20 bg-gray-50">
+                                                        <th className="px-6 py-3 text-center text-xs font-medium text-green-800 uppercase tracking-wider w-20 bg-gray-50">
                                                             상세
                                                         </th>
                                                     </tr>
@@ -1835,12 +1835,12 @@ export default function ManagerServiceTablesPage() {
                                                         {getTableColumns('tour').map((column) => (
                                                             <th
                                                                 key={column.key}
-                                                                className={`px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider ${column.width} bg-gray-50`}
+                                                                className={`px-6 py-3 text-left text-xs font-medium text-green-800 uppercase tracking-wider ${column.width} bg-gray-50`}
                                                             >
                                                                 {column.label}
                                                             </th>
                                                         ))}
-                                                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-20 bg-gray-50">
+                                                        <th className="px-6 py-3 text-center text-xs font-medium text-green-800 uppercase tracking-wider w-20 bg-gray-50">
                                                             상세
                                                         </th>
                                                     </tr>
@@ -1900,12 +1900,12 @@ export default function ManagerServiceTablesPage() {
                                                         {getTableColumns('hotel').map((column) => (
                                                             <th
                                                                 key={column.key}
-                                                                className={`px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider ${column.width} bg-gray-50`}
+                                                                className={`px-6 py-3 text-left text-xs font-medium text-green-800 uppercase tracking-wider ${column.width} bg-gray-50`}
                                                             >
                                                                 {column.label}
                                                             </th>
                                                         ))}
-                                                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-20 bg-gray-50">
+                                                        <th className="px-6 py-3 text-center text-xs font-medium text-green-800 uppercase tracking-wider w-20 bg-gray-50">
                                                             상세
                                                         </th>
                                                     </tr>
@@ -1965,12 +1965,12 @@ export default function ManagerServiceTablesPage() {
                                                         {getTableColumns('airport').map((column) => (
                                                             <th
                                                                 key={column.key}
-                                                                className={`px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider ${column.width} bg-gray-50`}
+                                                                className={`px-6 py-3 text-left text-xs font-medium text-green-800 uppercase tracking-wider ${column.width} bg-gray-50`}
                                                             >
                                                                 {column.label}
                                                             </th>
                                                         ))}
-                                                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-20 bg-gray-50">
+                                                        <th className="px-6 py-3 text-center text-xs font-medium text-green-800 uppercase tracking-wider w-20 bg-gray-50">
                                                             상세
                                                         </th>
                                                     </tr>
@@ -2023,12 +2023,12 @@ export default function ManagerServiceTablesPage() {
                                                 {getTableColumns(activeTab).map((column) => (
                                                     <th
                                                         key={column.key}
-                                                        className={`px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider ${column.width} bg-gray-50`}
+                                                        className={`px-6 py-3 text-left text-xs font-medium text-green-800 uppercase tracking-wider ${column.width} bg-gray-50`}
                                                     >
                                                         {column.label}
                                                     </th>
                                                 ))}
-                                                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-20 bg-gray-50">
+                                                <th className="px-6 py-3 text-center text-xs font-medium text-green-800 uppercase tracking-wider w-20 bg-gray-50">
                                                     상세
                                                 </th>
                                             </tr>

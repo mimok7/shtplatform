@@ -240,7 +240,7 @@ export default function ServiceManagement() {
                   {columns.map((column) => (
                     <th
                       key={column}
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50"
+                      className="px-6 py-3 text-left text-xs font-medium text-green-800 uppercase tracking-wider bg-gray-50"
                     >
                       {column}
                     </th>
@@ -416,19 +416,19 @@ export default function ServiceManagement() {
         {/* 서비스 통계 */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
           <div className="bg-white p-4 rounded-lg shadow">
-            <div className="text-sm font-medium text-gray-500">크루즈</div>
+            <div className="text-sm font-medium text-green-800">크루즈</div>
             <div className="text-2xl font-bold text-blue-600">{cruises.length}</div>
           </div>
           <div className="bg-white p-4 rounded-lg shadow">
-            <div className="text-sm font-medium text-gray-500">일정</div>
+            <div className="text-sm font-medium text-green-800">일정</div>
             <div className="text-2xl font-bold text-green-600">{schedules.length}</div>
           </div>
           <div className="bg-white p-4 rounded-lg shadow">
-            <div className="text-sm font-medium text-gray-500">객실</div>
+            <div className="text-sm font-medium text-green-800">객실</div>
             <div className="text-2xl font-bold text-purple-600">{rooms.length}</div>
           </div>
           <div className="bg-white p-4 rounded-lg shadow">
-            <div className="text-sm font-medium text-gray-500">차량</div>
+            <div className="text-sm font-medium text-green-800">차량</div>
             <div className="text-2xl font-bold text-red-600">{cars.length}</div>
           </div>
         </div>

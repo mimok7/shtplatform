@@ -403,19 +403,19 @@ function CustomerEmailPreviewClient() {
                                     <table className="w-full">
                                         <thead className="bg-gray-50">
                                             <tr>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12">
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-green-800 uppercase tracking-wider w-12">
                                                     No.
                                                 </th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-green-800 uppercase tracking-wider">
                                                     서비스 종류
                                                 </th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-green-800 uppercase tracking-wider">
                                                     상세 정보
                                                 </th>
-                                                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-20">
+                                                <th className="px-4 py-3 text-center text-xs font-medium text-green-800 uppercase tracking-wider w-20">
                                                     상태
                                                 </th>
-                                                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-28">
+                                                <th className="px-4 py-3 text-right text-xs font-medium text-green-800 uppercase tracking-wider w-28">
                                                     금액
                                                 </th>
                                             </tr>

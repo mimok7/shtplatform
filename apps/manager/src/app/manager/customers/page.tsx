@@ -371,11 +371,11 @@ export default function CustomerManagement() {
         {/* 고객 통계 */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
           <div className="bg-white p-4 rounded-lg shadow">
-            <div className="text-sm font-medium text-gray-500">총 고객 수</div>
+            <div className="text-sm font-medium text-green-800">총 고객 수</div>
             <div className="text-2xl font-bold text-gray-900">{customerCount ?? filteredCustomers.length}</div>
           </div>
           <div className="bg-white p-4 rounded-lg shadow">
-            <div className="text-sm font-medium text-gray-500">활성 고객</div>
+            <div className="text-sm font-medium text-green-800">활성 고객</div>
             <div className="text-2xl font-bold text-green-600">
               {filteredCustomers.filter(c => {
                 const daysSince = c.last_activity ? Math.floor((Date.now() - new Date(c.last_activity).getTime()) / (1000 * 60 * 60 * 24)) : 9999;
@@ -384,13 +384,13 @@ export default function CustomerManagement() {
             </div>
           </div>
           <div className="bg-white p-4 rounded-lg shadow">
-            <div className="text-sm font-medium text-gray-500">예약 고객</div>
+            <div className="text-sm font-medium text-green-800">예약 고객</div>
             <div className="text-2xl font-bold text-blue-600">
               {filteredCustomers.filter(c => c.confirmed_count && c.confirmed_count > 0).length}
             </div>
           </div>
           <div className="bg-white p-4 rounded-lg shadow">
-            <div className="text-sm font-medium text-gray-500">신규 고객 (30일)</div>
+            <div className="text-sm font-medium text-green-800">신규 고객 (30일)</div>
             <div className="text-2xl font-bold text-purple-600">
               {filteredCustomers.filter(c => {
                 const daysSince = c.created_at ? Math.floor((Date.now() - new Date(c.created_at).getTime()) / (1000 * 60 * 60 * 24)) : 9999;
@@ -429,7 +429,7 @@ export default function CustomerManagement() {
                               : String(value);
                           return (
                             <div key={key} className="mb-1">
-                              <span className="font-semibold text-gray-500">{key}:</span> <span className="text-gray-700 break-all">{displayValue}</span>
+                              <span className="font-semibold text-green-800">{key}:</span> <span className="text-gray-700 break-all">{displayValue}</span>
                             </div>
                           );
                         })}

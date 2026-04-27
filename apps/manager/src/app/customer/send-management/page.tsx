@@ -378,11 +378,11 @@ export default function CustomerSendManagementPage() {
                             <table className="min-w-full divide-y divide-gray-200">
                                 <thead className="bg-gray-50">
                                     <tr>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">예약 정보</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">고객 정보</th>
-                                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">일시/금액</th>
-                                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">발송상태</th>
-                                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">작업</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-green-800 uppercase">예약 정보</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-green-800 uppercase">고객 정보</th>
+                                        <th className="px-4 py-3 text-center text-xs font-medium text-green-800 uppercase">일시/금액</th>
+                                        <th className="px-4 py-3 text-center text-xs font-medium text-green-800 uppercase">발송상태</th>
+                                        <th className="px-4 py-3 text-center text-xs font-medium text-green-800 uppercase">작업</th>
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">

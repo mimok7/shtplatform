@@ -113,7 +113,7 @@ export function NavigationHeader() {
               <div className="relative">
                 <button
                   onClick={() => setIsMenuOpen(!isMenuOpen)}
-                  className="flex items-center space-x-1 px-3 py-2 rounded-md text-sm font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                  className="flex items-center space-x-1 px-3 py-2 rounded-md text-sm font-medium text-green-800 hover:text-gray-700 hover:bg-gray-100"
                 >
                   <span>👤</span>
                   <span className="hidden sm:inline">계정</span>
@@ -144,7 +144,7 @@ export function NavigationHeader() {
               <div className="flex space-x-2">
                 <Link
                   href="/login"
-                  className="px-3 py-2 rounded-md text-sm font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                  className="px-3 py-2 rounded-md text-sm font-medium text-green-800 hover:text-gray-700 hover:bg-gray-100"
                 >
                   🔐 로그인
                 </Link>

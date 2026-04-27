@@ -842,7 +842,7 @@ const VehicleDispatchCodesPage = () => {
 
                                                 {/* 배차 코드 섹션 */}
                                                 <div className="pt-4 border-t border-gray-100 mt-4">
-                                                    <div className="text-xs font-medium text-gray-500 mb-2">차량번호</div>
+                                                    <div className="text-xs font-medium text-green-800 mb-2">차량번호</div>
 
                                                     {editingId === reservation.id ? (
                                                         <div className="flex items-center gap-2">

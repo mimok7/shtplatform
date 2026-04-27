@@ -367,7 +367,7 @@ function QuoteDetailModal({ quoteId, onClose }: { quoteId: string; onClose: () =
                                 const subtotalSum = rows.reduce((s, r) => s + r.price * r.count, 0);
                                 return (
                                   <div className="bg-gray-50 p-2 rounded text-xs">
-                                    <div className="grid grid-cols-12 gap-1 font-medium text-gray-500 border-b border-gray-200 pb-1 mb-1">
+                                    <div className="grid grid-cols-12 gap-1 font-medium text-green-800 border-b border-gray-200 pb-1 mb-1">
                                       <span className="col-span-3">구분</span>
                                       <span className="col-span-4 text-right">단가</span>
                                       <span className="col-span-1 text-center">×</span>

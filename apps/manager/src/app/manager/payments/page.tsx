@@ -861,7 +861,7 @@ export default function ManagerPaymentsPage() {
                 <DollarSign className="h-8 w-8 text-gray-400" />
               </div>
               <div className="ml-4">
-                <div className="text-sm font-medium text-gray-500">총 예약</div>
+                <div className="text-sm font-medium text-green-800">총 예약</div>
                 <div className="text-2xl font-bold text-gray-900">
                   {refreshing ? '...' : `${globalStats.total.toLocaleString()}건`}
                 </div>
@@ -874,7 +874,7 @@ export default function ManagerPaymentsPage() {
                 <Clock className="h-8 w-8 text-yellow-400" />
               </div>
               <div className="ml-4">
-                <div className="text-sm font-medium text-gray-500">미결제</div>
+                <div className="text-sm font-medium text-green-800">미결제</div>
                 <div className="text-2xl font-bold text-yellow-600">
                   {refreshing ? '...' : `${globalStats.pending.toLocaleString()}건`}
                 </div>
@@ -887,7 +887,7 @@ export default function ManagerPaymentsPage() {
                 <CreditCard className="h-8 w-8 text-blue-400" />
               </div>
               <div className="ml-4">
-                <div className="text-sm font-medium text-gray-500">부분결제</div>
+                <div className="text-sm font-medium text-green-800">부분결제</div>
                 <div className="text-2xl font-bold text-blue-600">
                   {refreshing ? '...' : `${globalStats.partial.toLocaleString()}건`}
                 </div>
@@ -900,7 +900,7 @@ export default function ManagerPaymentsPage() {
                 <CheckCircle className="h-8 w-8 text-green-400" />
               </div>
               <div className="ml-4">
-                <div className="text-sm font-medium text-gray-500">결제완료</div>
+                <div className="text-sm font-medium text-green-800">결제완료</div>
                 <div className="text-2xl font-bold text-green-600">
                   {refreshing ? '...' : `${globalStats.completed.toLocaleString()}건`}
                 </div>

@@ -481,7 +481,7 @@ export default function UserReservationDetailModal({
                                     </div>
                                     {/* 카테고리별 요금 내역 */}
                                     <div className="border-t border-gray-100 pt-2 mt-1 space-y-1">
-                                        <div className="text-xs font-semibold text-gray-500 mb-1">요금 내역</div>
+                                        <div className="text-xs font-semibold text-green-800 mb-1">요금 내역</div>
                                         {cruiseLines.length > 0 ? (
                                             cruiseLines.map((line, idx) => (
                                                 <div key={`${line.label}-${idx}`} className="flex justify-between text-sm">
@@ -925,7 +925,7 @@ export default function UserReservationDetailModal({
                                         <h3 className="text-lg font-bold text-gray-800">
                                             {group.title}
                                         </h3>
-                                        <span className="ml-2 text-xs font-medium text-gray-500 bg-white px-2 py-0.5 rounded border border-gray-200">
+                                        <span className="ml-2 text-xs font-medium text-green-800 bg-white px-2 py-0.5 rounded border border-gray-200">
                                             {group.items.length}건
                                         </span>
                                     </div>

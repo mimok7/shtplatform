@@ -153,7 +153,7 @@ export default function ServiceCardBody({
         if (!filteredNote) return null;
         return (
             <div className="flex items-start gap-2 mt-2 pt-2 border-t border-gray-200">
-                <span className="font-semibold text-orange-600 text-xs whitespace-nowrap">📝</span>
+                <span className="font-semibold text-green-800 text-xs whitespace-nowrap">📝</span>
                 <span className="text-sm text-gray-700 leading-relaxed">{filteredNote}</span>
             </div>
         );
@@ -173,11 +173,11 @@ export default function ServiceCardBody({
             <div className="flex flex-col gap-1 text-sm text-gray-700 mt-1">
                 {renderCustomer()}
                 <div className="flex items-start gap-2">
-                    <span className="font-semibold text-gray-500 text-xs mt-0.5">크루즈</span>
+                    <span className="font-semibold text-green-800 text-xs mt-0.5">크루즈</span>
                     <span className="text-sm font-bold text-blue-700 break-words">{cruise}</span>
                 </div>
                 <div className="flex items-start gap-2">
-                    <span className="font-semibold text-gray-500 text-xs mt-0.5">객실명</span>
+                    <span className="font-semibold text-green-800 text-xs mt-0.5">객실명</span>
                     <span className="text-sm break-words">{roomName} {roomCategory ? `(${roomCategory})` : ''}</span>
                 </div>
                 <div className="flex items-center gap-2 mt-1">
@@ -185,11 +185,11 @@ export default function ServiceCardBody({
                     <span className="text-sm font-medium">{getDateDisplay()}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                    <span className="font-semibold text-gray-500 text-xs">인원</span>
+                    <span className="font-semibold text-green-800 text-xs">인원</span>
                     <span className="text-sm">{formatPeople(adult, child, infant)}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                    <span className="font-semibold text-gray-500 text-xs">객실수</span>
+                    <span className="font-semibold text-green-800 text-xs">객실수</span>
                     <span className="text-sm">{row?.room_count || 1}개</span>
                 </div>
                 {renderNote()}
@@ -212,11 +212,11 @@ export default function ServiceCardBody({
             <div className="flex flex-col gap-1 text-sm text-gray-700 mt-1">
                 {renderCustomer()}
                 <div className="flex items-start gap-2">
-                    <span className="font-semibold text-gray-500 text-xs mt-0.5">구분</span>
+                    <span className="font-semibold text-green-800 text-xs mt-0.5">구분</span>
                     <span className="text-sm font-bold text-green-700 break-words">{way}{category ? ` - ${category}` : ''}</span>
                 </div>
                 <div className="flex items-start gap-2">
-                    <span className="font-semibold text-gray-500 text-xs mt-0.5">경로</span>
+                    <span className="font-semibold text-green-800 text-xs mt-0.5">경로</span>
                     <span className="text-sm break-words">{row?.route || '-'}</span>
                 </div>
                 <div className="flex items-center gap-2 mt-1">
@@ -232,12 +232,12 @@ export default function ServiceCardBody({
                     <span className="text-sm break-words">{stopover}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                    <span className="font-semibold text-gray-500 text-xs">인원/차량</span>
+                    <span className="font-semibold text-green-800 text-xs">인원/차량</span>
                     <span className="text-sm">👥 {row?.ra_passenger_count || 0}명 / 🚗 {row?.ra_car_count || 0}대</span>
                 </div>
                 {Number(row?.ra_luggage_count || 0) > 0 && (
                     <div className="flex items-center gap-2">
-                        <span className="font-semibold text-gray-500 text-xs">캐리어</span>
+                        <span className="font-semibold text-green-800 text-xs">캐리어</span>
                         <span className="text-sm">🧳 {row?.ra_luggage_count}개</span>
                     </div>
                 )}
@@ -263,11 +263,11 @@ export default function ServiceCardBody({
             <div className="flex flex-col gap-1 text-sm text-gray-700 mt-1">
                 {renderCustomer()}
                 <div className="flex items-start gap-2">
-                    <span className="font-semibold text-gray-500 text-xs mt-0.5">호텔</span>
+                    <span className="font-semibold text-green-800 text-xs mt-0.5">호텔</span>
                     <span className="text-sm font-bold text-orange-700 break-words">{hotelName}</span>
                 </div>
                 <div className="flex items-start gap-2">
-                    <span className="font-semibold text-gray-500 text-xs mt-0.5">객실</span>
+                    <span className="font-semibold text-green-800 text-xs mt-0.5">객실</span>
                     <span className="text-sm break-words">{roomName}{roomType ? ` (${roomType})` : ''}</span>
                 </div>
                 <div className="flex items-center gap-2 mt-1">
@@ -275,16 +275,16 @@ export default function ServiceCardBody({
                     <span className="text-sm font-medium">{checkinText}{Number(nights) > 0 ? ` (${nights}박)` : ''}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                    <span className="font-semibold text-gray-500 text-xs">인원</span>
+                    <span className="font-semibold text-green-800 text-xs">인원</span>
                     <span className="text-sm">{formatPeople(adult, child, infant)}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                    <span className="font-semibold text-gray-500 text-xs">객실수</span>
+                    <span className="font-semibold text-green-800 text-xs">객실수</span>
                     <span className="text-sm">{row?.room_count || 1}개</span>
                 </div>
                 {breakfastIncluded && (
                     <div className="flex items-center gap-2">
-                        <span className="font-semibold text-gray-500 text-xs">조식</span>
+                        <span className="font-semibold text-green-800 text-xs">조식</span>
                         <span className="text-sm">🍳 포함</span>
                     </div>
                 )}
@@ -303,7 +303,7 @@ export default function ServiceCardBody({
             <div className="flex flex-col gap-1 text-sm text-gray-700 mt-1">
                 {renderCustomer()}
                 <div className="flex items-start gap-2">
-                    <span className="font-semibold text-gray-500 text-xs mt-0.5">투어</span>
+                    <span className="font-semibold text-green-800 text-xs mt-0.5">투어</span>
                     <span className="text-sm font-bold text-pink-700 break-words">{tourName}</span>
                 </div>
                 <div className="flex items-center gap-2 mt-1">
@@ -311,7 +311,7 @@ export default function ServiceCardBody({
                     <span className="text-sm font-medium">{getDateDisplay()}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                    <span className="font-semibold text-gray-500 text-xs">인원</span>
+                    <span className="font-semibold text-green-800 text-xs">인원</span>
                     <span className="text-sm">👥 {row?.tour_capacity || row?.participant_count || 0}명</span>
                 </div>
                 <div className="flex items-start gap-2">
@@ -324,7 +324,7 @@ export default function ServiceCardBody({
                 </div>
                 {Number(row?.quantity || 0) > 0 && (
                     <div className="flex items-center gap-2">
-                        <span className="font-semibold text-gray-500 text-xs">수량</span>
+                        <span className="font-semibold text-green-800 text-xs">수량</span>
                         <span className="text-sm">{row.quantity}개</span>
                     </div>
                 )}
@@ -355,11 +355,11 @@ export default function ServiceCardBody({
             <div className="flex flex-col gap-1 text-sm text-gray-700 mt-1">
                 {renderCustomer()}
                 <div className="flex items-start gap-2">
-                    <span className="font-semibold text-gray-500 text-xs mt-0.5">차량</span>
+                    <span className="font-semibold text-green-800 text-xs mt-0.5">차량</span>
                     <span className="text-sm font-bold text-indigo-700 break-words">{vehicleType}</span>
                 </div>
                 <div className="flex items-start gap-2">
-                    <span className="font-semibold text-gray-500 text-xs mt-0.5">경로</span>
+                    <span className="font-semibold text-green-800 text-xs mt-0.5">경로</span>
                     <span className="text-sm break-words">{routeText}{tripType ? ` (${tripType})` : ''}</span>
                 </div>
                 {showPickupBlock && (
@@ -387,12 +387,12 @@ export default function ServiceCardBody({
                     </div>
                 )}
                 <div className="flex items-center gap-2">
-                    <span className="font-semibold text-gray-500 text-xs">인원/차량</span>
+                    <span className="font-semibold text-green-800 text-xs">인원/차량</span>
                     <span className="text-sm">👥 {row?.passenger_count || 0}명 / 🚗 {row?.car_count || 0}대</span>
                 </div>
                 {(row?.usage_period || Number(row?.rental_days || 0) > 0) && (
                     <div className="flex items-center gap-2">
-                        <span className="font-semibold text-gray-500 text-xs">사용기간</span>
+                        <span className="font-semibold text-green-800 text-xs">사용기간</span>
                         <span className="text-sm">{row?.usage_period || `${row.rental_days}일`}</span>
                     </div>
                 )}
@@ -413,11 +413,11 @@ export default function ServiceCardBody({
             <div className="flex flex-col gap-1 text-sm text-gray-700 mt-1">
                 {renderCustomer()}
                 <div className="flex items-start gap-2">
-                    <span className="font-semibold text-gray-500 text-xs mt-0.5">크루즈</span>
+                    <span className="font-semibold text-green-800 text-xs mt-0.5">크루즈</span>
                     <span className="text-sm break-words">{cruiseName}</span>
                 </div>
                 <div className="flex items-start gap-2">
-                    <span className="font-semibold text-gray-500 text-xs mt-0.5">차량명</span>
+                    <span className="font-semibold text-green-800 text-xs mt-0.5">차량명</span>
                     <span className="text-sm break-words">{vehicleName}</span>
                 </div>
                 <div className="flex items-center gap-2 mt-1">
@@ -426,18 +426,18 @@ export default function ServiceCardBody({
                 </div>
                 {showPickupBlock && (
                     <div className="flex items-start gap-2">
-                        <span className="font-semibold text-gray-500 text-xs mt-0.5">승차</span>
+                        <span className="font-semibold text-green-800 text-xs mt-0.5">승차</span>
                         <span className="text-sm break-words">{row?.pickup_location || '-'}</span>
                     </div>
                 )}
                 {showDropBlock && (
                     <div className="flex items-start gap-2">
-                        <span className="font-semibold text-gray-500 text-xs mt-0.5">하차</span>
+                        <span className="font-semibold text-green-800 text-xs mt-0.5">하차</span>
                         <span className="text-sm break-words">{row?.dropoff_location || '-'}</span>
                     </div>
                 )}
                 <div className="flex items-center gap-2">
-                    <span className="font-semibold text-gray-500 text-xs">인원/차량</span>
+                    <span className="font-semibold text-green-800 text-xs">인원/차량</span>
                     <span className="text-sm">👥 {row?.passenger_count || 0}명 / 🚗 {row?.car_count || 0}대</span>
                 </div>
                 {renderNote()}
@@ -457,7 +457,7 @@ export default function ServiceCardBody({
                 </div>
                 {row?.accommodation_info && (
                     <div className="flex items-start gap-2 mb-1 pb-1 border-b border-gray-100">
-                        <span className="font-semibold text-gray-500 text-xs mt-0.5">크루즈</span>
+                        <span className="font-semibold text-green-800 text-xs mt-0.5">크루즈</span>
                         <span className="text-sm text-purple-700 font-medium break-words">{row.accommodation_info}</span>
                     </div>
                 )}
@@ -470,16 +470,16 @@ export default function ServiceCardBody({
                     <span className="text-sm break-words">{row?.vehicle_number || '-'} / 좌석: {row?.seat_number || '-'}</span>
                 </div>
                 <div className="flex items-start gap-2">
-                    <span className="font-semibold text-gray-500 text-xs mt-0.5">픽업</span>
+                    <span className="font-semibold text-green-800 text-xs mt-0.5">픽업</span>
                     <span className="text-sm break-words">{row?.pickup_location || '-'}</span>
                 </div>
                 <div className="flex items-start gap-2">
-                    <span className="font-semibold text-gray-500 text-xs mt-0.5">드랍</span>
+                    <span className="font-semibold text-green-800 text-xs mt-0.5">드랍</span>
                     <span className="text-sm break-words">{row?.dropoff_location || '-'}</span>
                 </div>
                 {row?.driver_name && (
                     <div className="flex items-center gap-2">
-                        <span className="font-semibold text-gray-500 text-xs">기사</span>
+                        <span className="font-semibold text-green-800 text-xs">기사</span>
                         <span className="text-sm">{row.driver_name}</span>
                     </div>
                 )}
@@ -497,16 +497,16 @@ export default function ServiceCardBody({
             <div className="flex flex-col gap-1 text-sm text-gray-700 mt-1">
                 {renderCustomer()}
                 <div className="flex items-start gap-2">
-                    <span className="font-semibold text-gray-500 text-xs mt-0.5">패키지</span>
+                    <span className="font-semibold text-green-800 text-xs mt-0.5">패키지</span>
                     <span className="text-sm font-bold text-indigo-700 break-words">{row?.package_name || '-'}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                    <span className="font-semibold text-gray-500 text-xs">인원</span>
+                    <span className="font-semibold text-green-800 text-xs">인원</span>
                     <span className="text-sm">{formatPeople(adult, child, infant)}</span>
                 </div>
                 {row?.total_amount > 0 && (
                     <div className="flex items-center gap-2">
-                        <span className="font-semibold text-gray-500 text-xs">금액</span>
+                        <span className="font-semibold text-green-800 text-xs">금액</span>
                         <span className="text-sm font-bold text-green-600">{row.total_amount?.toLocaleString()}동</span>
                     </div>
                 )}

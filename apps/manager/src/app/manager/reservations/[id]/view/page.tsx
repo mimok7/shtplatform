@@ -946,13 +946,13 @@ function ReservationViewContent() {
                                             <div className="grid grid-cols-2 gap-4 mb-4">
                                                 <div className="flex items-center gap-3">
                                                     <div className="flex-1">
-                                                        <p className="text-xs font-semibold text-gray-500 uppercase">승차일자</p>
+                                                        <p className="text-xs font-semibold text-green-800 uppercase">승차일자</p>
                                                         <p className="text-lg font-bold text-blue-700">{usageDate}</p>
                                                     </div>
                                                 </div>
                                                 <div className="flex items-center gap-3">
                                                     <div className="flex-1">
-                                                        <p className="text-xs font-semibold text-gray-500 uppercase">구분</p>
+                                                        <p className="text-xs font-semibold text-green-800 uppercase">구분</p>
                                                         <p className={`text-lg font-bold ${category === 'Pickup' || category === '픽업' ? 'text-green-700' : 'text-red-700'}`}>
                                                             {category}
                                                         </p>
