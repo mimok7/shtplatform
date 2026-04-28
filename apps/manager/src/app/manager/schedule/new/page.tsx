@@ -2281,6 +2281,8 @@ for (const { table, rows } of serviceRows) {
       if (rentcarReturnDate) {
         const returnLocation = (row.return_pickup_location && row.return_destination)
           ? `${row.return_pickup_location}  ${row.return_destination} `
+          : row.return_pickup_location || row.return_destination || row.dropoff_location || location;
+
         result.push({
           re_id: reservationAny.re_id,
           re_type: type,
