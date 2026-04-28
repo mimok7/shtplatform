@@ -145,9 +145,6 @@ NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
 ```
 
-### 수정 후 자동 푸시
-- ✅ **수정 후 자동 푸시**: 변경 작업을 완료하면 에이전트에게 자동 푸시를 요청할 수 있습니다. 에이전트가
-  `git add . && git commit -m "chore: auto apply changes" && git push mimok7` 를 실행합니다.
 
 ### 🔄 이중 프로젝트 동시 수정 규칙 (필수!)
 ⚠️ **두 쌍의 프로젝트가 1:1로 미러링됨** — 한쪽만 수정 시 운영/배포 불일치 발생

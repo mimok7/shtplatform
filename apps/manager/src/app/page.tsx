@@ -122,7 +122,7 @@ export default function HomePage() {
         <div className="max-w-md w-full space-y-8">
           <div className="text-center">
             <div className="flex justify-center mb-4">
-              <Image src="/logo-full.png" alt="스테이하롱 전체 로고" width={320} height={80} unoptimized />
+              <Image src="/logo-full.png" alt="스테이하롱 전체 로고" width={320} height={80} loading="eager" style={{ width: "auto", height: "auto" }} unoptimized />
             </div>
             <h2 className="mt-2 text-center text-2xl font-extrabold text-gray-900">
               스테이하롱 크루즈 관리자 시스템

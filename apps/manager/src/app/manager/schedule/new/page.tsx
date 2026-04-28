@@ -214,6 +214,27 @@ export default function ManagerSchedulePage() {
   // 현재 사용자 정보 (삭제 권한 확인
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
+  useEffect(() => {
+    const originalConsole = {
+      log: console.log,
+      info: console.info,
+      debug: console.debug,
+      warn: console.warn,
+    };
+
+    console.log = () => {};
+    console.info = () => {};
+    console.debug = () => {};
+    console.warn = () => {};
+
+    return () => {
+      console.log = originalConsole.log;
+      console.info = originalConsole.info;
+      console.debug = originalConsole.debug;
+      console.warn = originalConsole.warn;
+    };
+  }, []);
+
   // 현재 사용자 정보 로드
   useEffect(() => {
     const loadCurrentUser = async () => {

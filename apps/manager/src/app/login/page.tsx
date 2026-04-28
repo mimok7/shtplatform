@@ -104,7 +104,7 @@ function LoginForm() {
   return (
     <div className="max-w-sm mx-auto mt-12 p-4 bg-white shadow rounded">
       <div className="flex justify-center mb-4">
-        <Image src="/logo-full.png" alt="스테이하롱 전체 로고" width={320} height={80} unoptimized />
+        <Image src="/logo-full.png" alt="스테이하롱 전체 로고" width={320} height={80} loading="eager" style={{ width: "auto", height: "auto" }} unoptimized />
       </div>
       <h2 className="text-2xl font-bold mb-6 text-center">🔐 로그인</h2>
       <form onSubmit={handleLogin} className="space-y-4">
