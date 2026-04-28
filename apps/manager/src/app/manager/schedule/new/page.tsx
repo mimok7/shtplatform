@@ -2476,8 +2476,8 @@ const getDisplayTypeName = (schedule: any) => {
 const renderDbCardBody = (schedule: any) => {
   const row = schedule.service_row || {};
   const dateText = schedule.schedule_date
-  new Date(schedule.schedule_date).toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' })
-      : undefined;
+    ? new Date(schedule.schedule_date).toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' })
+    : undefined;
 const serviceType = schedule.service_table || schedule.re_type || '';
 const cardData = (() => {
   if (serviceType === 'reservation_rentcar' || serviceType === 'rentcar') {
@@ -2500,7 +2500,7 @@ const shouldShowTime =
   serviceType === 'reservation_rentcar' ||
   serviceType === 'airport' ||
   serviceType === 'rentcar';
-const timeText = shouldShowTime(schedule.schedule_time || undefined) : undefined;
+const timeText = shouldShowTime ? (schedule.schedule_time || undefined) : undefined;
 
 return (
   <ServiceCardBody
@@ -2534,7 +2534,7 @@ const getCruiseNameAndRoom = (row: any) => {
     row.room ||
     '';
   const code = row.room_price_code || '';
-  const left = cruise || (code`붾뱶:${code} ` : '크루즈');
+  const left = cruise || (code ? `가격:${code} ` : '크루즈');
   const right = roomType;
   return [left, right].filter(Boolean).join(' ');
 };
@@ -2678,10 +2678,10 @@ const groupedByDate: Record<string, any[]> = uniqueSchedules.reduce(
   {}
 );
 
-// 날짜 범위 꾩궛 (붾쾭몄슜)
+// 날짜 범위 계산 (view 모드)
 const { start: rangeStart, end: rangeEnd } = viewMode === 'day'
-{ start: selectedDate, end: selectedDate }
-    : getRange(selectedDate, viewMode);
+  ? { start: selectedDate, end: selectedDate }
+  : getRange(selectedDate, viewMode);
 
 console.log('뱟 필터 날짜 범위:', {
   start: toLocalDateString(rangeStart),
@@ -2726,16 +2726,16 @@ let filteredGoogleSheets = googleSheetsData.filter(reservation => {
     dateType = '렌트카승차일';
   }
 
-  // 날짜가 녿뒗 곗씠곕뒗 필터곸뿉구조
+  // 날짜가 없는 경우 필터할때 구조
   if (!targetDate) {
-    const serviceType = reservation.cruise  '크루즈' :
-    reservation.carType && reservation.pickupDatetime  '차량' :
-    reservation.vehicleNumber  '스하차량' :
-    reservation.airportName  '공항' :
-    reservation.hotelName  '호텔' :
-    reservation.tourName  '투어' :
-    reservation.carCode && reservation.pickupDate  '렌트카' : '명솗 ';
-    // 슦 쒕뚮쭔 쒓퉭 (0.1% 뺣쪧)
+    const serviceType = reservation.cruise ? '크루즈' :
+      reservation.carType && reservation.pickupDatetime ? '차량' :
+      reservation.vehicleNumber ? '스하차량' :
+      reservation.airportName ? '공항' :
+      reservation.hotelName ? '호텔' :
+      reservation.tourName ? '투어' :
+      reservation.carCode && reservation.pickupDate ? '렌트카' : '명칭 ';
+    // 우 서브타입 분류 (0.1% 비효율)
     if (Math.random() < 0.001) {
       console.log(`좑툘 날짜 녿뒗 ${serviceType} 구조:`, reservation.orderId);
     }
@@ -2762,7 +2762,7 @@ let filteredGoogleSheets = googleSheetsData.filter(reservation => {
       formatted: formatLocalDate(targetDate),
       rangeStart: formatLocalDate(start),
       rangeEnd: formatLocalDate(end),
-      match: result  "yes": "no"
+      match: result ? "yes": "no"
     });
   }
 
@@ -2828,14 +2828,11 @@ Object.entries(filteredServiceCounts).forEach(([type, count]) => {
 const navigateDate = (direction: 'prev' | 'next') => {
   const newDate = new Date(selectedDate);
   if (viewMode === 'day') {
-    newDate.setDate(newDate.getDate() + (direction === 'next'  1 : -1));
-  } else if (viewMode === 'week') {
-    newDate.setDate(newDate.getDate() + (direction === 'next'  7 : -7));
-  } else {
-    newDate.setMonth(newDate.getMonth() + (direction === 'next'  1 : -1));
-  }
-  setSelectedDate(newDate);
-};
+      newDate.setDate(newDate.getDate() + (direction === 'next' ? 1 : -1));
+    } else if (viewMode === 'week') {
+      newDate.setDate(newDate.getDate() + (direction === 'next' ? 7 : -7));
+    } else {
+      newDate.setMonth(newDate.getMonth() + (direction === 'next' ? 1 : -1));
 
 const toDateInputValue = (date: Date) => {
   const y = date.getFullYear();
@@ -2955,7 +2952,7 @@ const renderGoogleSheetsCard = (reservation: any, index: number) => {
     return (
       <div
         key={`${reservation.orderId}-${index}`}
-        className={`bg-gray-50 border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-all p-3 flex flex-col h-full ${isPast  'opacity-60' : ''
+        className={`bg-gray-50 border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-all p-3 flex flex-col h-full ${isPast ? 'opacity-60' : ''
   } `}
         >
           <div className="flex items-center gap-2 mb-2 pb-1 border-b border-gray-100">
@@ -3972,11 +3969,11 @@ const renderGoogleSheetsCard = (reservation: any, index: number) => {
                       })
                       .map(([serviceType, reservations]) => {
                         const serviceInfo = getServiceInfo(serviceType);
-                        const reservationArray = Array.isArray(reservations)  reservations : [];
+                        const reservationArray = Array.isArray(reservations) ? reservations : [];
                         return (
                           <div key={serviceType}>
                             <div className="flex items-center gap-2 mb-3 pb-2 border-b">
-                              <div className={`text - ${ serviceInfo.color } -600`}>
+                              <div className={`text-${serviceInfo.color}-600`}>
                                 {serviceInfo.icon}
                               </div>
                               <h4 className="text-md font-semibold text-gray-800">
@@ -3986,7 +3983,7 @@ const renderGoogleSheetsCard = (reservation: any, index: number) => {
                             </div>
 
                             {/* 스하차량의 경우 분류(category)꾨줈 서브그룹*/}
-                            {serviceType === 'vehicle'  (
+                            {serviceType === 'vehicle' ? (
                               <div className="space-y-4">
                                 {Object.entries(
                                   reservationArray.reduce((acc: Record<string, any[]>, reservation) => {
@@ -4064,7 +4061,7 @@ const renderGoogleSheetsCard = (reservation: any, index: number) => {
                           .sort(([a], [b]) => new Date(a).getTime() - new Date(b).getTime())
                           .map(([dateKey, reservations]) => {
                             const d = new Date(dateKey + 'T00:00:00');
-                            const reservationArray = Array.isArray(reservations)  reservations : [];
+                            const reservationArray = Array.isArray(reservations) ? reservations : [];
 
                             // 날짜꾨줈 서비스대낅퀎 그룹
                             const serviceGroups = reservationArray.reduce((acc: Record<string, any[]>, reservation) => {
@@ -4090,11 +4087,11 @@ const renderGoogleSheetsCard = (reservation: any, index: number) => {
                                     })
                                     .map(([serviceType, serviceReservations]) => {
                                       const serviceInfo = getServiceInfo(serviceType);
-                                      const serviceReservationArray = Array.isArray(serviceReservations)  serviceReservations : [];
+                                      const serviceReservationArray = Array.isArray(serviceReservations) ? serviceReservations : [];
                                       return (
                                         <div key={serviceType}>
                                           <div className="flex items-center gap-2 mb-2 pb-1 border-b border-gray-200">
-                                            <div className={`text - ${ serviceInfo.color } -600`}>
+                                            <div className={`text-${serviceInfo.color}-600`}>
                                               {serviceInfo.icon}
                                             </div>
                                             <h5 className="text-sm font-semibold text-gray-700">
@@ -4104,7 +4101,7 @@ const renderGoogleSheetsCard = (reservation: any, index: number) => {
                                           </div>
 
                                           {/* 스하차량의 경우 분류(category)꾨줈 서브그룹*/}
-                                          {serviceType === 'vehicle'  (
+                                          {serviceType === 'vehicle' ? (
                                             <div className="space-y-4">
                                               {Object.entries(
                                                 serviceReservationArray.reduce((acc: Record<string, any[]>, reservation) => {
@@ -4154,11 +4151,11 @@ const renderGoogleSheetsCard = (reservation: any, index: number) => {
                           })
                           .map(([serviceType, reservations]) => {
                             const serviceInfo = getServiceInfo(serviceType);
-                            const reservationArray = Array.isArray(reservations)  reservations : [];
+                            const reservationArray = Array.isArray(reservations) ? reservations : [];
                             return (
                               <div key={serviceType}>
                                 <div className="flex items-center gap-2 mb-3 pb-2 border-b">
-                                  <div className={`text - ${ serviceInfo.color } -600`}>
+                                  <div className={`text-${serviceInfo.color}-600`}>
                                     {serviceInfo.icon}
                                   </div>
                                   <h4 className="text-md font-semibold text-gray-800">
@@ -4168,7 +4165,7 @@ const renderGoogleSheetsCard = (reservation: any, index: number) => {
                                 </div>
 
                                 {/* 스하차량의 경우 분류(category)꾨줈 서브그룹*/}
-                                {serviceType === 'vehicle'  (
+                                {serviceType === 'vehicle' ? (
                                   <div className="space-y-4">
                                     {Object.entries(
                                       reservationArray.reduce((acc: Record<string, any[]>, reservation) => {
