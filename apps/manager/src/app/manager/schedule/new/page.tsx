@@ -70,7 +70,7 @@ interface SHCCReservation {
   boardingDate: string; // C후 승차일  serviceType: string; // D후 구분
   category: string; // E후 분류
   vehicleNumber: string; // F후 차량踰덊샇
-  seatNumber: string; // G후 醫뚯꽍踰덊샇
+  seatNumber: string; // G후 좌석踰덊샇
   name: string; // H후 이름
   pickupLocation?: string; // L후 승차위치
   dropoffLocation?: string; // M후 하차위치
@@ -1138,7 +1138,7 @@ export default function ManagerSchedulePage() {
         // sh_m 사용자 정보 조회 (紐⑤뱺 데이터
         const usersDataResult = await fetchAllRows('sh_m');
         const usersData = usersDataResult.data;
-        console.log('?뫁 sh_m 사용자 정보:', usersData?.length || 0, '건');
+        console.log('👥 sh_m 사용자 정보:', usersData?.length || 0, '건');
         const userMap = new Map((usersData || []).map((u: any) => [u.order_id, { korean_name: u.korean_name, english_name: u.english_name, email: u.email }]));
 
         // 데이터 매핑 諛후⑹튂湲?
@@ -1328,12 +1328,12 @@ export default function ManagerSchedulePage() {
         const rentcarSample = allData.filter(d => d.carCode && d.pickupDate)[0];
 
         console.log('📌 크루즈 샘플:', cruiseSample, '후checkin:', cruiseSample?.checkin);
-        console.log('?뱷 차량 샘플:', carSample, '후pickupDatetime:', carSample?.pickupDatetime);
-        console.log('?뱷 스하차량 샘플:', vhcSample, '후boardingDate:', vhcSample?.boardingDate);
-        console.log('?뱷 공항 샘플:', airportSample, '후date:', airportSample?.date);
-        console.log('?뱷 호텔 샘플:', hotelSample, '후checkinDate:', hotelSample?.checkinDate);
-        console.log('?뱷 투어 샘플:', tourSample, '후startDate:', tourSample?.startDate);
-        console.log('?뱷 렌트카샘플:', rentcarSample, '후pickupDate:', rentcarSample?.pickupDate);
+        console.log('📌 차량 샘플:', carSample, '후pickupDatetime:', carSample?.pickupDatetime);
+        console.log('📌 스하차량 샘플:', vhcSample, '후boardingDate:', vhcSample?.boardingDate);
+        console.log('📌 공항 샘플:', airportSample, '후date:', airportSample?.date);
+        console.log('📌 호텔 샘플:', hotelSample, '후checkinDate:', hotelSample?.checkinDate);
+        console.log('📌 투어 샘플:', tourSample, '후startDate:', tourSample?.startDate);
+        console.log('📌 렌트카샘플:', rentcarSample, '후pickupDate:', rentcarSample?.pickupDate);
 
         // 오늘 날짜(2025-11-14) 데이터媛쒖닔 확인 (?ㅼ뼇후날짜 형식 吏후
         const todayFormats = ['2025-11-14', '2025. 11. 14', '2025/11/14', '11/14/2025', '14/11/2025', '11-14-2025'];
@@ -2351,7 +2351,7 @@ export default function ManagerSchedulePage() {
               });
             }
 
-            // ?쒕∼ 移대뱶 생성: ?뺣났?대㈃ 같은?좎씠?대룄 諛섎뱶후생성
+            // 픽업 移대뱶 생성: ?뺣났?대㈃ 같은?좎씠?대룄 諛섎뱶후생성
             const wayType = String(row.way_type || '').trim();
             const isRoundTrip = wayType.includes('?뺣났');
             const returnDateSource = row.return_datetime || (isRoundTrip ? row.pickup_datetime : null);
@@ -2368,7 +2368,7 @@ export default function ManagerSchedulePage() {
                   location: row.dropoff_location || null,
                   duration,
                   segment_type: 'return',
-                  segment_ribbon: '?쒕∼',
+                  segment_ribbon: '픽업',
                   service_table: table,
                   service_row: row,
                   cruise_info: (row as any)._cruise_info || null
@@ -2458,8 +2458,8 @@ export default function ManagerSchedulePage() {
       case 'hotel': return '호텔';
       case 'tour': return '투어';
       case 'rentcar': return '렌트카';
-      case 'car': return '?ъ감';
-      case 'vehicle': return '?ъ감';
+      case 'car': return '드롭';
+      case 'vehicle': return '드롭';
       case 'sht': return '스하차량';
       default: return type;
     }
@@ -2983,7 +2983,7 @@ export default function ManagerSchedulePage() {
                   className="bg-red-500 text-white py-0.5 px-2 rounded text-xs hover:bg-red-600 transition-colors"
                   title="삭제"
                 >
-                  ?뿊截?                </button>
+                  고객                </button>
               )}
             </div>
           </div>
@@ -3017,9 +3017,9 @@ export default function ManagerSchedulePage() {
             <div className="flex items-center gap-2">
               <span className="font-semibold text-gray-500 text-xs">인원</span>
               <span className="text-sm">
-                {reservation.adult > 0 && `?뫅 ${reservation.adult}명`}
+                {reservation.adult > 0 && `👨 ${reservation.adult}명`}
                 {reservation.child > 0 && ` ? 뫔 ${reservation.child}명`}
-                {reservation.toddler > 0 && ` ?띁 ${reservation.toddler}명`}
+                {reservation.toddler > 0 && ` 👶 ${reservation.toddler}명`}
                 {reservation.adult === 0 && reservation.child === 0 && reservation.toddler === 0 && (
                   <span className="text-gray-400">-</span>
                 )}
@@ -3037,7 +3037,7 @@ export default function ManagerSchedulePage() {
             )}
             {reservation.requestNote && (
               <div className="flex items-start gap-2 mt-2 pt-2 border-t border-gray-200">
-                <span className="font-semibold text-orange-600 text-xs whitespace-nowrap">?뱷</span>
+                <span className="font-semibold text-orange-600 text-xs whitespace-nowrap">📌</span>
                 <span className="text-sm text-gray-700 leading-relaxed">{reservation.requestNote}</span>
               </div>
             )}
@@ -3086,7 +3086,7 @@ export default function ManagerSchedulePage() {
                   className="bg-red-500 text-white py-0.5 px-2 rounded text-xs hover:bg-red-600 transition-colors"
                   title="삭제"
                 >
-                  ?뿊截?                </button>
+                  고객                </button>
               )}
             </div>
           </div>
@@ -3127,7 +3127,7 @@ export default function ManagerSchedulePage() {
             </div>
             <div className="flex items-start gap-2">
               <Car className="w-4 h-4 text-gray-400 mt-0.5" />
-              <span className="text-sm break-words">{reservation.vehicleNumber} / 醫뚯꽍: {reservation.seatNumber}</span>
+              <span className="text-sm break-words">{reservation.vehicleNumber} / 좌석: {reservation.seatNumber}</span>
             </div>
             {reservation.pickupLocation && (
               <div className="flex items-start gap-2 mt-1">
@@ -3182,7 +3182,7 @@ export default function ManagerSchedulePage() {
                   className="bg-red-500 text-white py-0.5 px-2 rounded text-xs hover:bg-red-600 transition-colors"
                   title="삭제"
                 >
-                  ?뿊截?                </button>
+                  고객                </button>
               )}
             </div>
           </div>
@@ -3219,7 +3219,7 @@ export default function ManagerSchedulePage() {
             </div>
             <div className="flex items-center gap-2">
               <span className="font-semibold text-gray-500 text-xs">인원/차량</span>
-              <span className="text-sm">?뫁 {reservation.passengerCount}명/ ?슅 {reservation.carCount}대</span>
+              <span className="text-sm">👥 {reservation.passengerCount}명/ 🚗 {reservation.carCount}대</span>
             </div>
             {reservation.carrierCount > 0 && (
               <div className="flex items-center gap-2">
@@ -3265,7 +3265,7 @@ export default function ManagerSchedulePage() {
                   className="bg-red-500 text-white py-0.5 px-2 rounded text-xs hover:bg-red-600 transition-colors"
                   title="삭제"
                 >
-                  ?뿊截?                </button>
+                  고객                </button>
               )}
             </div>
           </div>
@@ -3296,9 +3296,9 @@ export default function ManagerSchedulePage() {
             <div className="flex items-center gap-2">
               <span className="font-semibold text-gray-500 text-xs">인원</span>
               <span className="text-sm">
-                {reservation.adult > 0 && `?뫅 ${reservation.adult}명`}
+                {reservation.adult > 0 && `👨 ${reservation.adult}명`}
                 {reservation.child > 0 && ` ? 뫔 ${reservation.child}명`}
-                {reservation.toddler > 0 && ` ?띁 ${reservation.toddler}명`}
+                {reservation.toddler > 0 && ` 👶 ${reservation.toddler}명`}
               </span>
             </div>
             <div className="flex items-center gap-2">
@@ -3349,7 +3349,7 @@ export default function ManagerSchedulePage() {
                   className="bg-red-500 text-white py-0.5 px-2 rounded text-xs hover:bg-red-600 transition-colors"
                   title="삭제"
                 >
-                  ?뿊截?                </button>
+                  고객                </button>
               )}
             </div>
           </div>
@@ -3376,7 +3376,7 @@ export default function ManagerSchedulePage() {
             </div>
             <div className="flex items-center gap-2">
               <span className="font-semibold text-gray-500 text-xs">인원</span>
-              <span className="text-sm">?뫁 {reservation.participants}명</span>
+              <span className="text-sm">👥 {reservation.participants}명</span>
             </div>
             {reservation.pickupLocation && (
               <div className="flex items-start gap-2">
@@ -3427,7 +3427,7 @@ export default function ManagerSchedulePage() {
                   className="bg-red-500 text-white py-0.5 px-2 rounded text-xs hover:bg-red-600 transition-colors"
                   title="삭제"
                 >
-                  ?뿊截?                </button>
+                  고객                </button>
               )}
             </div>
           </div>
@@ -3463,7 +3463,7 @@ export default function ManagerSchedulePage() {
             </div>
             <div className="flex items-center gap-2">
               <span className="font-semibold text-gray-500 text-xs">인원/차량</span>
-              <span className="text-sm">?뫁 {reservation.passengerCount}명/ ?슅 {reservation.carCount}대</span>
+              <span className="text-sm">👥 {reservation.passengerCount}명/ 🚗 {reservation.carCount}대</span>
             </div>
             {reservation.usagePeriod && (
               <div className="flex items-center gap-2">
@@ -3478,7 +3478,7 @@ export default function ManagerSchedulePage() {
 
     // 7. 차량 데이터(湲곕낯)
     else if (isCarData(reservation)) {
-      console.log('?슅 차량 ?뚮뜑留?', {
+      console.log('🚗 차량 ?뚮뜑留?', {
         orderId: reservation.orderId,
         pickupDatetime: reservation.pickupDatetime,
         customerName: reservation.customerName,
@@ -3524,7 +3524,7 @@ export default function ManagerSchedulePage() {
                   className="bg-red-500 text-white py-0.5 px-2 rounded text-xs hover:bg-red-600 transition-colors"
                   title="삭제"
                 >
-                  ?뿊截?                </button>
+                  고객                </button>
               )}
             </div>
           </div>
@@ -3566,7 +3566,7 @@ export default function ManagerSchedulePage() {
             <div className="flex items-center gap-2">
               <span className="font-semibold text-gray-500 text-xs">인원/차량</span>
               <span className="text-sm">
-                ?뫁 {reservation.passengerCount}명/ ?슅 {reservation.carCount}대
+                👥 {reservation.passengerCount}명/ 🚗 {reservation.carCount}대
               </span>
             </div>
           </div>
@@ -3580,7 +3580,7 @@ export default function ManagerSchedulePage() {
 
   if (loading) {
     return (
-      <ManagerLayout title="예약 일정 (??援?구분)" activeTab="schedule-new">
+      <ManagerLayout title="예약 일정 (서비스별 구분)" activeTab="schedule-new">
         <div className="flex justify-center items-center h-64">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500 mx-auto"></div>
@@ -3592,12 +3592,12 @@ export default function ManagerSchedulePage() {
   }
 
   return (
-    <ManagerLayout title="예약 일정 (??援?구분)" activeTab="schedule-new">
+    <ManagerLayout title="예약 일정 (서비스별 구분)" activeTab="schedule-new">
       <div className="space-y-6">
 
-        {/* 일정 而⑦듃濡?*/}
+        {/* 일정 필터로*/}
         <div className="bg-white rounded-lg shadow-md p-6">
-          {/* 1후 날짜 ?ㅻ퉬寃뚯씠후+ 검색諛?+ 일간/주간/월간 踰꾪듉 */}
+          {/* 1후 날짜 ?ㅻ퉬寃뚯씠후+ 검색諛?+ 일간/주간/월간 버튼 */}
           <div className="flex items-center justify-between gap-4 mb-4">
             {/* ?쇱そ: 날짜 ?ㅻ퉬寃뚯씠후*/}
             <div className="flex items-center gap-2">
@@ -3634,7 +3634,7 @@ export default function ManagerSchedulePage() {
                 aria-hidden="true"
               />
 
-              {/* 오늘 踰꾪듉 */}
+              {/* 오늘 버튼 */}
               {viewMode === 'day' && (
                 <button
                   onClick={() => setSelectedDate(new Date())}
@@ -3677,7 +3677,7 @@ export default function ManagerSchedulePage() {
               )}
             </div>
 
-            {/* ?ㅻⅨ履? 일간/주간/월간 踰꾪듉 */}
+            {/* ?ㅻⅨ履? 일간/주간/월간 버튼 */}
             <div className="flex gap-1">
               <button
                 onClick={() => setViewMode('day')}
@@ -3724,7 +3724,7 @@ export default function ManagerSchedulePage() {
               </div>
             </div>
 
-            {/* 그룹후踰꾪듉 (주월간 모드?먮쭔 표시) */}
+            {/* 그룹후버튼 (주월간 모드?먮쭔 표시) */}
             {(viewMode === 'week' || viewMode === 'month') && (
               <div className="flex items-center gap-2">
                 <span className="text-xs text-gray-600">그룹후</span>
