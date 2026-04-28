@@ -1,20 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-// Supabase Admin 클라이언트 생성 (서버 측에서만 사용)
-const supabaseAdmin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!, // Service Role Key 필요
-    {
-        auth: {
-            autoRefreshToken: false,
-            persistSession: false
-        }
+function getSupabaseAdmin() {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    if (!supabaseUrl || !serviceRoleKey) {
+        return {
+            client: null,
+            error: NextResponse.json(
+                { error: 'Missing Supabase server environment variables' },
+                { status: 500 }
+            )
+        };
     }
-);
+
+    return {
+        client: createClient(supabaseUrl, serviceRoleKey, {
+            auth: {
+                autoRefreshToken: false,
+                persistSession: false
+            }
+        }),
+        error: null
+    };
+}
 
 export async function POST(request: NextRequest) {
     try {
+        const { client: supabaseAdmin, error } = getSupabaseAdmin();
+        if (!supabaseAdmin) return error!;
+
         const { userIds } = await request.json();
 
         if (!Array.isArray(userIds)) {
