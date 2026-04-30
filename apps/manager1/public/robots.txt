@@ -1,0 +1,5 @@
+User-agent: *
+Disallow: /manager/
+Disallow: /mypage/
+Disallow: /customer/
+Disallow: /api/
