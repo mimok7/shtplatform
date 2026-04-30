@@ -72,8 +72,9 @@ function humanizeText(value: any, fallback = '-'): string {
 function humanizeWayType(value: any): string {
     const raw = String(value || '').trim().toLowerCase();
     if (!raw) return '-';
-    if (raw.includes('pickup') || raw.includes('픽업')) return '픽업';
-    if (raw.includes('sending') || raw.includes('sanding') || raw.includes('샌딩')) return '샌딩';
+    if (raw.includes('pickup') || raw.includes('entry') || raw.includes('픽업')) return '픽업';
+    if (raw.includes('sending') || raw.includes('sanding') || raw.includes('exit') || raw.includes('샌딩')) return '샌딩';
+    if (raw.includes('dropoff') || raw.includes('drop') || raw.includes('드롭')) return '드롭';
     return humanizeText(value);
 }
 
@@ -168,8 +169,9 @@ function getAirportOrderWeight(service: any): number {
 function getAirportDisplayLocations(service: any): { pickup: string; sending: string } {
     const wayType = humanizeWayType(service.category || service.way_type);
     const airport = humanizeText(service.airportName || service.ra_airport_location || service.airport_location, '미정');
-    const pickupRaw = humanizeText(service.pickupLocation || service.pickup_location, '');
-    const dropRaw = humanizeText(service.dropoffLocation || service.destination || service.dropoff_location, '');
+    const stay = humanizeText(service.accommodation_info || service.ra_accommodation_info, '');
+    const pickupRaw = humanizeText(service.pickupLocation || service.pickup_location || stay, '');
+    const dropRaw = humanizeText(service.dropoffLocation || service.destination || service.dropoff_location || stay, '');
 
     if (wayType === '픽업') {
         return {
@@ -312,7 +314,7 @@ export default function PackageReservationDetailModal({
                                         {userInfo.name || '-'}
                                     </span>
                                     <span>{userInfo.email || '-'}</span>
-                                    <span>{userInfo.phone || '-'}</span>
+                                    <span>{userInfo.phone || userInfo.phone_number || '-'}</span>
                                     <span>행복여행: {userInfo.quote_title || '-'}</span>
                                 </div>
                             </div>
@@ -362,6 +364,18 @@ export default function PackageReservationDetailModal({
                                                 <div>인원: 성인 {pkg.re_adult_count || 0}, 아동 {pkg.re_child_count || 0}, 유아 {pkg.re_infant_count || 0}</div>
                                                 <div className="font-semibold text-emerald-700">총액: {formatAmount(pkg.total_amount)}</div>
                                             </div>
+                                            {(pkg.child_extra_bed != null || pkg.child_no_extra_bed != null || pkg.infant_free != null || pkg.infant_tour != null || pkg.infant_extra_bed != null || pkg.infant_seat != null) && (
+                                                <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-gray-700 bg-white border border-indigo-100 rounded p-2">
+                                                    <div>아동: 엑스트라베드 {pkg.child_extra_bed || 0}, 베드없음 {pkg.child_no_extra_bed || 0}</div>
+                                                    <div>유아: 무료 {pkg.infant_free || 0}, 투어 {pkg.infant_tour || 0}, 엑스트라베드 {pkg.infant_extra_bed || 0}, 좌석 {pkg.infant_seat || 0}</div>
+                                                    <div>공항 차량: {humanizeText(pkg.airport_vehicle, '미정')}</div>
+                                                    <div>닌빈 차량: {humanizeText(pkg.ninh_binh_vehicle, '미정')}</div>
+                                                    <div>하노이 차량: {humanizeText(pkg.hanoi_vehicle, '미정')}</div>
+                                                    <div>크루즈 차량: {humanizeText(pkg.cruise_vehicle, '미정')}</div>
+                                                    <div>스하 픽업: {humanizeText(pkg.sht_pickup_vehicle, '미정')} / {humanizeText(pkg.sht_pickup_seat, '좌석 미정')}</div>
+                                                    <div>스하 드롭: {humanizeText(pkg.sht_dropoff_vehicle, '미정')} / {humanizeText(pkg.sht_dropoff_seat, '좌석 미정')}</div>
+                                                </div>
+                                            )}
                                             {pkg.package_description && (
                                                 <div className="mt-2 text-xs text-gray-600 bg-white border border-gray-200 rounded p-2 whitespace-pre-line">
                                                     {humanizeText(pkg.package_description)}
@@ -425,8 +439,14 @@ export default function PackageReservationDetailModal({
                                                 )}
                                                 {service.flightNumber && <div>항공편: {humanizeText(service.flightNumber)}</div>}
                                                 {service.passengerCount != null && <div>탑승 인원: {service.passengerCount}명</div>}
+                                                {service.carCount != null && <div>차량수: {service.carCount}대</div>}
+                                                {service.luggageCount != null && <div>수하물: {service.luggageCount}개</div>}
                                                 {service.guestCount != null && <div>투숙 인원: {service.guestCount}명</div>}
                                                 {service.tourCapacity != null && <div>투어 인원: {service.tourCapacity}명</div>}
+                                                {service.vehicleNumber && <div>차량번호: {humanizeText(service.vehicleNumber)}</div>}
+                                                {service.seatNumber && <div>좌석: {humanizeText(service.seatNumber)}</div>}
+                                                {service.driverName && <div>기사: {humanizeText(service.driverName)}</div>}
+                                                {service.dispatchCode && <div>배차코드: {humanizeText(service.dispatchCode)}</div>}
                                                 {(service.adult != null || service.child != null || service.infant != null) && (
                                                     <div>인원 구성: 성인 {service.adult || 0}, 아동 {service.child || 0}, 유아 {service.infant || 0}</div>
                                                 )}
@@ -434,7 +454,12 @@ export default function PackageReservationDetailModal({
 
                                             <div className="mt-2 pt-2 border-t border-gray-100 flex justify-between items-center text-sm">
                                                 <span className="text-gray-500">금액</span>
-                                                <span className="font-bold text-blue-700">{formatAmount(service.totalPrice || service.total_amount)}</span>
+                                                <div className="text-right">
+                                                    {service.unitPrice != null && Number(service.unitPrice || 0) > 0 && (
+                                                        <div className="text-xs text-gray-500">단가 {formatAmount(service.unitPrice)}</div>
+                                                    )}
+                                                    <span className="font-bold text-blue-700">{formatAmount(service.totalPrice || service.total_amount)}</span>
+                                                </div>
                                             </div>
 
                                             {formatNote(service.note) && (

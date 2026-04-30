@@ -502,21 +502,27 @@ export default function BulkReservationPage() {
             let packageAirportData: any[] = [];
             let packageTourData: any[] = [];
             let packageHotelData: any[] = [];
+            let packageRentcarData: any[] = [];
             let packageShtData: any[] = [];
+            let packageDetailData: any[] = [];
 
             if (packageIds.length > 0) {
-                const [pkgCruise, pkgAirport, pkgTour, pkgHotel, pkgSht] = await Promise.all([
+                const [pkgCruise, pkgAirport, pkgTour, pkgHotel, pkgRentcar, pkgSht, pkgDetail] = await Promise.all([
                     supabase.from('reservation_cruise').select('*').in('reservation_id', packageIds),
                     supabase.from('reservation_airport').select('*').in('reservation_id', packageIds),
                     supabase.from('reservation_tour').select('*').in('reservation_id', packageIds),
                     supabase.from('reservation_hotel').select('*').in('reservation_id', packageIds),
-                    supabase.from('reservation_car_sht').select('*').in('reservation_id', packageIds)
+                    supabase.from('reservation_rentcar').select('*').in('reservation_id', packageIds),
+                    supabase.from('reservation_car_sht').select('*').in('reservation_id', packageIds),
+                    supabase.from('reservation_package').select('*').in('reservation_id', packageIds)
                 ]);
                 packageCruiseData = pkgCruise.data || [];
                 packageAirportData = pkgAirport.data || [];
                 packageTourData = pkgTour.data || [];
                 packageHotelData = pkgHotel.data || [];
+                packageRentcarData = pkgRentcar.data || [];
                 packageShtData = pkgSht.data || [];
+                packageDetailData = pkgDetail.data || [];
             }
 
             // 2. 가격/코드 정보 조회 (필요 시)
@@ -526,11 +532,11 @@ export default function BulkReservationPage() {
             const rentCarData = rentcarRes.data || [];
             const airportData = airportRes.data || [];
 
-            const cruiseCodes = cruiseData.map((r: any) => r.room_price_code).filter(Boolean);
-            const tourCodes = tourData.map((r: any) => r.tour_price_code).filter(Boolean);
-            const hotelCodes = hotelData.map((r: any) => r.hotel_price_code).filter(Boolean);
-            const rentCodes = rentCarData.map((r: any) => r.rentcar_price_code).filter(Boolean);
-            const airportCodes = airportData.map((r: any) => r.airport_price_code).filter(Boolean);
+            const cruiseCodes = [...cruiseData, ...packageCruiseData].map((r: any) => r.room_price_code).filter(Boolean);
+            const tourCodes = [...tourData, ...packageTourData].map((r: any) => r.tour_price_code).filter(Boolean);
+            const hotelCodes = [...hotelData, ...packageHotelData].map((r: any) => r.hotel_price_code).filter(Boolean);
+            const rentCodes = [...rentCarData, ...packageRentcarData].map((r: any) => r.rentcar_price_code).filter(Boolean);
+            const airportCodes = [...airportData, ...packageAirportData].map((r: any) => r.airport_price_code).filter(Boolean);
             const cruiseCarData = cruiseCarRes.data || [];
             // car_price_code에는 rentcar_price.rent_code 값이 저장됨
             const cruiseCarCodes = cruiseCarData.map((c: any) => c.rentcar_price_code || c.car_price_code).filter(Boolean);
@@ -557,6 +563,16 @@ export default function BulkReservationPage() {
             const rentPriceMap = new Map((rentPrices.data || []).map((r: any) => [r.rent_code, r]));
             const airportPriceMap = new Map((airportPrices.data || []).map((r: any) => [r.airport_code, r]));
             const carPriceMap = new Map((carPrices.data || []).map((r: any) => [r.rent_code, r]));
+            const packageDetailMap = new Map(packageDetailData.map((r: any) => [r.reservation_id, r]));
+            const getAirportPriceInfo = (row: any) => {
+                const rows = airportPrices.data || [];
+                const way = String(row?.way_type || row?.ra_way_type || '').toLowerCase();
+                const serviceType = way.includes('pickup') || way.includes('entry') || way.includes('픽업') ? '픽업'
+                    : way.includes('sending') || way.includes('sanding') || way.includes('exit') || way.includes('샌딩') ? '샌딩'
+                        : '';
+                return rows.find((price: any) => price.airport_code === row.airport_price_code && (!serviceType || price.service_type === serviceType))
+                    || rows.find((price: any) => price.airport_code === row.airport_price_code);
+            };
 
             // 3. 데이터 구조화 (UserReservationDetailModal과 호환되게)
             // reservationDetails 상태는 flattenedServices useMemo에서 다시 평탄화되므로,
@@ -627,7 +643,7 @@ export default function BulkReservationPage() {
             // Airport
             if (airportData.length > 0) {
                 allDetails['airport'] = airportData.map((r: any) => {
-                    const priceInfo = airportPriceMap.get(r.airport_price_code);
+                    const priceInfo = getAirportPriceInfo(r) || airportPriceMap.get(r.airport_price_code);
                     return {
                         service: getServiceBase(r.reservation_id),
                         ...r,
@@ -690,7 +706,8 @@ export default function BulkReservationPage() {
                     ...r,
                     package_name: r.package_master?.name || '',
                     package_code: r.package_master?.package_code || '',
-                    package_description: r.package_master?.description || ''
+                    package_description: r.package_master?.description || '',
+                    ...(packageDetailMap.get(r.re_id) || {})
                 }));
 
                 // 패키지에 속한 서비스들 추가
@@ -707,7 +724,7 @@ export default function BulkReservationPage() {
                 }
                 if (packageAirportData.length > 0) {
                     allDetails['package_airport'] = packageAirportData.map((r: any) => {
-                        const priceInfo = airportPriceMap.get(r.airport_price_code);
+                        const priceInfo = getAirportPriceInfo(r) || airportPriceMap.get(r.airport_price_code);
                         return {
                             service: getServiceBase(r.reservation_id),
                             ...r,
@@ -734,6 +751,17 @@ export default function BulkReservationPage() {
                             service: getServiceBase(r.reservation_id),
                             ...r,
                             hotelPriceInfo: priceInfo,
+                            isPackageService: true
+                        };
+                    });
+                }
+                if (packageRentcarData.length > 0) {
+                    allDetails['package_rentcar'] = packageRentcarData.map((r: any) => {
+                        const priceInfo = rentPriceMap.get(r.rentcar_price_code);
+                        return {
+                            service: getServiceBase(r.reservation_id),
+                            ...r,
+                            rentcarPriceInfo: priceInfo,
                             isPackageService: true
                         };
                     });

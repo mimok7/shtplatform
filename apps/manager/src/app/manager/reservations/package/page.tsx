@@ -155,32 +155,56 @@ export default function PackageReservationsPage() {
             const packageMasterMap = new Map((packageMasterData || []).map((p: any) => [p.id, p]));
 
             // 패키지에 포함된 모든 서비스 조회 (병렬)
-            const [cruiseRes, airportRes, tourRes, hotelRes] = await Promise.all([
+            const [cruiseRes, airportRes, tourRes, hotelRes, rentcarRes, shtRes, packageDetailRes] = await Promise.all([
                 supabase.from('reservation_cruise').select('*').in('reservation_id', packageReservationIds),
                 supabase.from('reservation_airport').select('*').in('reservation_id', packageReservationIds),
                 supabase.from('reservation_tour').select('*').in('reservation_id', packageReservationIds),
-                supabase.from('reservation_hotel').select('*').in('reservation_id', packageReservationIds)
+                supabase.from('reservation_hotel').select('*').in('reservation_id', packageReservationIds),
+                supabase.from('reservation_rentcar').select('*').in('reservation_id', packageReservationIds),
+                supabase.from('reservation_car_sht').select('*').in('reservation_id', packageReservationIds),
+                supabase.from('reservation_package').select('*').in('reservation_id', packageReservationIds)
             ]);
 
             const cruiseData = cruiseRes.data || [];
             const airportData = airportRes.data || [];
             const tourData = tourRes.data || [];
             const hotelData = hotelRes.data || [];
+            const rentcarData = rentcarRes.data || [];
+            const shtData = shtRes.data || [];
+            const packageDetailMap = new Map((packageDetailRes.data || []).map((row: any) => [row.reservation_id, row]));
 
             // 가격 코드로 추가 정보 조회
             const cruiseCodes = cruiseData.map((r: any) => r.room_price_code).filter(Boolean);
             const tourCodes = tourData.map((r: any) => r.tour_price_code).filter(Boolean);
             const airportCodes = airportData.map((r: any) => r.airport_price_code).filter(Boolean);
+            const hotelCodes = hotelData.map((r: any) => r.hotel_price_code).filter(Boolean);
+            const rentcarCodes = rentcarData.map((r: any) => r.rentcar_price_code).filter(Boolean);
 
-            const [roomPrices, tourPrices, airportPrices] = await Promise.all([
+            const [roomPrices, roomPricesByRoomType, tourPrices, airportPrices, hotelPrices, rentcarPrices] = await Promise.all([
                 cruiseCodes.length > 0 ? supabase.from('cruise_rate_card').select('id, cruise_name, room_type').in('id', cruiseCodes) : Promise.resolve({ data: [] }),
+                cruiseCodes.length > 0 ? supabase.from('cruise_rate_card').select('id, cruise_name, room_type').in('room_type', cruiseCodes) : Promise.resolve({ data: [] }),
                 tourCodes.length > 0 ? supabase.from('tour_pricing').select('pricing_id, tour:tour_id(tour_name, tour_code)').in('pricing_id', tourCodes) : Promise.resolve({ data: [] }),
-                airportCodes.length > 0 ? supabase.from('airport_price').select('airport_code, service_type, route').in('airport_code', airportCodes) : Promise.resolve({ data: [] })
+                airportCodes.length > 0 ? supabase.from('airport_price').select('airport_code, service_type, route, vehicle_type, price').in('airport_code', airportCodes) : Promise.resolve({ data: [] }),
+                hotelCodes.length > 0 ? supabase.from('hotel_price').select('hotel_price_code, hotel_name, room_name, base_price').in('hotel_price_code', hotelCodes) : Promise.resolve({ data: [] }),
+                rentcarCodes.length > 0 ? supabase.from('rentcar_price').select('rent_code, vehicle_type, way_type, route, price').in('rent_code', rentcarCodes) : Promise.resolve({ data: [] })
             ]);
 
             const roomPriceMap = new Map<string, { id: string; cruise_name?: string; room_type?: string }>((roomPrices.data || []).map((r: any) => [r.id, r]));
+            (roomPricesByRoomType.data || []).forEach((r: any) => {
+                if (r?.room_type && !roomPriceMap.has(r.room_type)) roomPriceMap.set(r.room_type, r);
+            });
             const tourPriceMap = new Map<string, { pricing_id: string; tour?: { tour_name?: string; tour_code?: string } }>((tourPrices.data || []).map((r: any) => [r.pricing_id, r]));
-            const airportPriceMap = new Map<string, { airport_code: string; service_type?: string; route?: string }>((airportPrices.data || []).map((r: any) => [r.airport_code, r]));
+            const airportPriceRows = airportPrices.data || [];
+            const hotelPriceMap = new Map((hotelPrices.data || []).map((r: any) => [r.hotel_price_code, r]));
+            const rentcarPriceMap = new Map((rentcarPrices.data || []).map((r: any) => [r.rent_code, r]));
+            const getAirportPrice = (item: any) => {
+                const way = String(item.way_type || item.ra_way_type || '').toLowerCase();
+                const serviceType = way.includes('pickup') || way.includes('entry') || way.includes('픽업') ? '픽업'
+                    : way.includes('sending') || way.includes('sanding') || way.includes('exit') || way.includes('샌딩') ? '샌딩'
+                        : '';
+                return airportPriceRows.find((row: any) => row.airport_code === item.airport_price_code && (!serviceType || row.service_type === serviceType))
+                    || airportPriceRows.find((row: any) => row.airport_code === item.airport_price_code);
+            };
 
             // 서비스 데이터 매핑
             const services: any[] = [];
@@ -188,6 +212,7 @@ export default function PackageReservationsPage() {
             // 패키지 메인 예약도 함께 표시
             (resData || []).forEach((pkg: any) => {
                 const pkgMaster: any = packageMasterMap.get(pkg.package_id);
+                const pkgDetail: any = packageDetailMap.get(pkg.re_id);
                 services.push({
                     serviceType: 'package',
                     reservation_id: pkg.re_id,
@@ -200,6 +225,7 @@ export default function PackageReservationsPage() {
                     re_adult_count: pkg.re_adult_count,
                     re_child_count: pkg.re_child_count,
                     re_infant_count: pkg.re_infant_count,
+                    ...(pkgDetail || {}),
                 });
             });
 
@@ -222,19 +248,27 @@ export default function PackageReservationsPage() {
 
             // 공항 서비스
             airportData.forEach((item: any) => {
-                const priceInfo = airportPriceMap.get(item.airport_price_code);
+                const priceInfo = getAirportPrice(item);
                 services.push({
                     serviceType: 'airport',
                     isPackageService: true,
                     reservation_id: item.reservation_id,
                     category: priceInfo?.service_type || '',
                     route: priceInfo?.route || '',
+                    carType: priceInfo?.vehicle_type || '',
                     airportName: item.ra_airport_location,
+                    accommodation_info: item.accommodation_info,
+                    way_type: item.way_type,
                     flightNumber: item.ra_flight_number,
-                    date: item.ra_datetime ? new Date(item.ra_datetime).toLocaleDateString() : '',
-                    time: item.ra_datetime ? new Date(item.ra_datetime).toLocaleTimeString() : '',
+                    ra_datetime: item.ra_datetime,
                     passengerCount: item.ra_passenger_count,
+                    carCount: item.ra_car_count,
+                    luggageCount: item.ra_luggage_count,
+                    pickupLocation: item.pickup_location,
+                    dropoffLocation: item.dropoff_location,
                     totalPrice: item.total_price,
+                    unitPrice: priceInfo?.price || item.unit_price,
+                    dispatchCode: item.dispatch_code,
                     note: item.request_note
                 });
             });
@@ -250,6 +284,12 @@ export default function PackageReservationsPage() {
                     tourDate: item.usage_date,
                     tourCapacity: item.tour_capacity,
                     pickupLocation: item.pickup_location,
+                    dropoffLocation: item.dropoff_location,
+                    adult: item.adult_count || 0,
+                    child: item.child_count || 0,
+                    infant: item.infant_count || 0,
+                    passengerCount: item.passenger_count,
+                    carCount: item.car_count,
                     totalPrice: item.total_price,
                     note: item.request_note
                 });
@@ -257,15 +297,63 @@ export default function PackageReservationsPage() {
 
             // 호텔 서비스
             hotelData.forEach((item: any) => {
+                const priceInfo: any = hotelPriceMap.get(item.hotel_price_code);
                 services.push({
                     serviceType: 'hotel',
                     isPackageService: true,
                     reservation_id: item.reservation_id,
-                    hotelName: item.hotel_category,
+                    hotelName: priceInfo?.hotel_name || item.hotel_category,
+                    roomType: priceInfo?.room_name || item.hotel_price_code,
                     checkinDate: item.checkin_date,
                     nights: item.room_count,
                     guestCount: item.guest_count,
                     totalPrice: item.total_price,
+                    unitPrice: priceInfo?.base_price || item.unit_price,
+                    note: item.request_note
+                });
+            });
+
+            // 렌터카 서비스
+            rentcarData.forEach((item: any) => {
+                const priceInfo: any = rentcarPriceMap.get(item.rentcar_price_code);
+                services.push({
+                    serviceType: 'rentcar',
+                    isPackageService: true,
+                    reservation_id: item.reservation_id,
+                    category: priceInfo?.way_type || item.way_type || '',
+                    route: priceInfo?.route || item.route || '',
+                    carType: priceInfo?.vehicle_type || item.vehicle_type || item.rentcar_price_code,
+                    pickupDatetime: item.pickup_datetime,
+                    pickupLocation: item.pickup_location,
+                    dropoffLocation: item.destination || item.dropoff_location,
+                    passengerCount: item.passenger_count,
+                    carCount: item.car_count,
+                    luggageCount: item.luggage_count,
+                    totalPrice: item.total_price,
+                    unitPrice: priceInfo?.price || item.unit_price,
+                    dispatchCode: item.dispatch_code,
+                    note: item.request_note
+                });
+            });
+
+            // 스하차량 서비스
+            shtData.forEach((item: any) => {
+                services.push({
+                    serviceType: 'sht',
+                    isPackageService: true,
+                    reservation_id: item.reservation_id,
+                    category: item.sht_category,
+                    usageDate: item.pickup_datetime || item.usage_date,
+                    pickupLocation: item.pickup_location,
+                    dropoffLocation: item.dropoff_location,
+                    passengerCount: item.passenger_count,
+                    carCount: item.car_count,
+                    vehicleNumber: item.vehicle_number,
+                    seatNumber: item.seat_number,
+                    driverName: item.driver_name,
+                    dispatchCode: item.dispatch_code,
+                    totalPrice: item.car_total_price,
+                    unitPrice: item.unit_price,
                     note: item.request_note
                 });
             });
@@ -274,8 +362,10 @@ export default function PackageReservationsPage() {
             services.sort((a, b) => {
                 const getDate = (s: any) => {
                     if (s.checkin) return new Date(s.checkin);
-                    if (s.date) return new Date(s.date);
+                    if (s.ra_datetime) return new Date(s.ra_datetime);
                     if (s.tourDate) return new Date(s.tourDate);
+                    if (s.usageDate) return new Date(s.usageDate);
+                    if (s.pickupDatetime) return new Date(s.pickupDatetime);
                     if (s.checkinDate) return new Date(s.checkinDate);
                     return new Date(0);
                 };
