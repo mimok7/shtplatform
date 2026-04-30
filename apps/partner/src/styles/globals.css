@@ -31,3 +31,13 @@ body {
 .btn {
     @apply px-3 py-1.5 text-xs rounded border border-gray-200 bg-white hover:bg-gray-50 text-gray-700;
 }
+
+/* 가로 스크롤 영역에서 스크롤바 숨김 (모바일 카테고리 칩 등) */
+.scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+    display: none;
+}

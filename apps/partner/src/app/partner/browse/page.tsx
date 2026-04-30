@@ -2,6 +2,10 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import {
+    Hotel, Sparkles, Utensils, Shirt, Bus, Car,
+    MapPin, Clock, Search, Tag, ChevronRight, Filter
+} from 'lucide-react';
 import PartnerLayout from '@/components/PartnerLayout';
 import SectionBox from '@/components/SectionBox';
 import Spinner from '@/components/Spinner';
@@ -22,14 +26,18 @@ interface Partner {
     default_discount_rate?: number | null;
 }
 
-const CATEGORY_LABEL: Record<string, string> = {
-    hotel: '🏨 호텔',
-    spa: '💆 스파',
-    restaurant: '🍴 식당',
-    costume: '👘 의상대여',
-    tour: '🚌 투어',
-    rentcar: '🚗 렌터카',
+const CATEGORY_META: Record<string, { label: string; icon: React.ComponentType<{ className?: string }>; color: string; }> = {
+    hotel: { label: '호텔', icon: Hotel, color: 'from-blue-500 to-cyan-500' },
+    spa: { label: '스파', icon: Sparkles, color: 'from-pink-500 to-rose-500' },
+    restaurant: { label: '식당', icon: Utensils, color: 'from-orange-500 to-amber-500' },
+    costume: { label: '의상대여', icon: Shirt, color: 'from-purple-500 to-fuchsia-500' },
+    tour: { label: '투어', icon: Bus, color: 'from-emerald-500 to-teal-500' },
+    rentcar: { label: '렌터카', icon: Car, color: 'from-indigo-500 to-violet-500' },
 };
+
+function categoryMeta(c: string) {
+    return CATEGORY_META[c] || { label: c, icon: Tag, color: 'from-gray-500 to-gray-600' };
+}
 
 export default function BrowseAllPage() {
     const [partners, setPartners] = useState<Partner[]>([]);
@@ -37,6 +45,7 @@ export default function BrowseAllPage() {
     const [category, setCategory] = useState<string>('');
     const [region, setRegion] = useState<string>('');
     const [keyword, setKeyword] = useState<string>('');
+    const [showFilters, setShowFilters] = useState(false);
 
     useEffect(() => {
         let cancelled = false;
@@ -73,81 +82,181 @@ export default function BrowseAllPage() {
     }, [partners, category, region, keyword]);
 
     return (
-        <PartnerLayout title="🛍️ 제휴업체 둘러보기" requiredRoles={['member', 'partner', 'manager', 'admin']}>
-            <SectionBox title="필터">
-                <div className="flex flex-col gap-2">
-                    <div className="flex gap-2 flex-wrap text-xs">
-                        <span className="text-gray-500 self-center">카테고리:</span>
-                        <button onClick={() => setCategory('')}
-                            className={`px-3 py-1 rounded border ${category === '' ? 'bg-blue-50 border-blue-300 text-blue-600' : 'bg-white border-gray-200 text-gray-600'}`}>전체</button>
-                        {categories.map(c => (
-                            <button key={c} onClick={() => setCategory(c)}
-                                className={`px-3 py-1 rounded border ${category === c ? 'bg-blue-50 border-blue-300 text-blue-600' : 'bg-white border-gray-200 text-gray-600'}`}>
-                                {CATEGORY_LABEL[c] || c}
-                            </button>
-                        ))}
-                    </div>
-                    {regions.length > 0 && (
-                        <div className="flex gap-2 flex-wrap text-xs">
-                            <span className="text-gray-500 self-center">지역:</span>
-                            <button onClick={() => setRegion('')}
-                                className={`px-3 py-1 rounded border ${region === '' ? 'bg-blue-50 border-blue-300 text-blue-600' : 'bg-white border-gray-200 text-gray-600'}`}>전체</button>
-                            {regions.map(r => (
-                                <button key={r} onClick={() => setRegion(r)}
-                                    className={`px-3 py-1 rounded border ${region === r ? 'bg-blue-50 border-blue-300 text-blue-600' : 'bg-white border-gray-200 text-gray-600'}`}>{r}</button>
-                            ))}
-                        </div>
-                    )}
-                    <input type="text" placeholder="업체명/지점/설명 검색" value={keyword} onChange={(e) => setKeyword(e.target.value)}
-                        className="px-2 py-1 rounded border border-gray-200 bg-white text-sm" />
+        <PartnerLayout
+            title="제휴업체 둘러보기"
+            subtitle="할인 혜택과 다양한 서비스를 한눈에"
+            requiredRoles={['member', 'partner', 'manager', 'admin']}
+        >
+            {/* 카테고리 칩 (가로 스크롤) */}
+            <div className="mb-4 -mx-4 lg:mx-0 px-4 lg:px-0 overflow-x-auto scrollbar-hide">
+                <div className="flex gap-2 lg:flex-wrap pb-1">
+                    <CategoryChip
+                        active={category === ''}
+                        onClick={() => setCategory('')}
+                        label="전체"
+                        Icon={Tag}
+                        color="from-gray-700 to-gray-800"
+                    />
+                    {categories.map(c => {
+                        const m = categoryMeta(c);
+                        return (
+                            <CategoryChip
+                                key={c}
+                                active={category === c}
+                                onClick={() => setCategory(c)}
+                                label={m.label}
+                                Icon={m.icon}
+                                color={m.color}
+                            />
+                        );
+                    })}
                 </div>
-            </SectionBox>
+            </div>
 
-            <SectionBox title={`업체 ${filtered.length}개`}>
-                {loading ? (
-                    <Spinner label="불러오는 중..." />
-                ) : filtered.length === 0 ? (
-                    <div className="text-sm text-gray-500 text-center py-8">조건에 맞는 업체가 없습니다.</div>
+            {/* 검색바 */}
+            <div className="mb-4 flex gap-2">
+                <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input
+                        type="text"
+                        placeholder="업체명, 지점, 설명으로 검색"
+                        value={keyword}
+                        onChange={(e) => setKeyword(e.target.value)}
+                        className="w-full pl-10 pr-3 py-2.5 rounded-xl border border-gray-200 bg-white/80 backdrop-blur-sm text-sm focus:outline-none focus:ring-2 focus:ring-blue-400/30 focus:border-blue-400"
+                    />
+                </div>
+                {regions.length > 0 && (
+                    <button
+                        onClick={() => setShowFilters(!showFilters)}
+                        className={`px-3 py-2.5 rounded-xl border text-sm font-medium flex items-center gap-1.5 transition ${region || showFilters
+                            ? 'bg-blue-500 text-white border-blue-500'
+                            : 'bg-white/80 text-gray-700 border-gray-200 hover:bg-white'
+                            }`}
+                    >
+                        <Filter className="w-4 h-4" />
+                        <span className="hidden sm:inline">지역</span>
+                    </button>
+                )}
+            </div>
+
+            {/* 지역 필터 (토글) */}
+            {showFilters && regions.length > 0 && (
+                <div className="mb-4 p-3 rounded-xl bg-white/80 border border-gray-200 flex flex-wrap gap-2">
+                    <button
+                        onClick={() => setRegion('')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${region === '' ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                    >
+                        전체 지역
+                    </button>
+                    {regions.map(r => (
+                        <button
+                            key={r}
+                            onClick={() => setRegion(r)}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${region === r ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                        >
+                            {r}
+                        </button>
+                    ))}
+                </div>
+            )}
+
+            {/* 결과 */}
+            <div className="mb-3 flex items-center justify-between px-1">
+                <div className="text-sm text-gray-600">
+                    총 <span className="font-bold text-gray-900">{filtered.length}</span>개 업체
+                </div>
+            </div>
+
+            {loading ? (
+                <Spinner label="불러오는 중..." />
+            ) : filtered.length === 0 ? (
+                <div className="text-center py-16 text-gray-400 text-sm bg-white/60 rounded-2xl border border-dashed border-gray-300">
+                    조건에 맞는 업체가 없습니다.
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 lg:gap-4">
+                    {filtered.map(p => (
+                        <PartnerCard key={p.partner_id} p={p} />
+                    ))}
+                </div>
+            )}
+        </PartnerLayout>
+    );
+}
+
+function CategoryChip({
+    active, onClick, label, Icon, color,
+}: { active: boolean; onClick: () => void; label: string; Icon: React.ComponentType<{ className?: string }>; color: string; }) {
+    return (
+        <button
+            onClick={onClick}
+            className={`flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold transition-all ${active
+                ? `bg-gradient-to-r ${color} text-white shadow-md shadow-gray-300/40`
+                : 'bg-white/80 text-gray-700 border border-gray-200 hover:bg-white'
+                }`}
+        >
+            <Icon className="w-3.5 h-3.5" />
+            {label}
+        </button>
+    );
+}
+
+function PartnerCard({ p }: { p: Partner }) {
+    const m = categoryMeta(p.category);
+    const Icon = m.icon;
+    return (
+        <Link
+            href={`/partner/booking/${p.partner_id}`}
+            className="group block bg-white/90 backdrop-blur-sm border border-gray-200/70 rounded-2xl overflow-hidden hover:shadow-lg hover:shadow-gray-300/30 hover:-translate-y-0.5 hover:border-blue-300 transition-all duration-200"
+        >
+            <div className="relative h-36 overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200">
+                {p.thumbnail_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={p.thumbnail_url} alt={p.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                        {filtered.map(p => (
-                            <Link
-                                key={p.partner_id}
-                                href={`/partner/booking/${p.partner_id}`}
-                                className="block p-4 bg-white border border-gray-200 rounded hover:border-blue-300 hover:shadow-sm transition"
-                            >
-                                {p.thumbnail_url && (
-                                    <img src={p.thumbnail_url} alt={p.name} className="w-full h-32 object-cover rounded mb-2" />
-                                )}
-                                <div className="flex items-start justify-between gap-2">
-                                    <div className="text-sm font-medium text-gray-800">
-                                        {p.name}
-                                        {p.branch_name && <span className="text-xs text-gray-500 ml-1">({p.branch_name})</span>}
-                                    </div>
-                                    {p.default_discount_rate ? (
-                                        <span className="text-xs px-2 py-0.5 rounded bg-red-50 text-red-600 whitespace-nowrap">
-                                            {Number(p.default_discount_rate)}% 할인
-                                        </span>
-                                    ) : null}
-                                </div>
-                                <div className="text-xs text-gray-500 mt-1">
-                                    <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 mr-1">
-                                        {CATEGORY_LABEL[p.category] || p.category}
-                                    </span>
-                                    {p.subcategory && <span className="text-gray-500">{p.subcategory}</span>}
-                                </div>
-                                <div className="text-xs text-gray-500 mt-1">
-                                    {p.region || '-'}{p.address ? ` · ${p.address}` : ''}
-                                </div>
-                                {p.open_hours && <div className="text-xs text-gray-500 mt-0.5">⏰ {p.open_hours}</div>}
-                                {p.description && (
-                                    <div className="text-xs text-gray-600 mt-2 line-clamp-2">{p.description}</div>
-                                )}
-                            </Link>
-                        ))}
+                    <div className={`w-full h-full bg-gradient-to-br ${m.color} flex items-center justify-center`}>
+                        <Icon className="w-12 h-12 text-white/50" />
                     </div>
                 )}
-            </SectionBox>
-        </PartnerLayout>
+                <div className={`absolute top-2 left-2 flex items-center gap-1 px-2 py-1 rounded-lg bg-white/90 backdrop-blur text-[10px] font-semibold text-gray-700`}>
+                    <Icon className="w-3 h-3" />
+                    {m.label}
+                </div>
+                {p.default_discount_rate ? (
+                    <div className="absolute top-2 right-2 px-2 py-1 rounded-lg bg-red-500 text-white text-[10px] font-bold shadow-sm">
+                        {Number(p.default_discount_rate)}% OFF
+                    </div>
+                ) : null}
+            </div>
+
+            <div className="p-3.5">
+                <div className="flex items-start justify-between gap-2 mb-1">
+                    <h4 className="text-sm font-bold text-gray-900 line-clamp-1 group-hover:text-blue-600 transition">
+                        {p.name}
+                    </h4>
+                    <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-blue-500 group-hover:translate-x-0.5 transition flex-shrink-0 mt-0.5" />
+                </div>
+                {p.branch_name && (
+                    <div className="text-[11px] text-gray-500 mb-1.5">{p.branch_name}</div>
+                )}
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-500">
+                    {(p.region || p.address) && (
+                        <span className="flex items-center gap-1 truncate max-w-full">
+                            <MapPin className="w-3 h-3 flex-shrink-0" />
+                            <span className="truncate">{p.region || ''}{p.address ? ` · ${p.address}` : ''}</span>
+                        </span>
+                    )}
+                    {p.open_hours && (
+                        <span className="flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            {p.open_hours}
+                        </span>
+                    )}
+                </div>
+                {p.description && (
+                    <p className="text-xs text-gray-600 mt-2 line-clamp-2 leading-relaxed">{p.description}</p>
+                )}
+            </div>
+        </Link>
     );
 }
