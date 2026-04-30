@@ -115,6 +115,7 @@ export default function MyPage() {
     { icon: '📝', label: '견적 작성', href: '/mypage/quotes' },
     { icon: '🎯', label: '예약하기', href: '/mypage/direct-booking' },
     { icon: '📋', label: '예약내역', href: '/mypage/reservations/list' },
+    { icon: '🤝', label: '제휴업체', href: 'partner' },
     { icon: '📍', label: '장소 추가', href: '/mypage/location-updates' },
     { icon: '📄', label: '예약확인서', href: '/mypage/confirmations' },
     { icon: '👤', label: '내 정보', href: '/mypage/profile' },
@@ -164,6 +165,21 @@ export default function MyPage() {
       <SectionBox title="원하는 서비스를 선택하세요">
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {quickActions.map((action, index) => {
+            if (action.href === 'partner') {
+              return (
+                <button key={index} type="button" onClick={handleGoPartner} className="group text-left">
+                  <div className="bg-white border border-gray-200 rounded-lg p-6 text-center hover:border-blue-500 hover:shadow-md transition-all duration-200">
+                    <div className="text-4xl mb-3 transform group-hover:scale-110 transition-transform duration-200">
+                      {action.icon}
+                    </div>
+                    <div className="text-sm font-medium text-gray-900 group-hover:text-blue-600 transition-colors">
+                      {action.label}
+                    </div>
+                  </div>
+                </button>
+              );
+            }
+
             return (
               <Link key={index} href={action.href} className="group">
                 <div className="bg-white border border-gray-200 rounded-lg p-6 text-center hover:border-blue-500 hover:shadow-md transition-all duration-200">
@@ -177,18 +193,6 @@ export default function MyPage() {
               </Link>
             );
           })}
-
-          {/* 제휴업체 — 별도 도메인으로 세션 유지하며 이동 */}
-          <button type="button" onClick={handleGoPartner} className="group text-left">
-            <div className="bg-white border border-gray-200 rounded-lg p-6 text-center hover:border-blue-500 hover:shadow-md transition-all duration-200">
-              <div className="text-4xl mb-3 transform group-hover:scale-110 transition-transform duration-200">
-                🤝
-              </div>
-              <div className="text-sm font-medium text-gray-900 group-hover:text-blue-600 transition-colors">
-                제휴업체
-              </div>
-            </div>
-          </button>
         </div>
       </SectionBox>
     </PageWrapper>
