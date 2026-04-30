@@ -2470,11 +2470,22 @@ export default function ManagerSchedulePage() {
     }
   };
 
+  const getScheduleServiceType = (schedule: any) => {
+    switch (schedule?.service_table) {
+      case 'reservation_cruise': return 'cruise';
+      case 'reservation_airport': return 'airport';
+      case 'reservation_hotel': return 'hotel';
+      case 'reservation_tour': return 'tour';
+      case 'reservation_rentcar': return 'rentcar';
+      case 'reservation_cruise_car': return 'vehicle';
+      case 'reservation_car_sht': return 'sht';
+      default: return schedule?.re_type || 'other';
+    }
+  };
+
   // 표시용 타입명/아이콘 (service_table을 반영)
   const getDisplayTypeName = (schedule: any) => {
-    if (schedule?.service_table === 'reservation_car_sht') return getTypeName('sht');
-    if (schedule?.service_table === 'reservation_cruise_car') return getTypeName('vehicle');
-    return getTypeName(schedule?.re_type);
+    return getTypeName(getScheduleServiceType(schedule));
   };
 
   const renderDbCardBody = (schedule: any) => {
@@ -2519,9 +2530,8 @@ export default function ManagerSchedulePage() {
   };
 
   const getDisplayTypeIcon = (schedule: any) => {
-    if (schedule?.service_table === 'reservation_car_sht') return getTypeIcon('vehicle');
-    if (schedule?.service_table === 'reservation_cruise_car') return getTypeIcon('vehicle');
-    return getTypeIcon(schedule?.re_type);
+    const type = getScheduleServiceType(schedule);
+    return getTypeIcon(type === 'sht' ? 'vehicle' : type);
   };
 
   // 크루즈명 + 객실타입 표시용 유틸 (가용 필드에서 최대한 추출)
@@ -2574,15 +2584,7 @@ export default function ManagerSchedulePage() {
 
   const typeFilteredSchedules = schedules.filter(schedule => {
     if (typeFilter !== 'all') {
-      if (typeFilter === 'sht') {
-        if (schedule.service_table !== 'reservation_car_sht') return false;
-      } else if (typeFilter === 'vehicle') {
-        if (schedule.service_table !== 'reservation_cruise_car') return false;
-      } else if (typeFilter === 'cruise') {
-        // 크루즈 필터: 차량 테이블은 제외하고 cruise 예약만 포함
-        if (schedule.service_table === 'reservation_cruise_car' || schedule.service_table === 'reservation_car_sht') return false;
-        if (schedule.re_type !== 'cruise') return false;
-      } else if (schedule.re_type !== typeFilter) {
+      if (getScheduleServiceType(schedule) !== typeFilter) {
         return false;
       }
     }
@@ -2654,7 +2656,7 @@ export default function ManagerSchedulePage() {
   // 서비스 타입별 그룹
   const groupedByType: Record<string, any[]> = uniqueSchedules.reduce(
     (acc: Record<string, any[]>, cur) => {
-      const k = cur.re_type || 'other';
+      const k = getScheduleServiceType(cur) || 'other';
       (acc[k] ||= []).push(cur);
       return acc;
     },

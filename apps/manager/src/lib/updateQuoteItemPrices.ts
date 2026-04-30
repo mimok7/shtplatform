@@ -1,5 +1,14 @@
 import supabase from './supabase';
 
+type CruiseRatePrice = {
+  price_adult?: number | null;
+  price_child?: number | null;
+  price_child_extra_bed?: number | null;
+  price_infant?: number | null;
+  price_extra_bed?: number | null;
+  price_single?: number | null;
+};
+
 /**
  * 견적의 모든 아이템에 대해 가격을 계산하고 업데이트하는 함수
  * @param quoteId - 견적 ID
@@ -61,7 +70,7 @@ export async function updateQuoteItemPrices(quoteId: string): Promise<boolean> {
             continue;
           }
 
-          const price = priceData[0] || {};
+          const price = (priceData[0] || {}) as CruiseRatePrice;
           const adultCount = Number(roomData.adult_count || 0);
           const childCount = Number(roomData.child_count || 0);
           const childExtraBedCount = Number(roomData.child_extra_bed_count || 0);

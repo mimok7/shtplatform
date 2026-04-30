@@ -595,7 +595,7 @@ export default function CustomerManagement() {
 
 // 드롭다운 메뉴를 버튼으로 변경 (컴포넌트 내보내기)
 
-export function CustomerMenuButton() {
+function CustomerMenuButton() {
   const [open, setOpen] = useState(false);
   return (
     <div className="relative inline-block text-left">

@@ -100,6 +100,55 @@ const safeDateTime = (dateStr: any): string => {
     }
 };
 
+/** "UPDATING" placeholder/공백 값을 fallback 으로 정규화 */
+const cleanLoc = (value: any, fallback = '-'): string => {
+    const s = String(value ?? '').trim();
+    if (!s || /^updating$/i.test(s)) return fallback;
+    return s;
+};
+
+const cleanText = (value: any, fallback = '-'): string => cleanLoc(value, fallback);
+
+const normalizeWayType = (value: any): string => {
+    const raw = String(value || '').trim().toLowerCase();
+    if (!raw) return '-';
+    if (raw.includes('pickup') || raw.includes('픽업')) return '픽업';
+    if (raw.includes('sending') || raw.includes('sanding') || raw.includes('샌딩')) return '샌딩';
+    return cleanText(value);
+};
+
+const extractBracketValue = (note: any, label: string): string => {
+    const text = String(note || '');
+    const match = text.match(new RegExp(`\\[${label}\\s*:\\s*([^\\]]+)\\]`));
+    return match?.[1]?.trim() || '';
+};
+
+const extractCruiseInfo = (value: any): { cruise?: string; room?: string } => {
+    const raw = cleanText(value, '');
+    if (!raw) return {};
+    const tokens = raw.split(/\s+/).filter(Boolean);
+    if (tokens.length < 2) return { room: raw };
+    const roomIndex = tokens.findIndex((token) => /(스위트|캐빈|룸|디럭스|베란다|씨뷰|오션|패밀리)/.test(token));
+    if (roomIndex > 0) {
+        return {
+            cruise: tokens.slice(0, roomIndex).join(' '),
+            room: tokens.slice(roomIndex).join(' '),
+        };
+    }
+    return { room: raw };
+};
+
+const inferTourName = (row: any, requestNote: any): string => {
+    const mapped = cleanText(row?._tour_info?.tour_name || row?.tour_name, '');
+    if (mapped) return mapped;
+
+    const text = `${row?.tour_price_code || ''} ${requestNote || ''}`.toLowerCase();
+    if (text.includes('하노이') || text.includes('hanoi')) return '하노이 오후 투어';
+    if (text.includes('야경')) return '야경투어';
+    if (text.includes('닌빈') || text.includes('ninh')) return '닌빈투어';
+    return '패키지 투어';
+};
+
 /** 서비스 타입 정규화 */
 const normalizeType = (type: string): string => {
     let t = type || '';
@@ -169,8 +218,10 @@ export default function ServiceCardBody({
     // ========== CRUISE ==========
     if (type === 'cruise') {
         const cruiseInfo = row?._cruise_info || row?.cruise_info || {};
-        const cruise = cruiseInfo?.cruise || row?.cruise_name || row?.cruise || '-';
-        const roomName = cruiseInfo?.room_name || row?.room_name || cruiseInfo?.room_type || row?.room_type || row?.room_category || '-';
+        const noteRoomText = extractBracketValue(requestNote, '객실');
+        const parsedRoomInfo = extractCruiseInfo(noteRoomText || row?.accommodation_info);
+        const cruise = cruiseInfo?.cruise || row?.cruise_name || row?.cruise || parsedRoomInfo.cruise || '-';
+        const roomName = cruiseInfo?.room_name || row?.room_name || cruiseInfo?.room_type || row?.room_type || row?.room_category || parsedRoomInfo.room || '-';
         const roomCategory = row?.room_category || row?.category || '';
         const adult = Number(row?.adult_count ?? row?.guest_count ?? 0);
         const child = Number(row?.child_count ?? 0);
@@ -206,14 +257,22 @@ export default function ServiceCardBody({
 
     // ========== AIRPORT ==========
     if (type === 'airport') {
-        const way = row?.ra_way_type || row?.way_type || row?.service_type || '-';
-        const category = row?.vehicle_type || '';
-        const airportPlace = row?.ra_airport_location || '-';
+        const way = normalizeWayType(row?.ra_way_type || row?.way_type || row?.service_type);
+        const category = row?.vehicle_type || extractBracketValue(requestNote, '차량수배') || '';
+        const airportPlace = cleanText(row?.ra_airport_location);
         const rawAccommodation = String(row?.accommodation_info || '').trim();
         const rawStopover = String(row?.ra_stopover_location || '').trim();
         const stopover = !/^updating$/i.test(rawAccommodation)
             ? (rawAccommodation || (!/^updating$/i.test(rawStopover) ? rawStopover : '') || '-')
             : (!/^updating$/i.test(rawStopover) ? rawStopover : '-');
+        const route = cleanText(
+            row?.route,
+            way === '픽업'
+                ? `${airportPlace} → ${stopover !== '-' ? stopover : '숙소'}`
+                : way === '샌딩'
+                    ? `${stopover !== '-' ? stopover : '숙소'} → ${airportPlace}`
+                    : '-'
+        );
 
         return (
             <div className="flex flex-col gap-1 text-sm text-gray-700 mt-1">
@@ -224,7 +283,7 @@ export default function ServiceCardBody({
                 </div>
                 <div className="flex items-start gap-2">
                     <span className="font-semibold text-green-700 text-xs mt-0.5">경로</span>
-                    <span className="text-sm break-words">{row?.route || '-'}</span>
+                    <span className="text-sm break-words">{route}</span>
                 </div>
                 <div className="flex items-center gap-2 mt-1">
                     <Calendar className="w-4 h-4 text-gray-400" />
@@ -302,9 +361,9 @@ export default function ServiceCardBody({
 
     // ========== TOUR ==========
     if (type === 'tour') {
-        const tourName = row?._tour_info?.tour_name || row?.tour_name || '-';
-        const pickupLocation = row?.pickup_location || '-';
-        const dropoffLocation = row?.dropoff_location || '-';
+        const tourName = inferTourName(row, requestNote);
+        const pickupLocation = cleanLoc(row?.pickup_location, row?.accommodation_info ? cleanText(row.accommodation_info) : '숙소 미정');
+        const dropoffLocation = cleanLoc(row?.dropoff_location || row?.destination, row?.accommodation_info ? cleanText(row.accommodation_info) : '숙소 미정');
 
         return (
             <div className="flex flex-col gap-1 text-sm text-gray-700 mt-1">
