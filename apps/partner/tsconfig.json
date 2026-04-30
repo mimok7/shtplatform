@@ -1,0 +1,25 @@
+{
+  "extends": "@sht/config/tsconfig/nextjs.json",
+  "compilerOptions": {
+    "jsx": "preserve",
+    "strict": false,
+    "noUncheckedIndexedAccess": false,
+    "noImplicitOverride": false,
+    "noFallthroughCasesInSwitch": false,
+    "incremental": false,
+    "paths": {
+      "@/*": [
+        "./src/*"
+      ]
+    }
+  },
+  "include": [
+    "next-env.d.ts",
+    "global.d.ts",
+    "src/**/*",
+    ".next/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}
