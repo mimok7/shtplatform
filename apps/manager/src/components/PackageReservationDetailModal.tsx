@@ -85,6 +85,31 @@ function humanizeServiceName(value: any, fallbackLabel: string): string {
     return humanizeText(raw, fallbackLabel);
 }
 
+function getTourDisplayName(service: any): string {
+    const directName = service.tourName || service.tour_name || service.tour?.tour_name;
+    if (directName && !isCodeLike(directName)) return humanizeText(directName, '투어 프로그램');
+
+    const note = formatNote(service.note || service.request_note);
+    const noteTour = note.match(/투어\s*[:：]\s*([^\n]+)/)?.[1]
+        || note.match(/\[(닌빈|하노이)[^\]]*투어[^\]]*\]/)?.[0];
+    if (noteTour) return humanizeText(noteTour.replace(/[\[\]]/g, ''), '투어 프로그램');
+
+    const joined = `${service.route || ''} ${service.category || ''} ${service.pickupLocation || service.pickup_location || ''} ${service.dropoffLocation || service.dropoff_location || service.destination || ''} ${note}`;
+    if (/닌빈|ninh/i.test(joined)) return '닌빈투어';
+    if (/하노이|hanoi/i.test(joined)) return '하노이 오후 투어';
+
+    if (directName) return humanizeServiceName(directName, '투어 프로그램');
+    return '투어 프로그램';
+}
+
+function isUnknownTourService(service: any): boolean {
+    if (service?.serviceType !== 'tour') return false;
+    const name = getTourDisplayName(service);
+    const rawName = String(service?.tourName || service?.tour_name || '').trim();
+    const note = formatNote(service?.note || service?.request_note);
+    return name === '투어 프로그램' && (!rawName || isCodeLike(rawName)) && !note;
+}
+
 function formatAmount(value: any): string {
     const amount = Number(value || 0);
     if (!amount) return '금액 확인 중';
@@ -164,6 +189,28 @@ function getAirportOrderWeight(service: any): number {
     if (type === '픽업') return 0;
     if (type === '샌딩') return 1;
     return 9;
+}
+
+function getPackageStepWeight(service: any): number {
+    const type = service?.serviceType || '';
+    if (type === 'airport') {
+        return getAirportOrderWeight(service) === 0 ? 10 : 90;
+    }
+    if (type === 'tour') {
+        const name = getTourDisplayName(service);
+        if (/닌빈|ninh/i.test(name)) return 20;
+        if (/하노이|hanoi/i.test(name)) return 70;
+        return 25;
+    }
+    if (type === 'sht') {
+        const category = String(service.category || service.sht_category || '').toLowerCase();
+        if (category.includes('pickup') || category.includes('픽업')) return 30;
+        if (category.includes('drop') || category.includes('드롭')) return 60;
+        return 50;
+    }
+    if (type === 'cruise') return 40;
+    if (type === 'hotel') return 80;
+    return 99;
 }
 
 function getAirportDisplayLocations(service: any): { pickup: string; sending: string } {
@@ -257,19 +304,18 @@ export default function PackageReservationDetailModal({
     );
 
     const packageServices = useMemo(() => {
-        const nonPackage = filteredServices.filter((s) => s?.serviceType !== 'package');
+        const nonPackage = filteredServices.filter((s) => s?.serviceType !== 'package' && !isUnknownTourService(s));
 
         // 동일 투어 중복 제거
         const tourSeen = new Set<string>();
         const deduped = nonPackage.filter((s) => {
             if (s?.serviceType !== 'tour') return true;
-            const rawName = String(s?.tourName || '').trim();
+            const rawName = getTourDisplayName(s);
             const key = [
                 String(s?.tourDate || ''),
                 rawName,
                 String(s?.pickupLocation || s?.pickup_location || ''),
                 String(s?.dropoffLocation || s?.destination || s?.dropoff_location || ''),
-                String(s?.reservation_id || s?.re_id || ''),
             ].join('|');
             if (tourSeen.has(key)) return false;
             tourSeen.add(key);
@@ -280,7 +326,16 @@ export default function PackageReservationDetailModal({
         return [...deduped].sort((a, b) => {
             const ta = getTimeValue(getServiceDateValue(a));
             const tb = getTimeValue(getServiceDateValue(b));
+            const dateA = getServiceDateValue(a).slice(0, 10);
+            const dateB = getServiceDateValue(b).slice(0, 10);
+            if (dateA && dateB && dateA === dateB) {
+                const stepDiff = getPackageStepWeight(a) - getPackageStepWeight(b);
+                if (stepDiff !== 0) return stepDiff;
+            }
             if (ta !== tb) return ta - tb;
+
+            const stepDiff = getPackageStepWeight(a) - getPackageStepWeight(b);
+            if (stepDiff !== 0) return stepDiff;
 
             if (a?.serviceType === 'airport' && b?.serviceType === 'airport') {
                 return getAirportOrderWeight(a) - getAirportOrderWeight(b);
@@ -399,9 +454,7 @@ export default function PackageReservationDetailModal({
                                     const cruiseNameValue = cruiseFromNote.cruiseName || service.cruiseName || service.cruise;
                                     const roomTypeValue = cruiseFromNote.roomType || service.roomType;
                                     const airportLocations = type === 'airport' ? getAirportDisplayLocations(service) : null;
-                                    const tourNameValue = type === 'tour'
-                                        ? (isCodeLike(service.tourName) ? humanizeText((formatNote(service.note).match(/투어\s*[:：]\s*([^\n]+)/)?.[1] || ''), '투어 프로그램') : humanizeServiceName(service.tourName, '투어 프로그램'))
-                                        : '';
+                                    const tourNameValue = type === 'tour' ? getTourDisplayName(service) : '';
                                     return (
                                         <div key={`${service.reservation_id || service.re_id || type}-${idx}`} className="border border-gray-200 rounded-lg p-3 bg-white">
                                             <div className="flex items-center justify-between gap-2">

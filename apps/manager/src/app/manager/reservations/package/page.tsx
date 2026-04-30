@@ -180,20 +180,26 @@ export default function PackageReservationsPage() {
             const hotelCodes = hotelData.map((r: any) => r.hotel_price_code).filter(Boolean);
             const rentcarCodes = rentcarData.map((r: any) => r.rentcar_price_code).filter(Boolean);
 
-            const [roomPrices, roomPricesByRoomType, tourPrices, airportPrices, hotelPrices, rentcarPrices] = await Promise.all([
+            const [roomPrices, roomPricesByRoomType, tourPriceRows, airportPrices, hotelPrices, rentcarPrices] = await Promise.all([
                 cruiseCodes.length > 0 ? supabase.from('cruise_rate_card').select('id, cruise_name, room_type').in('id', cruiseCodes) : Promise.resolve({ data: [] }),
                 cruiseCodes.length > 0 ? supabase.from('cruise_rate_card').select('id, cruise_name, room_type').in('room_type', cruiseCodes) : Promise.resolve({ data: [] }),
-                tourCodes.length > 0 ? supabase.from('tour_pricing').select('pricing_id, tour:tour_id(tour_name, tour_code)').in('pricing_id', tourCodes) : Promise.resolve({ data: [] }),
+                tourCodes.length > 0 ? supabase.from('tour_pricing').select('pricing_id, tour_id, price_per_person').in('pricing_id', tourCodes) : Promise.resolve({ data: [] }),
                 airportCodes.length > 0 ? supabase.from('airport_price').select('airport_code, service_type, route, vehicle_type, price').in('airport_code', airportCodes) : Promise.resolve({ data: [] }),
                 hotelCodes.length > 0 ? supabase.from('hotel_price').select('hotel_price_code, hotel_name, room_name, base_price').in('hotel_price_code', hotelCodes) : Promise.resolve({ data: [] }),
                 rentcarCodes.length > 0 ? supabase.from('rentcar_price').select('rent_code, vehicle_type, way_type, route, price').in('rent_code', rentcarCodes) : Promise.resolve({ data: [] })
             ]);
 
+            const tourIds = Array.from(new Set((tourPriceRows.data || []).map((row: any) => row.tour_id).filter(Boolean)));
+            const { data: tourNameRows } = tourIds.length > 0
+                ? await supabase.from('tour').select('tour_id, tour_name, tour_code').in('tour_id', tourIds)
+                : { data: [] as any[] };
+
             const roomPriceMap = new Map<string, { id: string; cruise_name?: string; room_type?: string }>((roomPrices.data || []).map((r: any) => [r.id, r]));
             (roomPricesByRoomType.data || []).forEach((r: any) => {
                 if (r?.room_type && !roomPriceMap.has(r.room_type)) roomPriceMap.set(r.room_type, r);
             });
-            const tourPriceMap = new Map<string, { pricing_id: string; tour?: { tour_name?: string; tour_code?: string } }>((tourPrices.data || []).map((r: any) => [r.pricing_id, r]));
+            const tourById = new Map((tourNameRows || []).map((row: any) => [row.tour_id, row]));
+            const tourPriceMap = new Map((tourPriceRows.data || []).map((row: any) => [row.pricing_id, { ...row, tour: tourById.get(row.tour_id) }]));
             const airportPriceRows = airportPrices.data || [];
             const hotelPriceMap = new Map((hotelPrices.data || []).map((r: any) => [r.hotel_price_code, r]));
             const rentcarPriceMap = new Map((rentcarPrices.data || []).map((r: any) => [r.rent_code, r]));

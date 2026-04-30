@@ -469,7 +469,7 @@ export async function createPackageReservation({
                     const { error: tourError } = await supabase.from('reservation_tour').insert({
                         reservation_id: reservationId,
                         tour_price_code: tourPriceCode,
-                        request_note: tourVehicle ? `[차량수배: ${tourVehicle}]\n${additionalRequests || ''}` : additionalRequests || '',
+                        request_note: `[투어: ${tourName}]${tourVehicle ? `\n[차량수배: ${tourVehicle}]` : ''}\n${additionalRequests || ''}`.trim(),
                         created_at: new Date().toISOString(),
                         adult_count: adults,
                         child_count: totalChildren,

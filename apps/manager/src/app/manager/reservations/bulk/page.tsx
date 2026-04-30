@@ -541,10 +541,10 @@ export default function BulkReservationPage() {
             // car_price_code에는 rentcar_price.rent_code 값이 저장됨
             const cruiseCarCodes = cruiseCarData.map((c: any) => c.rentcar_price_code || c.car_price_code).filter(Boolean);
 
-            const [roomPrices, roomPricesByRoomType, tourPrices, hotelPrices, rentPrices, airportPrices, carPrices] = await Promise.all([
+            const [roomPrices, roomPricesByRoomType, tourPriceRows, hotelPrices, rentPrices, airportPrices, carPrices] = await Promise.all([
                 cruiseCodes.length > 0 ? supabase.from('cruise_rate_card').select('id, cruise_name, room_type, price_adult, price_child, price_infant, price_extra_bed, price_single, price_child_extra_bed').in('id', cruiseCodes) : Promise.resolve({ data: [] }),
                 cruiseCodes.length > 0 ? supabase.from('cruise_rate_card').select('id, cruise_name, room_type, price_adult, price_child, price_infant, price_extra_bed, price_single, price_child_extra_bed').in('room_type', cruiseCodes) : Promise.resolve({ data: [] }),
-                tourCodes.length > 0 ? supabase.from('tour_pricing').select('pricing_id, price_per_person, tour:tour_id(tour_name, tour_code)').in('pricing_id', tourCodes) : Promise.resolve({ data: [] }),
+                tourCodes.length > 0 ? supabase.from('tour_pricing').select('pricing_id, tour_id, price_per_person').in('pricing_id', tourCodes) : Promise.resolve({ data: [] }),
                 hotelCodes.length > 0 ? supabase.from('hotel_price').select('hotel_price_code, base_price, hotel_name, room_name').in('hotel_price_code', hotelCodes) : Promise.resolve({ data: [] }),
                 rentCodes.length > 0 ? supabase.from('rentcar_price').select('rent_code, vehicle_type, way_type, route, price').in('rent_code', rentCodes) : Promise.resolve({ data: [] }),
                 airportCodes.length > 0 ? supabase.from('airport_price').select('airport_code, service_type, route, vehicle_type, price').in('airport_code', airportCodes) : Promise.resolve({ data: [] }),
@@ -552,13 +552,19 @@ export default function BulkReservationPage() {
                 cruiseCarCodes.length > 0 ? supabase.from('rentcar_price').select('rent_code, vehicle_type, way_type, route, price, category').in('rent_code', cruiseCarCodes) : Promise.resolve({ data: [] })
             ]);
 
+            const tourIdsForName = Array.from(new Set((tourPriceRows.data || []).map((row: any) => row.tour_id).filter(Boolean)));
+            const { data: tourNameRows } = tourIdsForName.length > 0
+                ? await supabase.from('tour').select('tour_id, tour_name, tour_code').in('tour_id', tourIdsForName)
+                : { data: [] as any[] };
+
             const roomPriceMap = new Map((roomPrices.data || []).map((r: any) => [r.id, r]));
             (roomPricesByRoomType.data || []).forEach((r: any) => {
                 if (r?.room_type && !roomPriceMap.has(r.room_type)) {
                     roomPriceMap.set(r.room_type, r);
                 }
             });
-            const tourPriceMap = new Map((tourPrices.data || []).map((r: any) => [r.pricing_id, r]));
+            const tourById = new Map((tourNameRows || []).map((row: any) => [row.tour_id, row]));
+            const tourPriceMap = new Map((tourPriceRows.data || []).map((row: any) => [row.pricing_id, { ...row, tour: tourById.get(row.tour_id) }]));
             const hotelPriceMap = new Map((hotelPrices.data || []).map((r: any) => [r.hotel_price_code, r]));
             const rentPriceMap = new Map((rentPrices.data || []).map((r: any) => [r.rent_code, r]));
             const airportPriceMap = new Map((airportPrices.data || []).map((r: any) => [r.airport_code, r]));
