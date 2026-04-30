@@ -2,6 +2,35 @@ import { NextRequest, NextResponse } from 'next/server';
 import supabase from '@/lib/supabase';
 import serviceSupabase from '../../../lib/serviceSupabase';
 
+async function requireManagerOrAdmin(request: NextRequest): Promise<NextResponse | null> {
+    if (!serviceSupabase) {
+        return NextResponse.json({ success: false, error: 'Service role client unavailable' }, { status: 500 });
+    }
+
+    const authHeader = request.headers.get('authorization') || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+    if (!token) {
+        return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { data: authData, error: authError } = await serviceSupabase.auth.getUser(token);
+    if (authError || !authData?.user) {
+        return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { data: profile, error: profileError } = await serviceSupabase
+        .from('users')
+        .select('role')
+        .eq('id', authData.user.id)
+        .maybeSingle();
+
+    if (profileError || !profile?.role || !['manager', 'admin'].includes(profile.role)) {
+        return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+    }
+
+    return null;
+}
+
 // GET: 환율 조회
 export async function GET(request: NextRequest) {
     try {
@@ -43,6 +72,9 @@ export async function GET(request: NextRequest) {
 // POST: 환율 수동 업데이트
 export async function POST(request: NextRequest) {
     try {
+        const authError = await requireManagerOrAdmin(request);
+        if (authError) return authError;
+
         const body = await request.json();
         const { currency_code, rate_to_krw } = body;
 
@@ -55,8 +87,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ success: false, error: 'rate_to_krw must be a finite number' }, { status: 400 });
         }
 
-        const dbClient = serviceSupabase || supabase;
-        const { data, error } = await dbClient
+        const { data, error } = await serviceSupabase!
             .from('exchange_rates')
             .upsert({
                 currency_code,

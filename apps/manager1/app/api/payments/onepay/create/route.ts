@@ -2,6 +2,36 @@ import { NextRequest, NextResponse } from 'next/server';
 import serviceSupabase from '../../../../../lib/serviceSupabase';
 import { buildOnepayUrl, getOnepayConfigFromEnv, getBaseSiteUrl } from '../../../../../lib/onepay';
 
+async function requireManagerOrAdmin(req: NextRequest): Promise<NextResponse | null> {
+    if (!serviceSupabase) {
+        return NextResponse.json(
+            { error: 'Service client unavailable', code: 'SUPABASE_SERVICE_ROLE_MISSING', required: ['SUPABASE_SERVICE_ROLE_KEY'] },
+            { status: 500 }
+        );
+    }
+
+    const authHeader = req.headers.get('authorization') || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+    if (!token) return NextResponse.json({ error: 'Unauthorized', code: 'UNAUTHORIZED' }, { status: 401 });
+
+    const { data: authData, error: authError } = await serviceSupabase.auth.getUser(token);
+    if (authError || !authData?.user) {
+        return NextResponse.json({ error: 'Unauthorized', code: 'UNAUTHORIZED' }, { status: 401 });
+    }
+
+    const { data: profile, error: profileError } = await serviceSupabase
+        .from('users')
+        .select('role')
+        .eq('id', authData.user.id)
+        .maybeSingle();
+
+    if (profileError || !profile?.role || !['manager', 'admin'].includes(profile.role)) {
+        return NextResponse.json({ error: 'Forbidden', code: 'FORBIDDEN' }, { status: 403 });
+    }
+
+    return null;
+}
+
 export async function POST(req: NextRequest) {
     try {
         const cfg = getOnepayConfigFromEnv();
@@ -26,6 +56,9 @@ export async function POST(req: NextRequest) {
                 { status: 500 }
             );
         }
+
+        const authError = await requireManagerOrAdmin(req);
+        if (authError) return authError;
 
         const body = await req.json();
         const paymentId: string = body?.paymentId;

@@ -1,7 +1,6 @@
 {
   "extends": "@sht/config/tsconfig/nextjs.json",
   "compilerOptions": {
-    "baseUrl": ".",
     "jsx": "preserve",
     "strict": false,
     "noUncheckedIndexedAccess": false,

@@ -5,8 +5,8 @@ import { useRouter } from 'next/navigation';
 import supabase from '@/lib/supabase';
 import QuoteForm from '@/components/QuoteForm'; // 재사용 가능한 입력 폼 컴포넌트
 
-export default function QuoteEditPage({ params }: { params: { id: string } }) {
-  const { id } = params;
+export default function QuoteEditPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = React.use(params);
   const router = useRouter();
   const [quoteData, setQuoteData] = useState<any>(null);
   const [loading, setLoading] = useState(true);

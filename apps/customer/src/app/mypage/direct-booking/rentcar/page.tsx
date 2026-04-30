@@ -143,6 +143,7 @@ function RentcarDirectBookingContent() {
                 loadedVehicles.push({
                     id: i + 1,
                     wayType: rentInfo?.way_type || '편도',
+                    pyondoDirection: '',
                     route: rentInfo?.route || '',
                     carType: rentInfo?.vehicle_type || '',
                     rentcar: rentInfo || null,

@@ -198,8 +198,8 @@ export default function PackageReservationsPage() {
             (roomPricesByRoomType.data || []).forEach((r: any) => {
                 if (r?.room_type && !roomPriceMap.has(r.room_type)) roomPriceMap.set(r.room_type, r);
             });
-            const tourById = new Map((tourNameRows || []).map((row: any) => [row.tour_id, row]));
-            const tourPriceMap = new Map((tourPriceRows.data || []).map((row: any) => [row.pricing_id, { ...row, tour: tourById.get(row.tour_id) }]));
+            const tourById = new Map<string, any>((tourNameRows || []).map((row: any) => [row.tour_id, row]));
+            const tourPriceMap = new Map<string, any>((tourPriceRows.data || []).map((row: any) => [row.pricing_id, { ...row, tour: tourById.get(row.tour_id) }]));
             const airportPriceRows = airportPrices.data || [];
             const hotelPriceMap = new Map((hotelPrices.data || []).map((r: any) => [r.hotel_price_code, r]));
             const rentcarPriceMap = new Map((rentcarPrices.data || []).map((r: any) => [r.rent_code, r]));

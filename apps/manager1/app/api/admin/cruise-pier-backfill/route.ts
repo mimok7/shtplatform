@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import serviceSupabase from '../../../../lib/serviceSupabase';
 
 type ReservationCarShtRow = {
@@ -36,7 +36,39 @@ function normalize(value: string | null | undefined): string {
     return (value || '').trim().toLowerCase();
 }
 
-export async function POST() {
+async function requireManagerOrAdmin(request: NextRequest): Promise<NextResponse | null> {
+    if (!serviceSupabase) {
+        return NextResponse.json(
+            { success: false, error: 'SUPABASE_SERVICE_ROLE_KEY 환경변수를 확인하세요.' },
+            { status: 500 }
+        );
+    }
+
+    const authHeader = request.headers.get('authorization') || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+    if (!token) {
+        return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { data: authData, error: authError } = await serviceSupabase.auth.getUser(token);
+    if (authError || !authData?.user) {
+        return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { data: profile, error: profileError } = await serviceSupabase
+        .from('users')
+        .select('role')
+        .eq('id', authData.user.id)
+        .maybeSingle();
+
+    if (profileError || !profile?.role || !['manager', 'admin'].includes(profile.role)) {
+        return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+    }
+
+    return null;
+}
+
+export async function POST(request: NextRequest) {
     try {
         if (!serviceSupabase) {
             return NextResponse.json(
@@ -44,6 +76,9 @@ export async function POST() {
                 { status: 500 }
             );
         }
+
+        const authError = await requireManagerOrAdmin(request);
+        if (authError) return authError;
 
         const { data: carRowsRaw, error: carError } = await serviceSupabase
             .from('reservation_car_sht')

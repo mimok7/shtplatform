@@ -120,6 +120,26 @@ export default function MyPage() {
     { icon: '👤', label: '내 정보', href: '/mypage/profile' },
   ], []);
 
+  // 제휴업체(파트너) 도메인으로 SSO 이동: 현재 세션 토큰을 hash로 전달
+  const handleGoPartner = useCallback(async () => {
+    const partnerBase = (process.env.NEXT_PUBLIC_PARTNER_URL || 'https://partner.stayhalong.com').replace(/\/$/, '');
+    const next = '/partner/browse';
+    try {
+      const { data } = await supabase.auth.getSession();
+      const at = data?.session?.access_token;
+      const rt = data?.session?.refresh_token;
+      if (at && rt) {
+        const url = `${partnerBase}/auth/bridge#at=${encodeURIComponent(at)}&rt=${encodeURIComponent(rt)}&next=${encodeURIComponent(next)}`;
+        window.location.href = url;
+        return;
+      }
+    } catch (err) {
+      console.error('파트너 이동을 위한 세션 조회 실패:', err);
+    }
+    // 세션 없으면 그냥 파트너 사이트로 이동(로그인 페이지로 자연스럽게 리다이렉트됨)
+    window.location.href = `${partnerBase}${next}`;
+  }, []);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -157,6 +177,18 @@ export default function MyPage() {
               </Link>
             );
           })}
+
+          {/* 제휴업체 — 별도 도메인으로 세션 유지하며 이동 */}
+          <button type="button" onClick={handleGoPartner} className="group text-left">
+            <div className="bg-white border border-gray-200 rounded-lg p-6 text-center hover:border-blue-500 hover:shadow-md transition-all duration-200">
+              <div className="text-4xl mb-3 transform group-hover:scale-110 transition-transform duration-200">
+                🤝
+              </div>
+              <div className="text-sm font-medium text-gray-900 group-hover:text-blue-600 transition-colors">
+                제휴업체
+              </div>
+            </div>
+          </button>
         </div>
       </SectionBox>
     </PageWrapper>

@@ -93,19 +93,7 @@ function metaOf(c?: string | null): CatMeta {
     };
 }
 
-// partner_code → 이미지 fallback 매핑
-const PARTNER_IMAGE_MAP: Record<string, string[]> = {
-    'NHAMNHAM-HL-001':       ['/images/partners/nhamnham.gif'],
-    'SOLCAFE-HL-001':        ['/images/partners/solcafe.gif'],
-    'TAEYEONG-HN-WESTLAKE':  ['/images/partners/taeyeong.gif'],
-    'TAEYEONG-HL-DELIVERY':   ['/images/partners/taeyeong.gif'],
-    'MON-HL-NIGHTMKT':       ['/images/partners/mon.jpg'],
-    'SERENE-HN-001':         ['/images/partners/serene.jpg'],
-    'CUCCHI-HL-AOZAI':       ['/images/partners/cucchi.jpg'],
-};
-function partnerImages(code?: string | null): string[] {
-    return code && PARTNER_IMAGE_MAP[code] ? PARTNER_IMAGE_MAP[code] : [];
-}
+// partner_code → 이미지 매핑은 lib/partnerImages.ts (사이드바와 공용)
 
 function fmtDate(s?: string | null) {
     if (!s) return '-';
@@ -234,24 +222,9 @@ export default function PartnerDashboardPage() {
             subtitle={partner?.branch_name || meta.label}
             requiredRoles={['partner', 'manager', 'admin']}
         >
-            {/* 카테고리 적응 헤더 배너 */}
+            {/* 카테고리 적응 헤더 배너 (이미지는 사이드바에 표시) */}
             {partner && (
                 <div className={`rounded-2xl overflow-hidden border ${meta.softBg} border-gray-200 mb-4`}>
-                    {/* 업체 이미지 갤러리 (1매이면 1장, 2이상이면 그리드) */}
-                    {(() => {
-                        const imgs = partnerImages(partner.partner_code);
-                        if (imgs.length === 0) return null;
-                        return (
-                            <div className={`grid ${imgs.length >= 2 ? 'grid-cols-2 gap-px bg-gray-200' : 'grid-cols-1'}`}>
-                                {imgs.map((src, i) => (
-                                    <div key={i} className="relative w-full aspect-[16/9] bg-gray-100 overflow-hidden">
-                                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                                        <img src={src} alt={partner.name} className="w-full h-full object-cover" />
-                                    </div>
-                                ))}
-                            </div>
-                        );
-                    })()}
                     <div className={`px-5 py-4 bg-gradient-to-r ${meta.color} text-white`}>
                         <div className="flex items-center justify-between gap-4">
                             <div className="flex items-center gap-3 min-w-0">

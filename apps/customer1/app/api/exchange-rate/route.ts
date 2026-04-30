@@ -24,6 +24,52 @@ function getServerSupabaseClient() {
   });
 }
 
+function getServiceSupabaseClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!url || !key) {
+    return null;
+  }
+
+  return createClient(url, key, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  });
+}
+
+async function requireManagerOrAdmin(request: NextRequest) {
+  const db = getServiceSupabaseClient();
+  if (!db) {
+    return { db: null, response: NextResponse.json({ success: false, error: 'Service role client unavailable' }, { status: 500 }) };
+  }
+
+  const authHeader = request.headers.get('authorization') || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+  if (!token) {
+    return { db: null, response: NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 }) };
+  }
+
+  const { data: authData, error: authError } = await db.auth.getUser(token);
+  if (authError || !authData?.user) {
+    return { db: null, response: NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 }) };
+  }
+
+  const { data: profile, error: profileError } = await db
+    .from('users')
+    .select('role')
+    .eq('id', authData.user.id)
+    .maybeSingle();
+
+  if (profileError || !profile?.role || !['manager', 'admin'].includes(profile.role)) {
+    return { db: null, response: NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 }) };
+  }
+
+  return { db, response: null };
+}
+
 function normalizeCurrency(raw: string | null): SupportedCurrency {
   const value = String(raw || 'VND').toUpperCase();
   return value === 'USD' ? 'USD' : 'VND';
@@ -79,6 +125,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireManagerOrAdmin(request);
+    if (auth.response || !auth.db) return auth.response;
+
     const body = await request.json();
     const currency = normalizeCurrency(body?.currency_code || body?.currency);
     const parsedRate = Number(body?.rate_to_krw);
@@ -87,12 +136,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'rate_to_krw must be a positive number' }, { status: 400 });
     }
 
-    const db = getServerSupabaseClient();
-    if (!db) {
-      return NextResponse.json({ success: false, error: 'Supabase is not configured' }, { status: 500 });
-    }
-
-    const { data, error } = await db
+    const { data, error } = await auth.db
       .from('exchange_rates')
       .upsert(
         {

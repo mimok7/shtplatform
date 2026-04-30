@@ -130,9 +130,13 @@ export default function ManagerExchangeRatePage() {
         try {
             setExchangeRateLoading(true);
 
+            const { data: sessionData } = await supabase.auth.getSession();
+            const token = sessionData.session?.access_token;
+            if (!token) throw new Error('로그인이 필요합니다.');
+
             const resp = await fetch('/api/exchange-rate', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                 body: JSON.stringify({
                     currency_code: currencyCode,
                     rate_to_krw: rate

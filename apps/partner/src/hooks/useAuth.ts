@@ -23,7 +23,14 @@ function writeCache(user: any | null) {
 
 export interface AuthState {
     user: any;
-    profile: { role?: string; partner_id?: string | null; name?: string | null } | null;
+    profile: {
+        role?: string;
+        partner_id?: string | null;
+        partner_code?: string | null;
+        partner_name?: string | null;
+        branch_name?: string | null;
+        name?: string | null;
+    } | null;
     loading: boolean;
 }
 
@@ -68,15 +75,22 @@ export function useAuth(requiredRoles?: string[], redirectOnFail: string = '/par
                         .eq('id', user.id)
                         .maybeSingle();
                     let partner_id: string | null = null;
+                    let partner_code: string | null = null;
+                    let partner_name: string | null = null;
+                    let branch_name: string | null = null;
                     if (u?.role === 'partner') {
                         const { data: pu } = await supabase
                             .from('partner_user')
-                            .select('pu_partner_id')
+                            .select('pu_partner_id, partner:pu_partner_id(partner_code, name, branch_name)')
                             .eq('pu_user_id', user.id)
                             .maybeSingle();
-                        partner_id = pu?.pu_partner_id ?? null;
+                        partner_id = (pu as any)?.pu_partner_id ?? null;
+                        const p = (pu as any)?.partner;
+                        partner_code = p?.partner_code ?? null;
+                        partner_name = p?.name ?? null;
+                        branch_name = p?.branch_name ?? null;
                     }
-                    profile = { role: u?.role, name: u?.name, partner_id };
+                    profile = { role: u?.role, name: u?.name, partner_id, partner_code, partner_name, branch_name };
                 } catch { /* ignore */ }
 
                 if (cancelled) return;

@@ -2,6 +2,35 @@ import { NextRequest, NextResponse } from 'next/server';
 import supabase from '@/lib/supabase';
 import serviceSupabase from '../../../lib/serviceSupabase';
 
+async function requireManagerOrAdmin(request: NextRequest): Promise<NextResponse | null> {
+    if (!serviceSupabase) {
+        return NextResponse.json({ success: false, error: 'Service role client unavailable' }, { status: 500 });
+    }
+
+    const authHeader = request.headers.get('authorization') || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+    if (!token) {
+        return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { data: authData, error: authError } = await serviceSupabase.auth.getUser(token);
+    if (authError || !authData?.user) {
+        return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { data: profile, error: profileError } = await serviceSupabase
+        .from('users')
+        .select('role')
+        .eq('id', authData.user.id)
+        .maybeSingle();
+
+    if (profileError || !profile?.role || !['manager', 'admin'].includes(profile.role)) {
+        return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+    }
+
+    return null;
+}
+
 // 네이버 환율 API에서 실시간 환율 가져오기
 async function fetchNaverExchangeRate(): Promise<number | null> {
     try {
@@ -51,6 +80,11 @@ export async function GET(request: NextRequest) {
 
         // 데이터가 없거나 강제 새로고침인 경우 네이버에서 조회
         if (!exchangeRateData || forceRefresh) {
+            if (forceRefresh) {
+                const authError = await requireManagerOrAdmin(request);
+                if (authError) return authError;
+            }
+
             const naverRate = await fetchNaverExchangeRate();
 
             if (naverRate) {
@@ -62,7 +96,8 @@ export async function GET(request: NextRequest) {
                     last_updated: new Date().toISOString()
                 };
 
-                const { data: upsertedData, error: upsertError } = await supabase
+                const dbClient = serviceSupabase || supabase;
+                const { data: upsertedData, error: upsertError } = await dbClient
                     .from('exchange_rates')
                     .upsert(upsertData, { onConflict: 'currency_code' })
                     .select()
@@ -108,8 +143,10 @@ export async function GET(request: NextRequest) {
 // POST: 환율 수동 업데이트
 export async function POST(request: NextRequest) {
     try {
+        const authError = await requireManagerOrAdmin(request);
+        if (authError) return authError;
+
         const body = await request.json();
-        console.debug('[exchange-rate POST] body:', body);
         const { currency_code, rate_to_krw } = body;
 
         if (!currency_code || (rate_to_krw === undefined || rate_to_krw === null)) {
@@ -125,10 +162,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ success: false, error: 'rate_to_krw must be a finite number' }, { status: 400 });
         }
 
-        // 데이터베이스에 저장 (클라이언트는 KRW/VND 값을 보냄)
-        // Use server-side service key client for writes to bypass RLS safely on the backend.
-        const dbClient = serviceSupabase || supabase;
-        const { data, error } = await dbClient
+        const { data, error } = await serviceSupabase!
             .from('exchange_rates')
             .upsert({
                 currency_code,

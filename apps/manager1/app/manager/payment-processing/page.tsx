@@ -1508,9 +1508,13 @@ export default function ManagerPaymentsPage() {
     const totalAmount = targetPayments.reduce((sum: number, p: any) => sum + getPreferredAmount(p), 0);
     setCreatingGroupLinkId(group.quoteId);
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) throw new Error('로그인이 필요합니다.');
+
       const res = await fetch('/api/payments/onepay/create', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           paymentIds: targetPayments.map((p: any) => p.id),
           amount: totalAmount

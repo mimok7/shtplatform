@@ -149,9 +149,13 @@ export default function CruiseInfoPage() {
         setBackfilling(true);
         setBackfillResult('');
         try {
+            const { data: sessionData } = await supabase.auth.getSession();
+            const token = sessionData.session?.access_token;
+            if (!token) throw new Error('로그인이 필요합니다.');
+
             const res = await fetch('/api/admin/cruise-pier-backfill', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
             });
             const json = await res.json();
             if (!res.ok || !json?.success) {
