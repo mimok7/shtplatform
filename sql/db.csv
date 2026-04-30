@@ -173,6 +173,7 @@ cruise_rate_card,valid_year,integer,NOT NULL,null,11
 cruise_rate_card,valid_from,date,NULL 가능,null,12
 cruise_rate_card,valid_to,date,NULL 가능,null,13
 cruise_rate_card,display_order,integer,NULL 가능,0,14
+
 cruise_rate_card,currency,text,NOT NULL,'VND'::text,15
 cruise_rate_card,is_active,boolean,NULL 가능,true,16
 cruise_rate_card,notes,text,NULL 가능,null,17
