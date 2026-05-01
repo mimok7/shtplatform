@@ -112,7 +112,6 @@ export default function MyPage() {
   }, [router]);
 
   const quickActions = useMemo(() => [
-    { icon: '📝', label: '견적 작성', href: '/mypage/quotes' },
     { icon: '🎯', label: '예약하기', href: '/mypage/direct-booking' },
     { icon: '📋', label: '예약내역', href: '/mypage/reservations/list' },
     { icon: '🤝', label: '제휴업체', href: 'partner' },
