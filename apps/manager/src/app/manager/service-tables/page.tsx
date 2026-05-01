@@ -81,6 +81,7 @@ import {
     Building,
     MapPin,
     Car,
+    FileText,
     Calendar,
     Search,
     Eye,
@@ -156,6 +157,7 @@ export default function ManagerServiceTablesPage() {
         { id: 'airport', label: '공항서비스', icon: <Plane className="w-4 h-4" />, color: 'green' },
         { id: 'hotel', label: '호텔', icon: <Building className="w-4 h-4" />, color: 'purple' },
         { id: 'tour', label: '투어', icon: <MapPin className="w-4 h-4" />, color: 'orange' },
+        { id: 'ticket', label: '티켓', icon: <FileText className="w-4 h-4" />, color: 'teal' },
         { id: 'rentcar', label: '렌터카', icon: <Car className="w-4 h-4" />, color: 'red' },
         { id: 'package', label: '패키지', icon: <Package className="w-4 h-4" />, color: 'indigo' },
         { id: 'fasttrack', label: '패스트랙', icon: <Plane className="w-4 h-4" />, color: 'emerald' }
@@ -174,6 +176,7 @@ export default function ManagerServiceTablesPage() {
         // 호텔 탭일 때만 그룹화 데이터 사용
         else if (serviceType === 'rentcar') dateFilterCol = 'pickup_datetime';
         else if (serviceType === 'tour') dateFilterCol = 'tour_date';
+        else if (serviceType === 'ticket') dateFilterCol = 'usage_date';
         else if (serviceType === 'sht_car') dateFilterCol = 'usage_date';
         else if (serviceType === 'package') dateFilterCol = 're_created_at';
         else if (serviceType === 'fasttrack') dateFilterCol = 'created_at';
@@ -208,6 +211,10 @@ export default function ManagerServiceTablesPage() {
                 case 'tour':
                     tableName = 'reservation_tour';
                     orderCandidates.push('created_at', 'id');
+                    break;
+                case 'ticket':
+                    tableName = 'reservation_ticket';
+                    orderCandidates.push('usage_date', 'created_at', 'id');
                     break;
                 case 'rentcar':
                     tableName = 'reservation_rentcar';
@@ -584,6 +591,18 @@ export default function ManagerServiceTablesPage() {
                     { key: 'total_price', label: '총금액', width: 'w-32', type: 'price' },
                     { key: 'reservation.re_status', label: '상태', width: 'w-24', type: 'status' }
                 ];
+            case 'ticket':
+                return [
+                    { key: 'reservation.users.name', label: '고객명', width: 'w-32' },
+                    { key: 'reservation.users.email', label: '이메일', width: 'w-48' },
+                    { key: 'ticket_name', label: '티켓명', width: 'w-40' },
+                    { key: 'program_selection', label: '프로그램', width: 'w-40' },
+                    { key: 'ticket_quantity', label: '수량', width: 'w-20' },
+                    { key: 'usage_date', label: '사용일자', width: 'w-32', type: 'date' },
+                    { key: 'pickup_location', label: '픽업장소', width: 'w-40' },
+                    { key: 'total_price', label: '총금액', width: 'w-32', type: 'price' },
+                    { key: 'reservation.re_status', label: '상태', width: 'w-24', type: 'status' }
+                ];
             case 'rentcar':
                 return [
                     { key: 'reservation.users.name', label: '고객명', width: 'w-32' },
@@ -748,6 +767,7 @@ export default function ManagerServiceTablesPage() {
             case 'airport': return <Plane className="w-5 h-5 text-green-600" />;
             case 'hotel': return <Building className="w-5 h-5 text-purple-600" />;
             case 'tour': return <MapPin className="w-5 h-5 text-orange-600" />;
+            case 'ticket': return <FileText className="w-5 h-5 text-teal-600" />;
             case 'rentcar': return <Car className="w-5 h-5 text-red-600" />;
             case 'package': return <Package className="w-5 h-5 text-indigo-600" />;
             case 'fasttrack': return <Plane className="w-5 h-5 text-emerald-600" />;
@@ -812,6 +832,11 @@ export default function ManagerServiceTablesPage() {
             const d = (item.usage_date || item.tour_date);
             whenStr = d ? new Date(d).toLocaleDateString('ko-KR') : '';
             extra = item.total_price ? `${item.total_price.toLocaleString()}동` : null;
+        } else if (serviceType === 'ticket') {
+            title = item.ticket_name || item.program_selection || '티켓';
+            sub = [item.pickup_location, item.dropoff_location].filter(Boolean).join(' → ');
+            whenStr = item.usage_date ? new Date(item.usage_date).toLocaleDateString('ko-KR') : '';
+            extra = [item.ticket_quantity ? `${item.ticket_quantity}매` : null, item.total_price ? `${item.total_price.toLocaleString()}동` : null].filter(Boolean).join(' · ') || null;
         } else if (serviceType === 'rentcar') {
             title = '렌터카';
             const pickupRoute = [item.pickup_location, item.destination].filter(Boolean).join(' → ');
@@ -963,6 +988,7 @@ export default function ManagerServiceTablesPage() {
                 { label: 'reservation_airport', table: 'reservation_airport' },
                 { label: 'reservation_hotel', table: 'reservation_hotel' },
                 { label: 'reservation_tour', table: 'reservation_tour' },
+                { label: 'reservation_ticket', table: 'reservation_ticket' },
                 { label: 'reservation_rentcar', table: 'reservation_rentcar' },
             ] as const;
 
@@ -1076,12 +1102,13 @@ export default function ManagerServiceTablesPage() {
             }
 
             // 3. 각 서비스 테이블에서 상세 정보 조회
-            const [cruiseRes, airportRes, hotelRes, rentcarRes, tourRes, cruiseCarRes, carShtRes] = await Promise.all([
+            const [cruiseRes, airportRes, hotelRes, rentcarRes, tourRes, ticketRes, cruiseCarRes, carShtRes] = await Promise.all([
                 fetchServiceByReservationIds('reservation_cruise', reservationIds, '*', 80),
                 fetchServiceByReservationIds('reservation_airport', reservationIds, '*', 80),
                 fetchServiceByReservationIds('reservation_hotel', reservationIds, '*', 80),
                 fetchServiceByReservationIds('reservation_rentcar', reservationIds, '*', 80),
                 fetchServiceByReservationIds('reservation_tour', reservationIds, '*', 80),
+                fetchServiceByReservationIds('reservation_ticket', reservationIds, '*', 80),
                 fetchServiceByReservationIds('reservation_cruise_car', reservationIds, '*', 80),
                 fetchServiceByReservationIds('reservation_car_sht', reservationIds, '*', 80)
             ]);
@@ -1198,6 +1225,21 @@ export default function ManagerServiceTablesPage() {
                         totalPrice: r.total_price
                     };
                 }),
+                ...(ticketRes as any[] || []).map((r: any) => ({
+                    ...r,
+                    ...getReservationAdditional(r.reservation_id),
+                    serviceType: 'ticket',
+                    status: (reservationMap.get(r.reservation_id) as any)?.re_status,
+                    ticketType: r.ticket_type,
+                    ticketName: r.ticket_name || r.program_selection,
+                    usageDate: r.usage_date,
+                    ticketQuantity: r.ticket_quantity,
+                    pickupLocation: r.pickup_location,
+                    dropoffLocation: r.dropoff_location,
+                    note: r.request_note,
+                    unitPrice: r.unit_price,
+                    totalPrice: r.total_price
+                })),
                 ...(rentcarRes as any[] || []).map((r: any) => {
                     const info: any = rentPriceMap.get(r.rentcar_price_code);
                     return {

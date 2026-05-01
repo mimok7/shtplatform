@@ -15,6 +15,7 @@ import {
   Building,
   MapPin,
   Car,
+  FileText,
   Filter,
   ChevronLeft,
   ChevronRight,
@@ -535,13 +536,14 @@ export default function ManagerSchedulePage() {
       const reservationMap = new Map((reservations || []).map((r: any) => [r.re_id, r]));
       const reservationIds = reservations.map((r: any) => r.re_id).filter(Boolean);
 
-      const [cruiseRes, cruiseCarRes, carShtRes, airportRes, hotelRes, tourRes, rentcarRes] = await Promise.all([
+      const [cruiseRes, cruiseCarRes, carShtRes, airportRes, hotelRes, tourRes, ticketRes, rentcarRes] = await Promise.all([
         supabase.from('reservation_cruise').select('*').in('reservation_id', reservationIds),
         supabase.from('reservation_cruise_car').select('*').in('reservation_id', reservationIds),
         supabase.from('reservation_car_sht').select('*').in('reservation_id', reservationIds),
         supabase.from('reservation_airport').select('*').in('reservation_id', reservationIds),
         supabase.from('reservation_hotel').select('*').in('reservation_id', reservationIds),
         supabase.from('reservation_tour').select('*').in('reservation_id', reservationIds),
+        supabase.from('reservation_ticket').select('*').in('reservation_id', reservationIds),
         supabase.from('reservation_rentcar').select('*').in('reservation_id', reservationIds)
       ]);
 
@@ -638,6 +640,7 @@ export default function ManagerSchedulePage() {
             tour_name: row.tour_name || priceInfo?.tour_name || null,
           };
         }),
+        ...mergeWithBase(ticketRes.data || [], 'ticket'),
         ...mergeWithBase(rentcarRes.data || [], 'rentcar')
       ].sort((a: any, b: any) => {
         const aTime = new Date(a?.reservation?.re_created_at || 0).getTime();
@@ -690,12 +693,13 @@ export default function ManagerSchedulePage() {
       }
 
       // 3. 각 서비스 테이블에서 상세 정보 조회
-      const [cruiseRes, airportRes, hotelRes, rentcarRes, tourRes, cruiseCarRes, carShtRes] = await Promise.all([
+      const [cruiseRes, airportRes, hotelRes, rentcarRes, tourRes, ticketRes, cruiseCarRes, carShtRes] = await Promise.all([
         supabase.from('reservation_cruise').select('*').in('reservation_id', reservationIds),
         supabase.from('reservation_airport').select('*').in('reservation_id', reservationIds),
         supabase.from('reservation_hotel').select('*').in('reservation_id', reservationIds),
         supabase.from('reservation_rentcar').select('*').in('reservation_id', reservationIds),
         supabase.from('reservation_tour').select('*').in('reservation_id', reservationIds),
+        supabase.from('reservation_ticket').select('*').in('reservation_id', reservationIds),
         supabase.from('reservation_cruise_car').select('*').in('reservation_id', reservationIds),
         supabase.from('reservation_car_sht').select('*').in('reservation_id', reservationIds)
       ]);
@@ -960,6 +964,20 @@ export default function ManagerSchedulePage() {
             totalPrice: r.total_price,
           };
         }),
+        ...(ticketRes.data || []).map(r => ({
+          ...r,
+          serviceType: 'ticket',
+          status: reservationMap.get(r.reservation_id)?.re_status,
+          ticketType: r.ticket_type,
+          ticketName: r.ticket_name || r.program_selection,
+          usageDate: r.usage_date,
+          ticketQuantity: r.ticket_quantity,
+          pickupLocation: r.pickup_location,
+          dropoffLocation: r.dropoff_location,
+          note: r.request_note,
+          unitPrice: r.unit_price,
+          totalPrice: r.total_price,
+        })),
         ...(rentcarRes.data || []).map(r => {
           const rentCode = String(r.rentcar_price_code || '').trim();
           const compactCode = compactRentCode(rentCode);
@@ -1730,6 +1748,7 @@ export default function ManagerSchedulePage() {
       let hotelRows: any[] = [];
       let rentcarRows: any[] = [];
       let tourRows: any[] = [];
+      let ticketRows: any[] = [];
       let cruiseCarRows: any[] = [];
       let carShtRows: any[] = [];
 
@@ -1751,12 +1770,13 @@ export default function ManagerSchedulePage() {
           return;
         }
 
-        const [cruiseData, airportData, hotelData, rentcarData, tourData, cruiseCarData, carShtData] = await Promise.all([
+        const [cruiseData, airportData, hotelData, rentcarData, tourData, ticketData, cruiseCarData, carShtData] = await Promise.all([
           fetchByReservationIds('reservation_cruise', reservationIds),
           fetchByReservationIds('reservation_airport', reservationIds),
           fetchByReservationIds('reservation_hotel', reservationIds),
           fetchByReservationIds('reservation_rentcar', reservationIds),
           fetchByReservationIds('reservation_tour', reservationIds),
+          fetchByReservationIds('reservation_ticket', reservationIds),
           fetchByReservationIds('reservation_cruise_car', reservationIds),
           fetchByReservationIds('reservation_car_sht', reservationIds),
         ]);
@@ -1766,10 +1786,11 @@ export default function ManagerSchedulePage() {
         hotelRows = hotelData;
         rentcarRows = rentcarData;
         tourRows = tourData;
+        ticketRows = ticketData;
         cruiseCarRows = cruiseCarData;
         carShtRows = carShtData;
       } else {
-        const [cruiseRes, airportRes, hotelRes, rentcarRes, tourRes, cruiseCarRes, carShtRes] = await Promise.all([
+        const [cruiseRes, airportRes, hotelRes, rentcarRes, tourRes, ticketRes, cruiseCarRes, carShtRes] = await Promise.all([
           // cruise: checkin (date)
           supabase
             .from('reservation_cruise')
@@ -1801,6 +1822,11 @@ export default function ManagerSchedulePage() {
             .select('*, reservation_id')
             .gte('usage_date', startDateOnly)
             .lte('usage_date', endDateOnly),
+          supabase
+            .from('reservation_ticket')
+            .select('*, reservation_id')
+            .gte('usage_date', startDateOnly)
+            .lte('usage_date', endDateOnly),
           // cruise car: pickup/return date
           supabase
             .from('reservation_cruise_car')
@@ -1821,6 +1847,7 @@ export default function ManagerSchedulePage() {
         hotelRows = hotelRes.data || [];
         rentcarRows = rentcarRes.data || [];
         tourRows = tourRes.data || [];
+        ticketRows = ticketRes.data || [];
         cruiseCarRows = cruiseCarRes.data || [];
         carShtRows = carShtRes.data || [];
       }
@@ -1831,6 +1858,7 @@ export default function ManagerSchedulePage() {
         { table: 'reservation_hotel', rows: hotelRows },
         { table: 'reservation_rentcar', rows: rentcarRows },
         { table: 'reservation_tour', rows: tourRows },
+        { table: 'reservation_ticket', rows: ticketRows },
         { table: 'reservation_cruise_car', rows: cruiseCarRows },
         { table: 'reservation_car_sht', rows: carShtRows }
       ];
@@ -2323,6 +2351,16 @@ export default function ManagerSchedulePage() {
               (row as any)._tour_info = tourInfoByCode.get(row.tour_price_code);
             }
             if (row.tour_duration) duration = row.tour_duration;
+          } else if (table === 'reservation_ticket') {
+            if (row.usage_date) {
+              scheduleDate = new Date(row.usage_date + 'T09:00:00');
+              scheduleTime = '';
+            }
+            if (row.pickup_location && row.dropoff_location) {
+              location = `${row.pickup_location} → ${row.dropoff_location}`;
+            } else {
+              location = row.pickup_location || row.dropoff_location || null;
+            }
           } else if (table === 'reservation_cruise_car') {
             if (row.rentcar_price_code) {
               const rentCode = String(row.rentcar_price_code || '').trim();
@@ -2453,6 +2491,7 @@ export default function ManagerSchedulePage() {
       case 'airport': return <Plane className="w-5 h-5 text-green-600" />;
       case 'hotel': return <Building className="w-5 h-5 text-purple-600" />;
       case 'tour': return <MapPin className="w-5 h-5 text-orange-600" />;
+      case 'ticket': return <FileText className="w-5 h-5 text-teal-600" />;
       case 'rentcar': return <Car className="w-5 h-5 text-red-600" />;
       case 'car': return <Car className="w-5 h-5 text-red-600" />;
       case 'vehicle': return <Car className="w-5 h-5 text-red-600" />;
@@ -2466,6 +2505,7 @@ export default function ManagerSchedulePage() {
       case 'airport': return '공항';
       case 'hotel': return '호텔';
       case 'tour': return '투어';
+      case 'ticket': return '티켓';
       case 'rentcar': return '렌트카';
       case 'car': return '크차';
       case 'vehicle': return '크차';
@@ -2480,6 +2520,7 @@ export default function ManagerSchedulePage() {
       case 'reservation_airport': return 'airport';
       case 'reservation_hotel': return 'hotel';
       case 'reservation_tour': return 'tour';
+      case 'reservation_ticket': return 'ticket';
       case 'reservation_rentcar': return 'rentcar';
       case 'reservation_cruise_car': return 'vehicle';
       case 'reservation_car_sht': return 'sht';
@@ -2617,6 +2658,13 @@ export default function ManagerSchedulePage() {
       if (row.dropoff_location) lines.push(`하차: ${row.dropoff_location}`);
       if (row.usage_date) lines.push(`이용일: ${row.usage_date}`);
       if (row.request_note) lines.push(`요청: ${row.request_note}`);
+    } else if (table === 'reservation_ticket' || table === 'ticket') {
+      if (row.ticket_name || row.program_selection) lines.push(`티켓: ${row.ticket_name || row.program_selection}`);
+      if (row.ticket_quantity) lines.push(`수량: ${row.ticket_quantity}매`);
+      if (row.usage_date) lines.push(`이용일: ${row.usage_date}`);
+      if (row.pickup_location) lines.push(`픽업: ${row.pickup_location}`);
+      if (row.dropoff_location) lines.push(`하차: ${row.dropoff_location}`);
+      if (row.request_note) lines.push(`요청: ${row.request_note}`);
     } else if (table === 'reservation_car_sht') {
       if (row.vehicle_number) lines.push(`차량: ${row.vehicle_number}`);
       if (row.seat_number) lines.push(`좌석: ${row.seat_number}`);
@@ -2646,7 +2694,7 @@ export default function ManagerSchedulePage() {
       const t = s?.service_table || s?.re_type || 'unknown';
       (groups[t] ||= []).push(s);
     });
-    const order = ['reservation_cruise', 'reservation_car_sht', 'reservation_cruise_car', 'reservation_airport', 'reservation_hotel', 'reservation_tour', 'reservation_rentcar'];
+    const order = ['reservation_cruise', 'reservation_car_sht', 'reservation_cruise_car', 'reservation_airport', 'reservation_hotel', 'reservation_tour', 'reservation_ticket', 'reservation_rentcar'];
     const sortedKeys = Object.keys(groups).sort((a, b) => {
       const ai = order.indexOf(a); const bi = order.indexOf(b);
       return (ai < 0 ? 999 : ai) - (bi < 0 ? 999 : bi);
@@ -2658,6 +2706,7 @@ export default function ManagerSchedulePage() {
       reservation_airport: '✈️ 공항',
       reservation_hotel: '🏨 호텔',
       reservation_tour: '🗺️ 투어',
+      reservation_ticket: '🎟️ 티켓',
       reservation_rentcar: '🚗 렌터카',
     } as Record<string, string>)[t] || t;
 
@@ -2707,6 +2756,9 @@ export default function ManagerSchedulePage() {
                   {key === 'reservation_tour' && (
                     <tr><th className={headCls}>상태</th><th className={headCls}>고객</th><th className={headCls}>이용일</th><th className={headCls}>투어</th><th className={headCls}>인원</th><th className={headCls}>픽업</th><th className={headCls}>하차</th><th className={headCls}>요청</th><th className="px-2 py-2 text-right font-semibold">액션</th></tr>
                   )}
+                  {key === 'reservation_ticket' && (
+                    <tr><th className={headCls}>상태</th><th className={headCls}>고객</th><th className={headCls}>이용일</th><th className={headCls}>티켓</th><th className={headCls}>수량</th><th className={headCls}>픽업</th><th className={headCls}>하차</th><th className={headCls}>요청</th><th className="px-2 py-2 text-right font-semibold">액션</th></tr>
+                  )}
                   {key === 'reservation_rentcar' && (
                     <tr><th className={headCls}>상태</th><th className={headCls}>고객</th><th className={headCls}>픽업</th><th className={headCls}>리턴</th><th className={headCls}>차종</th><th className={headCls}>경로</th><th className={headCls}>구분</th><th className={headCls}>운전자</th><th className={headCls}>요청</th><th className="px-2 py-2 text-right font-semibold">액션</th></tr>
                   )}
@@ -2746,6 +2798,9 @@ export default function ManagerSchedulePage() {
                         <tr key={rowKey} className="hover:bg-blue-50/40"><td className={cellCls}>{statusBadge(s)}</td><td className={`${cellCls} font-semibold`}>{cust}</td><td className={cellCls}>{r.usage_date || dateText}</td><td className={cellCls}>{ti.tour_name || '-'}</td><td className={cellCls}>{r.tour_capacity ? `${r.tour_capacity}명` : '-'}</td><td className={cellCls}>{r.pickup_location || '-'}</td><td className={cellCls}>{r.dropoff_location || '-'}</td><td className={`${cellCls} whitespace-pre-line max-w-[220px] break-words`}>{r.request_note || '-'}</td><td className="px-2 py-1.5 align-top text-right">{actionBtn(s)}</td></tr>
                       );
                     }
+                    if (key === 'reservation_ticket') return (
+                      <tr key={rowKey} className="hover:bg-blue-50/40"><td className={cellCls}>{statusBadge(s)}</td><td className={`${cellCls} font-semibold`}>{cust}</td><td className={cellCls}>{r.usage_date || dateText}</td><td className={cellCls}>{r.ticket_name || r.program_selection || '-'}</td><td className={cellCls}>{r.ticket_quantity ? `${r.ticket_quantity}매` : '-'}</td><td className={cellCls}>{r.pickup_location || '-'}</td><td className={cellCls}>{r.dropoff_location || '-'}</td><td className={`${cellCls} whitespace-pre-line max-w-[220px] break-words`}>{r.request_note || '-'}</td><td className="px-2 py-1.5 align-top text-right">{actionBtn(s)}</td></tr>
+                    );
                     if (key === 'reservation_rentcar') {
                       const ri = (r as any)._rentcar_info || {};
                       return (
@@ -4377,7 +4432,7 @@ export default function ManagerSchedulePage() {
                 >
                   전체
                 </button>
-                {['cruise', 'vehicle', 'sht', 'airport', 'hotel', 'tour', 'rentcar'].map(type => (
+                {['cruise', 'vehicle', 'sht', 'airport', 'hotel', 'tour', 'ticket', 'rentcar'].map(type => (
                   <button
                     key={type}
                     onClick={() => setTypeFilter(type)}

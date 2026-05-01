@@ -8,7 +8,7 @@ import { formatKst } from '@/lib/kstDateTime';
 import PageWrapper from '@/components/PageWrapper';
 import SectionBox from '@/components/SectionBox';
 
-type ServiceType = 'cruise' | 'airport' | 'hotel' | 'rentcar' | 'tour' | 'sht_car' | 'sht' | 'car' | 'package';
+type ServiceType = 'cruise' | 'airport' | 'hotel' | 'rentcar' | 'tour' | 'ticket' | 'sht_car' | 'sht' | 'car' | 'package';
 
 interface ReservationRow {
   re_id: string;
@@ -43,6 +43,7 @@ function getTypeIcon(type: string) {
     case 'hotel': return '🏨';
     case 'rentcar': return '🚗';
     case 'tour': return '🎫';
+    case 'ticket': return '🎟️';
     case 'car': return '🚙';
     case 'sht_car':
     case 'sht': return '🚙';
@@ -58,6 +59,7 @@ function getTypeName(type: string) {
     case 'hotel': return '호텔';
     case 'rentcar': return '렌터카';
     case 'tour': return '투어';
+    case 'ticket': return '티켓';
     case 'car': return '크루즈 차량';
     case 'sht_car':
     case 'sht': return '스하차량';
@@ -74,6 +76,7 @@ const customerFriendlyFields: Record<string, string[]> = {
   hotel: ['hotel_name', 'room_name', 'checkin_date', 'guest_count', 'schedule', 'breakfast_service', 'hotel_category', 'assignment_code', 'request_note'],
   rentcar: ['way_type', 'route', 'vehicle_type', 'pickup_datetime', 'pickup_location', 'destination', 'via_location', 'via_waiting', 'car_count', 'passenger_count', 'luggage_count', 'dispatch_code', 'request_note'],
   tour: ['tour_name', 'tour_vehicle', 'tour_type', 'usage_date', 'tour_capacity', 'pickup_location', 'dropoff_location'],
+  ticket: ['ticket_type', 'ticket_name', 'program_selection', 'usage_date', 'ticket_quantity', 'shuttle_required', 'pickup_location', 'dropoff_location', 'ticket_details', 'request_note'],
   cruise_car: ['way_type', 'route', 'vehicle_type', 'car_passenger_capacity', 'pickup_datetime', 'pickup_location', 'dropoff_location', 'car_count', 'passenger_count', 'dispatch_code', 'request_note'],
   car: ['way_type', 'route', 'vehicle_type', 'car_passenger_capacity', 'pickup_datetime', 'pickup_location', 'dropoff_location', 'car_count', 'passenger_count', 'dispatch_code', 'request_note'],
   sht_car: ['vehicle_number', 'seat_number', 'car_type', 'usage_date', 'pickup_location', 'dropoff_location', 'passenger_count', 'request_note'],
@@ -137,6 +140,18 @@ const labelMap: Record<string, Record<string, string>> = {
     tour_capacity: '👥 정원',
     pickup_location: '📍 픽업 장소',
     dropoff_location: '🎯 하차 장소',
+    request_note: '📝 요청사항'
+  },
+  ticket: {
+    ticket_type: '🎫 티켓 유형',
+    ticket_name: '🎟️ 티켓명',
+    program_selection: '📋 프로그램',
+    usage_date: '📅 이용 날짜',
+    ticket_quantity: '👥 수량',
+    shuttle_required: '🚐 셔틀 신청',
+    pickup_location: '📍 픽업 장소',
+    dropoff_location: '🎯 하차 장소',
+    ticket_details: '🧾 상세 내용',
     request_note: '📝 요청사항'
   },
   cruise_car: {
@@ -443,6 +458,7 @@ function ReservationViewInner() {
           hotel: 'reservation_hotel',
           rentcar: 'reservation_rentcar',
           tour: 'reservation_tour',
+          ticket: 'reservation_ticket',
           sht_car: 'reservation_car_sht',
           sht: 'reservation_car_sht',
           car: 'reservation_cruise_car',
@@ -460,6 +476,21 @@ function ReservationViewInner() {
             .order('created_at', { ascending: false });
 
           enrichedSvc = Array.isArray(svc) ? svc : (svc ? [svc] : []);
+
+          if (row.re_type === 'ticket' && enrichedSvc.length === 0) {
+            const { data: legacyTicketSvc } = await supabase
+              .from('reservation_tour')
+              .select('*')
+              .eq('reservation_id', reservationId)
+              .order('created_at', { ascending: false });
+
+            enrichedSvc = (Array.isArray(legacyTicketSvc) ? legacyTicketSvc : (legacyTicketSvc ? [legacyTicketSvc] : [])).map((item: any) => ({
+              ...item,
+              ticket_type: String(item.request_note || '').includes('[프로그램]') ? 'other' : 'dragon',
+              ticket_quantity: item.tour_capacity,
+              program_selection: String(item.request_note || '').match(/\[프로그램\]\s*([^\r\n]+)/)?.[1]?.trim() || null,
+            }));
+          }
         }
 
         // 각 서비스별로 가격 테이블 정보 추가

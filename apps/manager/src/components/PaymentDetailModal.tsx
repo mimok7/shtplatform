@@ -32,10 +32,11 @@ const ServiceDetailSection = ({ payment }: { payment: any }) => {
                 const results: Record<string, any[]> = {};
 
                 // 모든 서비스 테이블 병렬 조회
-                const [airportRes, hotelRes, tourRes, rentcarRes, shtRes] = await Promise.all([
+                const [airportRes, hotelRes, tourRes, ticketRes, rentcarRes, shtRes] = await Promise.all([
                     supabase.from('reservation_airport').select('*').in('reservation_id', ids),
                     supabase.from('reservation_hotel').select('*').in('reservation_id', ids),
                     supabase.from('reservation_tour').select('*').in('reservation_id', ids),
+                    supabase.from('reservation_ticket').select('*').in('reservation_id', ids),
                     supabase.from('reservation_rentcar').select('*').in('reservation_id', ids),
                     supabase.from('reservation_car_sht').select('*').in('reservation_id', ids),
                 ]);
@@ -74,6 +75,10 @@ const ServiceDetailSection = ({ payment }: { payment: any }) => {
                         }
                         return { ...item, price_info: priceData };
                     }));
+                }
+
+                if (ticketRes.data?.length) {
+                    results.ticket = ticketRes.data;
                 }
 
                 // 렌터카 - 가격 정보 enrichment
@@ -120,6 +125,7 @@ const ServiceDetailSection = ({ payment }: { payment: any }) => {
             case 'airport': return <Plane className="w-4 h-4 mr-1" />;
             case 'hotel': return <Building className="w-4 h-4 mr-1" />;
             case 'tour': return <MapPin className="w-4 h-4 mr-1" />;
+            case 'ticket': return <FileText className="w-4 h-4 mr-1" />;
             case 'rentcar': return <Car className="w-4 h-4 mr-1" />;
             case 'sht': return <Car className="w-4 h-4 mr-1" />;
             default: return <FileText className="w-4 h-4 mr-1" />;
@@ -131,6 +137,7 @@ const ServiceDetailSection = ({ payment }: { payment: any }) => {
             airport: '공항차량',
             hotel: '호텔',
             tour: '투어',
+            ticket: '티켓',
             rentcar: '렌터카',
             sht: 'SHT 차량'
         };
@@ -142,6 +149,7 @@ const ServiceDetailSection = ({ payment }: { payment: any }) => {
             case 'airport': return { bg: 'bg-green-50', border: 'border-green-200', text: 'text-green-800', badge: 'bg-blue-100 text-blue-800', borderItem: 'border-green-100' };
             case 'hotel': return { bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-800', badge: 'bg-purple-100 text-purple-800', borderItem: 'border-purple-100' };
             case 'tour': return { bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-800', badge: 'bg-orange-100 text-orange-800', borderItem: 'border-orange-100' };
+            case 'ticket': return { bg: 'bg-teal-50', border: 'border-teal-200', text: 'text-teal-800', badge: 'bg-teal-100 text-teal-800', borderItem: 'border-teal-100' };
             case 'rentcar': return { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-800', badge: 'bg-red-100 text-red-800', borderItem: 'border-red-100' };
             case 'sht': return { bg: 'bg-indigo-50', border: 'border-indigo-200', text: 'text-indigo-800', badge: 'bg-indigo-100 text-indigo-800', borderItem: 'border-indigo-100' };
             default: return { bg: 'bg-gray-50', border: 'border-gray-200', text: 'text-gray-800', badge: 'bg-gray-100 text-gray-800', borderItem: 'border-gray-100' };
@@ -245,6 +253,38 @@ const ServiceDetailSection = ({ payment }: { payment: any }) => {
                                         <div><strong>총 금액:</strong> <span className="text-lg font-bold text-green-600">{detail.total_price?.toLocaleString() || 0}동</span></div>
                                         {detail.request_note && (
                                             <div className="md:col-span-2 mt-3 pt-3 border-t border-orange-100">
+                                                <strong>요청사항:</strong>
+                                                <div className="bg-gray-50 p-2 rounded mt-1 text-sm">{detail.request_note}</div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                );
+            })()}
+
+            {allDetails.ticket && allDetails.ticket.length > 0 && (() => {
+                const c = getServiceColor('ticket');
+                return (
+                    <div className={`${c.bg} p-6 rounded-lg border ${c.border}`}>
+                        <h3 className={`text-lg font-semibold ${c.text} mb-4 flex items-center`}>
+                            {getServiceIcon('ticket')} {getServiceName('ticket')} 상세 정보
+                        </h3>
+                        <div className="space-y-3">
+                            {allDetails.ticket.map((detail: any, index: number) => (
+                                <div key={index} className={`bg-white p-4 rounded border ${c.borderItem}`}>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                                        <div><strong>유형:</strong> {detail.ticket_type === 'dragon' ? '드래곤펄' : '요코온센/기타'}</div>
+                                        <div><strong>티켓명:</strong> {detail.ticket_name || detail.program_selection || '미정'}</div>
+                                        <div><strong>사용 날짜:</strong> {detail.usage_date ? new Date(detail.usage_date).toLocaleDateString('ko-KR') : '미정'}</div>
+                                        <div><strong>수량:</strong> {detail.ticket_quantity || 0}매</div>
+                                        <div><strong>셔틀:</strong> {detail.shuttle_required ? '신청함' : '신청 안함'}</div>
+                                        <div><strong>총 금액:</strong> <span className="text-lg font-bold text-green-600">{detail.total_price?.toLocaleString() || 0}동</span></div>
+                                        {(detail.pickup_location || detail.dropoff_location) && <div className="md:col-span-2"><strong>동선:</strong> {detail.pickup_location || '-'} → {detail.dropoff_location || '-'}</div>}
+                                        {detail.request_note && (
+                                            <div className="md:col-span-2 mt-3 pt-3 border-t border-teal-100">
                                                 <strong>요청사항:</strong>
                                                 <div className="bg-gray-50 p-2 rounded mt-1 text-sm">{detail.request_note}</div>
                                             </div>

@@ -97,25 +97,38 @@ function TicketBookingContent() {
             if (!reservation) return;
             setExistingReservationId(reservation.re_id);
 
-            const { data: tourRow } = await supabase
-                .from('reservation_tour')
+            const { data: ticketRow } = await supabase
+                .from('reservation_ticket')
                 .select('*')
                 .eq('reservation_id', reservation.re_id)
                 .maybeSingle();
-            if (!tourRow) return;
+
+            // Backward compatibility: older ticket reservations were stored in reservation_tour.
+            let legacyTourRow: any = null;
+            if (!ticketRow) {
+                const { data } = await supabase
+                    .from('reservation_tour')
+                    .select('*')
+                    .eq('reservation_id', reservation.re_id)
+                    .maybeSingle();
+                legacyTourRow = data;
+            }
+
+            const sourceRow = ticketRow || legacyTourRow;
+            if (!sourceRow) return;
 
             // request_note를 파싱하여 데이터 복원
-            const requestNote = tourRow.request_note || '';
+            const requestNote = sourceRow.request_note || '';
             let parsedData = {
-                ticket_name: '',
-                ticket_quantity: tourRow.tour_capacity || 1,
-                ticket_date: tourRow.usage_date || '',
-                program_selection: '',
-                shuttle_required: requestNote.includes('[셔틀차량]') && requestNote.includes('[셔틀] 신청함'),
-                pickup_location: tourRow.pickup_location || '',
-                dropoff_location: tourRow.dropoff_location || '',
-                ticket_details: '',
-                special_requests: ''
+                ticket_name: sourceRow.ticket_name || '',
+                ticket_quantity: sourceRow.ticket_quantity || sourceRow.tour_capacity || 1,
+                ticket_date: sourceRow.usage_date || sourceRow.ticket_date || '',
+                program_selection: sourceRow.program_selection || '',
+                shuttle_required: !!sourceRow.shuttle_required || requestNote.includes('[셔틀] 신청함'),
+                pickup_location: sourceRow.pickup_location || '',
+                dropoff_location: sourceRow.dropoff_location || '',
+                ticket_details: sourceRow.ticket_details || '',
+                special_requests: sourceRow.special_requests || ''
             };
 
             // 기타 티켓인 경우 request_note에서 파싱
@@ -215,7 +228,6 @@ function TicketBookingContent() {
             // request_note 생성
             let requestNote = '';
             if (ticketType === 'dragon') {
-                const shuttleInfo = formData.shuttle_required ? '[셔틀차량] 신청함 (1인당 25만동)' : '[셔틀차량] 신청 안함';
                 requestNote = [
                     `[셔틀] ${formData.shuttle_required ? '신청함' : '신청 안함'}`,
                     formData.special_requests
@@ -231,19 +243,27 @@ function TicketBookingContent() {
 
             // 수정 모드
             if (isEditMode && existingReservationId) {
+                const ticketPayload = {
+                    reservation_id: existingReservationId,
+                    ticket_type: ticketType,
+                    ticket_name: ticketType === 'dragon' ? formData.ticket_name || null : null,
+                    program_selection: ticketType === 'other' ? formData.program_selection || null : null,
+                    ticket_quantity: formData.ticket_quantity,
+                    usage_date: formData.ticket_date,
+                    shuttle_required: ticketType === 'dragon' ? !!formData.shuttle_required : false,
+                    pickup_location: ticketType === 'dragon' ? formData.pickup_location || null : null,
+                    dropoff_location: ticketType === 'dragon' ? formData.dropoff_location || null : null,
+                    ticket_details: ticketType === 'other' ? formData.ticket_details || null : null,
+                    special_requests: formData.special_requests || null,
+                    unit_price: 0,
+                    total_price: 0,
+                    request_note: requestNote || null,
+                    updated_at: new Date().toISOString(),
+                };
+
                 const { error } = await supabase
-                    .from('reservation_tour')
-                    .update({
-                        tour_price_code: null,
-                        tour_capacity: formData.ticket_quantity,
-                        pickup_location: ticketType === 'dragon' ? formData.pickup_location || null : null,
-                        dropoff_location: ticketType === 'dragon' ? formData.dropoff_location || null : null,
-                        usage_date: formData.ticket_date,
-                        unit_price: 0,
-                        total_price: 0,
-                        request_note: requestNote || null
-                    })
-                    .eq('reservation_id', existingReservationId);
+                    .from('reservation_ticket')
+                    .upsert(ticketPayload, { onConflict: 'reservation_id' });
                 if (error) throw error;
                 alert('티켓 예약이 수정되었습니다!');
                 router.push('/mypage/direct-booking?completed=ticket');
@@ -267,22 +287,27 @@ function TicketBookingContent() {
                 return;
             }
 
-            const { error: tourReservationError } = await supabase
-                .from('reservation_tour')
+            const { error: ticketReservationError } = await supabase
+                .from('reservation_ticket')
                 .insert({
                     reservation_id: reservationData.re_id,
-                    tour_price_code: null,
-                    tour_capacity: formData.ticket_quantity,
+                    ticket_type: ticketType,
+                    ticket_name: ticketType === 'dragon' ? formData.ticket_name || null : null,
+                    program_selection: ticketType === 'other' ? formData.program_selection || null : null,
+                    ticket_quantity: formData.ticket_quantity,
                     pickup_location: ticketType === 'dragon' ? formData.pickup_location || null : null,
                     dropoff_location: ticketType === 'dragon' ? formData.dropoff_location || null : null,
                     usage_date: formData.ticket_date,
+                    shuttle_required: ticketType === 'dragon' ? !!formData.shuttle_required : false,
+                    ticket_details: ticketType === 'other' ? formData.ticket_details || null : null,
+                    special_requests: formData.special_requests || null,
                     unit_price: 0,
                     total_price: 0,
                     request_note: requestNote
                 });
 
-            if (tourReservationError) {
-                alert(`티켓 예약 생성 실패: ${tourReservationError.message}`);
+            if (ticketReservationError) {
+                alert(`티켓 예약 생성 실패: ${ticketReservationError.message}`);
                 return;
             }
 

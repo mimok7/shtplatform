@@ -5,7 +5,7 @@ import React from 'react';
 import { Calendar, Plane, MapPin, Car } from 'lucide-react';
 
 interface ServiceCardBodyProps {
-    /** 서비스 타입: 'cruise' | 'airport' | 'hotel' | 'tour' | 'rentcar' | 'cruise_car' | 'car_sht'
+    /** 서비스 타입: 'cruise' | 'airport' | 'hotel' | 'tour' | 'ticket' | 'rentcar' | 'cruise_car' | 'car_sht'
      *  또는 'reservation_cruise' 등 테이블명 형태도 허용 */
     serviceType: string;
     /** 서비스 상세 데이터 (reservation_* 테이블의 행 데이터) */
@@ -184,6 +184,8 @@ export default function ServiceCardBody({
                 return row?.checkin_date ? safeDate(row.checkin_date) : '-';
             case 'tour':
                 return row?.tour_date ? safeDate(row.tour_date) : row?.usage_date ? safeDate(row.usage_date) : '-';
+            case 'ticket':
+                return row?.usage_date ? safeDate(row.usage_date) : '-';
             case 'rentcar':
                 return row?.pickup_datetime ? safeDateTime(row.pickup_datetime) : '-';
             case 'cruise_car':
@@ -352,6 +354,50 @@ export default function ServiceCardBody({
                     <div className="flex items-center gap-2">
                         <span className="font-semibold text-green-700 text-xs">조식</span>
                         <span className="text-sm">🍳 포함</span>
+                    </div>
+                )}
+                {renderNote()}
+            </div>
+        );
+    }
+
+    // ========== TOUR ==========
+    if (type === 'ticket') {
+        const ticketType = row?.ticket_type === 'dragon' ? '드래곤펄' : '요코온센/기타';
+        const ticketName = cleanText(row?.ticket_name || row?.program_selection, ticketType);
+        const quantity = Number(row?.ticket_quantity || row?.tour_capacity || 0);
+
+        return (
+            <div className="flex flex-col gap-1 text-sm text-gray-700 mt-1">
+                {renderCustomer()}
+                <div className="flex items-start gap-2">
+                    <span className="font-semibold text-green-700 text-xs mt-0.5">티켓</span>
+                    <span className="text-sm font-bold text-teal-700 break-words">{ticketName}</span>
+                </div>
+                <div className="flex items-center gap-2 mt-1">
+                    <Calendar className="w-4 h-4 text-gray-400" />
+                    <span className="text-sm font-medium">{getDateDisplay()}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                    <span className="font-semibold text-green-700 text-xs">유형/수량</span>
+                    <span className="text-sm">{ticketType} / {quantity}매</span>
+                </div>
+                {row?.shuttle_required && (
+                    <div className="flex items-center gap-2">
+                        <span className="font-semibold text-green-700 text-xs">셔틀</span>
+                        <span className="text-sm">신청함</span>
+                    </div>
+                )}
+                {(row?.pickup_location || row?.dropoff_location) && (
+                    <div className="flex items-start gap-2">
+                        <MapPin className="w-4 h-4 text-gray-400 mt-0.5" />
+                        <span className="text-sm break-words">{cleanLoc(row?.pickup_location, '-')}{row?.dropoff_location ? ` → ${row.dropoff_location}` : ''}</span>
+                    </div>
+                )}
+                {row?.ticket_details && (
+                    <div className="flex items-start gap-2">
+                        <span className="font-semibold text-green-700 text-xs mt-0.5">상세</span>
+                        <span className="text-sm break-words">{row.ticket_details}</span>
                     </div>
                 )}
                 {renderNote()}

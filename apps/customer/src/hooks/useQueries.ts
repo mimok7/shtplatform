@@ -217,6 +217,7 @@ export function useReservationAdditionalData(reservations: any[]) {
                 supabase.from('reservation_hotel').select('reservation_id,total_price').in('reservation_id', reservationIds),
                 supabase.from('reservation_rentcar').select('reservation_id,total_price').in('reservation_id', reservationIds),
                 supabase.from('reservation_tour').select('reservation_id,total_price').in('reservation_id', reservationIds),
+                supabase.from('reservation_ticket').select('reservation_id,total_price').in('reservation_id', reservationIds),
                 // 9. 결제 상태
                 supabase.from('reservation_payment').select('reservation_id,payment_status,amount,payment_method,created_at').in('reservation_id', reservationIds)
             ]);
@@ -241,7 +242,8 @@ export function useReservationAdditionalData(reservations: any[]) {
             const hotelPriceRes = pick(5);
             const rentPriceRes = pick(6);
             const tourPriceRes = pick(7);
-            const paymentRes = pick(8);
+            const ticketPriceRes = pick(8);
+            const paymentRes = pick(9);
 
             // 데이터 가공
             const quotesById: Record<string, any> = {};
@@ -272,6 +274,7 @@ export function useReservationAdditionalData(reservations: any[]) {
             sumAmount(hotelPriceRes.data || [], 'total_price');
             sumAmount(rentPriceRes.data || [], 'total_price');
             sumAmount(tourPriceRes.data || [], 'total_price');
+            sumAmount(ticketPriceRes.data || [], 'total_price');
 
             const paymentStatusByReservation: Record<string, any> = {};
             const payRows = paymentRes.data || [];

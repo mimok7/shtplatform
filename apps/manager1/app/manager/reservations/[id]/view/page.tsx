@@ -132,6 +132,7 @@ function ReservationViewContent() {
                 airport: 'reservation_airport',
                 hotel: 'reservation_hotel',
                 tour: 'reservation_tour',
+                ticket: 'reservation_ticket',
                 rentcar: 'reservation_rentcar'
             };
 
@@ -289,6 +290,7 @@ function ReservationViewContent() {
             case 'airport': return <Plane className="w-6 h-6 text-green-600" />;
             case 'hotel': return <Building className="w-6 h-6 text-purple-600" />;
             case 'tour': return <MapPin className="w-6 h-6 text-orange-600" />;
+            case 'ticket': return <FileText className="w-6 h-6 text-teal-600" />;
             case 'rentcar': return <Car className="w-6 h-6 text-red-600" />;
             default: return <FileText className="w-6 h-6 text-gray-600" />;
         }
@@ -300,6 +302,7 @@ function ReservationViewContent() {
             case 'airport': return '공항';
             case 'hotel': return '호텔';
             case 'tour': return '투어';
+            case 'ticket': return '티켓';
             case 'rentcar': return '렌터카';
             default: return type;
         }
@@ -456,6 +459,24 @@ function ReservationViewContent() {
             total_price: '총 결제 금액',
             request_note: '요청사항',
             created_at: '예약 생성일시'
+        },
+        ticket: {
+            reservation_id: '예약 ID',
+            ticket_type: '티켓 유형',
+            ticket_name: '티켓명',
+            program_selection: '프로그램',
+            ticket_quantity: '수량',
+            usage_date: '이용 날짜',
+            shuttle_required: '셔틀 신청',
+            pickup_location: '픽업 장소',
+            dropoff_location: '하차 장소',
+            ticket_details: '상세 내용',
+            special_requests: '특별 요청사항',
+            unit_price: '단가',
+            total_price: '총 결제 금액',
+            request_note: '요청사항',
+            created_at: '예약 생성일시',
+            updated_at: '수정일시'
         },
         cruise_car: {
             reservation_id: '예약 ID',

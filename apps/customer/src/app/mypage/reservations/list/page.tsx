@@ -109,6 +109,7 @@ export default function MyReservationsListPage() {
       t === 'airport' ? '✈️' :
         t === 'hotel' ? '🏨' :
           t === 'tour' ? '🎫' :
+            t === 'ticket' ? '🎟️' :
             t === 'rentcar' ? '🚗' :
               t === 'car' ? '🚙' :
                 t === 'cruise_car' ? '🚙' :
@@ -120,6 +121,7 @@ export default function MyReservationsListPage() {
       t === 'airport' ? '공항' :
         t === 'hotel' ? '호텔' :
           t === 'tour' ? '투어' :
+            t === 'ticket' ? '티켓' :
             t === 'rentcar' ? '렌터카' :
               t === 'car' ? '크루즈 차량' :
                 t === 'cruise_car' ? '크루즈 차량' :
@@ -131,6 +133,7 @@ export default function MyReservationsListPage() {
       t === 'airport' ? 'from-orange-100/40 to-amber-100/40 border-orange-100' :
         t === 'hotel' ? 'from-purple-100/40 to-pink-100/40 border-purple-100' :
           t === 'tour' ? 'from-green-100/40 to-emerald-100/40 border-green-100' :
+            t === 'ticket' ? 'from-teal-100/40 to-cyan-100/40 border-teal-100' :
             t === 'rentcar' ? 'from-red-100/40 to-rose-100/40 border-red-100' :
               t === 'car' || t === 'cruise_car' ? 'from-yellow-100/40 to-orange-100/40 border-yellow-100' :
                 t === 'sht_car' || t === 'sht' ? 'from-indigo-100/40 to-blue-100/40 border-indigo-100' : 'from-gray-100/40 to-slate-100/40 border-gray-100'
@@ -141,6 +144,7 @@ export default function MyReservationsListPage() {
       t === 'airport' ? 'text-orange-700' :
         t === 'hotel' ? 'text-purple-700' :
           t === 'tour' ? 'text-green-700' :
+            t === 'ticket' ? 'text-teal-700' :
             t === 'rentcar' ? 'text-red-700' :
               t === 'car' || t === 'cruise_car' ? 'text-yellow-700' :
                 t === 'sht_car' || t === 'sht' ? 'text-indigo-700' : 'text-gray-700'

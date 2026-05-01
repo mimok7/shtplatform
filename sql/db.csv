@@ -968,6 +968,23 @@ reservation_tour,adult_count,integer,NULL 가능,1,12
 reservation_tour,child_count,integer,NULL 가능,0,13
 reservation_tour,infant_count,integer,NULL 가능,0,14
 reservation_tour,dispatch_code,text,NULL 가능,null,16
+reservation_ticket,id,uuid,NOT NULL,gen_random_uuid(),1
+reservation_ticket,reservation_id,uuid,NOT NULL,null,2
+reservation_ticket,ticket_type,text,NOT NULL,'other'::text,3
+reservation_ticket,ticket_name,text,NULL 가능,null,4
+reservation_ticket,program_selection,text,NULL 가능,null,5
+reservation_ticket,ticket_quantity,integer,NOT NULL,1,6
+reservation_ticket,usage_date,date,NOT NULL,null,7
+reservation_ticket,shuttle_required,boolean,NOT NULL,false,8
+reservation_ticket,pickup_location,text,NULL 가능,null,9
+reservation_ticket,dropoff_location,text,NULL 가능,null,10
+reservation_ticket,ticket_details,text,NULL 가능,null,11
+reservation_ticket,special_requests,text,NULL 가능,null,12
+reservation_ticket,unit_price,numeric,NOT NULL,0,13
+reservation_ticket,total_price,numeric,NOT NULL,0,14
+reservation_ticket,request_note,text,NULL 가능,null,15
+reservation_ticket,created_at,timestamp with time zone,NOT NULL,now(),16
+reservation_ticket,updated_at,timestamp with time zone,NOT NULL,now(),17
 room,id,uuid,NOT NULL,gen_random_uuid(),1
 room,base_price,numeric,NULL 가능,null,2
 room,created_at,timestamp with time zone,NULL 가능,now(),3

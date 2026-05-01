@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { X, Ship, Plane, Building, MapPin, Car, Users, Wallet, Calendar, Clock, CheckCircle, AlertCircle, XCircle, Package } from 'lucide-react';
+import { X, Ship, Plane, Building, MapPin, Car, Users, Wallet, Calendar, Clock, CheckCircle, AlertCircle, XCircle, Package, FileText } from 'lucide-react';
 import supabase from '@/lib/supabase';
 import ShtCarSeatMap from '@/components/ShtCarSeatMap';
 
@@ -301,6 +301,7 @@ export default function UserReservationDetailModal({
             case 'airport': return <Plane className="w-5 h-5 text-green-600" />;
             case 'hotel': return <Building className="w-5 h-5 text-orange-600" />;
             case 'tour': return <MapPin className="w-5 h-5 text-pink-600" />;
+            case 'ticket': return <FileText className="w-5 h-5 text-teal-600" />;
             case 'rentcar': return <Car className="w-5 h-5 text-indigo-600" />;
             case 'sht': return <Car className="w-5 h-5 text-blue-500" />;
             case 'package': return <Package className="w-5 h-5 text-indigo-600" />;
@@ -316,6 +317,7 @@ export default function UserReservationDetailModal({
             airport: '공항',
             hotel: '호텔',
             tour: '투어',
+            ticket: '티켓',
             rentcar: '렌터카',
             sht: '스하차량',
             package: '패키지'
@@ -369,7 +371,7 @@ export default function UserReservationDetailModal({
             }));
         } else {
             // 종류별 정렬
-            const typeOrder = ['cruise', 'vehicle', 'sht', 'airport', 'tour', 'rentcar', 'hotel'];
+            const typeOrder = ['cruise', 'vehicle', 'sht', 'airport', 'tour', 'ticket', 'rentcar', 'hotel'];
             const groups: Record<string, any[]> = {};
 
             allServices.forEach(service => {
@@ -662,6 +664,36 @@ export default function UserReservationDetailModal({
                                     <div className="flex justify-between text-sm">
                                         <span className="text-gray-600">1인 {Number(service.unitPrice).toLocaleString()}동 × {service.tourCapacity}명</span>
                                         <span className="font-medium">{(Number(service.unitPrice) * (service.tourCapacity || 1)).toLocaleString()}동</span>
+                                    </div>
+                                )}
+                                <div className="flex justify-between items-center border-t border-gray-200 pt-1">
+                                    <span className="text-gray-500 font-medium">총 금액</span>
+                                    <span className="font-bold text-blue-600">{Number(service.totalPrice || 0).toLocaleString()}동</span>
+                                </div>
+                            </div>
+                        )}
+                        {renderServiceNote(service.note)}
+                    </>
+                )}
+                {type === 'ticket' && (
+                    <>
+                        <div className="bg-teal-50 rounded-lg p-3 mb-2 border border-teal-100">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                                <div><strong>티켓명:</strong> <span className="font-semibold text-teal-800">{service.ticketName || service.program_selection || '-'}</span></div>
+                                {service.ticketType && <div><strong>유형:</strong> {service.ticketType === 'dragon' ? '드래곤펄' : '요코온센/기타'}</div>}
+                                {service.usageDate && <div><strong>이용일자:</strong> {service.usageDate}</div>}
+                                {service.ticketQuantity && <div><strong>수량:</strong> {service.ticketQuantity}매</div>}
+                                <div><strong>셔틀:</strong> {service.shuttle_required ? '신청함' : '신청 안함'}</div>
+                                {service.pickupLocation && <div><strong>픽업장소:</strong> {service.pickupLocation}</div>}
+                                {service.dropoffLocation && <div><strong>하차장소:</strong> {service.dropoffLocation}</div>}
+                            </div>
+                        </div>
+                        {(service.unitPrice || service.totalPrice) && (
+                            <div className="border-t border-gray-100 pt-2 mt-1 space-y-1">
+                                {service.unitPrice > 0 && (service.ticketQuantity || 0) > 0 && (
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-gray-600">1매 {Number(service.unitPrice).toLocaleString()}동 × {service.ticketQuantity}매</span>
+                                        <span className="font-medium">{(Number(service.unitPrice) * (service.ticketQuantity || 1)).toLocaleString()}동</span>
                                     </div>
                                 )}
                                 <div className="flex justify-between items-center border-t border-gray-200 pt-1">
