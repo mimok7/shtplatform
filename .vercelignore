@@ -1,0 +1,32 @@
+# Documentation & Markdown
+*.md
+docs/**
+
+# GitHub & Scripts
+.github/**
+scripts/**
+
+# Database & SQL
+sql/**
+
+# Build artifacts & logs
+dist/**
+.turbo/**
+node_modules/**
+
+# Environment (local only)
+.env.local
+.env.development.local
+
+# IDE & OS
+.vscode/**
+.idea/**
+.DS_Store
+*.swp
+*.swo
+
+# Test files (if not needed in production)
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.tsx
