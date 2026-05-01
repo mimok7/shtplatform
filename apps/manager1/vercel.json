@@ -1,4 +1,4 @@
-﻿{
+{
   "ignoreCommand": "node ../../scripts/vercel-ignore.js manager1",
   "installCommand": "cd ../.. && pnpm install --frozen-lockfile",
   "buildCommand": "cd ../.. && pnpm --filter @sht/manager1 build",
