@@ -10,6 +10,7 @@
     "dev": "turbo run dev --parallel",
     "dev:customer": "turbo run dev --filter=@sht/customer",
     "dev:manager": "turbo run dev --filter=@sht/manager",
+    "dev:quote": "turbo run dev --filter=@sht/quote",
     "build": "turbo run build",
     "lint": "turbo run lint",
     "lint:fix": "turbo run lint -- --fix",

@@ -1,0 +1,338 @@
+table_schema,table_name,column_name,foreign_table_schema,foreign_table_name,foreign_column_name,constraint_name,constraint_type
+auth,audit_log_entries,id,null,null,null,audit_log_entries_pkey,PRIMARY KEY
+auth,audit_log_entries,null,null,null,null,16492_16523_2_not_null,CHECK
+auth,audit_log_entries,null,null,null,null,16492_16523_5_not_null,CHECK
+auth,flow_state,null,null,null,null,16492_16925_3_not_null,CHECK
+auth,flow_state,null,null,null,null,16492_16925_1_not_null,CHECK
+auth,flow_state,null,null,null,null,16492_16925_11_not_null,CHECK
+auth,flow_state,null,null,null,null,16492_16925_5_not_null,CHECK
+auth,flow_state,null,null,null,null,16492_16925_6_not_null,CHECK
+auth,flow_state,null,null,null,null,16492_16925_4_not_null,CHECK
+auth,flow_state,id,null,null,null,flow_state_pkey,PRIMARY KEY
+auth,identities,provider_id,null,null,null,identities_provider_id_provider_unique,UNIQUE
+auth,identities,null,null,null,null,16492_16723_4_not_null,CHECK
+auth,identities,null,null,null,null,16492_16723_3_not_null,CHECK
+auth,identities,null,null,null,null,16492_16723_2_not_null,CHECK
+auth,identities,null,null,null,null,16492_16723_1_not_null,CHECK
+auth,identities,user_id,null,null,null,identities_user_id_fkey,FOREIGN KEY
+auth,identities,null,null,null,null,16492_16723_9_not_null,CHECK
+auth,identities,provider,null,null,null,identities_provider_id_provider_unique,UNIQUE
+auth,identities,id,null,null,null,identities_pkey,PRIMARY KEY
+auth,instances,null,null,null,null,16492_16516_1_not_null,CHECK
+auth,instances,id,null,null,null,instances_pkey,PRIMARY KEY
+auth,mfa_amr_claims,null,null,null,null,16492_16812_5_not_null,CHECK
+auth,mfa_amr_claims,session_id,null,null,null,mfa_amr_claims_session_id_fkey,FOREIGN KEY
+auth,mfa_amr_claims,id,null,null,null,amr_id_pk,PRIMARY KEY
+auth,mfa_amr_claims,session_id,null,null,null,mfa_amr_claims_session_id_authentication_method_pkey,UNIQUE
+auth,mfa_amr_claims,authentication_method,null,null,null,mfa_amr_claims_session_id_authentication_method_pkey,UNIQUE
+auth,mfa_amr_claims,null,null,null,null,16492_16812_1_not_null,CHECK
+auth,mfa_amr_claims,null,null,null,null,16492_16812_3_not_null,CHECK
+auth,mfa_amr_claims,null,null,null,null,16492_16812_2_not_null,CHECK
+auth,mfa_amr_claims,null,null,null,null,16492_16812_4_not_null,CHECK
+auth,mfa_challenges,factor_id,null,null,null,mfa_challenges_auth_factor_id_fkey,FOREIGN KEY
+auth,mfa_challenges,id,null,null,null,mfa_challenges_pkey,PRIMARY KEY
+auth,mfa_challenges,null,null,null,null,16492_16800_5_not_null,CHECK
+auth,mfa_challenges,null,null,null,null,16492_16800_3_not_null,CHECK
+auth,mfa_challenges,null,null,null,null,16492_16800_2_not_null,CHECK
+auth,mfa_challenges,null,null,null,null,16492_16800_1_not_null,CHECK
+auth,mfa_factors,null,null,null,null,16492_16787_7_not_null,CHECK
+auth,mfa_factors,user_id,null,null,null,mfa_factors_user_id_fkey,FOREIGN KEY
+auth,mfa_factors,id,null,null,null,mfa_factors_pkey,PRIMARY KEY
+auth,mfa_factors,null,null,null,null,16492_16787_1_not_null,CHECK
+auth,mfa_factors,null,null,null,null,16492_16787_2_not_null,CHECK
+auth,mfa_factors,null,null,null,null,16492_16787_4_not_null,CHECK
+auth,mfa_factors,last_challenged_at,null,null,null,mfa_factors_last_challenged_at_key,UNIQUE
+auth,mfa_factors,null,null,null,null,16492_16787_5_not_null,CHECK
+auth,mfa_factors,null,null,null,null,16492_16787_6_not_null,CHECK
+auth,one_time_tokens,null,null,null,null,16492_16975_2_not_null,CHECK
+auth,one_time_tokens,id,null,null,null,one_time_tokens_pkey,PRIMARY KEY
+auth,one_time_tokens,null,null,null,null,16492_16975_4_not_null,CHECK
+auth,one_time_tokens,null,null,null,null,16492_16975_3_not_null,CHECK
+auth,one_time_tokens,null,null,null,null,16492_16975_7_not_null,CHECK
+auth,one_time_tokens,user_id,null,null,null,one_time_tokens_user_id_fkey,FOREIGN KEY
+auth,one_time_tokens,null,null,null,null,16492_16975_1_not_null,CHECK
+auth,one_time_tokens,null,null,null,null,16492_16975_5_not_null,CHECK
+auth,one_time_tokens,null,null,null,null,16492_16975_6_not_null,CHECK
+auth,one_time_tokens,null,null,null,null,one_time_tokens_token_hash_check,CHECK
+auth,refresh_tokens,token,null,null,null,refresh_tokens_token_unique,UNIQUE
+auth,refresh_tokens,session_id,null,null,null,refresh_tokens_session_id_fkey,FOREIGN KEY
+auth,refresh_tokens,null,null,null,null,16492_16505_2_not_null,CHECK
+auth,refresh_tokens,id,null,null,null,refresh_tokens_pkey,PRIMARY KEY
+auth,saml_providers,null,null,null,null,metadata_url not empty,CHECK
+auth,saml_providers,id,null,null,null,saml_providers_pkey,PRIMARY KEY
+auth,saml_providers,entity_id,null,null,null,saml_providers_entity_id_key,UNIQUE
+auth,saml_providers,sso_provider_id,null,null,null,saml_providers_sso_provider_id_fkey,FOREIGN KEY
+auth,saml_providers,null,null,null,null,16492_16854_2_not_null,CHECK
+auth,saml_providers,null,null,null,null,16492_16854_3_not_null,CHECK
+auth,saml_providers,null,null,null,null,16492_16854_4_not_null,CHECK
+auth,saml_providers,null,null,null,null,16492_16854_1_not_null,CHECK
+auth,saml_providers,null,null,null,null,metadata_xml not empty,CHECK
+auth,saml_providers,null,null,null,null,entity_id not empty,CHECK
+auth,saml_relay_states,sso_provider_id,null,null,null,saml_relay_states_sso_provider_id_fkey,FOREIGN KEY
+auth,saml_relay_states,null,null,null,null,16492_16872_2_not_null,CHECK
+auth,saml_relay_states,flow_state_id,null,null,null,saml_relay_states_flow_state_id_fkey,FOREIGN KEY
+auth,saml_relay_states,null,null,null,null,16492_16872_3_not_null,CHECK
+auth,saml_relay_states,null,null,null,null,16492_16872_1_not_null,CHECK
+auth,saml_relay_states,null,null,null,null,request_id not empty,CHECK
+auth,saml_relay_states,id,null,null,null,saml_relay_states_pkey,PRIMARY KEY
+auth,sessions,null,null,null,null,16492_16753_2_not_null,CHECK
+auth,sessions,id,null,null,null,sessions_pkey,PRIMARY KEY
+auth,sessions,null,null,null,null,16492_16753_1_not_null,CHECK
+auth,sessions,user_id,null,null,null,sessions_user_id_fkey,FOREIGN KEY
+auth,sso_domains,null,null,null,null,16492_16839_3_not_null,CHECK
+auth,sso_domains,null,null,null,null,16492_16839_2_not_null,CHECK
+auth,sso_domains,null,null,null,null,domain not empty,CHECK
+auth,sso_domains,null,null,null,null,16492_16839_1_not_null,CHECK
+auth,sso_domains,id,null,null,null,sso_domains_pkey,PRIMARY KEY
+auth,sso_domains,sso_provider_id,null,null,null,sso_domains_sso_provider_id_fkey,FOREIGN KEY
+auth,sso_providers,null,null,null,null,16492_16830_1_not_null,CHECK
+auth,sso_providers,null,null,null,null,resource_id not empty,CHECK
+auth,sso_providers,id,null,null,null,sso_providers_pkey,PRIMARY KEY
+auth,users,id,null,null,null,users_pkey,PRIMARY KEY
+auth,users,null,null,null,null,16492_16493_33_not_null,CHECK
+auth,users,null,null,null,null,16492_16493_35_not_null,CHECK
+auth,users,null,null,null,null,users_email_change_confirm_status_check,CHECK
+auth,users,phone,null,null,null,users_phone_key,UNIQUE
+auth,users,null,null,null,null,16492_16493_2_not_null,CHECK
+public,airport,null,null,null,null,2200_34719_1_not_null,CHECK
+public,airport,id,public,airport,id,airport_pkey,PRIMARY KEY
+public,airport,null,null,null,null,2200_34719_2_not_null,CHECK
+public,airport_price,null,null,null,null,2200_37658_3_not_null,CHECK
+public,airport_price,airport_code,public,airport_price,airport_code,airport_price_pkey,PRIMARY KEY
+public,airport_price,null,null,null,null,2200_37658_1_not_null,CHECK
+public,airport_price,null,null,null,null,2200_37658_2_not_null,CHECK
+public,airport_price,null,null,null,null,2200_37658_4_not_null,CHECK
+public,airport_price,null,null,null,null,2200_37658_5_not_null,CHECK
+public,business_notifications,null,null,null,null,2200_57476_1_not_null,CHECK
+public,business_notifications,notification_id,public,notifications,id,business_notifications_notification_id_fkey,FOREIGN KEY
+public,business_notifications,id,public,business_notifications,id,business_notifications_pkey,PRIMARY KEY
+public,business_notifications,null,null,null,null,2200_57476_3_not_null,CHECK
+public,car,null,null,null,null,2200_39396_1_not_null,CHECK
+public,car,id,public,car,id,car_pkey,PRIMARY KEY
+public,car_price,null,null,null,null,2200_37436_1_not_null,CHECK
+public,cruise,null,null,null,null,2200_59227_2_not_null,CHECK
+public,cruise,null,null,null,null,2200_59227_1_not_null,CHECK
+public,cruise,null,null,null,null,2200_59227_4_not_null,CHECK
+public,cruise,null,null,null,null,2200_59227_3_not_null,CHECK
+public,cruise,id,public,cruise,id,cruise_pkey,PRIMARY KEY
+public,customer_notifications,id,public,customer_notifications,id,customer_notifications_pkey,PRIMARY KEY
+public,customer_notifications,null,null,null,null,2200_57492_1_not_null,CHECK
+public,customer_notifications,customer_id,public,users,id,customer_notifications_customer_id_fkey,FOREIGN KEY
+public,customer_notifications,notification_id,public,notifications,id,customer_notifications_notification_id_fkey,FOREIGN KEY
+public,customer_request_attachments,null,null,null,null,2200_59363_1_not_null,CHECK
+public,customer_request_attachments,null,null,null,null,2200_59363_7_not_null,CHECK
+public,customer_request_attachments,null,null,null,null,2200_59363_4_not_null,CHECK
+public,customer_request_attachments,request_id,public,customer_requests,id,customer_request_attachments_request_id_fkey,FOREIGN KEY
+public,customer_request_attachments,null,null,null,null,2200_59363_3_not_null,CHECK
+public,customer_request_attachments,null,null,null,null,2200_59363_2_not_null,CHECK
+public,customer_request_attachments,id,public,customer_request_attachments,id,customer_request_attachments_pkey,PRIMARY KEY
+public,customer_request_history,null,null,null,null,2200_59377_2_not_null,CHECK
+public,customer_request_history,id,public,customer_request_history,id,customer_request_history_pkey,PRIMARY KEY
+public,customer_request_history,null,null,null,null,2200_59377_3_not_null,CHECK
+public,customer_request_history,null,null,null,null,2200_59377_6_not_null,CHECK
+public,customer_request_history,null,null,null,null,2200_59377_1_not_null,CHECK
+public,customer_request_history,request_id,public,customer_requests,id,customer_request_history_request_id_fkey,FOREIGN KEY
+public,customer_requests,null,public,customer_requests,urgency_level,customer_requests_urgency_level_check,CHECK
+public,customer_requests,request_id,public,customer_requests,request_id,customer_requests_request_id_key,UNIQUE
+public,customer_requests,id,public,customer_requests,id,customer_requests_pkey,PRIMARY KEY
+public,customer_requests,null,public,customer_requests,status,customer_requests_status_check,CHECK
+public,customer_requests,null,public,customer_requests,request_type,customer_requests_request_type_check,CHECK
+public,customer_requests,null,null,null,null,2200_59344_1_not_null,CHECK
+public,customer_requests,null,null,null,null,2200_59344_2_not_null,CHECK
+public,customer_requests,null,null,null,null,2200_59344_3_not_null,CHECK
+public,customer_requests,null,null,null,null,2200_59344_4_not_null,CHECK
+public,customer_requests,null,null,null,null,2200_59344_5_not_null,CHECK
+public,customer_requests,null,null,null,null,2200_59344_6_not_null,CHECK
+public,customer_requests,null,null,null,null,2200_59344_7_not_null,CHECK
+public,hotel,id,public,hotel,id,hotel_pkey,PRIMARY KEY
+public,hotel,null,null,null,null,2200_34732_1_not_null,CHECK
+public,hotel,null,null,null,null,2200_34732_2_not_null,CHECK
+public,hotel_price,null,null,null,null,2200_36234_1_not_null,CHECK
+public,hotel_price,null,null,null,null,2200_36234_2_not_null,CHECK
+public,hotel_price,null,null,null,null,2200_36234_3_not_null,CHECK
+public,notification_reads,user_id,public,notification_reads,user_id,notification_reads_notification_id_user_id_key,UNIQUE
+public,notification_reads,id,public,notification_reads,id,notification_reads_pkey,PRIMARY KEY
+public,notification_reads,notification_id,public,notification_reads,user_id,notification_reads_notification_id_user_id_key,UNIQUE
+public,notification_reads,notification_id,public,notification_reads,notification_id,notification_reads_notification_id_user_id_key,UNIQUE
+public,notification_reads,user_id,public,notification_reads,notification_id,notification_reads_notification_id_user_id_key,UNIQUE
+public,notification_reads,notification_id,public,notifications,id,notification_reads_notification_id_fkey,FOREIGN KEY
+public,notification_reads,user_id,public,users,id,notification_reads_user_id_fkey,FOREIGN KEY
+public,notification_reads,null,null,null,null,2200_57525_1_not_null,CHECK
+public,notification_templates,null,null,null,null,2200_57513_4_not_null,CHECK
+public,notification_templates,null,null,null,null,2200_57513_1_not_null,CHECK
+public,notification_templates,id,public,notification_templates,id,notification_templates_pkey,PRIMARY KEY
+public,notification_templates,null,null,null,null,2200_57513_6_not_null,CHECK
+public,notification_templates,null,null,null,null,2200_57513_3_not_null,CHECK
+public,notification_templates,null,null,null,null,2200_57513_2_not_null,CHECK
+public,notification_templates,null,null,null,null,2200_57513_5_not_null,CHECK
+public,notifications,id,public,notifications,id,notifications_pkey,PRIMARY KEY
+public,notifications,null,null,null,null,2200_57464_4_not_null,CHECK
+public,notifications,null,null,null,null,2200_57464_5_not_null,CHECK
+public,notifications,null,null,null,null,2200_57464_3_not_null,CHECK
+public,notifications,null,null,null,null,2200_57464_1_not_null,CHECK
+public,notifications,null,null,null,null,2200_57464_2_not_null,CHECK
+public,payment_info,null,null,null,null,2200_47073_2_not_null,CHECK
+public,payment_info,code,public,payment_info,code,payment_info_pkey,PRIMARY KEY
+public,payment_info,null,null,null,null,2200_47073_1_not_null,CHECK
+public,quote,null,null,null,null,2200_34668_1_not_null,CHECK
+public,quote,null,public,quote,payment_status,quote_payment_status_chk,CHECK
+public,quote,user_id,public,users,id,fk_quote_user,FOREIGN KEY
+public,quote,null,public,quote,status,quote_status_check,CHECK
+public,quote,user_id,null,null,null,quote_user_id_fkey,FOREIGN KEY
+public,quote,id,public,quote,id,quote_pkey,PRIMARY KEY
+public,quote,null,null,null,null,2200_34668_12_not_null,CHECK
+public,quote,null,null,null,null,2200_34668_2_not_null,CHECK
+public,quote_item,quote_id,public,quote,id,quote_item_quote_id_fkey,FOREIGN KEY
+public,quote_item,null,null,null,null,2200_34686_4_not_null,CHECK
+public,quote_item,null,null,null,null,2200_34686_3_not_null,CHECK
+public,quote_item,null,null,null,null,2200_34686_2_not_null,CHECK
+public,quote_item,null,null,null,null,2200_34686_1_not_null,CHECK
+public,quote_item,null,public,quote_item,service_type,quote_item_service_type_check,CHECK
+public,quote_item,id,public,quote_item,id,quote_item_pkey,PRIMARY KEY
+public,rent_price,null,null,null,null,2200_36260_1_not_null,CHECK
+public,rentcar,id,public,rentcar,id,rentcar_pkey,PRIMARY KEY
+public,rentcar,null,null,null,null,2200_34759_1_not_null,CHECK
+public,rentcar,null,null,null,null,2200_34759_2_not_null,CHECK
+public,reservation,null,null,null,null,2200_27724_4_not_null,CHECK
+public,reservation,null,null,null,null,2200_27724_2_not_null,CHECK
+public,reservation,re_user_id,null,null,null,reservation_re_user_id_fkey,FOREIGN KEY
+public,reservation,re_id,public,reservation,re_id,reservation_pkey,PRIMARY KEY
+public,reservation,null,null,null,null,2200_27724_1_not_null,CHECK
+public,reservation,null,null,null,null,2200_27724_19_not_null,CHECK
+public,reservation,null,null,null,null,2200_27724_6_not_null,CHECK
+public,reservation,null,null,null,null,2200_27724_5_not_null,CHECK
+public,reservation_airport,id,public,reservation_airport,id,reservation_airport_pkey,PRIMARY KEY
+public,reservation_airport,null,null,null,null,2200_52620_1_not_null,CHECK
+public,reservation_airport,reservation_id,public,reservation,re_id,reservation_airport_reservation_id_fkey,FOREIGN KEY
+public,reservation_car_sht,null,null,null,null,2200_37812_5_not_null,CHECK
+public,reservation_car_sht,null,null,null,null,2200_37812_6_not_null,CHECK
+public,reservation_car_sht,reservation_id,public,reservation,re_id,reservation_car_sht_reservation_id_fkey,FOREIGN KEY
+public,reservation_car_sht,id,public,reservation_car_sht,id,reservation_car_sht_pkey,PRIMARY KEY
+public,reservation_confirmation,reservation_id,public,reservation,re_id,reservation_confirmation_reservation_fk,FOREIGN KEY
+public,reservation_confirmation,null,null,null,null,2200_47240_1_not_null,CHECK
+public,reservation_confirmation,null,null,null,null,2200_47240_9_not_null,CHECK
+public,reservation_confirmation,null,null,null,null,2200_47240_5_not_null,CHECK
+public,reservation_confirmation,id,public,reservation_confirmation,id,reservation_confirmation_pkey,PRIMARY KEY
+public,reservation_confirmation,null,null,null,null,2200_47240_11_not_null,CHECK
+public,reservation_confirmation,quote_id,public,quote,id,reservation_confirmation_quote_fk,FOREIGN KEY
+public,reservation_cruise,null,null,null,null,2200_27842_2_not_null,CHECK
+public,reservation_cruise,id,public,reservation_cruise,id,reservation_cruise_pkey,PRIMARY KEY
+public,reservation_cruise,null,null,null,null,2200_27842_1_not_null,CHECK
+public,reservation_cruise,reservation_id,public,reservation,re_id,reservation_room_reservation_id_fkey,FOREIGN KEY
+public,reservation_cruise,null,null,null,null,2200_27842_17_not_null,CHECK
+public,reservation_cruise,null,null,null,null,2200_27842_16_not_null,CHECK
+public,reservation_cruise,null,null,null,null,2200_27842_5_not_null,CHECK
+public,reservation_cruise,null,null,null,null,2200_27842_4_not_null,CHECK
+public,reservation_cruise,null,null,null,null,2200_27842_3_not_null,CHECK
+public,reservation_cruise,reservation_id,public,reservation,re_id,reservation_cruise_reservation_id_fkey,FOREIGN KEY
+public,reservation_cruise_car,null,null,null,null,2200_46927_1_not_null,CHECK
+public,reservation_cruise_car,reservation_id,public,reservation,re_id,fk_cruise_car_reservation,FOREIGN KEY
+public,reservation_cruise_car,id,public,reservation_cruise_car,id,reservation_cruise_car_pkey,PRIMARY KEY
+public,reservation_cruise_car,null,null,null,null,2200_46927_2_not_null,CHECK
+public,reservation_hotel,id,public,reservation_hotel,id,reservation_hotel_pkey,PRIMARY KEY
+public,reservation_hotel,null,null,null,null,2200_37838_11_not_null,CHECK
+public,reservation_hotel,reservation_id,public,reservation,re_id,reservation_hotel_reservation_id_fkey,FOREIGN KEY
+public,reservation_hotel,null,null,null,null,2200_37838_12_not_null,CHECK
+public,reservation_payment,payment_method,public,payment_info,code,reservation_payment_payment_method_fkey,FOREIGN KEY
+public,reservation_payment,null,null,null,null,2200_47080_1_not_null,CHECK
+public,reservation_payment,null,null,null,null,2200_47080_2_not_null,CHECK
+public,reservation_payment,null,null,null,null,2200_47080_4_not_null,CHECK
+public,reservation_payment,null,null,null,null,2200_47080_6_not_null,CHECK
+public,reservation_payment,null,null,null,null,2200_47080_8_not_null,CHECK
+public,reservation_payment,null,null,null,null,2200_47080_9_not_null,CHECK
+public,reservation_payment,user_id,public,users,id,reservation_payment_user_id_fkey,FOREIGN KEY
+public,reservation_payment,reservation_id,public,reservation,re_id,reservation_payment_reservation_id_fkey,FOREIGN KEY
+public,reservation_payment,id,public,reservation_payment,id,reservation_payment_pkey,PRIMARY KEY
+public,reservation_rentcar,null,null,null,null,2200_27880_4_not_null,CHECK
+public,reservation_rentcar,null,null,null,null,2200_27880_15_not_null,CHECK
+public,reservation_rentcar,null,null,null,null,2200_27880_16_not_null,CHECK
+public,reservation_rentcar,reservation_id,public,reservation,re_id,reservation_car_reservation_id_fkey,FOREIGN KEY
+public,reservation_rentcar,null,null,null,null,2200_27880_1_not_null,CHECK
+public,reservation_rentcar,null,null,null,null,2200_27880_2_not_null,CHECK
+public,reservation_rentcar,reservation_id,public,reservation,re_id,reservation_rentcar_reservation_id_fkey,FOREIGN KEY
+public,reservation_rentcar,id,public,reservation_rentcar,id,reservation_rentcar_pkey,PRIMARY KEY
+public,reservation_rentcar,null,null,null,null,2200_27880_3_not_null,CHECK
+public,reservation_tour,null,null,null,null,2200_37864_8_not_null,CHECK
+public,reservation_tour,id,public,reservation_tour,id,reservation_tour_pkey,PRIMARY KEY
+public,reservation_tour,reservation_id,public,reservation,re_id,reservation_tour_reservation_id_fkey,FOREIGN KEY
+public,reservation_tour,null,null,null,null,2200_37864_9_not_null,CHECK
+public,room,id,public,room,id,room_pkey,PRIMARY KEY
+public,room,null,null,null,null,2200_39386_1_not_null,CHECK
+public,room_price,null,null,null,null,2200_37462_1_not_null,CHECK
+public,tour,id,public,tour,id,tour_pkey,PRIMARY KEY
+public,tour,null,null,null,null,2200_34746_2_not_null,CHECK
+public,tour,null,null,null,null,2200_34746_3_not_null,CHECK
+public,tour,null,null,null,null,2200_34746_1_not_null,CHECK
+public,tour_price,null,null,null,null,2200_36286_2_not_null,CHECK
+public,tour_price,null,null,null,null,2200_36286_1_not_null,CHECK
+public,users,email,public,users,email,users_email_key,UNIQUE
+public,users,null,null,null,null,2200_17375_1_not_null,CHECK
+public,users,null,null,null,null,2200_17375_10_not_null,CHECK
+public,users,null,public,users,role,users_role_check,CHECK
+public,users,id,public,users,id,users_pkey,PRIMARY KEY
+realtime,messages,null,null,null,null,16603_17289_4_not_null,CHECK
+realtime,messages,null,null,null,null,16603_17289_8_not_null,CHECK
+realtime,messages,inserted_at,realtime,messages,id,messages_pkey,PRIMARY KEY
+realtime,messages,id,realtime,messages,inserted_at,messages_pkey,PRIMARY KEY
+realtime,messages,inserted_at,realtime,messages,inserted_at,messages_pkey,PRIMARY KEY
+realtime,messages,id,realtime,messages,id,messages_pkey,PRIMARY KEY
+realtime,messages,null,null,null,null,16603_17289_10_not_null,CHECK
+realtime,messages,null,null,null,null,16603_17289_3_not_null,CHECK
+realtime,messages,null,null,null,null,16603_17289_9_not_null,CHECK
+realtime,schema_migrations,version,null,null,null,schema_migrations_pkey,PRIMARY KEY
+realtime,schema_migrations,null,null,null,null,16603_17000_1_not_null,CHECK
+realtime,subscription,null,null,null,null,16603_17136_8_not_null,CHECK
+realtime,subscription,null,null,null,null,16603_17136_7_not_null,CHECK
+realtime,subscription,null,null,null,null,16603_17136_5_not_null,CHECK
+realtime,subscription,null,null,null,null,16603_17136_4_not_null,CHECK
+realtime,subscription,null,null,null,null,16603_17136_2_not_null,CHECK
+realtime,subscription,null,null,null,null,16603_17136_1_not_null,CHECK
+realtime,subscription,id,null,null,null,pk_subscription,PRIMARY KEY
+realtime,subscription,null,null,null,null,16603_17136_9_not_null,CHECK
+storage,buckets,id,null,null,null,buckets_pkey,PRIMARY KEY
+storage,buckets,null,null,null,null,16540_16544_11_not_null,CHECK
+storage,buckets,null,null,null,null,16540_16544_2_not_null,CHECK
+storage,buckets,null,null,null,null,16540_16544_1_not_null,CHECK
+storage,buckets_analytics,id,null,null,null,buckets_analytics_pkey,PRIMARY KEY
+storage,buckets_analytics,null,null,null,null,16540_24050_4_not_null,CHECK
+storage,buckets_analytics,null,null,null,null,16540_24050_3_not_null,CHECK
+storage,buckets_analytics,null,null,null,null,16540_24050_1_not_null,CHECK
+storage,buckets_analytics,null,null,null,null,16540_24050_5_not_null,CHECK
+storage,buckets_analytics,null,null,null,null,16540_24050_2_not_null,CHECK
+storage,objects,id,null,null,null,objects_pkey,PRIMARY KEY
+storage,objects,bucket_id,null,null,null,objects_bucketId_fkey,FOREIGN KEY
+storage,objects,null,null,null,null,16540_16559_1_not_null,CHECK
+storage,prefixes,name,null,null,null,prefixes_pkey,PRIMARY KEY
+storage,prefixes,null,null,null,null,16540_17104_1_not_null,CHECK
+storage,prefixes,null,null,null,null,16540_17104_2_not_null,CHECK
+storage,prefixes,null,null,null,null,16540_17104_3_not_null,CHECK
+storage,prefixes,bucket_id,null,null,null,prefixes_bucketId_fkey,FOREIGN KEY
+storage,prefixes,level,null,null,null,prefixes_pkey,PRIMARY KEY
+storage,prefixes,bucket_id,null,null,null,prefixes_pkey,PRIMARY KEY
+storage,s3_multipart_uploads,null,null,null,null,16540_17037_4_not_null,CHECK
+storage,s3_multipart_uploads,bucket_id,null,null,null,s3_multipart_uploads_bucket_id_fkey,FOREIGN KEY
+storage,s3_multipart_uploads,id,null,null,null,s3_multipart_uploads_pkey,PRIMARY KEY
+storage,s3_multipart_uploads,null,null,null,null,16540_17037_3_not_null,CHECK
+storage,s3_multipart_uploads,null,null,null,null,16540_17037_8_not_null,CHECK
+storage,s3_multipart_uploads,null,null,null,null,16540_17037_2_not_null,CHECK
+storage,s3_multipart_uploads,null,null,null,null,16540_17037_1_not_null,CHECK
+storage,s3_multipart_uploads,null,null,null,null,16540_17037_6_not_null,CHECK
+storage,s3_multipart_uploads,null,null,null,null,16540_17037_5_not_null,CHECK
+storage,s3_multipart_uploads_parts,id,null,null,null,s3_multipart_uploads_parts_pkey,PRIMARY KEY
+storage,s3_multipart_uploads_parts,null,null,null,null,16540_17051_10_not_null,CHECK
+storage,s3_multipart_uploads_parts,null,null,null,null,16540_17051_7_not_null,CHECK
+storage,s3_multipart_uploads_parts,null,null,null,null,16540_17051_9_not_null,CHECK
+storage,s3_multipart_uploads_parts,null,null,null,null,16540_17051_6_not_null,CHECK
+storage,s3_multipart_uploads_parts,null,null,null,null,16540_17051_5_not_null,CHECK
+storage,s3_multipart_uploads_parts,null,null,null,null,16540_17051_4_not_null,CHECK
+storage,s3_multipart_uploads_parts,null,null,null,null,16540_17051_2_not_null,CHECK
+storage,s3_multipart_uploads_parts,null,null,null,null,16540_17051_3_not_null,CHECK
+storage,s3_multipart_uploads_parts,null,null,null,null,16540_17051_1_not_null,CHECK
+storage,s3_multipart_uploads_parts,bucket_id,null,null,null,s3_multipart_uploads_parts_bucket_id_fkey,FOREIGN KEY
+storage,s3_multipart_uploads_parts,upload_id,null,null,null,s3_multipart_uploads_parts_upload_id_fkey,FOREIGN KEY
+vault,secrets,null,null,null,null,16651_16656_4_not_null,CHECK
+vault,secrets,null,null,null,null,16651_16656_1_not_null,CHECK
+vault,secrets,id,null,null,null,secrets_pkey,PRIMARY KEY
+vault,secrets,null,null,null,null,16651_16656_8_not_null,CHECK
+vault,secrets,null,null,null,null,16651_16656_7_not_null,CHECK
+vault,secrets,null,null,null,null,16651_16656_3_not_null,CHECK

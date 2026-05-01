@@ -4,6 +4,7 @@ import { useEffect, useState, Suspense } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter, useSearchParams } from 'next/navigation';
 import supabase from '@/lib/supabase';
+import { getSessionUser } from '@/lib/authHelpers';
 
 const OrderHomePage = dynamic(() => import('@/components/order-home/OrderHomePage'), {
     ssr: false,
@@ -31,10 +32,10 @@ function OrderDetailContent() {
         }
 
         // 없으면 로그인 유저 정보로 조회
-        supabase.auth.getUser().then(async ({ data: { user } }) => {
-            if (!user) { router.push('/login'); return; }
+        getSessionUser().then(async ({ user }) => {
+            if (!user) { router.push('/login'); setLoading(false); return; }
             try {
-                const { data: profile, error } = await supabase.from('users').select('order_id').eq('id', user.id).single();
+                const { data: profile, error } = await supabase.from('users').select('order_id').eq('id', user.id).maybeSingle();
                 if (error) throw error;
                 if (!profile?.order_id) {
                     router.push('/order');

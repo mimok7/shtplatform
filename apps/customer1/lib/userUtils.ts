@@ -1,4 +1,5 @@
 import supabase from './supabase';
+import { getSessionUser } from './authHelpers';
 
 // --- Lightweight role cache (per-tab + cookie) ----------------------------
 const ROLE_CACHE_KEY = 'app:user:role';
@@ -217,17 +218,17 @@ export const upsertUserProfile = async (
 export const getCurrentUserInfo = async () => {
   try {
     // 1. 인증된 사용자 정보 가져오기
-    const { data: authData, error: authError } = await supabase.auth.getUser();
+    const { user, error: authError } = await getSessionUser();
 
-    if (authError || !authData.user) {
+    if (authError || !user) {
       clearCachedCurrentUserInfo();
       return { user: null, userData: null, error: authError };
     }
 
-    const cachedUserInfo = getCachedCurrentUserInfo(authData.user.id, authData.user.email || '');
+    const cachedUserInfo = getCachedCurrentUserInfo(user.id, user.email || '');
     if (cachedUserInfo) {
       return {
-        user: authData.user,
+        user,
         userData: cachedUserInfo.userData,
         error: null,
       };
@@ -237,24 +238,24 @@ export const getCurrentUserInfo = async () => {
     const { data: userData, error: dbError } = await supabase
       .from('users')
       .select('id, email, name, english_name, phone_number, role, created_at, updated_at')
-      .eq('id', authData.user.id)
+      .eq('id', user.id)
       .single();
 
     if (dbError) {
       console.error('사용자 DB 정보 조회 실패:', dbError);
       // DB 정보가 없어도 인증 정보는 반환
-      setCachedCurrentUserInfo(authData.user, null);
+      setCachedCurrentUserInfo(user, null);
       return {
-        user: authData.user,
+        user,
         userData: null,
         error: dbError,
       };
     }
 
-    setCachedCurrentUserInfo(authData.user, userData);
+    setCachedCurrentUserInfo(user, userData);
 
     return {
-      user: authData.user,
+      user,
       userData,
       error: null,
     };

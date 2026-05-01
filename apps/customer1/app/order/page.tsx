@@ -14,6 +14,7 @@ import {
 import { clearCachedUser } from '@/lib/authCache';
 import { clearAuthCache } from '@/hooks/useAuth';
 import { clearInvalidSession, isInvalidRefreshTokenError } from '@/lib/authRecovery';
+import { getSessionUser } from '@/lib/authHelpers';
 
 interface MenuCardProps {
     icon: React.ElementType;
@@ -57,7 +58,7 @@ export default function OrderMenuPage() {
 
         const checkUser = async () => {
             try {
-                const { data: { user }, error: authError } = await supabase.auth.getUser();
+                const { user, error: authError } = await getSessionUser();
 
                 if (authError || !user) {
                     if (authError && isInvalidRefreshTokenError(authError)) {
@@ -78,13 +79,13 @@ export default function OrderMenuPage() {
 
                 if (error) {
                     console.error('❌ 프로필 조회 오류:', error);
-                    router.push('/login');
+                    setUserName(user.user_metadata?.display_name || user.email?.split('@')[0] || '사용자');
                     return;
                 }
 
                 if (!profile?.order_id) {
-                    console.warn('⚠️ order_id 없음, /login으로 리디렉션');
-                    router.push('/login');
+                    console.warn('⚠️ order_id 없음, 메뉴 화면만 표시');
+                    setUserName(profile?.name || profile?.english_name || profile?.nickname || user.user_metadata?.display_name || user.email?.split('@')[0] || '사용자');
                     return;
                 }
 

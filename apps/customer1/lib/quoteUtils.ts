@@ -1,4 +1,5 @@
 import supabase from './supabase';
+import { getSessionUser } from './authHelpers';
 import {
   Quote,
   QuoteItem,
@@ -41,7 +42,7 @@ export async function createQuote(userId: string, title?: string): Promise<Quote
 export async function getServiceData(serviceType: ServiceType, serviceId: string) {
   try {
     // 표준 인증 체크 패턴
-    const { data: { user } } = await supabase.auth.getUser();
+    const { user } = await getSessionUser();
     if (!user) {
       throw new Error('인증이 필요합니다.');
     }
@@ -120,7 +121,7 @@ export async function getServiceData(serviceType: ServiceType, serviceId: string
 export async function getQuoteWithItems(quoteId: string): Promise<QuoteWithItems | null> {
   try {
     // 표준 인증 체크 패턴
-    const { data: { user } } = await supabase.auth.getUser();
+    const { user } = await getSessionUser();
     if (!user) {
       throw new Error('인증이 필요합니다.');
     }

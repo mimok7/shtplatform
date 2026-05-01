@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import supabase from '@/lib/supabase';
 import { clearInvalidSession, isInvalidRefreshTokenError } from '@/lib/authRecovery';
+import { getSessionUser } from '@/lib/authHelpers';
 
 interface AuthState {
     user: any | null;
@@ -85,8 +86,8 @@ export function useAuth(requiredRoles?: string[], redirectOnFail: string = '/log
                     return;
                 }
 
-                // 2. Supabase 인증 확인
-                const { data: { user }, error: userError } = await supabase.auth.getUser();
+                // 2. Supabase 로컬 세션 확인
+                const { user, error: userError } = await getSessionUser();
                 if (cancelled) return;
 
                 if (userError || !user) {
@@ -179,7 +180,7 @@ export function useAuth(requiredRoles?: string[], redirectOnFail: string = '/log
         setAuthState(prev => ({ ...prev, loading: true }));
 
         try {
-            const { data: { user }, error: userError } = await supabase.auth.getUser();
+            const { user, error: userError } = await getSessionUser();
             if (userError || !user) {
                 if (userError && isInvalidRefreshTokenError(userError)) {
                     await clearInvalidSession();

@@ -8,6 +8,7 @@
 | 앱 | 이름 | 포트 | 도메인 | 설명 |
 |----|------|------|--------|------|
 | `apps/customer` | @sht/customer | 3000 | `staycruise.kr` | 메인 고객 앱 (견적·예약) |
+| `apps/quote` | @sht/quote | 3002 | `quote.stayhalong.com` | 견적 전용 앱 (독립 `sht-quote` 이관본) |
 | `apps/customer1` | @sht/customer1 | 3006 | `legacy.staycruise.kr` | 구고객 주문번호 조회 |
 | `apps/manager` | @sht/manager | 3001 | `manager.staycruise.kr` | 메인 매니저 (6그룹 사이드바) |
 | `apps/manager1` | @sht/manager1 | 3005 | `quick.manager.staycruise.kr` | 즐겨찾기 빠른패널 (2섹션 고정) |
@@ -19,7 +20,7 @@
 ## 🏗️ 단일 저장소 원칙 (최우선 - 필수)
 
 ### ✅ 모든 작업은 `sht-platform` 모노레포에서만 수행
-- **단독 저장소(`sht-manager`, `sht-customer`, `sht-manager1`, `sht-customer1`, `sht-admin`) 수정 금지**
+- **단독 저장소(`sht-manager`, `sht-customer`, `sht-manager1`, `sht-customer1`, `sht-admin`, `sht-quote`) 수정 금지**
 - 코드는 `c:\Users\saint\SH_DATA\sht-platform\apps\<앱명>\` 안에서만 편집
 - 커밋·푸시: `git push origin main` (origin = `https://github.com/mimok7/shtplatform.git`)
 
@@ -27,6 +28,7 @@
 이전에 존재했던 다음 규칙은 **완전 폐지**됨:
 - ~~매니저 3종 동시 수정 규칙~~ (sht-manager / sht-manager1 / sht-platform)
 - ~~이중 프로젝트 미러링~~ (sht-customer + sht-platform/apps/customer 동시 수정)
+- ~~견적 프로젝트 독립 관리~~ (sht-quote 단독 수정 금지, `apps/quote`에서만 관리)
 - ~~바이트 단위 robocopy 미러링~~ (더 이상 불필요)
 
 ### Git 작업 표준
@@ -93,6 +95,7 @@ pnpm install                              # 의존성 설치
 pnpm --filter @sht/manager dev            # 매니저 개발 서버 (포트 3001)
 pnpm --filter @sht/manager1 dev           # 빠른패널 (포트 3005)
 pnpm --filter @sht/customer dev           # 고객 개발 서버 (포트 3000)
+pnpm --filter @sht/quote dev              # 견적 전용 앱 (포트 3002)
 pnpm --filter @sht/customer1 dev          # 구고객 (포트 3006)
 pnpm --filter @sht/admin dev              # 관리자 (포트 3004)
 pnpm --filter @sht/partner dev            # 파트너 (포트 3003)
@@ -203,10 +206,11 @@ if (loading) return (
 sht-platform/
 ├── apps/
 │   ├── customer/            # 메인 고객 앱 (Next.js App Router)
-│   │   ├── src/app/mypage/  # 견적·예약·직접예약
-│   │   ├── src/components/  # PageWrapper, SectionBox, Spinner...
-│   │   ├── src/hooks/       # useAuth, useQueries
-│   │   └── src/lib/         # supabase, authHelpers, queryClient
+│   ├── quote/               # 견적 전용 앱 (sht-quote 이관본)
+│   │   ├── app/             # Next.js App Router
+│   │   ├── components/      # PageWrapper, SectionBox, Spinner...
+│   │   ├── hooks/           # useAuth, useQueries
+│   │   └── lib/             # supabase, authHelpers, queryClient
 │   ├── customer1/           # 구고객 주문번호 조회 (Order-based)
 │   ├── manager/             # 메인 매니저 (견적·예약·결제·리포트)
 │   ├── manager1/            # 즐겨찾기 빠른패널 (2섹션 고정 사이드바)
