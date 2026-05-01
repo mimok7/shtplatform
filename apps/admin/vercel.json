@@ -1,5 +1,4 @@
 {
-  "ignoreCommand": "node ../../scripts/vercel-ignore.js admin",
   "installCommand": "cd ../.. && pnpm install --frozen-lockfile",
   "buildCommand": "cd ../.. && pnpm --filter @sht/admin build",
   "outputDirectory": ".next",
