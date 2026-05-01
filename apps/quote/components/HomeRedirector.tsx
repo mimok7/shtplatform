@@ -3,12 +3,18 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { clearCachedUser, getCachedOrderId, getCachedUser, setCachedUser } from '@/lib/authCache';
+import { clearAuthCache } from '@/hooks/useAuth';
 
 export default function HomeRedirector() {
     const router = useRouter();
 
     useEffect(() => {
         let cancelled = false;
+
+        clearCachedUser();
+        clearAuthCache();
+        try { sessionStorage.removeItem('app:session:cache'); } catch { /* noop */ }
+        try { sessionStorage.removeItem('app:auth:cache'); } catch { /* noop */ }
 
         const run = async () => {
             try {

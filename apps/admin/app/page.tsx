@@ -12,6 +12,9 @@ export default function HomePage() {
   useEffect(() => {
     let cancelled = false;
 
+    try { sessionStorage.removeItem('app:session:cache'); } catch { /* noop */ }
+    try { sessionStorage.removeItem('app:auth:cache'); } catch { /* noop */ }
+
     const checkAdmin = async () => {
       try {
         const {

@@ -10,6 +10,10 @@ import SectionBox from '@/components/SectionBox';
 export default function BookingListPage() {
     const router = useRouter();
     useEffect(() => {
+        try { sessionStorage.removeItem('app:session:cache'); } catch { /* noop */ }
+        try { sessionStorage.removeItem('app:auth:cache'); } catch { /* noop */ }
+        try { localStorage.removeItem('sht_partner_user_cache'); } catch { /* noop */ }
+
         const t = setTimeout(() => router.replace('/partner/browse'), 1500);
         return () => clearTimeout(t);
     }, [router]);

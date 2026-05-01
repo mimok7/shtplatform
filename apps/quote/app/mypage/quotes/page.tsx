@@ -10,7 +10,6 @@ import SectionBox from '@/components/SectionBox';
 export default function QuotesHubPage() {
   const router = useRouter();
   const actions = useMemo(() => [
-    { icon: '📝', label: '새 견적', href: '/mypage/quotes/new' },
     { icon: '📑', label: '견적 목록', href: '/mypage/quotes/list' },
   ], []);
 
