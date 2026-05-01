@@ -60,6 +60,8 @@ interface ReservationSummary {
     services: ServiceReservation[]; // 여러 서비스를 담는 배열
 }
 
+const RESERVATION_EDIT_SEARCH_CACHE_KEY = 'manager:reservation-edit:search-cache';
+
 function ReservationEditContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -72,32 +74,142 @@ function ReservationEditContent() {
     const [loading, setLoading] = useState(false);
     const [searchTerm, setSearchTerm] = useState(''); // 실제 필터링에 사용되는 검색어
     const [searchInput, setSearchInput] = useState(''); // 입력 필드 값
+    const [hasSearched, setHasSearched] = useState(false);
     // URL 파라미터에서 초기값 설정 (렌더 시점에 바로 읽어 중복 useEffect 방지)
-    const [statusFilter, setStatusFilter] = useState(() => searchParams.get('status') || 'pending');
+    const [statusFilter, setStatusFilter] = useState(() => searchParams.get('status') || 'all');
     const [typeFilter, setTypeFilter] = useState(() => normalizeTypeFilter(searchParams.get('type')));
     const [selectedReservation, setSelectedReservation] = useState<ReservationSummary | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
+
+    const saveSearchCache = (
+        nextSearchInput: string,
+        nextSearchTerm: string,
+        nextStatusFilter: string,
+        nextTypeFilter: string,
+        nextHasSearched: boolean
+    ) => {
+        if (typeof window === 'undefined') return;
+        try {
+            sessionStorage.setItem(
+                RESERVATION_EDIT_SEARCH_CACHE_KEY,
+                JSON.stringify({
+                    searchInput: nextSearchInput,
+                    searchTerm: nextSearchTerm,
+                    statusFilter: nextStatusFilter,
+                    typeFilter: nextTypeFilter,
+                    hasSearched: nextHasSearched,
+                })
+            );
+        } catch {
+            // noop
+        }
+    };
+
+    const clearSearchCache = () => {
+        if (typeof window === 'undefined') return;
+        try {
+            sessionStorage.removeItem(RESERVATION_EDIT_SEARCH_CACHE_KEY);
+        } catch {
+            // noop
+        }
+    };
 
     // searchParams 변경 시 필터 동기화
     useEffect(() => {
         const type = searchParams.get('type');
         const status = searchParams.get('status');
-        if (type) setTypeFilter(normalizeTypeFilter(type));
-        if (status) setStatusFilter(status);
+        setTypeFilter(normalizeTypeFilter(type));
+        setStatusFilter(status || 'all');
+
+        const quoteId = searchParams.get('quote_id');
+        if (quoteId) {
+            setSearchInput(quoteId);
+            setSearchTerm(quoteId);
+            setHasSearched(true);
+            saveSearchCache(quoteId, quoteId, status || 'all', normalizeTypeFilter(type), true);
+            void loadReservations(quoteId);
+            return;
+        }
+
+        if (typeof window !== 'undefined') {
+            try {
+                const raw = sessionStorage.getItem(RESERVATION_EDIT_SEARCH_CACHE_KEY);
+                if (raw) {
+                    const cached = JSON.parse(raw);
+                    const cachedTypeFilter = normalizeTypeFilter(cached?.typeFilter);
+                    const cachedStatusFilter = cached?.statusFilter || 'all';
+                    const cachedSearchInput = cached?.searchInput || '';
+                    const cachedSearchTerm = cached?.searchTerm || '';
+                    const cachedHasSearched = !!cached?.hasSearched;
+
+                    setTypeFilter(cachedTypeFilter);
+                    setStatusFilter(cachedStatusFilter);
+                    setSearchInput(cachedSearchInput);
+                    setSearchTerm(cachedSearchTerm);
+                    setHasSearched(cachedHasSearched);
+
+                    if (cachedHasSearched && cachedSearchTerm) {
+                        void loadReservations(cachedSearchTerm);
+                    }
+                }
+            } catch {
+                // noop
+            }
+        }
     }, [searchParams]);
 
-    // 필터(+초기 마운트) 시 데이터 로드 - 단일 useEffect로 통합
-    useEffect(() => {
-        loadReservations();
-    }, [statusFilter, typeFilter]); // eslint-disable-line react-hooks/exhaustive-deps
-
-    const loadReservations = async () => {
+    const loadReservations = async (keywordRaw: string = searchTerm) => {
         try {
             console.log('🔄 예약 데이터 로드 시작 (배이스 테이블 조회)...');
             setLoading(true);
 
             // URL 파라미터에서 필터 추출
             const quoteId = searchParams.get('quote_id');
+            const keyword = keywordRaw.trim();
+
+            const escapeIlike = (value: string) => value.replace(/[%_]/g, (m) => `\\${m}`);
+            let searchOrConditions: string[] = [];
+
+            if (!quoteId && keyword) {
+                const searchPattern = `%${escapeIlike(keyword)}%`;
+                const [usersRes, quoteRes] = await Promise.all([
+                    supabase
+                        .from('users')
+                        .select('id')
+                        .or(`name.ilike.${searchPattern},email.ilike.${searchPattern}`)
+                        .limit(500),
+                    supabase
+                        .from('quote')
+                        .select('id')
+                        .ilike('title', searchPattern)
+                        .limit(500),
+                ]);
+
+                const matchedUserIds = (usersRes.data || []).map((u: any) => u.id).filter(Boolean);
+                const matchedQuoteIds = (quoteRes.data || []).map((q: any) => q.id).filter(Boolean);
+                const isUuid = /^[0-9a-fA-F-]{36}$/.test(keyword);
+
+                if (matchedUserIds.length > 0) {
+                    searchOrConditions.push(`re_user_id.in.(${matchedUserIds.join(',')})`);
+                }
+                if (matchedQuoteIds.length > 0) {
+                    searchOrConditions.push(`re_quote_id.in.(${matchedQuoteIds.join(',')})`);
+                }
+                if (isUuid) {
+                    searchOrConditions.push(`re_id.eq.${keyword}`);
+                    searchOrConditions.push(`re_quote_id.eq.${keyword}`);
+                }
+
+                if (searchOrConditions.length === 0) {
+                    setReservations([]);
+                    return;
+                }
+            }
+
+            if (!quoteId && !keyword) {
+                setReservations([]);
+                return;
+            }
 
             // 1) reservation 테이블 조회
             const PAGE_SIZE = 1000;
@@ -114,6 +226,9 @@ function ReservationEditContent() {
                 // 필터 적용
                 if (quoteId) {
                     pageQuery = pageQuery.eq('re_quote_id', quoteId);
+                }
+                if (!quoteId && searchOrConditions.length > 0) {
+                    pageQuery = pageQuery.or(searchOrConditions.join(','));
                 }
                 if (statusFilter !== 'all') {
                     pageQuery = pageQuery.eq('re_status', statusFilter);
@@ -404,6 +519,24 @@ function ReservationEditContent() {
         }
     };
 
+    const handleSearchClick = async () => {
+        const keyword = searchInput.trim();
+        const quoteId = searchParams.get('quote_id');
+
+        if (!quoteId && !keyword) {
+            setReservations([]);
+            setSearchTerm('');
+            setHasSearched(false);
+            clearSearchCache();
+            return;
+        }
+
+        setSearchTerm(keyword);
+        setHasSearched(true);
+        saveSearchCache(searchInput, keyword, statusFilter, typeFilter, true);
+        await loadReservations(keyword);
+    };
+
     // 예약 삭제
     const [deleting, setDeleting] = useState<string | null>(null);
 
@@ -440,7 +573,7 @@ function ReservationEditContent() {
             if (error) throw error;
 
             alert('해당 서비스 예약 1건이 삭제되었습니다.');
-            loadReservations();
+            await loadReservations(searchTerm);
         } catch (error: any) {
             console.error('예약 삭제 실패:', error);
             alert('삭제 실패: ' + (error.message || '알 수 없는 오류'));
@@ -492,7 +625,7 @@ function ReservationEditContent() {
             }
 
             alert('견적 그룹 전체가 삭제되었습니다.');
-            loadReservations();
+            await loadReservations(searchTerm);
         } catch (error: any) {
             console.error('전체 삭제 실패:', error);
             alert('전체 삭제 실패: ' + (error.message || '알 수 없는 오류'));
@@ -501,20 +634,7 @@ function ReservationEditContent() {
         }
     };
 
-    const filteredReservations = reservations.filter(reservation => {
-        if (!searchTerm) return true;
-
-        const searchLower = searchTerm.toLowerCase();
-        return (
-            reservation.users?.name?.toLowerCase().includes(searchLower) ||
-            reservation.users?.email?.toLowerCase().includes(searchLower) ||
-            reservation.quote?.title?.toLowerCase().includes(searchLower) ||
-            reservation.services.some(s =>
-                s.re_type.toLowerCase().includes(searchLower) ||
-                s.re_status.toLowerCase().includes(searchLower)
-            )
-        );
-    });
+    const filteredReservations = reservations;
 
     const handleAddReservationForGroup = (reservation: ReservationSummary) => {
         if (reservation.re_quote_id) {
@@ -696,6 +816,27 @@ function ReservationEditContent() {
                             총 {filteredReservations.length}개의 예약
                         </div>
 
+                        {/* 검색 입력 및 검색 버튼 */}
+                        <div className="flex gap-2 items-center">
+                            <div className="relative">
+                                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                                <input
+                                    type="text"
+                                    placeholder="고객명, 이메일로 검색"
+                                    value={searchInput}
+                                    onChange={(e) => setSearchInput(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && handleSearchClick()}
+                                    className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-64"
+                                />
+                            </div>
+                            <button
+                                onClick={handleSearchClick}
+                                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium whitespace-nowrap"
+                            >
+                                검색
+                            </button>
+                        </div>
+
                         {/* 현재 필터 표시 및 필터 초기화 */}
                         {(typeFilter !== 'all' || statusFilter !== 'all' || searchTerm) && (
                             <div className="flex flex-wrap gap-2 items-center">
@@ -731,6 +872,7 @@ function ReservationEditContent() {
                                             onClick={() => {
                                                 setSearchTerm('');
                                                 setSearchInput('');
+                                                clearSearchCache();
                                             }}
                                             className="ml-1 hover:bg-gray-200 rounded-full p-0.5 w-4 h-4 flex items-center justify-center"
                                             title="검색어 제거"
@@ -743,40 +885,17 @@ function ReservationEditContent() {
                                     onClick={() => {
                                         setSearchTerm('');
                                         setSearchInput('');
-                                        setStatusFilter('pending');
+                                        setHasSearched(false);
+                                        setStatusFilter('all');
                                         setTypeFilter('all');
+                                        clearSearchCache();
                                     }}
                                     className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1 hover:bg-gray-100 rounded"
                                 >
-                                    필터 초기화 (대기중)
+                                    필터 초기화
                                 </button>
                             </div>
                         )}
-
-                        {/* 검색 입력 및 검색 버튼 */}
-                        <div className="flex gap-2 items-center ml-auto">
-                            <div className="relative">
-                                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                                <input
-                                    type="text"
-                                    placeholder="고객명, 이메일로 검색"
-                                    value={searchInput}
-                                    onChange={(e) => setSearchInput(e.target.value)}
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter') {
-                                            setSearchTerm(searchInput);
-                                        }
-                                    }}
-                                    className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-64"
-                                />
-                            </div>
-                            <button
-                                onClick={() => setSearchTerm(searchInput)}
-                                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium whitespace-nowrap"
-                            >
-                                검색
-                            </button>
-                        </div>
                     </div>
 
                     {/* 예약 목록 카드 그리드 */}
@@ -786,9 +905,9 @@ function ReservationEditContent() {
                                 <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                                 <h3 className="text-lg font-medium text-gray-900 mb-2">예약이 없습니다</h3>
                                 <p className="text-gray-600">
-                                    {searchTerm || statusFilter !== 'pending' || typeFilter !== 'all'
+                                    {hasSearched
                                         ? '검색 조건에 맞는 예약이 없습니다.'
-                                        : '대기중인 예약이 없습니다.'
+                                        : '검색어를 입력하고 검색 버튼을 눌러주세요.'
                                     }
                                 </p>
                                 <div className="mt-4">
@@ -796,8 +915,10 @@ function ReservationEditContent() {
                                         onClick={() => {
                                             setSearchTerm('');
                                             setSearchInput('');
-                                            setStatusFilter('pending');
+                                            setHasSearched(false);
+                                            setStatusFilter('all');
                                             setTypeFilter('all');
+                                            clearSearchCache();
                                         }}
                                         className="text-blue-600 hover:text-blue-800 text-sm"
                                     >
