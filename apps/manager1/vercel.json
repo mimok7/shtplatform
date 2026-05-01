@@ -1,7 +1,11 @@
 {
-  "root": "apps/manager1",
-  "installCommand": "pnpm install --frozen-lockfile",
-  "buildCommand": "pnpm build",
+  "installCommand": "cd ../.. && pnpm install --frozen-lockfile",
+  "buildCommand": "cd ../.. && pnpm --filter @sht/manager1 build",
   "outputDirectory": ".next",
-  "framework": "nextjs"
+  "framework": "nextjs",
+  "crons": [
+    { "path": "/api/cron/auto-complete", "schedule": "0 18 * * *" },
+    { "path": "/api/cron/daily-stats", "schedule": "0 15 * * *" },
+    { "path": "/api/cron/cleanup-documents", "schedule": "0 19 * * *" }
+  ]
 }

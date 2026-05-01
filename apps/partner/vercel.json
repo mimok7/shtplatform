@@ -1,7 +1,6 @@
 {
-{"root": "apps/partner",
-  "installCommand": "pnpm install --frozen-lockfile",
-  "buildCommand": "pnpm build",
+  "installCommand": "cd ../.. && pnpm install --frozen-lockfile",
+  "buildCommand": "cd ../.. && pnpm --filter @sht/partner build",
   "outputDirectory": ".next",
   "framework": "nextjs"
 }

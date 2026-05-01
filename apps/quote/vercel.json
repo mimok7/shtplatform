@@ -1,7 +1,6 @@
 {
-  "root": "apps/quote",
-  "installCommand": "pnpm install --frozen-lockfile",
-  "buildCommand": "pnpm build",
+  "installCommand": "cd ../.. && pnpm install --frozen-lockfile",
+  "buildCommand": "cd ../.. && pnpm --filter @sht/quote build",
   "outputDirectory": ".next",
   "framework": "nextjs"
 }
