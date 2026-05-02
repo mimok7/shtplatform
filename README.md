@@ -59,6 +59,27 @@ pnpm dev:manager    # http://localhost:3001
 | `pnpm lint:fix` | 린트 자동 수정 |
 | `pnpm test` | 테스트 |
 
+## 🔧 개발 도구
+
+### Google Sheets MCP 설정 (선택사항)
+Admin 앱의 Google Sheets 동기화 기능 개발 시 Smithery의 Google Sheets MCP를 추가할 수 있습니다.
+
+**🚀 가장 빠른 설정** (Claude Desktop):
+1. [`CLAUDE-DESKTOP-SETUP.md`](./CLAUDE-DESKTOP-SETUP.md) 참고
+2. Claude Desktop 설정 파일 업데이트 (2분)
+3. 완료! Claude에서 Google Sheets 도구 사용 가능
+
+**기타 가이드**:
+- **빠른 설정**: [`SMITHERY-SETUP-QUICK.md`](./SMITHERY-SETUP-QUICK.md) (3단계, 5분)  
+- **자세한 가이드**: [`docs/ADMIN-GOOGLE-SHEETS-MCP.md`](./docs/ADMIN-GOOGLE-SHEETS-MCP.md)  
+- **MCP 클라이언트 연결**: [`docs/MCP-CONFIGURATION.md`](./docs/MCP-CONFIGURATION.md)  
+- **자동 설정 스크립트**: [`scripts/setup-smithery-google-sheets.ps1`](./scripts/setup-smithery-google-sheets.ps1)
+
+```bash
+# 설정 완료 후 Claude/Copilot에서 Google Sheets 도구 사용 가능
+# 기존 /admin/sheets-sync 기능은 변화 없음
+```
+
 ## 앱 목록
 
 | 앱 | 패키지 | 포트 | 설명 |
