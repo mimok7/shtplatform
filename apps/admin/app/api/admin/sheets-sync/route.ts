@@ -27,12 +27,47 @@ const CRUISE_GUIDE_HEADERS = [
 const USER_HEADERS = ['예약자ID', '예약자명', '이메일', '연락처', '역할', '가입일', '예약건수'];
 const DEFAULT_SERVICE_ACCOUNT_EMAIL = 'sheets-importer@cruise-7683b.iam.gserviceaccount.com';
 
-function getSpreadsheetId(req: NextRequest) {
+type SyncOverrides = {
+  spreadsheetId?: string;
+  serviceAccountJson?: string;
+  serviceAccountEmail?: string;
+  serviceAccountPrivateKey?: string;
+};
+
+function getSpreadsheetId(req: NextRequest, overrides?: SyncOverrides) {
   const { searchParams } = new URL(req.url);
-  return searchParams.get('spreadsheetId') || process.env.GOOGLE_SHEETS_SPREADSHEET_ID || process.env.GOOGLE_SPREADSHEET_ID || '';
+  return (
+    overrides?.spreadsheetId ||
+    searchParams.get('spreadsheetId') ||
+    process.env.GOOGLE_SHEETS_SPREADSHEET_ID ||
+    process.env.GOOGLE_SPREADSHEET_ID ||
+    ''
+  );
 }
 
-function getServiceAccount() {
+function getServiceAccount(overrides?: SyncOverrides) {
+  const overrideJson = overrides?.serviceAccountJson || '';
+  if (overrideJson) {
+    try {
+      const parsed = JSON.parse(overrideJson);
+      return {
+        clientEmail: parsed.client_email || '',
+        privateKey: parsed.private_key || '',
+      };
+    } catch {
+      // ignore malformed override JSON and fallback
+    }
+  }
+
+  const overrideEmail = overrides?.serviceAccountEmail || '';
+  const overridePrivateKey = (overrides?.serviceAccountPrivateKey || '').replace(/\\n/g, '\n');
+  if (overrideEmail && overridePrivateKey) {
+    return {
+      clientEmail: overrideEmail,
+      privateKey: overridePrivateKey,
+    };
+  }
+
   const json = process.env.GOOGLE_SERVICE_ACCOUNT_JSON || process.env.GCP_SA_KEY || '';
   if (json) {
     try {
@@ -55,9 +90,9 @@ function getServiceAccount() {
   };
 }
 
-function envStatus(req: NextRequest) {
-  const spreadsheetId = getSpreadsheetId(req);
-  const serviceAccount = getServiceAccount();
+function envStatus(req: NextRequest, overrides?: SyncOverrides) {
+  const spreadsheetId = getSpreadsheetId(req, overrides);
+  const serviceAccount = getServiceAccount(overrides);
   return {
     supabaseUrl: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL),
     serviceRole: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
@@ -68,8 +103,8 @@ function envStatus(req: NextRequest) {
   };
 }
 
-function getSheetsClient() {
-  const serviceAccount = getServiceAccount();
+function getSheetsClient(overrides?: SyncOverrides) {
+  const serviceAccount = getServiceAccount(overrides);
   if (!serviceAccount.clientEmail || !serviceAccount.privateKey) {
     throw new Error('Google 서비스 계정 환경변수가 필요합니다. GOOGLE_SERVICE_ACCOUNT_JSON 또는 GOOGLE_SERVICE_ACCOUNT_EMAIL/GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY를 설정하세요.');
   }
@@ -343,14 +378,22 @@ export async function POST(req: NextRequest) {
   const auth = await checkAdmin(req);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
-  const spreadsheetId = getSpreadsheetId(req);
+  const body = await req.json().catch(() => ({}));
+  const overrides: SyncOverrides = {
+    spreadsheetId: typeof body?.spreadsheetId === 'string' ? body.spreadsheetId.trim() : '',
+    serviceAccountJson: typeof body?.serviceAccountJson === 'string' ? body.serviceAccountJson.trim() : '',
+    serviceAccountEmail: typeof body?.serviceAccountEmail === 'string' ? body.serviceAccountEmail.trim() : '',
+    serviceAccountPrivateKey: typeof body?.serviceAccountPrivateKey === 'string' ? body.serviceAccountPrivateKey : '',
+  };
+
+  const spreadsheetId = getSpreadsheetId(req, overrides);
   if (!spreadsheetId) {
     return NextResponse.json({ error: 'GOOGLE_SHEETS_SPREADSHEET_ID가 필요합니다.' }, { status: 400 });
   }
 
   try {
     const sheetMatrices = await buildSheets();
-    const sheets = getSheetsClient();
+    const sheets = getSheetsClient(overrides);
     await ensureSheets(sheets, spreadsheetId, sheetMatrices.map((sheet) => sheet.title));
     for (const sheet of sheetMatrices) {
       await writeSheet(sheets, spreadsheetId, sheet);
@@ -363,6 +406,6 @@ export async function POST(req: NextRequest) {
       sheets: sheetMatrices.map((sheet) => ({ title: sheet.title, rows: sheet.rows.length, columns: sheet.headers.length })),
     });
   } catch (error: any) {
-    return NextResponse.json({ error: error?.message || String(error), env: envStatus(req) }, { status: 500 });
+    return NextResponse.json({ error: error?.message || String(error), env: envStatus(req, overrides) }, { status: 500 });
   }
 }

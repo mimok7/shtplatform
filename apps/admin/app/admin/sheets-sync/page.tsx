@@ -34,6 +34,7 @@ export default function SheetsSyncPage() {
   const [syncedAt, setSyncedAt] = useState('');
   const [sheets, setSheets] = useState<SyncSheet[]>([]);
   const [spreadsheetIdInput, setSpreadsheetIdInput] = useState(DEFAULT_SPREADSHEET_ID);
+  const [serviceAccountJsonInput, setServiceAccountJsonInput] = useState('');
 
   const saveCache = (next: Partial<SyncCache>) => {
     try {
@@ -97,7 +98,17 @@ export default function SheetsSyncPage() {
     try {
       const headers = await authHeaders();
       const query = spreadsheetIdInput.trim() ? `?spreadsheetId=${encodeURIComponent(spreadsheetIdInput.trim())}` : '';
-      const res = await fetch(`/api/admin/sheets-sync${query}`, { method: 'POST', headers });
+      const res = await fetch(`/api/admin/sheets-sync${query}`, {
+        method: 'POST',
+        headers: {
+          ...headers,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          spreadsheetId: spreadsheetIdInput.trim(),
+          serviceAccountJson: serviceAccountJsonInput.trim(),
+        }),
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || '동기화 실패');
       setSyncedAt(data.syncedAt);
@@ -170,6 +181,17 @@ export default function SheetsSyncPage() {
             >
               입력값으로 재확인
             </button>
+          </div>
+          <div className="mt-2">
+            <textarea
+              value={serviceAccountJsonInput}
+              onChange={(e) => setServiceAccountJsonInput(e.target.value)}
+              placeholder="Google 서비스계정 JSON (선택: 환경변수 미설정 시 동기화 실행 시에만 사용)"
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-xs font-mono h-24 focus:border-blue-500 focus:outline-none"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              이 입력값은 서버 환경변수를 대체하여 이번 동기화 요청에만 사용됩니다.
+            </p>
           </div>
         </div>
 
