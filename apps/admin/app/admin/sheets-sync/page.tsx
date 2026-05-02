@@ -23,6 +23,7 @@ export default function SheetsSyncPage() {
   const [message, setMessage] = useState('');
   const [syncedAt, setSyncedAt] = useState('');
   const [sheets, setSheets] = useState<SyncSheet[]>([]);
+  const [spreadsheetIdInput, setSpreadsheetIdInput] = useState('');
 
   const authHeaders = async (): Promise<Record<string, string>> => {
     const { data: { session } } = await getSupabase().auth.getSession();
@@ -34,7 +35,8 @@ export default function SheetsSyncPage() {
     setMessage('');
     try {
       const headers = await authHeaders();
-      const res = await fetch('/api/admin/sheets-sync', { headers });
+      const query = spreadsheetIdInput.trim() ? `?spreadsheetId=${encodeURIComponent(spreadsheetIdInput.trim())}` : '';
+      const res = await fetch(`/api/admin/sheets-sync${query}`, { headers });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || '상태 확인 실패');
       setEnv(data.env);
@@ -59,7 +61,8 @@ export default function SheetsSyncPage() {
     setMessage('');
     try {
       const headers = await authHeaders();
-      const res = await fetch('/api/admin/sheets-sync', { method: 'POST', headers });
+      const query = spreadsheetIdInput.trim() ? `?spreadsheetId=${encodeURIComponent(spreadsheetIdInput.trim())}` : '';
+      const res = await fetch(`/api/admin/sheets-sync${query}`, { method: 'POST', headers });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || '동기화 실패');
       setSyncedAt(data.syncedAt);
@@ -112,6 +115,22 @@ export default function SheetsSyncPage() {
                 {syncing ? '동기화 중' : '동기화 실행'}
               </button>
             </div>
+          </div>
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-[1fr_auto] gap-2">
+            <input
+              type="text"
+              value={spreadsheetIdInput}
+              onChange={(e) => setSpreadsheetIdInput(e.target.value)}
+              placeholder="Google Sheet ID (선택: 환경변수 미설정 시 여기 입력)"
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+            />
+            <button
+              onClick={loadStatus}
+              disabled={loading || syncing}
+              className="inline-flex items-center justify-center px-4 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            >
+              입력값으로 재확인
+            </button>
           </div>
         </div>
 

@@ -25,6 +25,7 @@ const CRUISE_GUIDE_HEADERS = [
   '발코니', '추천', '객실설명', '포함사항', '불포함사항', '취소규정', '안내메모',
 ];
 const USER_HEADERS = ['예약자ID', '예약자명', '이메일', '연락처', '역할', '가입일', '예약건수'];
+const DEFAULT_SERVICE_ACCOUNT_EMAIL = 'sheets-importer@cruise-7683b.iam.gserviceaccount.com';
 
 function getSpreadsheetId(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -34,15 +35,22 @@ function getSpreadsheetId(req: NextRequest) {
 function getServiceAccount() {
   const json = process.env.GOOGLE_SERVICE_ACCOUNT_JSON || process.env.GCP_SA_KEY || '';
   if (json) {
-    const parsed = JSON.parse(json);
-    return {
-      clientEmail: parsed.client_email,
-      privateKey: parsed.private_key,
-    };
+    try {
+      const parsed = JSON.parse(json);
+      return {
+        clientEmail: parsed.client_email || '',
+        privateKey: parsed.private_key || '',
+      };
+    } catch {
+      return {
+        clientEmail: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || process.env.GOOGLE_CLIENT_EMAIL || DEFAULT_SERVICE_ACCOUNT_EMAIL,
+        privateKey: (process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY || process.env.GOOGLE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
+      };
+    }
   }
 
   return {
-    clientEmail: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || process.env.GOOGLE_CLIENT_EMAIL || '',
+    clientEmail: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || process.env.GOOGLE_CLIENT_EMAIL || DEFAULT_SERVICE_ACCOUNT_EMAIL,
     privateKey: (process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY || process.env.GOOGLE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
   };
 }
