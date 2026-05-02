@@ -233,7 +233,6 @@ export default function AdminLayout({ children, title, activeTab }: AdminLayoutP
         { id: 'backup-guide', label: '백업 지침', path: '/admin/backup/guide', icon: '📘' },
         { id: 'backup-setup', label: '엑셀 자동 설정', path: '/admin/backup/setup', icon: '✅' },
         { id: 'export', label: '엑셀 내보내기', path: '/admin/export', icon: '📤' },
-        { id: 'sheets-sync', label: '구글시트 내보내기', path: '/admin/sheets-sync', icon: '📊' },
       ]
     },
   ];
