@@ -1,6 +1,6 @@
 {
   "installCommand": "cd ../.. && pnpm install --frozen-lockfile",
-  "ignoreCommand": "if [ -z \"$VERCEL_GIT_PREVIOUS_SHA\" ]; then exit 1; fi; git diff --quiet $VERCEL_GIT_PREVIOUS_SHA $VERCEL_GIT_COMMIT_SHA -- . ../../packages ../../pnpm-lock.yaml ../../pnpm-workspace.yaml ../../turbo.json ../../package.json ../../tsconfig.base.json",
+  "ignoreCommand": "npx turbo-ignore @sht/manager",
   "buildCommand": "cd ../.. && pnpm --filter @sht/manager build",
   "outputDirectory": ".next",
   "framework": "nextjs"
