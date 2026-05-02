@@ -1,6 +1,6 @@
 {
   "installCommand": "cd ../.. && pnpm install --frozen-lockfile",
-  "ignoreCommand": "npx turbo-ignore @sht/admin",
+  "ignoreCommand": "cd ../.. && npx turbo-ignore @sht/admin",
   "buildCommand": "cd ../.. && pnpm --filter @sht/admin build",
   "outputDirectory": ".next",
   "framework": "nextjs"
