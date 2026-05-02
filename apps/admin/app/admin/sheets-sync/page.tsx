@@ -5,6 +5,9 @@ import { CheckCircle, ExternalLink, RefreshCw, Table2, XCircle } from 'lucide-re
 import AdminLayout from '@/components/AdminLayout';
 import { getSupabase } from '@/lib/supabase';
 
+const DEFAULT_SPREADSHEET_ID = '1HfeG38WvmKlz-QQEKmcjojC7w61z3rUTvQsjba5AYzg';
+const CACHE_KEY = 'sht_admin_sheets_sync_cache_v1';
+
 type EnvStatus = {
   supabaseUrl: boolean;
   serviceRole: boolean;
@@ -16,14 +19,35 @@ type EnvStatus = {
 
 type SyncSheet = { title: string; rows: number; columns: number };
 
+type SyncCache = {
+  env: EnvStatus | null;
+  syncedAt: string;
+  sheets: SyncSheet[];
+  spreadsheetIdInput: string;
+};
+
 export default function SheetsSyncPage() {
   const [env, setEnv] = useState<EnvStatus | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [message, setMessage] = useState('');
   const [syncedAt, setSyncedAt] = useState('');
   const [sheets, setSheets] = useState<SyncSheet[]>([]);
-  const [spreadsheetIdInput, setSpreadsheetIdInput] = useState('');
+  const [spreadsheetIdInput, setSpreadsheetIdInput] = useState(DEFAULT_SPREADSHEET_ID);
+
+  const saveCache = (next: Partial<SyncCache>) => {
+    try {
+      const current: SyncCache = {
+        env,
+        syncedAt,
+        sheets,
+        spreadsheetIdInput,
+      };
+      localStorage.setItem(CACHE_KEY, JSON.stringify({ ...current, ...next }));
+    } catch {
+      // ignore storage errors
+    }
+  };
 
   const authHeaders = async (): Promise<Record<string, string>> => {
     const { data: { session } } = await getSupabase().auth.getSession();
@@ -40,6 +64,7 @@ export default function SheetsSyncPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || '상태 확인 실패');
       setEnv(data.env);
+      saveCache({ env: data.env, spreadsheetIdInput });
     } catch (error: any) {
       setMessage(`상태 확인 실패: ${error.message || error}`);
     } finally {
@@ -48,7 +73,17 @@ export default function SheetsSyncPage() {
   };
 
   useEffect(() => {
-    loadStatus();
+    try {
+      const raw = localStorage.getItem(CACHE_KEY);
+      if (!raw) return;
+      const cached = JSON.parse(raw) as SyncCache;
+      if (cached?.env) setEnv(cached.env);
+      if (cached?.syncedAt) setSyncedAt(cached.syncedAt);
+      if (Array.isArray(cached?.sheets)) setSheets(cached.sheets);
+      if (cached?.spreadsheetIdInput) setSpreadsheetIdInput(cached.spreadsheetIdInput);
+    } catch {
+      // ignore cache parse errors
+    }
   }, []);
 
   const ready = useMemo(() => {
@@ -68,7 +103,7 @@ export default function SheetsSyncPage() {
       setSyncedAt(data.syncedAt);
       setSheets(data.sheets || []);
       setMessage('동기화가 완료되었습니다.');
-      await loadStatus();
+      saveCache({ syncedAt: data.syncedAt, sheets: data.sheets || [], spreadsheetIdInput });
     } catch (error: any) {
       setMessage(`동기화 실패: ${error.message || error}`);
     } finally {
@@ -108,7 +143,7 @@ export default function SheetsSyncPage() {
               </button>
               <button
                 onClick={runSync}
-                disabled={!ready || syncing || loading}
+                disabled={(!ready && !spreadsheetIdInput.trim()) || syncing || loading}
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
               >
                 <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
@@ -120,7 +155,11 @@ export default function SheetsSyncPage() {
             <input
               type="text"
               value={spreadsheetIdInput}
-              onChange={(e) => setSpreadsheetIdInput(e.target.value)}
+              onChange={(e) => {
+                const next = e.target.value;
+                setSpreadsheetIdInput(next);
+                saveCache({ spreadsheetIdInput: next });
+              }}
               placeholder="Google Sheet ID (선택: 환경변수 미설정 시 여기 입력)"
               className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
             />
@@ -138,7 +177,13 @@ export default function SheetsSyncPage() {
           {statusItems.map((item) => (
             <div key={item.label} className="bg-white rounded-lg shadow-sm p-4 flex items-center justify-between">
               <span className="text-sm font-medium text-gray-700">{item.label}</span>
-              {item.ok ? <CheckCircle className="w-5 h-5 text-green-600" /> : <XCircle className="w-5 h-5 text-red-500" />}
+              {env === null ? (
+                <span className="text-xs text-gray-400">미확인</span>
+              ) : item.ok ? (
+                <CheckCircle className="w-5 h-5 text-green-600" />
+              ) : (
+                <XCircle className="w-5 h-5 text-red-500" />
+              )}
             </div>
           ))}
         </div>
@@ -159,7 +204,7 @@ export default function SheetsSyncPage() {
           </div>
         )}
 
-        {!ready && !loading && (
+        {!ready && !loading && env !== null && (
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-5 text-sm text-amber-900">
             <div className="font-semibold mb-2">필요 환경변수</div>
             <div className="font-mono text-xs space-y-1">
