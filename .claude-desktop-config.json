@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "sht-googlesheets": {
+      "command": "npx",
+      "args": ["-y", "smithery", "run", "googlesheets"],
+      "disabled": false
+    }
+  }
+}
