@@ -1,0 +1,56 @@
+{
+  "defaultRequired": [
+    "NEXT_PUBLIC_SUPABASE_URL",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY"
+  ],
+  "apps": {
+    "admin": {
+      "required": [
+        "SUPABASE_SERVICE_ROLE_KEY"
+      ],
+      "recommended": [
+        "SUPABASE_DB_URL",
+        "GITHUB_BACKUP_TOKEN"
+      ]
+    },
+    "customer": {
+      "required": [
+        "SUPABASE_SERVICE_ROLE_KEY"
+      ]
+    },
+    "customer1": {
+      "recommended": [
+        "SUPABASE_SERVICE_ROLE_KEY"
+      ]
+    },
+    "manager": {
+      "required": [
+        "SUPABASE_SERVICE_ROLE_KEY"
+      ]
+    },
+    "manager1": {
+      "required": [
+        "SUPABASE_SERVICE_ROLE_KEY"
+      ]
+    },
+    "partner": {
+      "required": []
+    },
+    "quote": {
+      "required": [
+        "SUPABASE_SERVICE_ROLE_KEY"
+      ],
+      "recommended": [
+        "GOOGLE_SERVICE_ACCOUNT_EMAIL",
+        "GOOGLE_SERVICE_ACCOUNT_KEY"
+      ]
+    }
+  },
+  "placeholderPatterns": [
+    "^your[-_]",
+    "^changeme",
+    "example",
+    "<.*>",
+    "^REPLACE_"
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "servers": {
+    "io.github.github/github-mcp-server": {
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "gallery": "https://api.mcp.github.com",
+      "version": "1.0.1"
+    },
+    "com.supabase/mcp": {
+      "type": "http",
+      "url": "https://mcp.supabase.com/mcp",
+      "gallery": "https://api.mcp.github.com",
+      "version": "0.7.0"
+    },
+    "io.github.ChromeDevTools/chrome-devtools-mcp": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "--registry",
+        "https://registry.npmjs.org",
+        "chrome-devtools-mcp@0.22.0"
+      ],
+      "gallery": "https://api.mcp.github.com",
+      "version": "0.22.0"
+    },
+    "com.vercel/vercel-mcp": {
+      "type": "http",
+      "url": "https://mcp.vercel.com",
+      "gallery": "https://api.mcp.github.com",
+      "version": "0.0.3"
+    }
+  },
+  "inputs": []
+}
