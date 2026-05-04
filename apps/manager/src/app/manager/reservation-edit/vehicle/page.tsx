@@ -70,6 +70,7 @@ interface VehicleFormData {
     dropoff_location: string;
     return_datetime: string;
     car_total_price: number;
+    manual_total: boolean;
     unit_price: number;
     request_note: string;
     dispatch_code: string;
@@ -88,6 +89,7 @@ const createEmptyVehicleForm = (): VehicleFormData => ({
     dropoff_location: '',
     return_datetime: '',
     car_total_price: 0,
+    manual_total: false,
     unit_price: 0,
     request_note: '',
     dispatch_code: '',
@@ -160,6 +162,9 @@ function CruiseCarReservationEditContent() {
             prev.map((item, idx) => {
                 if (idx !== index) return item;
                 const next = { ...item, ...patch };
+                if (next.manual_total) {
+                    return next;
+                }
                 return { ...next, car_total_price: getAutoTotal(next) };
             })
         );
@@ -447,6 +452,7 @@ function CruiseCarReservationEditContent() {
                     dropoff_location: row.dropoff_location || '',
                     return_datetime: row.return_datetime || '',
                     car_total_price: row.car_total_price || 0,
+                    manual_total: row.car_total_price != null,
                     unit_price: row.unit_price || rentcarPriceInfo?.price || 0,
                     request_note: row.request_note || '',
                     dispatch_code: row.dispatch_code || '',
@@ -724,6 +730,7 @@ function CruiseCarReservationEditContent() {
                                                                 route: '',
                                                                 vehicle_type: '',
                                                                 rentcar_price_code: '',
+                                                                manual_total: false,
                                                                 unit_price: 0
                                                             });
                                                             if (nextWayType) {
@@ -749,6 +756,7 @@ function CruiseCarReservationEditContent() {
                                                                 route: nextRoute,
                                                                 vehicle_type: '',
                                                                 rentcar_price_code: '',
+                                                                manual_total: false,
                                                                 unit_price: 0
                                                             });
                                                             if (item.way_type && nextRoute) {
@@ -785,6 +793,7 @@ function CruiseCarReservationEditContent() {
                                                                     way_type: priceInfo.way_type || item.way_type,
                                                                     route: priceInfo.route || item.route,
                                                                     vehicle_type: priceInfo.vehicle_type || nextType,
+                                                                    manual_total: false,
                                                                     unit_price: priceInfo.price || 0
                                                                 });
                                                             }
@@ -949,7 +958,10 @@ function CruiseCarReservationEditContent() {
                                                     <input
                                                         type="number"
                                                         value={item.car_total_price}
-                                                        onChange={(e) => updateVehicleForm(index, { car_total_price: parseInt(e.target.value, 10) || 0 })}
+                                                        onChange={(e) => updateVehicleForm(index, {
+                                                            car_total_price: parseInt(e.target.value, 10) || 0,
+                                                            manual_total: true
+                                                        })}
                                                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-bold text-green-600"
                                                         min="0"
                                                     />
