@@ -250,6 +250,46 @@ export async function createPackageReservation({
             return '';
         };
 
+        // reservation_package 저장 (인원 옵션, 단가, 차량 배정)
+        const airportVehicleStr = getAssignedVehicle('airport', totalGuests);
+        const tourVehicleStr = getAssignedVehicle('tour', totalGuests);
+        // itemDetails에서 스하 셔틀 좌석 정보 추출 (cruise 아이템 기준)
+        const cruiseItem = items.find((i: any) => i.service_type === 'cruise');
+        const cruiseDetails = cruiseItem ? (itemDetails || {})[cruiseItem.id] || {} : {};
+
+        const { error: pkgInsertError } = await supabase.from('reservation_package').insert({
+            reservation_id: reservationId,
+            package_id: packageId,
+            adult_count: adults,
+            child_extra_bed: childExtraBed,
+            child_no_extra_bed: childNoExtraBed,
+            infant_free: infantFree,
+            infant_tour: infantTour,
+            infant_extra_bed: infantExtraBed,
+            infant_seat: infantSeat,
+            adult_price: adultUnitPrice,
+            child_extra_bed_price: pkg.price_child_extra_bed || 6900000,
+            child_no_extra_bed_price: pkg.price_child_no_extra_bed || 5850000,
+            infant_tour_price: pkg.price_infant_tour || 900000,
+            infant_extra_bed_price: pkg.price_infant_extra_bed || 4200000,
+            infant_seat_price: pkg.price_infant_seat || 800000,
+            airport_vehicle: airportVehicleStr,
+            ninh_binh_vehicle: tourVehicleStr,
+            hanoi_vehicle: tourVehicleStr,
+            cruise_vehicle: '스하 셔틀 리무진',
+            sht_pickup_vehicle: cruiseDetails.shtPickupVehicle || null,
+            sht_pickup_seat: cruiseDetails.shtPickupSeat || null,
+            sht_dropoff_vehicle: cruiseDetails.shtDropoffVehicle || null,
+            sht_dropoff_seat: cruiseDetails.shtDropoffSeat || null,
+            total_price: confirmedTotalAmount,
+            additional_requests: additionalRequests || null,
+            created_at: new Date().toISOString(),
+        });
+        if (pkgInsertError) {
+            console.error('reservation_package insert 실패:', pkgInsertError);
+            // 패키지 상세 저장 실패는 비치명적 — 예약 자체는 계속 진행
+        }
+
         for (const item of items) {
             const details = (itemDetails || {})[item.id] || {};
             const desc = (item.description || '').toLowerCase();
@@ -361,14 +401,13 @@ export async function createPackageReservation({
 
                     const pierLocation = cruiseLocationData?.pier_location || '선착장';
 
-                    // 스하 셔틀 차량 저장 (픽업: 숙소→선착장) - ops 테이블로 저장
+                    // 스하 셔틀 차량 저장 (픽업: 숙소→선착장) - reservation_car_sht
                     if (details.shtPickupSeat) {
-                        await supabase.from('ops_sht_seat_assignment').insert({
+                        await supabase.from('reservation_car_sht').insert({
                             reservation_id: reservationId,
-                            quote_id: quoteId,
                             vehicle_number: details.shtPickupVehicle || '',
                             seat_number: details.shtPickupSeat,
-                            sht_category: 'pickup', // 숙소→선착장
+                            sht_category: 'pickup',
                             usage_date: usageDate,
                             pickup_location: details.accommodation || '',
                             dropoff_location: pierLocation,
@@ -379,15 +418,14 @@ export async function createPackageReservation({
                         });
                     }
 
-                    // 스하 셔틀 차량 저장 (드랍: 선착장→숙소) - ops 테이블로 저장
+                    // 스하 셔틀 차량 저장 (드랍: 선착장→숙소) - reservation_car_sht
                     if (details.shtDropoffSeat) {
                         const dropoffDate = getOffsetDate(usageDate, 1); // 크루즈 다음날
-                        await supabase.from('ops_sht_seat_assignment').insert({
+                        await supabase.from('reservation_car_sht').insert({
                             reservation_id: reservationId,
-                            quote_id: quoteId,
                             vehicle_number: details.shtDropoffVehicle || '',
                             seat_number: details.shtDropoffSeat,
-                            sht_category: 'dropoff', // 선착장→숙소
+                            sht_category: 'dropoff',
                             usage_date: dropoffDate,
                             pickup_location: pierLocation,
                             dropoff_location: details.roomType || details.accommodation || '',
@@ -414,9 +452,12 @@ export async function createPackageReservation({
                         ra_flight_number: details.flightNumber || '',
                         ra_passenger_count: totalGuests || 1,
                         ra_luggage_count: luggageCount,
-                        ra_airport_location: airportName, // 공항명
+                        ra_airport_location: details.pickupAirportName || airportName, // 사용자 선택 공항명
                         accommodation_info: details.accommodation || '', // 숙소 (하차위치)
-                        way_type: 'Pickup'
+                        way_type: 'pickup',
+                        ra_car_count: 1,
+                        unit_price: 0,
+                        total_price: 0
                     });
 
                     // 샌딩 (4일차) - exit: 숙소 → 공항
@@ -430,9 +471,12 @@ export async function createPackageReservation({
                         ra_flight_number: '', // 샌딩은 항공편 불필요
                         ra_passenger_count: totalGuests || 1,
                         ra_luggage_count: luggageCount,
-                        ra_airport_location: airportName, // 공항명
+                        ra_airport_location: details.sandingAirportName || airportName, // 사용자 선택 공항명
                         accommodation_info: details.sandingPickupLocation || details.accommodation || '', // 숙소 (승차위치)
-                        way_type: 'Sanding'
+                        way_type: 'sending',
+                        ra_car_count: 1,
+                        unit_price: 0,
+                        total_price: 0
                     });
                     break;
                 case 'tour':
@@ -523,10 +567,10 @@ export async function createPackageReservation({
                     });
                     break;
                 case 'car_sht':
-                    await supabase.from('ops_sht_seat_assignment').insert({
+                    // car_sht 타입 아이템: reservation_car_sht에 저장
+                    await supabase.from('reservation_car_sht').insert({
                         reservation_id: baseData.reservation_id,
-                        quote_id: quoteId,
-                        pickup_datetime: usageDate,
+                        usage_date: usageDate,
                         car_count: 1,
                         passenger_count: totalGuests || 1,
                         request_note: baseData.request_note || '',

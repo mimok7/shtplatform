@@ -47,6 +47,8 @@ function PackageBookingContent() {
     const [locationInputError, setLocationInputError] = useState('');
     // 인원수에 따른 차량 정보
     const [vehicleInfo, setVehicleInfo] = useState<{ ninhBinh: string; hanoi: string; airport: string }>({ ninhBinh: '', hanoi: '', airport: '' });
+    // 공항명 목록 (airport_name 테이블)
+    const [airportLocationOptions, setAirportLocationOptions] = useState<string[]>([]);
 
     // SHT 차량 좌석 선택 관련 상태
     const [isShtCarModalOpen, setIsShtCarModalOpen] = useState(false);
@@ -228,8 +230,8 @@ function PackageBookingContent() {
             }
             setUser(user);
 
-            // 사용자 프로필과 패키지 목록을 병렬로 조회 (성능 최적화)
-            const [profileRes, pkgRes] = await Promise.all([
+            // 사용자 프로필, 패키지 목록, 공항명 목록을 병렬로 조회 (성능 최적화)
+            const [profileRes, pkgRes, airportNameRes] = await Promise.all([
                 supabase
                     .from('users')
                     .select('name, email, phone_number')
@@ -238,8 +240,17 @@ function PackageBookingContent() {
                 supabase
                     .from('package_master')
                     .select('*, items:package_items(*)')
-                    .eq('is_active', true)
+                    .eq('is_active', true),
+                supabase
+                    .from('airport_name')
+                    .select('airport_name')
+                    .order('airport_name', { ascending: true })
             ]);
+
+            if (airportNameRes.data) {
+                const names: string[] = [...new Set((airportNameRes.data as any[]).map(item => String(item.airport_name || '')))].filter(Boolean);
+                setAirportLocationOptions(names);
+            }
 
             if (profileRes.data) {
                 setApplicantData(prev => ({
@@ -938,6 +949,23 @@ function PackageBookingContent() {
                                                                         />
                                                                     </div>
                                                                     <div className="md:col-span-2">
+                                                                        <label className="block text-[11px] font-black text-green-700 uppercase mb-0.5 ml-1">공항 선택</label>
+                                                                        <select
+                                                                            required
+                                                                            className="w-full bg-white border border-green-200 rounded-lg py-1.5 px-3 text-sm font-bold focus:ring-1 focus:ring-green-500"
+                                                                            value={itemDetails[item.id]?.pickupAirportName || ''}
+                                                                            onChange={(e) => setItemDetails({
+                                                                                ...itemDetails,
+                                                                                [item.id]: { ...itemDetails[item.id], pickupAirportName: e.target.value }
+                                                                            })}
+                                                                        >
+                                                                            <option value="">공항 선택</option>
+                                                                            {airportLocationOptions.map(name => (
+                                                                                <option key={name} value={name}>{name}</option>
+                                                                            ))}
+                                                                        </select>
+                                                                    </div>
+                                                                    <div className="md:col-span-2">
                                                                         <div className="flex justify-between items-center mb-0.5 ml-1">
                                                                             <label className="block text-[11px] font-black text-gray-600 uppercase">하차 위치</label>
                                                                             <button
@@ -1004,6 +1032,23 @@ function PackageBookingContent() {
                                                                                 }}
                                                                             />
                                                                         </div>
+                                                                    </div>
+                                                                    <div>
+                                                                        <label className="block text-[11px] font-black text-orange-700 uppercase mb-0.5 ml-1">공항 선택</label>
+                                                                        <select
+                                                                            required
+                                                                            className="w-full bg-white border border-orange-200 rounded-lg py-1.5 px-3 text-sm font-bold focus:ring-1 focus:ring-orange-500"
+                                                                            value={itemDetails[item.id]?.sandingAirportName || ''}
+                                                                            onChange={(e) => setItemDetails({
+                                                                                ...itemDetails,
+                                                                                [item.id]: { ...itemDetails[item.id], sandingAirportName: e.target.value }
+                                                                            })}
+                                                                        >
+                                                                            <option value="">공항 선택</option>
+                                                                            {airportLocationOptions.map(name => (
+                                                                                <option key={name} value={name}>{name}</option>
+                                                                            ))}
+                                                                        </select>
                                                                     </div>
                                                                     <div>
                                                                         <label className="block text-[11px] font-black text-gray-600 uppercase mb-0.5 ml-1">승차 위치</label>
