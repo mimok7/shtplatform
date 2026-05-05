@@ -84,3 +84,35 @@ export function formatKst(value?: DateTimeLike, includeWeekday: boolean = true):
         ...(includeWeekday ? { weekday: 'short' } : {}),
     });
 }
+
+export function formatKstDate(value?: DateTimeLike): string {
+    if (!value) return '-';
+
+    const raw = String(value).trim();
+    if (!raw) return '-';
+
+    let parsedValue = raw;
+    if (!hasTimezone(raw)) {
+        const normalized = raw.replace(' ', 'T');
+
+        if (/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(normalized)) {
+            parsedValue = `${normalized}T00:00:00+09:00`;
+        } else if (/^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}$/.test(normalized)) {
+            parsedValue = `${normalized}:00+09:00`;
+        } else if (/^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}$/.test(normalized)) {
+            parsedValue = `${normalized}+09:00`;
+        } else {
+            return raw;
+        }
+    }
+
+    const date = new Date(parsedValue);
+    if (Number.isNaN(date.getTime())) return raw;
+
+    return date.toLocaleDateString('ko-KR', {
+        timeZone: 'Asia/Seoul',
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric',
+    });
+}

@@ -7,6 +7,7 @@ import PageWrapper from '@/components/PageWrapper';
 import { useReservations, useReservationAdditionalData } from '../../../../hooks/useQueries';
 import { useQueryClient } from '@tanstack/react-query';
 import { getAuthUserSafe } from '@/lib/authSafe';
+import { formatKstDate } from '@/lib/kstDateTime';
 import { Home } from 'lucide-react';
 
 interface Reservation {
@@ -151,8 +152,7 @@ export default function MyReservationsListPage() {
   );
 
   const formatDate = (iso: string) => {
-    const d = new Date(iso);
-    return isNaN(d.getTime()) ? iso : d.toLocaleDateString('ko-KR');
+    return formatKstDate(iso);
   };
 
   const cruiseTitle = (r: Reservation) => {
