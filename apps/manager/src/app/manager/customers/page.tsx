@@ -18,7 +18,6 @@ export default function CustomerManagement() {
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
   const [showModal, setShowModal] = useState(false);
   const [roleFilter, setRoleFilter] = useState('all');
-  const [hideAdmin, setHideAdmin] = useState(false);
   const [editValues, setEditValues] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -28,7 +27,6 @@ export default function CustomerManagement() {
   const normalizedRoleFilter = String(roleFilter ?? 'all').trim().toLowerCase();
   const filteredCustomers = customers.filter((c) => {
     const r = String(c?.role ?? '').trim().toLowerCase();
-    if (hideAdmin && r === 'admin') return false;
     return normalizedRoleFilter === 'all' || r === normalizedRoleFilter;
   });
 
@@ -384,9 +382,8 @@ export default function CustomerManagement() {
                 { label: '전체', value: 'all' },
                 { label: 'member', value: 'member' },
                 { label: 'guest', value: 'guest' },
-                { label: 'user', value: 'user' },
                 { label: 'manager', value: 'manager' },
-                { label: 'admin', value: 'admin' },
+                { label: 'partner', value: 'partner' },
                 { label: 'dispatcher', value: 'dispatcher' }
               ].map(opt => (
                 <button
@@ -400,13 +397,6 @@ export default function CustomerManagement() {
                   {opt.label}
                 </button>
               ))}
-              {/* 관리자 숨김 토글 */}
-              <button
-                onClick={() => setHideAdmin(prev => !prev)}
-                className={`px-3 py-2 rounded-md text-sm border transition-all ${hideAdmin ? 'bg-red-50 text-red-700 border-red-200' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
-              >
-                관리자 숨김
-              </button>
             </div>
           </div>
         </div>

@@ -41,6 +41,15 @@ function categoryMeta(c: string) {
     return CATEGORY_META[c] || { label: c, icon: Tag, color: 'from-gray-500 to-gray-600' };
 }
 
+// 지역명 한글화
+function regionLabel(r: string | null | undefined): string {
+    const regionMap: Record<string, string> = {
+        'Halong': '하롱베이',
+        'Hanoi': '하노이',
+    };
+    return regionMap[r || ''] || r || '기타';
+}
+
 // partner_code → 이미지 경로 fallback 매핑 (DB thumbnail_url이 비어있을 때 사용)
 const PARTNER_IMAGE_MAP: Record<string, string[]> = {
     'NHAMNHAM-HL-001':       ['/images/partners/nhamnham.gif'],
@@ -98,6 +107,27 @@ export default function BrowseAllPage() {
             return true;
         });
     }, [partners, category, region, keyword]);
+
+    // 지역별 그룹화 (하롱베이 → 하노이 순서)
+    const groupedByRegion = useMemo(() => {
+        const groups: Record<string, Partner[]> = {};
+        filtered.forEach(p => {
+            const r = p.region || '기타';
+            if (!groups[r]) groups[r] = [];
+            groups[r].push(p);
+        });
+        
+        // 정렬 순서: Halong 먼저, Hanoi 다음, 나머지는 알파벳
+        const sortedRegions = Object.keys(groups).sort((a, b) => {
+            if (a === 'Halong' && b !== 'Halong') return -1;
+            if (a !== 'Halong' && b === 'Halong') return 1;
+            if (a === 'Hanoi' && b !== 'Hanoi') return -1;
+            if (a !== 'Hanoi' && b === 'Hanoi') return 1;
+            return a.localeCompare(b);
+        });
+        
+        return sortedRegions.map(r => ({ region: r, regionLabel: regionLabel(r), partners: groups[r] }));
+    }, [filtered]);
 
     return (
         <PartnerLayout
@@ -172,7 +202,7 @@ export default function BrowseAllPage() {
                             onClick={() => setRegion(r)}
                             className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${region === r ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
                         >
-                            {r}
+                            {regionLabel(r)}
                         </button>
                     ))}
                 </div>
@@ -192,9 +222,19 @@ export default function BrowseAllPage() {
                     조건에 맞는 업체가 없습니다.
                 </div>
             ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 lg:gap-4">
-                    {filtered.map(p => (
-                        <PartnerCard key={p.partner_id} p={p} />
+                <div className="space-y-8">
+                    {groupedByRegion.map(group => (
+                        <div key={group.region}>
+                            <h3 className="text-sm font-bold text-gray-900 mb-3 px-1 flex items-center gap-2">
+                                <MapPin className="w-4 h-4 text-blue-600" />
+                                {group.regionLabel}
+                            </h3>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 lg:gap-4">
+                                {group.partners.map(p => (
+                                    <PartnerCard key={p.partner_id} p={p} />
+                                ))}
+                            </div>
+                        </div>
                     ))}
                 </div>
             )}

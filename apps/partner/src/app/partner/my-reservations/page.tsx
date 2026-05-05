@@ -252,13 +252,6 @@ function ReservationCard({ r }: { r: Row }) {
                         <Receipt className="w-3 h-3" />
                         <span>예약일 {fmtDate(r.created_at?.slice(0, 10))}</span>
                     </div>
-                    <div className="text-right">
-                        {Number(r.total_price) > 0 ? (
-                            <div className="text-base font-bold text-gray-900">{fmtMoney(r.total_price, r.currency)}</div>
-                        ) : (
-                            <div className="text-[12px] text-gray-500">현장 결제 / 가격 문의</div>
-                        )}
-                    </div>
                 </div>
 
                 <CardFooter r={r} />

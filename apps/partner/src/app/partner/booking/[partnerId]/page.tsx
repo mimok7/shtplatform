@@ -223,7 +223,6 @@ export default function BookingDetailPage() {
     const handleSubmit = async () => {
         setMsg(null);
         if (!user) { setMsg('로그인이 필요합니다.'); return; }
-        if (selectedList.length === 0) { setMsg('메뉴를 1개 이상 선택하세요.'); return; }
 
         if (mode === 'stay') {
             if (!checkin || !checkout) { setMsg('체크인/체크아웃 날짜를 입력하세요.'); return; }
@@ -260,46 +259,27 @@ export default function BookingDetailPage() {
                 ? `${scheduledDate}T${scheduledTime}:00`
                 : (mode === 'order' && scheduledDate ? `${scheduledDate}T${scheduledTime || '12:00'}:00` : null);
 
-            // ✅ 다중 메뉴 → 라벨/주문내역 조합
-            const itemLines = selectedList.map(it => {
-                const svc = services.find(s => s.service_id === it.sid);
-                const name = svc?.service_name || it.sid;
-                const unit = (singleSelectedSid === it.sid && currentPrice)
-                    ? Number(currentPrice.price)
-                    : Number(svc?.default_price || 0);
-                return `- ${name} × ${it.qty} (${(unit * it.qty).toLocaleString()})`;
-            });
-            const combinedLabel = selectedList
-                .map(it => {
-                    const svc = services.find(s => s.service_id === it.sid);
-                    return `${svc?.service_name || it.sid}×${it.qty}`;
-                })
-                .join(', ');
-
             const noteParts: string[] = [];
-            if (selectedList.length > 0) noteParts.push('[주문내역]\n' + itemLines.join('\n'));
             noteParts.push(`[카카오톡 ID] ${contactKakao}`);
             if (couponCode) noteParts.push(`[쿠폰] ${couponCode}`);
             if (requestNote.trim()) noteParts.push(`[요청사항]\n${requestNote.trim()}`);
 
-            const firstSvc = services.find(s => s.service_id === selectedList[0].sid) || null;
-
             const payload: any = {
                 pr_user_id: user.id,
                 pr_partner_id: partnerId,
-                pr_service_id: selectedList[0].sid,
-                pr_price_code: (singleSelectedSid && selectedPrice) ? selectedPrice : null,
+                pr_service_id: null,
+                pr_price_code: null,
                 guest_count: guestNum,
-                unit_price: selectedList.length === 1 ? Number(firstSvc?.default_price || 0) : 0,
-                total_price: totalPrice,
+                unit_price: 0,
+                total_price: 0,
                 status: 'pending',
                 request_note: noteParts.join('\n\n'),
                 contact_name: contactName,
                 contact_phone: contactPhone || null,
-                service_label: combinedLabel,
-                price_label: (singleSelectedSid && currentPrice) ? (currentPrice.tier_label || currentPrice.condition_label || null) : null,
-                quantity: mode === 'stay' ? roomCount : totalQty,
-                duration_minutes: currentPrice?.duration_minutes ?? firstSvc?.duration_minutes ?? null,
+                service_label: '직접문의',
+                price_label: null,
+                quantity: mode === 'stay' ? roomCount : 0,
+                duration_minutes: null,
                 payment_status: 'unpaid',
             };
 
@@ -389,88 +369,18 @@ export default function BookingDetailPage() {
                 </SectionBox>
             )}
 
-            <SectionBox title="① 메뉴 선택 (다중 가능)">
-                {services.length === 0 ? (
-                    <div className="text-sm text-gray-500">등록된 서비스가 없습니다.</div>
-                ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[480px] overflow-y-auto">
-                        {services.map(s => {
-                            const qty = selectedItems[s.service_id] || 0;
-                            const active = qty > 0;
-                            return (
-                                <div key={s.service_id}
-                                    onClick={() => toggleItem(s.service_id)}
-                                    className={`p-3 rounded border-2 cursor-pointer transition ${active ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:border-blue-300'}`}>
-                                    {s.thumbnail_url && (
-                                        <div className="w-full aspect-[16/9] rounded overflow-hidden bg-gray-100 mb-2">
-                                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                                            <img src={s.thumbnail_url} alt={s.service_name} className="w-full h-full object-cover" />
-                                        </div>
-                                    )}
-                                    <div className="flex justify-between items-start gap-2">
-                                        <div className="text-sm font-medium text-gray-800">{s.service_name}</div>
-                                        <div className="text-sm font-semibold text-blue-600 whitespace-nowrap">{Number(s.default_price).toLocaleString()}</div>
-                                    </div>
-                                    <div className="text-xs text-gray-500 mt-1">
-                                        {s.service_type}{s.service_subtype ? ` · ${s.service_subtype}` : ''}
-                                        {s.duration_minutes ? ` · ${s.duration_minutes}분` : ''}
-                                        {s.capacity ? ` · 정원 ${s.capacity}명` : ''}
-                                    </div>
-                                    {s.sht_discount_rate ? <div className="text-xs text-red-600 mt-0.5">스테이하롱 할인 {s.sht_discount_rate}%</div> : null}
-                                    {s.description && <div className="text-xs text-gray-600 mt-1 line-clamp-2">{s.description}</div>}
-
-                                    {active && (
-                                        <div className="mt-2 pt-2 border-t border-blue-200 flex items-center justify-between"
-                                            onClick={(e) => e.stopPropagation()}>
-                                            <span className="text-xs text-gray-600">수량</span>
-                                            <div className="flex items-center gap-1">
-                                                <button type="button"
-                                                    onClick={() => setItemQty(s.service_id, qty - 1)}
-                                                    className="w-7 h-7 rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-100">−</button>
-                                                <input type="number" min={1}
-                                                    value={qty}
-                                                    onChange={(e) => setItemQty(s.service_id, Number(e.target.value) || 1)}
-                                                    className="w-12 px-1 py-1 text-center text-sm rounded border border-gray-200" />
-                                                <button type="button"
-                                                    onClick={() => setItemQty(s.service_id, qty + 1)}
-                                                    className="w-7 h-7 rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-100">+</button>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })}
+            <SectionBox title="① 메뉴 안내">
+                <div className="p-4 rounded bg-blue-50 border border-blue-200">
+                    <div className="text-sm text-gray-700 leading-relaxed">
+                        <p className="font-medium mb-2">📋 다양한 상품과 메뉴는 직접문의 하세요</p>
+                        <p className="text-gray-600">
+                            업체별 메뉴 및 가격, 특별 옵션 등에 대해 자세히 알아보시려면 아래 예약자 정보를 입력하고 카카오톡으로 문의하시면 담당자가 상세히 안내해드립니다.
+                        </p>
                     </div>
-                )}
-                {selectedList.length > 0 && (
-                    <div className="mt-3 text-xs text-gray-600">
-                        선택: <b className="text-blue-600">{selectedList.length}종</b> / 총 수량: <b className="text-blue-600">{totalQty}</b>
-                    </div>
-                )}
+                </div>
             </SectionBox>
 
-            {servicePrices.length > 0 && (
-                <SectionBox title="② 가격 옵션">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                        {servicePrices.map(p => {
-                            const active = p.price_code === selectedPrice;
-                            return (
-                                <div key={p.price_code}
-                                    onClick={() => setSelectedPrice(active ? '' : p.price_code)}
-                                    className={`p-2 rounded border cursor-pointer text-xs ${active ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:border-blue-300'}`}>
-                                    <div className="font-medium text-gray-700">{p.tier_label || p.condition_label || p.price_code}</div>
-                                    <div className="text-blue-600 font-semibold">{Number(p.price).toLocaleString()}</div>
-                                    {p.sht_price ? <div className="text-red-600">SHT가: {Number(p.sht_price).toLocaleString()}</div> : null}
-                                    {p.duration_minutes ? <div className="text-gray-500">{p.duration_minutes}분</div> : null}
-                                    {(p.valid_from || p.valid_to) && (
-                                        <div className="text-gray-500 mt-1">{p.valid_from || '~'} ~ {p.valid_to || '~'}</div>
-                                    )}
-                                </div>
-                            );
-                        })}
-                    </div>
-                </SectionBox>
-            )}
+
 
             <SectionBox title="③ 일정">
                 {mode === 'stay' ? (
@@ -517,23 +427,13 @@ export default function BookingDetailPage() {
                         <div className="text-xs text-gray-500 mb-1">연락처 (선택)</div>
                         <input type="text" placeholder="연락처" value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} className="w-full px-2 py-1 rounded border border-gray-200 bg-white" />
                     </label>
-                    <input type="text" placeholder="쿠폰 코드 (선택)" value={couponCode} onChange={(e) => setCouponCode(e.target.value)} className="w-full px-2 py-1 rounded border border-gray-200 bg-white md:col-span-2" />
+
                 </div>
                 <textarea placeholder="요청사항(선택)" rows={3} value={requestNote} onChange={(e) => setRequestNote(e.target.value)} className="w-full px-2 py-1 rounded border border-gray-200 bg-white text-sm mt-2" />
                 <div className="text-[11px] text-gray-500 mt-1"><span className="text-red-500">*</span> 표시 항목은 필수 입력입니다 (이름 / 카카오톡 ID / 일시 / 인원).</div>
             </SectionBox>
 
-            <div className="bg-yellow-50 border border-yellow-200 rounded p-4 mb-3">
-                <div className="text-sm text-yellow-800 mb-1">💰 예상 총 금액</div>
-                <div className="text-xl font-bold text-red-600">
-                    {totalPrice.toLocaleString()}
-                    <span className="text-xs text-gray-500 ml-2 font-normal">
-                        ({mode === 'stay'
-                            ? `${nights || 1}박 × ${roomCount}객실`
-                            : `메뉴 ${selectedList.length}종 / 총 ${totalQty}수량`})
-                    </span>
-                </div>
-            </div>
+
 
             {msg && <div className="text-sm text-red-500 mb-2">{msg}</div>}
 
