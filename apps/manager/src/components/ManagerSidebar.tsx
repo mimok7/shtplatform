@@ -198,13 +198,6 @@ export default function ManagerSidebar({ activeTab, userEmail, onLogout, userRol
                                     onClick={() => handleNavigation('/manager/quotes')}
                                 />
                                 <NavItem
-                                    icon="✍️"
-                                    label="자료 입력"
-                                    path="/manager/quotes/cruise"
-                                    isActive={activeTab === 'quotes-cruise'}
-                                    onClick={() => handleNavigation('/manager/quotes/cruise')}
-                                />
-                                <NavItem
                                     icon="📋"
                                     label="전체 검색"
                                     path="/manager/quotes/comprehensive"

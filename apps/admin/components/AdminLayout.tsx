@@ -187,6 +187,7 @@ export default function AdminLayout({ children, title, activeTab }: AdminLayoutP
 
   const dashboardTab: TabItem = { id: 'dashboard', label: '대시보드', path: '/admin', icon: '📊' };
   const settingsTab: TabItem = { id: 'settings', label: '설정', path: '/admin/settings', icon: '⚙️' };
+  const notificationControlTab: TabItem = { id: 'notification-control', label: '알림 제어', path: '/admin/notification-control', icon: '🔔' };
 
   const tabGroups: TabGroup[] = [
     {
@@ -237,7 +238,7 @@ export default function AdminLayout({ children, title, activeTab }: AdminLayoutP
     },
   ];
 
-  const allTabs: TabItem[] = [dashboardTab, settingsTab, ...tabGroups.flatMap(g => g.items)];
+  const allTabs: TabItem[] = [dashboardTab, settingsTab, notificationControlTab, ...tabGroups.flatMap(g => g.items)];
 
   // 현재 경로로부터 활성 탭을 자동 계산 (가장 긴 경로 매칭 우선)
   const computedActiveTab = activeTab || (pathname
@@ -366,8 +367,9 @@ export default function AdminLayout({ children, title, activeTab }: AdminLayoutP
                 </nav>
 
                 {settingsTab && (
-                  <div className="mt-4">
+                  <div className="mt-4 space-y-1">
                     {renderTabLink(settingsTab)}
+                    {renderTabLink(notificationControlTab)}
                   </div>
                 )}
               </div>

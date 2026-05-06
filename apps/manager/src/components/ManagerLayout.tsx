@@ -3,6 +3,8 @@ import React from 'react';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import supabase from '@/lib/supabase';
+import { useReservationListener } from '@/hooks/useReservationListener';
+import { RESERVATION_REALTIME_NOTIFICATIONS_ENABLED } from '@/lib/reservationNotificationFeature';
 import { getCachedRole, getCookieRole, setCachedRole, clearCachedRole } from '@/lib/userUtils';
 import { clearAuthCache } from '@/hooks/useAuth';
 import { RoleContext } from '@/app/components/RoleContext';
@@ -23,6 +25,10 @@ export default function ManagerLayout({ children, title, activeTab }: ManagerLay
   const [sidebarMode, setSidebarMode] = useState<'auto' | 'manual'>('auto');
   // ✅ 인증 완료 전까지 children 렌더링 차단 (403 방지)
   const [authReady, setAuthReady] = useState(false);
+  const { latestReservation, unreadCount, clearLatestReservation } = useReservationListener(
+    RESERVATION_REALTIME_NOTIFICATIONS_ENABLED && authReady && (userRole === 'manager' || userRole === 'admin'),
+    user?.id || 'anonymous'
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -40,11 +46,20 @@ export default function ManagerLayout({ children, title, activeTab }: ManagerLay
           return;
         }
         setUser(sessionUser);
+        const { data: userData, error: roleError } = await supabase
+          .from('users')
+          .select('role')
+          .eq('id', sessionUser.id)
+          .single();
+        if (cancelled) return;
+
         const cached = getCachedRole();
         const cookieRole = !cached ? getCookieRole() : null;
+        const roleFromDb = !roleError && typeof userData?.role === 'string' ? userData.role : null;
         const roleFromCache = cached || cookieRole;
-        setUserRole(roleFromCache || 'guest');
-        if (!cached && roleFromCache) setCachedRole(roleFromCache);
+        const resolvedRole = roleFromDb || roleFromCache || 'guest';
+        setUserRole(resolvedRole);
+        if (resolvedRole !== 'guest') setCachedRole(resolvedRole);
         // ✅ 인증 완료 → children 렌더링 허용
         setAuthReady(true);
       } catch (err) {
@@ -201,6 +216,19 @@ export default function ManagerLayout({ children, title, activeTab }: ManagerLay
             </button>
 
             {title && <h1 className="text-lg font-semibold text-gray-800 truncate">{title}</h1>}
+
+            <div className="ml-auto flex items-center gap-3">
+              <div className="relative" title="새 예약 알림">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-white text-lg text-gray-700">
+                  🔔
+                </div>
+                {RESERVATION_REALTIME_NOTIFICATIONS_ENABLED && unreadCount > 0 && (
+                  <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-red-500 px-1.5 text-center text-[11px] font-semibold leading-5 text-white">
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
+                )}
+              </div>
+            </div>
           </div>
           <main className="flex-1 overflow-y-auto px-4 py-6">
             {authReady ? children : (
@@ -210,6 +238,29 @@ export default function ManagerLayout({ children, title, activeTab }: ManagerLay
             )}
             <div className="h-10" />
           </main>
+
+          {RESERVATION_REALTIME_NOTIFICATIONS_ENABLED && latestReservation && (
+            <div className="pointer-events-none fixed right-4 top-20 z-50 w-full max-w-sm">
+              <div className="pointer-events-auto rounded-xl border border-emerald-200 bg-white p-4 shadow-xl">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 text-lg">🔔</div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-gray-900">새 예약이 접수되었습니다</p>
+                    <p className="mt-1 text-sm text-gray-700">유형: {latestReservation.type}</p>
+                    <p className="text-sm text-gray-700">상태: {latestReservation.status}</p>
+                    <p className="mt-1 text-xs text-gray-500">{new Date(latestReservation.createdAt).toLocaleString('ko-KR')}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={clearLatestReservation}
+                    className="rounded-md px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                  >
+                    닫기
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </RoleContext.Provider>
