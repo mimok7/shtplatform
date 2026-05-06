@@ -106,6 +106,7 @@ export default function PartnerDashboardPage() {
     const [partner, setPartner] = useState<PartnerInfo | null>(null);
     const [rows, setRows] = useState<Row[]>([]);
     const [loading, setLoading] = useState(true);
+    const [updatingId, setUpdatingId] = useState<string | null>(null);
     const [statusFilter, setStatusFilter] = useState<string>('');
     const [period, setPeriod] = useState<'all' | 'today' | 'week' | 'month'>('week');
 
@@ -160,12 +161,16 @@ export default function PartnerDashboardPage() {
     }, [authLoading, profile?.partner_id, profile?.role]);
 
     const updateStatus = async (pr_id: string, next: string) => {
+        const current = rows.find(r => r.pr_id === pr_id)?.status;
+        if (!next || current === next) return;
         if (!confirm(`상태를 "${STATUS_LABEL[next] || next}"로 변경할까요?`)) return;
+        setUpdatingId(pr_id);
         const patch: any = { status: next };
         if (next === 'confirmed' && !rows.find(r => r.pr_id === pr_id)?.confirmation_code) {
             patch.confirmation_code = `C${Date.now().toString().slice(-8)}`;
         }
         const { error } = await supabase.from('partner_reservation').update(patch).eq('pr_id', pr_id);
+        setUpdatingId(null);
         if (error) { alert('변경 실패: ' + error.message); return; }
         setRows(prev => prev.map(r => r.pr_id === pr_id ? { ...r, status: next, ...(patch.confirmation_code ? { confirmation_code: patch.confirmation_code } : {}) } : r));
     };
@@ -285,68 +290,50 @@ export default function PartnerDashboardPage() {
                         <table className="w-full text-xs">
                             <thead className="bg-gray-50 text-gray-600">
                                 <tr>
-                                    <th className="px-2 py-2 text-left">{meta.dateLabel}</th>
-                                    <th className="px-2 py-2 text-left">{meta.serviceLabel}</th>
-                                    <th className="px-2 py-2 text-right">{meta.qtyLabel}</th>
+                                    <th className="px-2 py-2 text-center">순서</th>
+                                    <th className="px-2 py-2 text-left">예약일</th>
+                                    <th className="px-2 py-2 text-left">시간</th>
                                     <th className="px-2 py-2 text-left">예약자</th>
+                                    <th className="px-2 py-2 text-right">인원수</th>
                                     <th className="px-2 py-2 text-left">연락처</th>
                                     <th className="px-2 py-2 text-left">요청사항</th>
-                                    <th className="px-2 py-2 text-right">금액</th>
                                     <th className="px-2 py-2 text-center">상태</th>
                                     <th className="px-2 py-2 text-center">액션</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {filtered.map(r => (
+                                {filtered.map((r, index) => (
                                     <tr key={r.pr_id} className="border-t border-gray-100 hover:bg-gray-50 align-top">
+                                        <td className="px-2 py-2 text-center text-gray-500 whitespace-nowrap">{index + 1}</td>
                                         <td className="px-2 py-2 whitespace-nowrap">
-                                            {r.checkin_date ? (
-                                                <>
-                                                    {fmtDate(r.checkin_date)}
-                                                    {r.checkout_date && r.checkout_date !== r.checkin_date && (
-                                                        <><br /><span className="text-gray-400">~ {fmtDate(r.checkout_date)}</span></>
-                                                    )}
-                                                </>
-                                            ) : r.scheduled_at ? (
-                                                <>{r.scheduled_at.slice(0, 10)}<br /><span className="text-gray-500">{r.scheduled_at.slice(11, 16)}{r.duration_minutes ? ` (${r.duration_minutes}분)` : ''}</span></>
-                                            ) : '-'}
+                                            {reservationDateText(r)}
                                         </td>
-                                        <td className="px-2 py-2">
-                                            <div className="font-medium text-gray-800">{r.service_label || r.service?.service_name || '-'}</div>
-                                            {r.price_label && <div className="text-[11px] text-gray-500">{r.price_label}</div>}
+                                        <td className="px-2 py-2 whitespace-nowrap text-gray-600">
+                                            {reservationTimeText(r)}
+                                        </td>
+                                        <td className="px-2 py-2 whitespace-nowrap">
+                                            <div className="font-medium text-gray-800">{r.contact_name || '-'}</div>
                                             {r.confirmation_code && <div className="text-[11px] text-blue-600 font-mono">#{r.confirmation_code}</div>}
                                         </td>
-                                        <td className="px-2 py-2 text-right whitespace-nowrap">
-                                            {qtyText(partner?.category, r)}
-                                        </td>
-                                        <td className="px-2 py-2">{r.contact_name || '-'}</td>
+                                        <td className="px-2 py-2 text-right whitespace-nowrap">{qtyNumberText(partner?.category, r)}</td>
                                         <td className="px-2 py-2">{r.contact_phone || '-'}</td>
                                         <td className="px-2 py-2 max-w-[200px] truncate" title={r.request_note || ''}>{r.request_note || '-'}</td>
-                                        <td className="px-2 py-2 text-right font-semibold whitespace-nowrap">
-                                            {Number(r.total_price) > 0 ? (
-                                                <span className="text-red-600">{Number(r.total_price).toLocaleString()}동</span>
-                                            ) : (
-                                                <span className="text-gray-400 text-[11px]">현장결제</span>
-                                            )}
-                                            {r.payment_status && <div className="text-[11px] text-gray-500">{r.payment_status}</div>}
-                                        </td>
                                         <td className="px-2 py-2 text-center">
                                             <span className={`px-2 py-0.5 rounded-full text-[11px] border ${STATUS_COLOR[r.status] || 'bg-gray-50 text-gray-600 border-gray-200'}`}>
                                                 {STATUS_LABEL[r.status] || r.status}
                                             </span>
                                         </td>
                                         <td className="px-2 py-2 text-center whitespace-nowrap">
-                                            <div className="flex gap-1 justify-center flex-wrap">
-                                                {r.status !== 'confirmed' && r.status !== 'completed' && (
-                                                    <button onClick={() => updateStatus(r.pr_id, 'confirmed')} className="px-2 py-0.5 text-[11px] rounded bg-green-500 text-white hover:bg-green-600">확정</button>
-                                                )}
-                                                {r.status !== 'completed' && r.status !== 'cancelled' && (
-                                                    <button onClick={() => updateStatus(r.pr_id, 'completed')} className="px-2 py-0.5 text-[11px] rounded bg-blue-500 text-white hover:bg-blue-600">완료</button>
-                                                )}
-                                                {r.status !== 'cancelled' && (
-                                                    <button onClick={() => updateStatus(r.pr_id, 'cancelled')} className="px-2 py-0.5 text-[11px] rounded bg-gray-200 text-gray-700 hover:bg-gray-300">취소</button>
-                                                )}
-                                            </div>
+                                            <select
+                                                value={r.status}
+                                                onChange={(e) => updateStatus(r.pr_id, e.target.value)}
+                                                disabled={updatingId === r.pr_id}
+                                                className="px-2 py-1 rounded border border-gray-200 bg-white text-xs min-w-[84px] disabled:bg-gray-100 disabled:text-gray-400"
+                                            >
+                                                {Object.keys(STATUS_LABEL).map((status) => (
+                                                    <option key={status} value={status}>{STATUS_LABEL[status]}</option>
+                                                ))}
+                                            </select>
                                         </td>
                                     </tr>
                                 ))}
@@ -389,4 +376,25 @@ function qtyText(category: string | undefined, r: Row): string {
         default:
             return r.nights ? `${r.nights}박/${r.room_count}/${r.guest_count}명` : `${r.quantity || 1}/${r.guest_count}명`;
     }
+}
+
+function qtyNumberText(category: string | undefined, r: Row): string {
+    switch (category) {
+        case 'rentcar':
+            return `${r.room_count || 1}대 / ${r.guest_count}명`;
+        default:
+            return `${r.guest_count || 0}명`;
+    }
+}
+
+function reservationDateText(r: Row): string {
+    if (r.checkin_date) return fmtDate(r.checkin_date);
+    if (r.scheduled_at) return fmtDate(r.scheduled_at.slice(0, 10));
+    return '-';
+}
+
+function reservationTimeText(r: Row): string {
+    if (!r.scheduled_at) return '-';
+    const time = r.scheduled_at.slice(11, 16);
+    return r.duration_minutes ? `${time} (${r.duration_minutes}분)` : time;
 }

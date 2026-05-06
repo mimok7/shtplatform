@@ -11,8 +11,8 @@ export const metadata = {
   title: '스테이하롱 예약',
   description: '스테이하롱 자유여행 예약 시스템',
   icons: {
-    icon: '/favicon.ico',
-    shortcut: '/favicon.ico',
+    icon: '/logo.png',
+    shortcut: '/logo.png',
     apple: '/logo.png',
   },
 };
