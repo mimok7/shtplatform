@@ -3,6 +3,15 @@ import type { NextRequest } from 'next/server';
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  const host = request.headers.get('host') || '';
+  if (host === 'manag.stayhalong.com') {
+    const redirectUrl = request.nextUrl.clone();
+    redirectUrl.host = 'manager.stayhalong.com';
+    redirectUrl.protocol = 'https';
+    return NextResponse.redirect(redirectUrl, 308);
+  }
+
   const response = NextResponse.next();
 
   // 인증이 필요한 페이지는 캐시 방지 (세션 상태가 오래된 치로 남는 것을 방지)

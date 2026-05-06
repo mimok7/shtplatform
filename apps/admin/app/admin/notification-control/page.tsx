@@ -7,7 +7,6 @@ import { NOTIFICATION_RECEIVER_PREFERENCE_TABLE } from '@/lib/notificationReceiv
 
 const NOTIFICATION_RUNTIME_SETTINGS_TABLE = 'notification_runtime_settings';
 const RESERVATION_RUNTIME_SETTING_KEY = 'reservation_realtime_enabled';
-const NOTIFICATION_PRESENCE_TABLE = 'manager_notification_presence';
 const STATUS_RPC = 'admin_get_manager_notification_status';
 
 type ManagerStatusRow = {
@@ -47,6 +46,7 @@ function accountLabel(account: ManagerAccount | null) {
 
 export default function NotificationControlPage() {
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [adminUserId, setAdminUserId] = useState<string | null>(null);
   const [statusRows, setStatusRows] = useState<ManagerStatusRow[]>([]);
@@ -104,6 +104,26 @@ export default function NotificationControlPage() {
     });
   };
 
+  const loadRuntimeAndStatus = async (showRefreshing: boolean) => {
+    if (showRefreshing) setRefreshing(true);
+
+    try {
+      const { data: runtimeRow, error: runtimeError } = await supabase
+        .from(NOTIFICATION_RUNTIME_SETTINGS_TABLE)
+        .select('setting_value_bool')
+        .eq('setting_key', RESERVATION_RUNTIME_SETTING_KEY)
+        .maybeSingle();
+
+      if (!runtimeError) {
+        setRuntimeEnabled(runtimeRow?.setting_value_bool !== false);
+      }
+
+      await loadStatus();
+    } finally {
+      if (showRefreshing) setRefreshing(false);
+    }
+  };
+
   useEffect(() => {
     let cancelled = false;
 
@@ -119,61 +139,9 @@ export default function NotificationControlPage() {
         }
 
         setAdminUserId(authUser.id);
-
-        const { data: runtimeRow, error: runtimeError } = await supabase
-          .from(NOTIFICATION_RUNTIME_SETTINGS_TABLE)
-          .select('setting_value_bool')
-          .eq('setting_key', RESERVATION_RUNTIME_SETTING_KEY)
-          .maybeSingle();
-
-        if (!cancelled && !runtimeError) {
-          setRuntimeEnabled(runtimeRow?.setting_value_bool !== false);
-        }
-
         if (!cancelled) {
-          await loadStatus();
+          await loadRuntimeAndStatus(false);
         }
-
-        const presenceChannel = supabase
-          .channel('admin-notification-presence-status')
-          .on(
-            'postgres_changes',
-            { event: '*', schema: 'public', table: NOTIFICATION_PRESENCE_TABLE },
-            () => {
-              void loadStatus();
-            }
-          )
-          .subscribe();
-
-        const preferenceChannel = supabase
-          .channel('admin-notification-preference-status')
-          .on(
-            'postgres_changes',
-            { event: '*', schema: 'public', table: NOTIFICATION_RECEIVER_PREFERENCE_TABLE },
-            () => {
-              void loadStatus();
-            }
-          )
-          .subscribe();
-
-        const refreshTimer = window.setInterval(() => {
-          void loadStatus();
-        }, 10000);
-
-        return () => {
-          window.clearInterval(refreshTimer);
-          [presenceChannel, preferenceChannel].forEach((channel) => {
-            try {
-              void supabase.removeChannel?.(channel);
-            } catch {
-              try {
-                channel.unsubscribe();
-              } catch {
-                // noop
-              }
-            }
-          });
-        };
       } catch (error) {
         if (!cancelled) {
           console.error('알림 제어 설정 로드 실패:', error);
@@ -184,14 +152,10 @@ export default function NotificationControlPage() {
       }
     };
 
-    let cleanup: (() => void) | undefined;
-    void load().then((fn) => {
-      cleanup = fn;
-    });
+    void load();
 
     return () => {
       cancelled = true;
-      cleanup?.();
     };
   }, []);
 
@@ -285,6 +249,17 @@ export default function NotificationControlPage() {
   return (
     <AdminLayout title="알림 제어" activeTab="notification-control">
       <div className="max-w-6xl space-y-6">
+        <div className="flex justify-end">
+          <button
+            type="button"
+            disabled={saving || refreshing}
+            onClick={() => void loadRuntimeAndStatus(true)}
+            className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
+          >
+            {refreshing ? '새로고침 중...' : '새로고침'}
+          </button>
+        </div>
+
         {errorMessage && (
           <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
             {errorMessage}
