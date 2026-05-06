@@ -556,13 +556,16 @@ export default function ProfilePage() {
                             />
                         </div>
                         <div>
-                            <label className="block text-sm text-gray-600 mb-1">닉네임</label>
+                            <label className="block text-sm text-gray-600 mb-1">네이버 카페 닉네임</label>
                             <input
                                 type="text"
                                 value={profile.nickname ?? ''}
                                 onChange={(e) => setProfile({ ...profile, nickname: e.target.value })}
                                 className="w-full px-3 py-2 border border-gray-200 rounded"
                             />
+                            <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded text-sm text-gray-700">
+                                닉네임을 입력하셔야 네이버 카페 이벤트 및 할인혜택을 적용받으실 수 있습니다.
+                            </div>
                         </div>
                         <div>
                             <label className="block text-sm text-gray-600 mb-1">

@@ -1434,12 +1434,8 @@ function DirectBookingContent() {
                                 <div className="flex items-center">
                                     <span className="text-green-600 text-xl mr-2">🎉</span>
                                     <div>
-                                        <h3 className="text-green-800 font-semibold">
-                                            {getServiceDisplayName(completedService)} 예약이 완료되었습니다!
-                                        </h3>
-                                        <p className="text-green-700 text-sm mt-1">
-                                            예약 내용은 마이페이지 → 예약 관리에서 확인하실 수 있습니다.
-                                        </p>
+                                        <h3 className="text-green-800 font-semibold">예약 신청이 완료되었습니다.</h3>
+                                        <p className="text-green-700 text-sm mt-1">카카오 채널로 연락주세요.<br />담당자의 안내에 따라 결제를 진행하셔야 예약이 완료됩니다.</p>
                                     </div>
                                 </div>
                             </div>

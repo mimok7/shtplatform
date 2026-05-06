@@ -273,7 +273,7 @@ function DirectBookingVehicleContent() {
 
             if (vehicleError) throw vehicleError;
 
-            alert('예약이 성공적으로 완료되었습니다!');
+            alert('예약 신청이 완료되었습니다.\n카카오 채널로 연락주세요.\n담당자의 안내에 따라 결제를 진행하셔야 예약이 완료됩니다.');
             router.push('/mypage/direct-booking?completed=vehicle');
 
         } catch (error) {
