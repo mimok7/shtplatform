@@ -85,6 +85,37 @@ export default function NotificationControlPage() {
     return activeRows.filter((row) => row.user_id === selectedManagerId);
   }, [activeRows, selectedManagerId]);
 
+  // 계정별 모든 접속 현황 (활성+비활성) 그룹화
+  const accountsWithAllSessions = useMemo(() => {
+    const grouped = new Map<string, { account: ManagerAccount; sessions: ManagerStatusRow[] }>();
+
+    managerAccounts.forEach((account) => {
+      const accountRows = statusRows.filter((row) => row.user_id === account.user_id);
+      if (accountRows.length > 0) {
+        grouped.set(account.user_id, { account, sessions: accountRows });
+      }
+    });
+
+    return Array.from(grouped.values()).sort((a, b) => a.account.email.localeCompare(b.account.email));
+  }, [managerAccounts, statusRows]);
+
+  // 계정 내에서 기기별로 그룹화
+  const groupSessionsByDevice = (sessions: ManagerStatusRow[]) => {
+    const deviceMap = new Map<string, ManagerStatusRow[]>();
+    sessions.forEach((session) => {
+      const deviceKey = session.device_id || 'no-device';
+      if (!deviceMap.has(deviceKey)) {
+        deviceMap.set(deviceKey, []);
+      }
+      deviceMap.get(deviceKey)!.push(session);
+    });
+    return Array.from(deviceMap.entries()).sort((a, b) => {
+      const aLabel = a[1][0]?.device_label || a[0] || '';
+      const bLabel = b[1][0]?.device_label || b[0] || '';
+      return aLabel.localeCompare(bLabel);
+    });
+  };
+
   const loadStatus = async () => {
     const { data, error } = await supabase.rpc(STATUS_RPC);
     if (error) {
@@ -353,53 +384,127 @@ export default function NotificationControlPage() {
         </div>
 
         <div className="rounded-lg bg-white p-6 shadow-sm">
-          <h3 className="text-base font-semibold text-gray-800">전체 매니저 접속 탭 목록 (최근 90초)</h3>
-          {activeRows.length === 0 ? (
+          <h3 className="text-base font-semibold text-gray-800">📋 매니저 계정별 접속 현황</h3>
+          <p className="mt-1 text-xs text-gray-500">활성 상태: 🟢 = 최근 90초 안 신호 | 🔴 = 비활성 또는 미연결</p>
+
+          {accountsWithAllSessions.length === 0 ? (
             <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
-              현재 감지된 접속 탭이 없습니다.
+              등록된 매니저 계정이 없습니다.
             </div>
           ) : (
-            <div className="mt-4 overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-200 text-left text-gray-600">
-                    <th className="px-3 py-2">계정</th>
-                    <th className="px-3 py-2">역할</th>
-                    <th className="px-3 py-2">앱</th>
-                    <th className="px-3 py-2">기기</th>
-                    <th className="px-3 py-2">탭 ID</th>
-                    <th className="px-3 py-2">리더 탭</th>
-                    <th className="px-3 py-2">최근 신호</th>
-                    <th className="px-3 py-2">작업</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {activeRows.map((row) => {
-                    const account = managerAccounts.find((item) => item.user_id === row.user_id) || null;
-                    return (
-                      <tr key={`${row.user_id}-${row.app_name}-${row.tab_id}`} className="border-b border-gray-100 text-gray-700">
-                        <td className="px-3 py-2">{accountLabel(account)}</td>
-                        <td className="px-3 py-2">{account?.role || '-'}</td>
-                        <td className="px-3 py-2">{row.app_name}</td>
-                        <td className="px-3 py-2">{row.device_label || row.device_id}</td>
-                        <td className="px-3 py-2 font-mono text-xs">{row.tab_id}</td>
-                        <td className="px-3 py-2">{row.is_leader ? '예' : '아니오'}</td>
-                        <td className="px-3 py-2">{row.last_seen ? new Date(row.last_seen).toLocaleTimeString('ko-KR') : '-'}</td>
-                        <td className="px-3 py-2">
-                          <button
-                            type="button"
-                            disabled={saving || !row.device_id}
-                            onClick={() => void setReceiverDevice(row.user_id, row.device_id || '', row.device_label)}
-                            className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-                          >
-                            이 기기로 지정
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+            <div className="mt-4 space-y-4">
+              {accountsWithAllSessions.map(({ account, sessions }) => {
+                const activeSessions = sessions.filter((s) => s.is_active !== false && s.app_name && s.tab_id && s.device_id);
+                const hasActiveSessions = activeSessions.length > 0;
+
+                return (
+                  <div
+                    key={account.user_id}
+                    className={`rounded-lg border-2 p-4 ${hasActiveSessions ? 'border-emerald-200 bg-emerald-50' : 'border-gray-200 bg-gray-50'}`}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">{hasActiveSessions ? '🟢' : '🔴'}</span>
+                          <h4 className="text-sm font-semibold text-gray-800">{accountLabel(account)}</h4>
+                          <span className="inline-block rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
+                            {account.role || 'unknown'}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            ({activeSessions.length}개 활성 / {sessions.length}개 전체)
+                          </span>
+                        </div>
+                        {account.preferred_device_label && (
+                          <p className="mt-1 text-xs text-gray-600">
+                            선택 기기: <span className="font-semibold">{account.preferred_device_label}</span>
+                          </p>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedManagerId(account.user_id)}
+                        className="ml-2 rounded-md bg-blue-100 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-200"
+                      >
+                        설정
+                      </button>
+                    </div>
+
+                    {sessions.length === 0 ? (
+                      <p className="mt-3 text-xs text-gray-500">접속 기록이 없습니다.</p>
+                    ) : (
+                      <div className="mt-3 space-y-3">
+                        {groupSessionsByDevice(sessions).map(([deviceKey, deviceSessions]) => {
+                          const firstSession = deviceSessions[0];
+                          const deviceLabel = firstSession?.device_label || firstSession?.device_id || '미연결';
+                          const hasActiveSessions = deviceSessions.some((s) => s.is_active !== false && s.app_name && s.tab_id && s.device_id);
+
+                          return (
+                            <div
+                              key={deviceKey}
+                              className={`rounded-lg border p-3 ${
+                                hasActiveSessions
+                                  ? 'border-blue-200 bg-blue-50'
+                                  : 'border-gray-200 bg-gray-100'
+                              }`}
+                            >
+                              <div className="mb-2 flex items-center gap-2">
+                                <span>{hasActiveSessions ? '💻' : '🔌'}</span>
+                                <span className="font-semibold text-gray-800">{deviceLabel}</span>
+                                <span className="text-xs text-gray-500">({deviceSessions.length}개 탭)</span>
+                              </div>
+
+                              <div className="space-y-1.5">
+                                {deviceSessions.map((session) => {
+                                  const isActive = session.is_active !== false && session.app_name && session.tab_id && session.device_id;
+                                  const lastSeenTime = session.last_seen
+                                    ? new Date(session.last_seen).toLocaleTimeString('ko-KR')
+                                    : '-';
+
+                                  return (
+                                    <div
+                                      key={`${session.app_name}-${session.tab_id}`}
+                                      className={`flex items-center justify-between rounded-md border-l-4 p-2 text-xs ${
+                                        isActive
+                                          ? 'border-l-emerald-400 bg-white'
+                                          : 'border-l-gray-300 bg-gray-50'
+                                      }`}
+                                    >
+                                      <div className="flex-1 space-y-0.5">
+                                        <div className="flex items-center gap-2">
+                                          <span>{isActive ? '🟢' : '🔴'}</span>
+                                          <span className="font-medium text-gray-800">{session.app_name || '(앱 미선택)'}</span>
+                                          {session.is_leader && (
+                                            <span className="inline-block rounded bg-yellow-100 px-1 py-0.5 font-medium text-yellow-700">
+                                              리더
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="text-gray-500">
+                                          탭 ID: {session.tab_id ? session.tab_id.substring(0, 12) + '...' : '(미식별)'} · {lastSeenTime}
+                                        </div>
+                                      </div>
+                                      {session.device_id && (
+                                        <button
+                                          type="button"
+                                          disabled={saving}
+                                          onClick={() => void setReceiverDevice(session.user_id, session.device_id || '', session.device_label)}
+                                          className="ml-2 whitespace-nowrap rounded-md bg-blue-600 px-2 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                                        >
+                                          지정
+                                        </button>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

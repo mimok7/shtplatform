@@ -353,6 +353,17 @@ export function useReservationListener(enabled: boolean, leaderScope: string) {
         .subscribe();
     };
 
+    const claimLeadership = () => {
+      writeLeader(lockKey, tabIdRef.current);
+      startRealtimeSubscription();
+
+      if (!leaderHeartbeatRef.current) {
+        leaderHeartbeatRef.current = setInterval(() => {
+          writeLeader(lockKey, tabIdRef.current);
+        }, LEADER_HEARTBEAT_MS);
+      }
+    };
+
     const tryBecomeLeader = () => {
       if (cancelled || typeof window === 'undefined') return;
 
@@ -371,14 +382,7 @@ export function useReservationListener(enabled: boolean, leaderScope: string) {
       const isCurrentLeader = leader?.tabId === tabIdRef.current;
 
       if (isCurrentLeader || isLeaderMissing) {
-        writeLeader(lockKey, tabIdRef.current);
-        startRealtimeSubscription();
-
-        if (!leaderHeartbeatRef.current) {
-          leaderHeartbeatRef.current = setInterval(() => {
-            writeLeader(lockKey, tabIdRef.current);
-          }, LEADER_HEARTBEAT_MS);
-        }
+        claimLeadership();
         return;
       }
 
@@ -397,7 +401,9 @@ export function useReservationListener(enabled: boolean, leaderScope: string) {
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        tryBecomeLeader();
+        if (!isCurrentDevicePreferred) return;
+        // 현재 보이는 탭이 즉시 알림을 받도록 리더를 재선점한다.
+        claimLeadership();
       }
     };
 
