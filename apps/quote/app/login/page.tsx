@@ -92,6 +92,8 @@ export default function LoginPage() {
         }).catch(err => console.error('프로필 생성 오류:', err));
       }
 
+      // 단일 세션 강제: 다른 기기/탭의 모든 세션 종료 (실패해도 로그인 진행)
+      try { await supabase.auth.signOut({ scope: 'others' }); } catch { /* noop */ }
       // 바로 mypage로 이동
       router.push('/mypage/quotes');
 
