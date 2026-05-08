@@ -4,6 +4,25 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 
+const TAB_SESSION_KEY = 'sht:tab:id';
+const ACTIVE_TAB_PREFIX = 'sht:active:tab:user:';
+
+function getOrCreateTabId() {
+    if (typeof window === 'undefined') return '';
+    let tabId = sessionStorage.getItem(TAB_SESSION_KEY);
+    if (!tabId) {
+        tabId = `tab_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+        sessionStorage.setItem(TAB_SESSION_KEY, tabId);
+    }
+    return tabId;
+}
+
+function markActiveTab(userId: string) {
+    if (typeof window === 'undefined') return;
+    const tabId = getOrCreateTabId();
+    localStorage.setItem(`${ACTIVE_TAB_PREFIX}${userId}`, JSON.stringify({ tabId, ts: Date.now() }));
+}
+
 // 로그인 후 역할별 진입 경로
 function landingFor(role?: string | null): string {
     switch (role) {
@@ -74,6 +93,7 @@ export default function PartnerLoginPage() {
 
             // 단일 세션 강제: 다른 기기/탭의 모든 세션 종료 (실패해도 로그인 진행)
             try { await supabase.auth.signOut({ scope: 'others' }); } catch { /* noop */ }
+            if (data.user?.id) markActiveTab(data.user.id);
             router.replace(landingFor(role));
         } catch (err: any) {
             setError(err?.message || '로그인 실패');

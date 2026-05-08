@@ -7,6 +7,36 @@ import { supabase } from '@/lib/supabase';
 const CACHE_KEY = 'sht_partner_user_cache';
 const PROFILE_CACHE_KEY = 'sht_partner_profile_cache';
 const PROFILE_CACHE_TTL_MS = 1000 * 60 * 30;
+const TAB_SESSION_KEY = 'sht:tab:id';
+const ACTIVE_TAB_PREFIX = 'sht:active:tab:user:';
+
+function getOrCreateTabId() {
+    if (typeof window === 'undefined') return '';
+    let tabId = sessionStorage.getItem(TAB_SESSION_KEY);
+    if (!tabId) {
+        tabId = `tab_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+        sessionStorage.setItem(TAB_SESSION_KEY, tabId);
+    }
+    return tabId;
+}
+
+function parseActiveTabValue(raw: string | null): string | null {
+    if (!raw) return null;
+    try {
+        const parsed = JSON.parse(raw);
+        return typeof parsed?.tabId === 'string' ? parsed.tabId : null;
+    } catch {
+        return null;
+    }
+}
+
+function isActiveTabOwner(userId: string): boolean {
+    if (typeof window === 'undefined') return true;
+    const activeRaw = localStorage.getItem(`${ACTIVE_TAB_PREFIX}${userId}`);
+    const activeTabId = parseActiveTabValue(activeRaw);
+    if (!activeTabId) return true;
+    return activeTabId === getOrCreateTabId();
+}
 
 function readCache(): any | null {
     if (typeof window === 'undefined') return null;
@@ -90,6 +120,15 @@ export function useAuth(requiredRoles?: string[], redirectOnFail: string = '/par
                     return;
                 }
 
+                if (!isActiveTabOwner(user.id)) {
+                    try { await supabase.auth.signOut({ scope: 'local' }); } catch { /* noop */ }
+                    writeCache(null);
+                    writeProfileCache(null, null);
+                    setState({ user: null, profile: null, loading: false });
+                    router.replace(redirectOnFail);
+                    return;
+                }
+
                 writeCache(user);
 
                 // role/partner_id 조회
@@ -157,8 +196,27 @@ export function useAuth(requiredRoles?: string[], redirectOnFail: string = '/par
             }
         });
 
+        const handleStorage = (e: StorageEvent) => {
+            if (cancelled || !e.key || !e.key.startsWith(ACTIVE_TAB_PREFIX)) return;
+            const current = readCache();
+            if (!current?.id) return;
+            if (e.key !== `${ACTIVE_TAB_PREFIX}${current.id}`) return;
+            const incomingTabId = parseActiveTabValue(e.newValue);
+            if (!incomingTabId || incomingTabId === getOrCreateTabId()) return;
+
+            void (async () => {
+                try { await supabase.auth.signOut({ scope: 'local' }); } catch { /* noop */ }
+                writeCache(null);
+                writeProfileCache(null, null);
+                setState({ user: null, profile: null, loading: false });
+                router.replace(redirectOnFail);
+            })();
+        };
+        window.addEventListener('storage', handleStorage);
+
         return () => {
             cancelled = true;
+            window.removeEventListener('storage', handleStorage);
             try { subscription?.unsubscribe?.(); } catch { /* noop */ }
         };
     }, []);

@@ -3,6 +3,37 @@ import { useEffect, useState } from 'react';
 import supabase from '@/lib/supabase';
 import { getCachedRole, getCookieRole, setCachedRole } from '@/lib/userUtils';
 
+const TAB_SESSION_KEY = 'sht:tab:id';
+const ACTIVE_TAB_PREFIX = 'sht:active:tab:user:';
+
+function getOrCreateTabId() {
+  if (typeof window === 'undefined') return '';
+  let tabId = sessionStorage.getItem(TAB_SESSION_KEY);
+  if (!tabId) {
+    tabId = `tab_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    sessionStorage.setItem(TAB_SESSION_KEY, tabId);
+  }
+  return tabId;
+}
+
+function parseActiveTabValue(raw: string | null): string | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    return typeof parsed?.tabId === 'string' ? parsed.tabId : null;
+  } catch {
+    return null;
+  }
+}
+
+function isActiveTabOwner(userId: string): boolean {
+  if (typeof window === 'undefined') return true;
+  const activeRaw = localStorage.getItem(`${ACTIVE_TAB_PREFIX}${userId}`);
+  const activeTabId = parseActiveTabValue(activeRaw);
+  if (!activeTabId) return true;
+  return activeTabId === getOrCreateTabId();
+}
+
 interface UserProfile {
   id: string;
   email: string;
@@ -40,6 +71,13 @@ export function AuthWrapper({ children, requiredRole, allowedRoles }: AuthWrappe
         setUser(null);
         setHasAccess(true);
         setLoading(false);
+        return;
+      }
+
+      if (!isActiveTabOwner(authUser.id)) {
+        try { await supabase.auth.signOut({ scope: 'local' }); } catch { /* noop */ }
+        alert('다른 탭에서 로그인되어 현재 탭이 로그아웃되었습니다.');
+        router.push('/login');
         return;
       }
 
@@ -118,6 +156,25 @@ export function AuthWrapper({ children, requiredRole, allowedRoles }: AuthWrappe
     };
     return roleNames[role] || '견적자';
   };
+
+  useEffect(() => {
+    const handleStorage = (e: StorageEvent) => {
+      if (!user?.id || !e.key) return;
+      if (e.key !== `${ACTIVE_TAB_PREFIX}${user.id}`) return;
+      const incomingTabId = parseActiveTabValue(e.newValue);
+      if (!incomingTabId || incomingTabId === getOrCreateTabId()) return;
+
+      void (async () => {
+        try { await supabase.auth.signOut({ scope: 'local' }); } catch { /* noop */ }
+        setUser(null);
+        setHasAccess(false);
+        router.push('/login');
+      })();
+    };
+
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, [router, user?.id]);
 
   if (loading) {
     return (

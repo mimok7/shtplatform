@@ -11,7 +11,37 @@ interface AuthState {
 
 // 인메모리 + sessionStorage 백업 캐시 (새로고침/탭 복귀 시 깜빡임 방지)
 const AUTH_CACHE_KEY = 'app:auth:cache';
+const TAB_SESSION_KEY = 'sht:tab:id';
+const ACTIVE_TAB_PREFIX = 'sht:active:tab:user:';
 let authCache: { user: any | null; role: string | null; timestamp: number } | null = null;
+
+function getOrCreateTabId() {
+    if (typeof window === 'undefined') return '';
+    let tabId = sessionStorage.getItem(TAB_SESSION_KEY);
+    if (!tabId) {
+        tabId = `tab_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+        sessionStorage.setItem(TAB_SESSION_KEY, tabId);
+    }
+    return tabId;
+}
+
+function parseActiveTabValue(raw: string | null): string | null {
+    if (!raw) return null;
+    try {
+        const parsed = JSON.parse(raw);
+        return typeof parsed?.tabId === 'string' ? parsed.tabId : null;
+    } catch {
+        return null;
+    }
+}
+
+function isActiveTabOwner(userId: string): boolean {
+    if (typeof window === 'undefined') return true;
+    const activeRaw = localStorage.getItem(`${ACTIVE_TAB_PREFIX}${userId}`);
+    const activeTabId = parseActiveTabValue(activeRaw);
+    if (!activeTabId) return true;
+    return activeTabId === getOrCreateTabId();
+}
 
 function readSessionCache(): { user: any | null; role: string | null } | null {
     if (authCache?.user) return { user: authCache.user, role: authCache.role };
@@ -91,6 +121,14 @@ export function useAuth(requiredRoles?: string[], redirectOnFail: string = '/log
                 return;
             }
 
+            if (!isActiveTabOwner(user.id)) {
+                try { await supabase.auth.signOut({ scope: 'local' }); } catch { /* noop */ }
+                writeSessionCache(null);
+                setAuthState({ user: null, role: null, loading: false, error: null });
+                router.replace(redirectOnFail);
+                return;
+            }
+
             let role: string | null = cached?.role ?? null;
             if (requiredRoles?.length || !role || role === 'guest') {
                 role = await fetchRole(user.id);
@@ -137,8 +175,26 @@ export function useAuth(requiredRoles?: string[], redirectOnFail: string = '/log
             }
         });
 
+        const handleStorage = (e: StorageEvent) => {
+            if (cancelled || !e.key || !e.key.startsWith(ACTIVE_TAB_PREFIX)) return;
+            const current = readSessionCache();
+            if (!current?.user?.id) return;
+            if (e.key !== `${ACTIVE_TAB_PREFIX}${current.user.id}`) return;
+            const incomingTabId = parseActiveTabValue(e.newValue);
+            if (!incomingTabId || incomingTabId === getOrCreateTabId()) return;
+
+            void (async () => {
+                try { await supabase.auth.signOut({ scope: 'local' }); } catch { /* noop */ }
+                writeSessionCache(null);
+                setAuthState({ user: null, role: null, loading: false, error: null });
+                router.replace(redirectOnFail);
+            })();
+        };
+        window.addEventListener('storage', handleStorage);
+
         return () => {
             cancelled = true;
+            window.removeEventListener('storage', handleStorage);
             try { subscription?.unsubscribe?.(); } catch { /* noop */ }
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps

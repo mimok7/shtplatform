@@ -5,6 +5,25 @@ import { useRouter } from 'next/navigation';
 import supabase from '@/lib/supabase';
 import { setCachedUser } from '@/lib/authCache';
 
+const TAB_SESSION_KEY = 'sht:tab:id';
+const ACTIVE_TAB_PREFIX = 'sht:active:tab:user:';
+
+function getOrCreateTabId() {
+  if (typeof window === 'undefined') return '';
+  let tabId = sessionStorage.getItem(TAB_SESSION_KEY);
+  if (!tabId) {
+    tabId = `tab_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    sessionStorage.setItem(TAB_SESSION_KEY, tabId);
+  }
+  return tabId;
+}
+
+function markActiveTab(userId: string) {
+  if (typeof window === 'undefined') return;
+  const tabId = getOrCreateTabId();
+  localStorage.setItem(`${ACTIVE_TAB_PREFIX}${userId}`, JSON.stringify({ tabId, ts: Date.now() }));
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
@@ -42,6 +61,7 @@ export default function LoginPage() {
 
       // 단일 세션 강제: 다른 기기/탭의 모든 세션 종료 (실패해도 로그인 진행)
       try { await supabase.auth.signOut({ scope: 'others' }); } catch { /* noop */ }
+      markActiveTab(user.id);
       // 바로 오더 페이지로 이동
       router.push('/order');
 

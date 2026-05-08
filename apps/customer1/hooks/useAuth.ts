@@ -20,6 +20,36 @@ let authCache: {
 
 const CACHE_DURATION = 5 * 60 * 1000; // 5분 캐시
 const AUTH_CACHE_KEY = 'app:auth:cache';
+const TAB_SESSION_KEY = 'sht:tab:id';
+const ACTIVE_TAB_PREFIX = 'sht:active:tab:user:';
+
+function getOrCreateTabId() {
+    if (typeof window === 'undefined') return '';
+    let tabId = sessionStorage.getItem(TAB_SESSION_KEY);
+    if (!tabId) {
+        tabId = `tab_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+        sessionStorage.setItem(TAB_SESSION_KEY, tabId);
+    }
+    return tabId;
+}
+
+function parseActiveTabValue(raw: string | null): string | null {
+    if (!raw) return null;
+    try {
+        const parsed = JSON.parse(raw);
+        return typeof parsed?.tabId === 'string' ? parsed.tabId : null;
+    } catch {
+        return null;
+    }
+}
+
+function isActiveTabOwner(userId: string): boolean {
+    if (typeof window === 'undefined') return true;
+    const activeRaw = localStorage.getItem(`${ACTIVE_TAB_PREFIX}${userId}`);
+    const activeTabId = parseActiveTabValue(activeRaw);
+    if (!activeTabId) return true;
+    return activeTabId === getOrCreateTabId();
+}
 
 // sessionStorage에서 캐시 복원 (새로고침 시 인메모리 캐시 소실 방지)
 function restoreCache() {
@@ -103,6 +133,15 @@ export function useAuth(requiredRoles?: string[], redirectOnFail: string = '/log
                     return;
                 }
 
+                if (!isActiveTabOwner(user.id)) {
+                    await supabase.auth.signOut({ scope: 'local' });
+                    setAuthState({ user: null, role: null, loading: false, error: null });
+                    if (requiredRoles && requiredRoles.length > 0) {
+                        router.push('/login');
+                    }
+                    return;
+                }
+
                 // 3. 사용자 역할 조회
                 const { data: userData, error: roleError } = await supabase
                     .from('users')
@@ -170,7 +209,31 @@ export function useAuth(requiredRoles?: string[], redirectOnFail: string = '/log
         };
 
         doCheckAuth();
-        return () => { cancelled = true; };
+
+        const handleStorage = (e: StorageEvent) => {
+            if (cancelled || !e.key || !e.key.startsWith(ACTIVE_TAB_PREFIX)) return;
+            const currentUser = authCache?.user;
+            if (!currentUser?.id) return;
+            if (e.key !== `${ACTIVE_TAB_PREFIX}${currentUser.id}`) return;
+            const incomingTabId = parseActiveTabValue(e.newValue);
+            if (!incomingTabId || incomingTabId === getOrCreateTabId()) return;
+
+            void (async () => {
+                try { await supabase.auth.signOut({ scope: 'local' }); } catch { /* noop */ }
+                authCache = null;
+                try { sessionStorage.removeItem(AUTH_CACHE_KEY); } catch { /* noop */ }
+                setAuthState({ user: null, role: null, loading: false, error: null });
+                if (requiredRoles && requiredRoles.length > 0) {
+                    router.push('/login');
+                }
+            })();
+        };
+        window.addEventListener('storage', handleStorage);
+
+        return () => {
+            cancelled = true;
+            window.removeEventListener('storage', handleStorage);
+        };
     }, []);
 
     // 캐시 무효화 및 재인증 함수
