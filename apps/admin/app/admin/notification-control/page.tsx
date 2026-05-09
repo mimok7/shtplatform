@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import supabase from '@/lib/supabase';
 
@@ -134,8 +134,11 @@ export default function NotificationControlPage() {
     });
   };
 
+  const refreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const loadRuntimeAndStatus = async (showRefreshing: boolean) => {
     if (showRefreshing) setRefreshing(true);
+    const startMs = Date.now();
 
     try {
       const { data: runtimeRow, error: runtimeError } = await supabase
@@ -150,7 +153,15 @@ export default function NotificationControlPage() {
 
       await loadStatus();
     } finally {
-      if (showRefreshing) setRefreshing(false);
+      if (showRefreshing) {
+        // 최소 500ms 동안 '새로고침 중...' 상태 유지 (너무 빨리 끝나는 문제 방지)
+        const elapsed = Date.now() - startMs;
+        const remaining = Math.max(0, 500 - elapsed);
+        if (remaining > 0) {
+          await new Promise((resolve) => setTimeout(resolve, remaining));
+        }
+        setRefreshing(false);
+      }
     }
   };
 
@@ -159,11 +170,12 @@ export default function NotificationControlPage() {
 
     const load = async () => {
       try {
-        const { data, error } = await supabase.auth.getUser();
-        const authUser = data?.user;
+        // getSession()은 로컬 캐시만 읽으므로 navigator.locks 경쟁 없음
+        const { data: { session } } = await supabase.auth.getSession();
+        const authUser = session?.user;
         if (cancelled) return;
 
-        if (error || !authUser) {
+        if (!authUser) {
           setErrorMessage('로그인 정보를 확인할 수 없습니다. 다시 로그인해 주세요.');
           return;
         }
@@ -184,8 +196,14 @@ export default function NotificationControlPage() {
 
     void load();
 
+    // 30초마다 자동 갱신 (새로고침 없이도 최신 상태 반영)
+    refreshTimerRef.current = setInterval(() => {
+      void loadRuntimeAndStatus(false);
+    }, 30_000);
+
     return () => {
       cancelled = true;
+      if (refreshTimerRef.current) clearInterval(refreshTimerRef.current);
     };
   }, []);
 

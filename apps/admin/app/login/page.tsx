@@ -35,7 +35,8 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      // signInWithPassword 응답에 user가 직접 포함되어 있으므로 getUser() 추가 호출 불필요
+      const { data: signInData, error } = await supabase.auth.signInWithPassword({ email, password });
 
       if (error) {
         alert('로그인 실패: ' + error.message);
@@ -43,12 +44,8 @@ export default function LoginPage() {
         return;
       }
 
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
-
-      if (userError || !user) {
+      const user = signInData.user;
+      if (!user) {
         alert('로그인 세션 확인에 실패했습니다. 다시 시도해주세요.');
         setLoading(false);
         return;
@@ -61,17 +58,17 @@ export default function LoginPage() {
         .single();
 
       if (profileError || profile?.role !== 'admin') {
-        await supabase.auth.signOut();
+        void supabase.auth.signOut();
         alert('관리자 계정만 로그인 가능합니다.');
         setLoading(false);
         return;
       }
 
-      // 단일 세션 강제: 다른 기기/탭의 모든 세션 종료 (실패해도 로그인 진행)
-      try { await supabase.auth.signOut({ scope: 'others' }); } catch { /* noop */ }
+      // 단일 세션 강제: fire-and-forget (await 불필요 — 로그인 지연 방지)
+      void supabase.auth.signOut({ scope: 'others' }).catch(() => undefined);
       markActiveTab();
       router.replace('/admin');
-      router.refresh();
+      // router.refresh() 제거: replace 후 자동으로 새 세션 반영됨
     } catch (error) {
       console.error('로그인 처리 오류:', error);
       alert('로그인 처리 중 오류가 발생했습니다.');

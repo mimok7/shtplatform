@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { usePathname } from 'next/navigation';
 
 const TAB_SESSION_KEY = 'sht:tab:id';
 const ACTIVE_TAB_KEY = 'sht:active:tab';
@@ -25,12 +26,16 @@ function readTabId(raw: string | null) {
     }
 }
 
-export default function TabSessionGuard({ loginPath: _loginPath }: { loginPath: string }) {
+export default function TabSessionGuard({ loginPath }: { loginPath: string }) {
+    const pathname = usePathname();
     const currentTabIdRef = useRef('');
     const blockedRef = useRef(false);
     const [blocked, setBlocked] = useState(false);
 
     useEffect(() => {
+        // 로그인 페이지에서는 차단하지 않음 — 새 로그인이 우선되어야 함
+        if (pathname.startsWith(loginPath)) return;
+
         currentTabIdRef.current = getOrCreateTabId();
 
         const blockCurrentTab = () => {
@@ -55,7 +60,7 @@ export default function TabSessionGuard({ loginPath: _loginPath }: { loginPath: 
         syncWithActiveTab();
         window.addEventListener('storage', handleStorage);
         return () => window.removeEventListener('storage', handleStorage);
-    }, []);
+    }, [pathname, loginPath]);
 
     const handleClose = () => {
         try {
