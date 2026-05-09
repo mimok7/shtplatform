@@ -58,7 +58,14 @@ export default function TabSessionGuard({ loginPath: _loginPath }: { loginPath: 
     }, []);
 
     const handleClose = () => {
-        window.close();
+        try {
+            window.open('', '_self');
+            window.close();
+        } catch {
+            // noop
+        }
+        // User-opened tab은 close가 차단될 수 있어 사용 중지를 위해 blank 페이지로 전환
+        window.setTimeout(() => window.location.replace('about:blank'), 120);
     };
 
     if (blocked) {
@@ -66,9 +73,12 @@ export default function TabSessionGuard({ loginPath: _loginPath }: { loginPath: 
             <div className="fixed inset-0 z-[9999] bg-black/70 flex items-center justify-center p-4">
                 <div className="w-full max-w-md rounded-xl bg-white p-6 text-center shadow-xl">
                     <h2 className="text-xl font-bold text-red-600">동시 접속 차단</h2>
-                    <p className="mt-4 text-sm text-gray-700 leading-relaxed whitespace-pre-line">
-                        동시 접속은 보안, 데이터 오류을 위하여 차단되어 있습니다.\n현재 창의 사용이 중지되었습니다.\n\n계속 사용하려면 가장 최근 로그인한 창만 사용해 주세요.\n감사합니다.
-                    </p>
+                    <ul className="mt-4 text-left text-sm text-gray-700 leading-relaxed space-y-2">
+                        <li>- 동시 접속은 보안, 데이터 저장 오류 예방을 위하여 차단되어 있습니다.</li>
+                        <li>- 현재 창의 사용이 중지되었습니다.</li>
+                        <li>- 계속 사용하려면 가장 최근 로그인한 창만 사용해 주세요.</li>
+                        <li>- 감사합니다. ^^</li>
+                    </ul>
                     <button
                         onClick={handleClose}
                         className="mt-6 w-full px-4 py-2 bg-gray-800 text-white rounded-lg font-medium hover:bg-gray-900 transition"
