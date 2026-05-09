@@ -1,0 +1,4 @@
+{
+  "typescript.tsserver.maxTsServerMemory": 4096,
+  "typescript.tsserver.trace": "off"
+}
