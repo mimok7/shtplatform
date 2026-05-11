@@ -3,6 +3,7 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import supabase from '@/lib/supabase';
+import { recordReservationChange } from '@/lib/reservationChangeTracker';
 import ManagerLayout from '@/components/ManagerLayout';
 import {
     Save,
@@ -567,6 +568,46 @@ function PackageReservationEditContent() {
             }
 
             alert('패키지 예약이 저장되었습니다.');
+            try {
+                const pkgRow = packageDetail ? {
+                    package_id: reservation.package_id,
+                    adult_count: packageDetail.adult_count,
+                    child_extra_bed: packageDetail.child_extra_bed,
+                    child_no_extra_bed: packageDetail.child_no_extra_bed,
+                    infant_free: packageDetail.infant_free,
+                    infant_tour: packageDetail.infant_tour,
+                    infant_extra_bed: packageDetail.infant_extra_bed,
+                    infant_seat: packageDetail.infant_seat,
+                    airport_vehicle: packageDetail.airport_vehicle,
+                    ninh_binh_vehicle: packageDetail.ninh_binh_vehicle,
+                    hanoi_vehicle: packageDetail.hanoi_vehicle,
+                    cruise_vehicle: packageDetail.cruise_vehicle,
+                    sht_pickup_vehicle: packageDetail.sht_pickup_vehicle,
+                    sht_pickup_seat: packageDetail.sht_pickup_seat,
+                    sht_dropoff_vehicle: packageDetail.sht_dropoff_vehicle,
+                    sht_dropoff_seat: packageDetail.sht_dropoff_seat,
+                    adult_price: packageDetail.adult_price,
+                    child_extra_bed_price: packageDetail.child_extra_bed_price,
+                    child_no_extra_bed_price: packageDetail.child_no_extra_bed_price,
+                    infant_tour_price: packageDetail.infant_tour_price,
+                    infant_extra_bed_price: packageDetail.infant_extra_bed_price,
+                    infant_seat_price: packageDetail.infant_seat_price,
+                    total_price: packageDetail.total_price,
+                    request_note: packageDetail.additional_requests || null,
+                } : null;
+                await recordReservationChange({
+                    reservationId,
+                    reType: 'package',
+                    rows: pkgRow ? { package: [pkgRow] } : {},
+                    managerNote: '패키지 예약 매니저 직접 수정',
+                    snapshotData: {
+                        total_amount: formData.total_amount,
+                        manager_note: formData.manager_note,
+                    },
+                });
+            } catch (trackErr) {
+                console.warn('⚠️ 변경 추적 기록 실패(저장은 계속):', trackErr);
+            }
             router.push('/manager/reservation-edit?type=package');
 
         } catch (error: any) {

@@ -174,6 +174,15 @@ const hasReservationPricingOverride = (service: any, manualAdditionalFee: number
         || !!service?.reservation?.price_breakdown;
 };
 
+const getChangeStatusLabel = (status: any): string => {
+    const value = String(status || '').toLowerCase();
+    if (value === 'approved') return '승인';
+    if (value === 'pending') return '대기';
+    if (value === 'completed') return '완료';
+    if (value === 'confirmed') return '확정';
+    return status ? String(status) : '수정';
+};
+
 export default function UserReservationDetailModal({
     isOpen,
     onClose,
@@ -463,6 +472,13 @@ export default function UserReservationDetailModal({
 
         return (
             <div className="flex flex-col gap-1 text-sm text-gray-700 mt-2">
+                {service?._hasChange && (
+                    <div className="mb-1">
+                        <span className="inline-flex items-center gap-1 text-xs font-medium text-rose-700 bg-rose-100 px-2 py-0.5 rounded-full">
+                            수정 내용 반영 ({getChangeStatusLabel(service?._changeStatus)})
+                        </span>
+                    </div>
+                )}
                 {isPackageService && (
                     <div className="mb-1">
                         <span className="inline-flex items-center gap-1 text-xs font-medium text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full">

@@ -4,6 +4,7 @@ import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import supabase from '@/lib/supabase';
 import { saveAdditionalFeeTemplateFromInput } from '@/lib/additionalFeeTemplate';
+import { recordReservationChange } from '@/lib/reservationChangeTracker';
 import { calculateReservationPricing } from '@sht/domain/pricing';
 import ManagerLayout from '@/components/ManagerLayout';
 import {
@@ -534,6 +535,43 @@ function RentcarReservationEditContent() {
                 detail: additionalFeeDetail,
                 amount: additionalFee,
             });
+
+            // 변경 추적 기록
+            try {
+                await recordReservationChange({
+                    reservationId: reservationId!,
+                    reType: 'rentcar',
+                    rows: {
+                        rentcar: [{
+                            rentcar_price_code: reservation.rentcar_price_code || null,
+                            car_count: payload.car_count,
+                            passenger_count: payload.passenger_count,
+                            unit_price: payload.unit_price,
+                            total_price: payload.total_price,
+                            pickup_datetime: payload.pickup_datetime,
+                            pickup_location: payload.pickup_location,
+                            destination: payload.destination,
+                            via_location: payload.via_location,
+                            via_waiting: payload.via_waiting,
+                            request_note: payload.request_note,
+                            way_type: payload.way_type,
+                            return_datetime: payload.return_datetime,
+                            return_pickup_location: payload.return_pickup_location,
+                            return_destination: payload.return_destination,
+                            return_via_location: payload.return_via_location,
+                            return_via_waiting: payload.return_via_waiting,
+                        }],
+                    },
+                    managerNote: '렌터카 예약 매니저 직접 수정',
+                    snapshotData: {
+                        price_breakdown: pricing.price_breakdown,
+                        total_amount: pricing.total_amount,
+                        manual_additional_fee: additionalFee,
+                    },
+                });
+            } catch (trackErr) {
+                console.warn('⚠️ 변경 추적 기록 실패(저장은 계속):', trackErr);
+            }
 
             // 2. Insert fallback
             if (!updatedData || updatedData.length === 0) {

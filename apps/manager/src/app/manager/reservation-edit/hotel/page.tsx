@@ -4,6 +4,7 @@ import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import supabase from '@/lib/supabase';
 import { saveAdditionalFeeTemplateFromInput } from '@/lib/additionalFeeTemplate';
+import { recordReservationChange } from '@/lib/reservationChangeTracker';
 import { calculateReservationPricing } from '@sht/domain/pricing';
 import ManagerLayout from '@/components/ManagerLayout';
 import {
@@ -300,6 +301,34 @@ function HotelReservationEditContent() {
                 detail: additionalFeeDetail,
                 amount: additionalFee,
             });
+
+            // 3. 변경 추적 기록
+            try {
+                await recordReservationChange({
+                    reservationId: reservationId!,
+                    reType: 'hotel',
+                    rows: {
+                        hotel: [{
+                            hotel_price_code: reservation.hotel_price_code,
+                            checkin_date: formData.checkin_date,
+                            schedule: formData.schedule,
+                            room_count: roomCount,
+                            guest_count: formData.guest_count,
+                            unit_price: formData.unit_price,
+                            total_price: totalPrice,
+                            request_note: formData.request_note,
+                        }],
+                    },
+                    managerNote: '호텔 예약 매니저 직접 수정',
+                    snapshotData: {
+                        price_breakdown: pricing.price_breakdown,
+                        total_amount: pricing.total_amount,
+                        manual_additional_fee: additionalFee,
+                    },
+                });
+            } catch (trackErr) {
+                console.warn('⚠️ 변경 추적 기록 실패(저장은 계속):', trackErr);
+            }
 
             console.log('✅ 모든 테이블 저장 완료');
             alert('호텔 예약이 성공적으로 수정되었습니다.');

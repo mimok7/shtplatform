@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import supabase from '@/lib/supabase';
+import { fetchLatestActiveChangeRequests, applyChangeOverlay } from '@/lib/reservationChangeOverlay';
 
 interface ReservationDetail {
     reservation_id: string;
@@ -288,14 +289,25 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                     : Promise.resolve({ data: [] }),
             ]);
 
-            const cruiseDetails = (cruiseResult.data as any[]) || [];
-            const airportDetails = (airportResult.data as any[]) || [];
-            const hotelDetails = (hotelResult.data as any[]) || [];
-            const packageDetails = (packageResult.data as any[]) || [];
-            const rentcarDetails = (rentcarResult.data as any[]) || [];
-            const tourDetails = (tourResult.data as any[]) || [];
-            const carDetails = (carShtResult.data as any[]) || [];
-            const cruiseCarDetails = (cruiseCarResult.data as any[]) || [];
+            const cruiseDetailsRaw = (cruiseResult.data as any[]) || [];
+            const airportDetailsRaw = (airportResult.data as any[]) || [];
+            const hotelDetailsRaw = (hotelResult.data as any[]) || [];
+            const packageDetailsRaw = (packageResult.data as any[]) || [];
+            const rentcarDetailsRaw = (rentcarResult.data as any[]) || [];
+            const tourDetailsRaw = (tourResult.data as any[]) || [];
+            const carDetailsRaw = (carShtResult.data as any[]) || [];
+            const cruiseCarDetailsRaw = (cruiseCarResult.data as any[]) || [];
+
+            // 변경 요청 우선 조회 후 오버레이 적용 (수정된 내용을 먼저 반영)
+            const changeMetaMap = await fetchLatestActiveChangeRequests(reservationIds);
+            const cruiseDetails = await applyChangeOverlay('cruise', cruiseDetailsRaw, { metaMap: changeMetaMap, replaceMultiRow: true });
+            const airportDetails = await applyChangeOverlay('airport', airportDetailsRaw, { metaMap: changeMetaMap, replaceMultiRow: true });
+            const hotelDetails = await applyChangeOverlay('hotel', hotelDetailsRaw, { metaMap: changeMetaMap });
+            const packageDetails = await applyChangeOverlay('package', packageDetailsRaw, { metaMap: changeMetaMap });
+            const rentcarDetails = await applyChangeOverlay('rentcar', rentcarDetailsRaw, { metaMap: changeMetaMap });
+            const tourDetails = await applyChangeOverlay('tour', tourDetailsRaw, { metaMap: changeMetaMap });
+            const carDetails = await applyChangeOverlay('car_sht', carDetailsRaw, { metaMap: changeMetaMap });
+            const cruiseCarDetails = await applyChangeOverlay('cruise_car', cruiseCarDetailsRaw, { metaMap: changeMetaMap, replaceMultiRow: true });
 
             // 스하차량 좌석 단가는 하드코딩이 아닌 rentcar_price 기준으로 계산
             const shtPriceCodes = Array.from(new Set(

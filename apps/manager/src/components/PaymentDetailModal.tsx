@@ -2,6 +2,7 @@
 
 import React from 'react';
 import supabase from '@/lib/supabase';
+import { fetchLatestActiveChangeRequests, applyChangeOverlay } from '@/lib/reservationChangeOverlay';
 import {
     Calendar,
     Clock,
@@ -47,8 +48,18 @@ const ServiceDetailSection = ({ payment }: { payment: any }) => {
 
                 const reservationMap = new Map((reservationRes.data || []).map((item: any) => [item.re_id, item]));
 
-                if (cruiseRes.data?.length) {
-                    results.cruise = await Promise.all(cruiseRes.data.map(async (item) => {
+                // 변경 요청 우선 조회 후 오버레이 적용 (수정된 내용을 먼저 반영)
+                const _changeMetaMap = await fetchLatestActiveChangeRequests(ids);
+                const cruiseRows = await applyChangeOverlay('cruise', (cruiseRes.data as any[]) || [], { metaMap: _changeMetaMap, replaceMultiRow: true });
+                const airportRows = await applyChangeOverlay('airport', (airportRes.data as any[]) || [], { metaMap: _changeMetaMap, replaceMultiRow: true });
+                const hotelRows = await applyChangeOverlay('hotel', (hotelRes.data as any[]) || [], { metaMap: _changeMetaMap });
+                const tourRows = await applyChangeOverlay('tour', (tourRes.data as any[]) || [], { metaMap: _changeMetaMap });
+                const rentcarRows = await applyChangeOverlay('rentcar', (rentcarRes.data as any[]) || [], { metaMap: _changeMetaMap });
+                const shtRows = await applyChangeOverlay('car_sht', (shtRes.data as any[]) || [], { metaMap: _changeMetaMap });
+                // ticket은 change_* 테이블 없음 — 원본 유지
+
+                if (cruiseRows.length) {
+                    results.cruise = await Promise.all(cruiseRows.map(async (item) => {
                         let priceData = null;
                         if (item.room_price_code) {
                             const { data } = await supabase.from('cruise_rate_card').select('*').eq('id', item.room_price_code).maybeSingle();
@@ -59,8 +70,8 @@ const ServiceDetailSection = ({ payment }: { payment: any }) => {
                 }
 
                 // 공항 - 가격 정보 enrichment
-                if (airportRes.data?.length) {
-                    results.airport = await Promise.all(airportRes.data.map(async (item) => {
+                if (airportRows.length) {
+                    results.airport = await Promise.all(airportRows.map(async (item) => {
                         let priceData = null;
                         if (item.airport_price_code) {
                             const { data } = await supabase.from('airport_price').select('*').eq('airport_code', item.airport_price_code).single();
@@ -71,8 +82,8 @@ const ServiceDetailSection = ({ payment }: { payment: any }) => {
                 }
 
                 // 호텔 - 가격 정보 enrichment
-                if (hotelRes.data?.length) {
-                    results.hotel = await Promise.all(hotelRes.data.map(async (item) => {
+                if (hotelRows.length) {
+                    results.hotel = await Promise.all(hotelRows.map(async (item) => {
                         let priceData = null;
                         if (item.hotel_price_code) {
                             const { data } = await supabase.from('hotel_price').select('*').eq('hotel_price_code', item.hotel_price_code).single();
@@ -83,8 +94,8 @@ const ServiceDetailSection = ({ payment }: { payment: any }) => {
                 }
 
                 // 투어 - 가격 정보 enrichment
-                if (tourRes.data?.length) {
-                    results.tour = await Promise.all(tourRes.data.map(async (item) => {
+                if (tourRows.length) {
+                    results.tour = await Promise.all(tourRows.map(async (item) => {
                         let priceData = null;
                         if (item.tour_price_code) {
                             const { data } = await supabase.from('tour_pricing').select('*, tour:tour_id(tour_name, tour_code)').eq('pricing_id', item.tour_price_code).single();
@@ -99,8 +110,8 @@ const ServiceDetailSection = ({ payment }: { payment: any }) => {
                 }
 
                 // 렌터카 - 가격 정보 enrichment
-                if (rentcarRes.data?.length) {
-                    results.rentcar = await Promise.all(rentcarRes.data.map(async (item) => {
+                if (rentcarRows.length) {
+                    results.rentcar = await Promise.all(rentcarRows.map(async (item) => {
                         let priceData = null;
                         if (item.rentcar_price_code) {
                             const { data } = await supabase.from('rentcar_price').select('*').eq('rent_code', item.rentcar_price_code).single();
@@ -111,8 +122,8 @@ const ServiceDetailSection = ({ payment }: { payment: any }) => {
                 }
 
                 // SHT 차량
-                if (shtRes.data?.length) {
-                    results.sht = await Promise.all(shtRes.data.map(async (item) => {
+                if (shtRows.length) {
+                    results.sht = await Promise.all(shtRows.map(async (item) => {
                         let priceData = null;
                         if (item.car_price_code) {
                             try {

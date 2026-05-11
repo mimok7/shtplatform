@@ -4,6 +4,7 @@ import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import supabase from '@/lib/supabase';
 import { saveAdditionalFeeTemplateFromInput } from '@/lib/additionalFeeTemplate';
+import { recordReservationChange } from '@/lib/reservationChangeTracker';
 import { calculateReservationPricing } from '@sht/domain/pricing';
 import ManagerLayout from '@/components/ManagerLayout';
 import {
@@ -294,6 +295,34 @@ function TourReservationEditContent() {
                 detail: additionalFeeDetail,
                 amount: additionalFee,
             });
+
+            // 변경 추적 기록
+            try {
+                await recordReservationChange({
+                    reservationId: reservationId!,
+                    reType: 'tour',
+                    rows: {
+                        tour: [{
+                            tour_price_code: reservation.tour_price_code || null,
+                            usage_date: formData.tour_date || null,
+                            tour_capacity: formData.tour_capacity,
+                            pickup_location: formData.pickup_location,
+                            dropoff_location: formData.dropoff_location,
+                            unit_price: formData.unit_price,
+                            total_price: formData.total_price,
+                            request_note: formData.request_note,
+                        }],
+                    },
+                    managerNote: '투어 예약 매니저 직접 수정',
+                    snapshotData: {
+                        price_breakdown: pricing.price_breakdown,
+                        total_amount: pricing.total_amount,
+                        manual_additional_fee: additionalFee,
+                    },
+                });
+            } catch (trackErr) {
+                console.warn('⚠️ 변경 추적 기록 실패(저장은 계속):', trackErr);
+            }
 
             // 2. Insert fallback
             if (!updatedData || updatedData.length === 0) {

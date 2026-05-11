@@ -4,6 +4,7 @@ import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import supabase from '@/lib/supabase';
 import { saveAdditionalFeeTemplateFromInput } from '@/lib/additionalFeeTemplate';
+import { recordReservationChange } from '@/lib/reservationChangeTracker';
 import { calculateReservationPricing } from '@sht/domain/pricing';
 import ManagerLayout from '@/components/ManagerLayout';
 import {
@@ -649,6 +650,43 @@ function AirportReservationEditContent() {
                 detail: additionalFeeDetail,
                 amount: additionalFee,
             });
+
+            // 변경 추적 기록 (way_type 별로 row 생성)
+            try {
+                const changeAirportRows = wayKeys
+                    .filter((way) => airportForms[way].total_price > 0 || airportForms[way].unit_price > 0 || airportForms[way].ra_airport_name)
+                    .map((way) => {
+                        const f = airportForms[way];
+                        return {
+                            way_type: way,
+                            airport_price_code: f.airport_price_code || null,
+                            ra_airport_location: f.ra_airport_name || null,
+                            ra_airport_name: f.ra_airport_name || null,
+                            accommodation_info: f.accommodation_info || null,
+                            ra_flight_number: f.ra_flight_number || null,
+                            ra_datetime: toDbDateTimeKst(f.ra_datetime),
+                            ra_car_count: f.ra_car_count || 0,
+                            ra_passenger_count: f.ra_passenger_count || 0,
+                            unit_price: f.unit_price || 0,
+                            total_price: f.total_price || 0,
+                            request_note: f.ra_request_note || null,
+                            vehicle_type: f.vehicle_type || null,
+                        };
+                    });
+                await recordReservationChange({
+                    reservationId: targetReservationId,
+                    reType: 'airport',
+                    rows: { airport: changeAirportRows },
+                    managerNote: '공항 서비스 예약 매니저 직접 수정',
+                    snapshotData: {
+                        price_breakdown: pricing.price_breakdown,
+                        total_amount: pricing.total_amount,
+                        manual_additional_fee: additionalFee,
+                    },
+                });
+            } catch (trackErr) {
+                console.warn('⚠️ 변경 추적 기록 실패(저장은 계속):', trackErr);
+            }
 
             console.log('✅ 공항 서비스 예약 수정 완료');
             alert('공항 서비스 예약이 성공적으로 수정되었습니다.');

@@ -4,6 +4,7 @@ import React, { useState, useEffect, Suspense, useMemo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import supabase from '@/lib/supabase';
 import { saveAdditionalFeeTemplateFromInput } from '@/lib/additionalFeeTemplate';
+import { recordReservationChange } from '@/lib/reservationChangeTracker';
 import ManagerLayout from '@/components/ManagerLayout';
 import {
     Save,
@@ -1585,6 +1586,57 @@ function CruiseReservationEditContent() {
                 detail: additionalFeeDetail,
                 amount: manualAdditionalFee,
             });
+
+            // 4. 변경 추적 기록 (reservation_change_request + reservation_change_cruise/cruise_car)
+            try {
+                const changeCruiseRows = (cruiseResult || []).map((row: any) => ({
+                    room_price_code: row.room_price_code,
+                    checkin: row.checkin,
+                    guest_count: row.guest_count,
+                    unit_price: row.unit_price,
+                    room_total_price: row.room_total_price,
+                    request_note: row.request_note,
+                    room_count: row.room_count,
+                    adult_count: row.adult_count,
+                    child_count: row.child_count,
+                    infant_count: row.infant_count,
+                    extra_bed_count: row.extra_bed_count,
+                    single_count: row.single_count,
+                    child_extra_bed_count: row.child_extra_bed_count,
+                    boarding_code: row.boarding_code,
+                    boarding_assist: row.boarding_assist,
+                    accommodation_info: row.accommodation_info,
+                    connecting_room: row.connecting_room,
+                    birthday_event: row.birthday_event,
+                    birthday_name: row.birthday_name,
+                }));
+                const changeCarRows = (carData || []).map((c: any) => ({
+                    car_price_code: c.car_price_code,
+                    car_count: c.car_count,
+                    passenger_count: c.passenger_count,
+                    pickup_location: c.pickup_location || null,
+                    dropoff_location: c.dropoff_location || null,
+                    pickup_datetime: c.pickup_datetime || null,
+                    car_total_price: c.car_total_price || 0,
+                    request_note: c.request_note || null,
+                    unit_price: c.unit_price ?? null,
+                    dispatch_code: c.dispatch_code ?? null,
+                    dispatch_memo: c.dispatch_memo ?? null,
+                }));
+                await recordReservationChange({
+                    reservationId,
+                    reType: 'cruise',
+                    rows: { cruise: changeCruiseRows, cruise_car: changeCarRows },
+                    managerNote: '크루즈 예약 매니저 직접 수정',
+                    snapshotData: {
+                        price_breakdown: priceBreakdown,
+                        total_amount: grandTotal,
+                        manual_additional_fee: totalAdditionalFee,
+                    },
+                });
+            } catch (trackErr) {
+                console.warn('⚠️ 변경 추적 기록 실패(저장은 계속):', trackErr);
+            }
 
             console.log('✅ 크루즈 예약 수정 완료');
             alert('크루즈 예약이 성공적으로 수정되었습니다.');

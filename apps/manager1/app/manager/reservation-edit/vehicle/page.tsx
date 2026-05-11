@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import supabase from '@/lib/supabase';
 import { saveAdditionalFeeTemplateFromInput } from '@/lib/additionalFeeTemplate';
+import { recordReservationChange } from '@/lib/reservationChangeTracker';
 import { calculateReservationPricing } from '@sht/domain/pricing';
 import ManagerLayout from '@/components/ManagerLayout';
 import {
@@ -634,6 +635,23 @@ function CruiseCarReservationEditContent() {
                 detail: additionalFeeDetail,
                 amount: additionalFee,
             });
+
+            // 변경 추적 기록 (cruise_car 다중 행)
+            try {
+                await recordReservationChange({
+                    reservationId,
+                    reType: 'cruise_car',
+                    rows: { cruise_car: extendedRows.map((r) => { const { reservation_id, updated_at, ...rest } = r as any; return rest; }) },
+                    managerNote: '크루즈 차량 예약 매니저 직접 수정',
+                    snapshotData: {
+                        price_breakdown: pricing.price_breakdown,
+                        total_amount: pricing.total_amount,
+                        manual_additional_fee: additionalFee,
+                    },
+                });
+            } catch (trackErr) {
+                console.warn('⚠️ 변경 추적 기록 실패(저장은 계속):', trackErr);
+            }
 
             alert('크루즈 차량 예약이 성공적으로 수정되었습니다.');
             router.refresh();

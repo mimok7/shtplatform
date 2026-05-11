@@ -55,6 +55,14 @@ interface ReservationItem {
     services: ServiceReservation[];
 }
 
+interface LatestChangeInfo {
+    request_id: string;
+    re_type: string;
+    status: string;
+    updated_at: string;
+    detail: any | null;
+}
+
 type BulkAction = 'delete' | 'status_update' | '';
 type SortType = 'date' | 'name';
 
@@ -525,6 +533,90 @@ export default function BulkReservationPage() {
                 packageIds.length > 0 ? supabase.from('reservation').select('*, package_master:package_id(id, package_code, name, description)').in('re_id', packageIds) : Promise.resolve({ data: [] })
             ]);
 
+            // 1-1. 최신 예약 수정 요청/상세를 조회해서 모달에 우선 반영
+            const { data: changeRequests } = allServiceIds.length > 0
+                ? await supabase
+                    .from('reservation_change_request')
+                    .select('id, reservation_id, re_type, status, updated_at, submitted_at')
+                    .in('reservation_id', allServiceIds)
+                    .order('updated_at', { ascending: false })
+                : { data: [] as any[] };
+
+            const latestChangeByReservation = new Map<string, { request_id: string; re_type: string; status: string; updated_at: string }>();
+            (changeRequests || []).forEach((row: any) => {
+                const reservationId = String(row?.reservation_id || '').trim();
+                if (!reservationId) return;
+
+                const status = String(row?.status || '').toLowerCase();
+                if (status === 'rejected' || status === 'cancelled') return;
+
+                if (!latestChangeByReservation.has(reservationId)) {
+                    latestChangeByReservation.set(reservationId, {
+                        request_id: row.id,
+                        re_type: row.re_type,
+                        status: row.status,
+                        updated_at: row.updated_at || row.submitted_at || '',
+                    });
+                }
+            });
+
+            const latestChanges = Array.from(latestChangeByReservation.values());
+            const requestIdsByType = latestChanges.reduce((acc: Record<string, string[]>, row) => {
+                const key = String(row.re_type || '').toLowerCase();
+                if (!acc[key]) acc[key] = [];
+                acc[key].push(row.request_id);
+                return acc;
+            }, {});
+
+            const changeTableByType: Record<string, string> = {
+                cruise: 'reservation_change_cruise',
+                car: 'reservation_change_cruise_car',
+                vehicle: 'reservation_change_cruise_car',
+                airport: 'reservation_change_airport',
+                hotel: 'reservation_change_hotel',
+                rentcar: 'reservation_change_rentcar',
+                tour: 'reservation_change_tour',
+                sht: 'reservation_change_car_sht',
+                car_sht: 'reservation_change_car_sht',
+                reservation_car_sht: 'reservation_change_car_sht',
+            };
+
+            const detailPromiseEntries = Object.entries(requestIdsByType)
+                .map(([type, ids]) => {
+                    const tableName = changeTableByType[type];
+                    if (!tableName || ids.length === 0) return null;
+                    return [
+                        type,
+                        supabase.from(tableName).select('*').in('request_id', ids),
+                    ] as const;
+                })
+                .filter(Boolean) as Array<readonly [string, any]>;
+
+            const detailResults = await Promise.all(detailPromiseEntries.map(([, promise]) => promise));
+            const changeDetailByRequestId = new Map<string, any>();
+            detailResults.forEach((result: any) => {
+                (result?.data || []).forEach((row: any) => {
+                    if (row?.request_id) {
+                        changeDetailByRequestId.set(row.request_id, row);
+                    }
+                });
+            });
+
+            // reservation_id 기준으로 접근 가능한 맵으로 재구성
+            const latestChangeByReservationId = new Map<string, LatestChangeInfo>();
+            latestChanges.forEach((row) => {
+                const detail = changeDetailByRequestId.get(row.request_id) || null;
+                const reservationId = String(detail?.reservation_id || '').trim();
+                if (!reservationId) return;
+                latestChangeByReservationId.set(reservationId, {
+                    request_id: row.request_id,
+                    re_type: row.re_type,
+                    status: row.status,
+                    updated_at: row.updated_at,
+                    detail,
+                });
+            });
+
             // 패키지 예약인 경우, 패키지에 속한 서비스도 조회
             let packageCruiseData: any[] = [];
             let packageAirportData: any[] = [];
@@ -630,16 +722,23 @@ export default function BulkReservationPage() {
                     const priceInfo = roomPriceMap.get(r.room_price_code);
                     const carInfo = (cruiseCarRes.data || []).filter((c: any) => c.reservation_id === r.reservation_id);
                     const serviceBase = getServiceBase(r.reservation_id);
+                    const latestChange = latestChangeByReservationId.get(String(r.reservation_id));
+                    const mergedCruise = latestChange?.re_type === 'cruise' && latestChange.detail
+                        ? { ...r, ...latestChange.detail }
+                        : r;
                     return {
                         service: serviceBase,
-                        ...r,
+                        ...mergedCruise,
                         total_amount: serviceBase?.total_amount ?? null,
                         price_breakdown: serviceBase?.price_breakdown ?? null,
                         re_adult_count: serviceBase?.re_adult_count ?? null,
                         re_child_count: serviceBase?.re_child_count ?? null,
                         re_infant_count: serviceBase?.re_infant_count ?? null,
                         roomPriceInfo: priceInfo,
-                        cars: carInfo // 크루즈 차량 정보 포함
+                        cars: carInfo, // 크루즈 차량 정보 포함
+                        _hasChange: !!latestChange,
+                        _changeStatus: latestChange?.status || null,
+                        _changeUpdatedAt: latestChange?.updated_at || null,
                     };
                 });
             }
@@ -651,11 +750,18 @@ export default function BulkReservationPage() {
                     const priceInfo = carPriceMap.get(code);
                     // SHT 차량 매칭
                     const shtDetail = (shtRes.data || []).find((s: any) => s.reservation_id === r.reservation_id) || null;
+                    const latestChange = latestChangeByReservationId.get(String(r.reservation_id));
+                    const mergedCar = (latestChange?.re_type === 'car' || latestChange?.re_type === 'vehicle') && latestChange.detail
+                        ? { ...r, ...latestChange.detail }
+                        : r;
                     return {
                         service: getServiceBase(r.reservation_id),
-                        ...r,
+                        ...mergedCar,
                         carPriceInfo: priceInfo,
-                        shtDetail
+                        shtDetail,
+                        _hasChange: !!latestChange,
+                        _changeStatus: latestChange?.status || null,
+                        _changeUpdatedAt: latestChange?.updated_at || null,
                     };
                 });
             }
@@ -678,11 +784,18 @@ export default function BulkReservationPage() {
             // Airport
             if (airportData.length > 0) {
                 allDetails['airport'] = airportData.map((r: any) => {
-                    const priceInfo = getAirportPriceInfo(r) || airportPriceMap.get(r.airport_price_code);
+                    const latestChange = latestChangeByReservationId.get(String(r.reservation_id));
+                    const mergedAirport = latestChange?.re_type === 'airport' && latestChange.detail
+                        ? { ...r, ...latestChange.detail }
+                        : r;
+                    const priceInfo = getAirportPriceInfo(mergedAirport) || airportPriceMap.get(mergedAirport.airport_price_code);
                     return {
                         service: getServiceBase(r.reservation_id),
-                        ...r,
-                        airportPriceInfo: priceInfo
+                        ...mergedAirport,
+                        airportPriceInfo: priceInfo,
+                        _hasChange: !!latestChange,
+                        _changeStatus: latestChange?.status || null,
+                        _changeUpdatedAt: latestChange?.updated_at || null,
                     };
                 });
             }
@@ -690,11 +803,18 @@ export default function BulkReservationPage() {
             // Hotel
             if (hotelData.length > 0) {
                 allDetails['hotel'] = hotelData.map((r: any) => {
-                    const priceInfo = hotelPriceMap.get(r.hotel_price_code);
+                    const latestChange = latestChangeByReservationId.get(String(r.reservation_id));
+                    const mergedHotel = latestChange?.re_type === 'hotel' && latestChange.detail
+                        ? { ...r, ...latestChange.detail }
+                        : r;
+                    const priceInfo = hotelPriceMap.get(mergedHotel.hotel_price_code);
                     return {
                         service: getServiceBase(r.reservation_id),
-                        ...r,
-                        hotelPriceInfo: priceInfo
+                        ...mergedHotel,
+                        hotelPriceInfo: priceInfo,
+                        _hasChange: !!latestChange,
+                        _changeStatus: latestChange?.status || null,
+                        _changeUpdatedAt: latestChange?.updated_at || null,
                     };
                 });
             }
@@ -702,11 +822,18 @@ export default function BulkReservationPage() {
             // Rentcar
             if (rentCarData.length > 0) {
                 allDetails['rentcar'] = rentCarData.map((r: any) => {
-                    const priceInfo = rentPriceMap.get(r.rentcar_price_code);
+                    const latestChange = latestChangeByReservationId.get(String(r.reservation_id));
+                    const mergedRentcar = latestChange?.re_type === 'rentcar' && latestChange.detail
+                        ? { ...r, ...latestChange.detail }
+                        : r;
+                    const priceInfo = rentPriceMap.get(mergedRentcar.rentcar_price_code);
                     return {
                         service: getServiceBase(r.reservation_id),
-                        ...r,
-                        rentcarPriceInfo: priceInfo
+                        ...mergedRentcar,
+                        rentcarPriceInfo: priceInfo,
+                        _hasChange: !!latestChange,
+                        _changeStatus: latestChange?.status || null,
+                        _changeUpdatedAt: latestChange?.updated_at || null,
                     };
                 });
             }
@@ -714,11 +841,18 @@ export default function BulkReservationPage() {
             // Tour
             if (tourData.length > 0) {
                 allDetails['tour'] = tourData.map((r: any) => {
-                    const priceInfo = tourPriceMap.get(r.tour_price_code);
+                    const latestChange = latestChangeByReservationId.get(String(r.reservation_id));
+                    const mergedTour = latestChange?.re_type === 'tour' && latestChange.detail
+                        ? { ...r, ...latestChange.detail }
+                        : r;
+                    const priceInfo = tourPriceMap.get(mergedTour.tour_price_code);
                     return {
                         service: getServiceBase(r.reservation_id),
-                        ...r,
-                        tourPriceInfo: priceInfo
+                        ...mergedTour,
+                        tourPriceInfo: priceInfo,
+                        _hasChange: !!latestChange,
+                        _changeStatus: latestChange?.status || null,
+                        _changeUpdatedAt: latestChange?.updated_at || null,
                     };
                 });
             }
@@ -734,10 +868,19 @@ export default function BulkReservationPage() {
             // SHT (스하차량)
             const shtData = shtRes.data || [];
             if (shtData.length > 0) {
-                allDetails['sht'] = shtData.map((r: any) => ({
-                    service: getServiceBase(r.reservation_id),
-                    ...r
-                }));
+                allDetails['sht'] = shtData.map((r: any) => {
+                    const latestChange = latestChangeByReservationId.get(String(r.reservation_id));
+                    const mergedSht = (latestChange?.re_type === 'sht' || latestChange?.re_type === 'car_sht' || latestChange?.re_type === 'reservation_car_sht') && latestChange.detail
+                        ? { ...r, ...latestChange.detail }
+                        : r;
+                    return {
+                        service: getServiceBase(r.reservation_id),
+                        ...mergedSht,
+                        _hasChange: !!latestChange,
+                        _changeStatus: latestChange?.status || null,
+                        _changeUpdatedAt: latestChange?.updated_at || null,
+                    };
+                });
             }
 
             // 패키지 예약 처리

@@ -4,6 +4,7 @@ import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import supabase from '@/lib/supabase';
 import { saveAdditionalFeeTemplateFromInput } from '@/lib/additionalFeeTemplate';
+import { recordReservationChange } from '@/lib/reservationChangeTracker';
 import ManagerLayout from '@/components/ManagerLayout';
 import ShtCarSeatMap from '@/components/ShtCarSeatMap';
 import {
@@ -705,6 +706,23 @@ function SHTReservationEditContent() {
                 detail: additionalFees['Drop-off'].detail,
                 amount: dropoffAdditionalFee,
             });
+
+            // 변경 추적 기록 (새로 입력된 row 하나)
+            try {
+                await recordReservationChange({
+                    reservationId: reservationId!,
+                    reType: 'car_sht',
+                    rows: { car_sht: [{ ...payload }] },
+                    managerNote: '스하차량 예약 매니저 직접 수정',
+                    snapshotData: {
+                        price_breakdown: reservationPayload.price_breakdown,
+                        total_amount: finalTotalAmount,
+                        manual_additional_fee: totalAdditionalFee,
+                    },
+                });
+            } catch (trackErr) {
+                console.warn('⚠️ 변경 추적 기록 실패(저장은 계속):', trackErr);
+            }
 
             console.log('✅ 스하차량 예약 수정 완료');
             alert('스하차량 예약이 성공적으로 수정되었습니다.');
