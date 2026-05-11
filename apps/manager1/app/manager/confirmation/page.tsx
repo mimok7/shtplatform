@@ -549,16 +549,7 @@ function ConfirmationContent() {
                                         </div>
                                         {/* 카드 내부 정보를 1열로 세로 배치 */}
                                         <div className="flex flex-col gap-1 text-sm text-gray-700 mt-2 w-full">
-                                            <div>
-                                                <span className="font-semibold">견적명: </span>
-                                                {reservation.quote_title}
-                                            </div>
-                                            <div>
-                                                <span className="font-semibold">예약 ID: </span>
-                                                {reservation.re_id?.length > 8
-                                                    ? String(reservation.re_id).slice(0, 8) + '...'
-                                                    : reservation.re_id || '-'}
-                                            </div>
+                                            {/* 견적명 및 예약 ID는 카드에서 제거됨 */}
                                             <div>
                                                 <span className="font-semibold">이메일: </span>
                                                 {reservation.user_email || '-'}

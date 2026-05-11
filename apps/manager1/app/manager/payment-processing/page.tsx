@@ -1437,14 +1437,14 @@ export default function ManagerPaymentsPage() {
     setSelectedPayments(next);
   };
 
-  // 결제완료 처리 (결제완료 시 예약도 확정으로 변경)
+  // 결제완료 처리 (결제완료 시 예약도 승인으로 변경)
   const updatePaymentStatus = async (paymentId: string, status: string) => {
     await supabase
       .from('reservation_payment')
       .update({ payment_status: status, updated_at: new Date().toISOString() })
       .eq('id', paymentId);
 
-    // 결제 완료 시 해당 예약을 '확정' 상태로 변경
+    // 결제 완료 시 해당 예약을 '승인(approved)' 상태로 변경 + 확인서 대기 생성
     if (status === 'completed') {
       const { data: paymentRow } = await supabase
         .from('reservation_payment')
@@ -1452,10 +1452,31 @@ export default function ManagerPaymentsPage() {
         .eq('id', paymentId)
         .maybeSingle();
       if (paymentRow?.reservation_id) {
+        const rid = paymentRow.reservation_id;
+        // 현재 'pending' 상태인 경우만 'approved'로 변경
         await supabase
           .from('reservation')
-          .update({ re_status: 'confirmed' })
-          .eq('re_id', paymentRow.reservation_id);
+          .update({ re_status: 'approved' })
+          .eq('re_id', rid)
+          .eq('re_status', 'pending');
+        // 확인서 대기 생성 (없는 경우만)
+        const { data: existingCs } = await supabase
+          .from('confirmation_status')
+          .select('reservation_id')
+          .eq('reservation_id', rid)
+          .maybeSingle();
+        if (!existingCs) {
+          const { data: resRow } = await supabase
+            .from('reservation')
+            .select('re_id, re_quote_id')
+            .eq('re_id', rid)
+            .maybeSingle();
+          await supabase.from('confirmation_status').insert({
+            reservation_id: rid,
+            quote_id: resRow?.re_quote_id || null,
+            status: 'waiting',
+          });
+        }
       }
     }
     await loadPayments();
@@ -1603,15 +1624,16 @@ export default function ManagerPaymentsPage() {
         throw new Error('업데이트된 행이 없습니다. 권한 정책(RLS) 또는 선택 항목을 확인하세요.');
       }
 
-      // 결제 완료된 예약의 re_status를 '확정(confirmed)'으로 변경
+      // 결제 완료된 예약의 re_status를 '승인(approved)'으로 변경 (대기 상태인 경우만)
       const successRows = (beforeRows || []).filter(r => succeededIds.has(String(r.id)));
       const reservationIds = Array.from(new Set(successRows.map((r: any) => r.reservation_id).filter(Boolean)));
       if (reservationIds.length > 0) {
         for (const batch of chunkArray(reservationIds, 100)) {
           await supabase
             .from('reservation')
-            .update({ re_status: 'confirmed' })
-            .in('re_id', batch);
+            .update({ re_status: 'approved' })
+            .in('re_id', batch)
+            .eq('re_status', 'pending');
         }
       }
 

@@ -353,6 +353,28 @@ function ReservationViewContent() {
             if (error) throw error;
             setReservation(prev => prev ? { ...prev, re_status: nextStatus, reservationRow: { ...prev.reservationRow, re_status: nextStatus } } : prev);
             setConfirmMessage(`예약이 ${nextLabel}되었습니다.`);
+
+            // 예약 승인(pending → approved) 시: 결제 자동 완료 처리 + 확인서 대기 생성
+            if (nextStatus === 'approved') {
+                await supabase
+                    .from('reservation_payment')
+                    .update({ payment_status: 'completed', updated_at: new Date().toISOString() })
+                    .eq('reservation_id', reservation.re_id)
+                    .eq('payment_status', 'pending');
+                const { data: existingCs } = await supabase
+                    .from('confirmation_status')
+                    .select('reservation_id')
+                    .eq('reservation_id', reservation.re_id)
+                    .maybeSingle();
+                if (!existingCs) {
+                    await supabase.from('confirmation_status').insert({
+                        reservation_id: reservation.re_id,
+                        quote_id: reservation.re_quote_id || null,
+                        status: 'waiting',
+                    });
+                }
+            }
+
             if (nextStatus === 'completed') {
                 router.back();
                 return;
