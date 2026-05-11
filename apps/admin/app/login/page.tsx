@@ -68,8 +68,6 @@ export default function LoginPage() {
         return;
       }
 
-      // 단일 세션 강제: fire-and-forget (await 불필요 — 로그인 지연 방지)
-      void supabase.auth.signOut({ scope: 'others' }).catch(() => undefined);
       markActiveTab(user.id);
       router.replace('/admin');
       // router.refresh() 제거: replace 후 자동으로 새 세션 반영됨

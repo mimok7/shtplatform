@@ -95,8 +95,6 @@ export default function PartnerLoginPage() {
                 role = u?.role ?? null;
             } catch { /* ignore */ }
 
-            // 단일 세션 강제: 다른 기기/탭의 모든 세션 종료 (실패해도 로그인 진행)
-            try { await supabase.auth.signOut({ scope: 'others' }); } catch { /* noop */ }
             markActiveTab(data.user?.id);
             router.replace(landingFor(role));
         } catch (err: any) {

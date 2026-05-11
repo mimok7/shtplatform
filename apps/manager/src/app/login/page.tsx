@@ -119,8 +119,6 @@ function LoginForm() {
 
       setCachedRole(userRole);
 
-      // 단일 세션 강제: 다른 기기/탭의 모든 세션 종료 (실패해도 로그인 진행)
-      try { await supabase.auth.signOut({ scope: 'others' }); } catch { /* noop */ }
       markActiveTab(user.id);
       router.push('/'); // 홈 메뉴 페이지로 이동
       router.refresh(); // 세션 반영

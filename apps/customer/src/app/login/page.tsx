@@ -69,8 +69,6 @@ export default function LoginPage() {
       // 로그인 직후 보호 페이지가 먼저 마운트돼도 인증 훅이 동일한 사용자를 보도록 캐시를 선반영한다.
       setCachedUser(user);
       primeAuthCache(user);
-      // 단일 세션 강제: 다른 기기/탭의 모든 세션 종료 (실패해도 로그인 진행)
-      try { await supabase.auth.signOut({ scope: 'others' }); } catch { /* noop */ }
       markActiveTab(user.id);
       router.replace('/mypage');
 
