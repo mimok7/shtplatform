@@ -3,6 +3,19 @@ import { useEffect, useState } from 'react';
 import supabase from '@/lib/supabase';
 import { fetchLatestActiveChangeRequests, applyChangeOverlay } from '@/lib/reservationChangeOverlay';
 
+// 변경 추적 맵
+const CHANGE_TABLE_BY_TYPE: Record<string, string> = {
+    cruise: 'reservation_change_cruise',
+    cruise_car: 'reservation_change_cruise_car',
+    airport: 'reservation_change_airport',
+    hotel: 'reservation_change_hotel',
+    tour: 'reservation_change_tour',
+    rentcar: 'reservation_change_rentcar',
+    car_sht: 'reservation_change_car_sht',
+    sht: 'reservation_change_car_sht',
+    package: 'reservation_change_package',
+};
+
 interface ReservationDetail {
     reservation_id: string;
     service_type: string;
@@ -16,6 +29,7 @@ interface ReservationDetail {
     reservation_total_amount?: number;
     manual_additional_fee?: number;
     manual_additional_fee_detail?: string;
+    price_breakdown?: any;
 }
 
 interface QuoteData {
@@ -50,6 +64,8 @@ const formatScheduleType = (scheduleType: string | undefined): string => {
     if (!scheduleType) return '-';
     return SCHEDULE_TYPE_MAP[scheduleType] || scheduleType;
 };
+
+const formatSignedDong = (amount: number): string => `${amount > 0 ? '+' : ''}${Number(amount || 0).toLocaleString()}동`;
 
 const normalizeShtSeatType = (value: string) => {
     const raw = String(value || '').trim().toUpperCase();
@@ -300,6 +316,24 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
 
             // 변경 요청 우선 조회 후 오버레이 적용 (수정된 내용을 먼저 반영)
             const changeMetaMap = await fetchLatestActiveChangeRequests(reservationIds);
+            
+            // ✅ snapshot_data를 포함한 변경 요청 상세 조회 (UserReservationDetailModal과 동일)
+            const { data: changeRequestsWithSnapshot } = reservationIds.length > 0
+                ? await supabase
+                    .from('reservation_change_request')
+                    .select('id, reservation_id, re_type, status, submitted_at, snapshot_data')
+                    .in('reservation_id', reservationIds)
+                    .not('status', 'in', '(rejected,cancelled)')
+                    .order('submitted_at', { ascending: false })
+                : { data: [] };
+            
+            const latestChangeByReservation = new Map<string, any>();
+            for (const req of (changeRequestsWithSnapshot || []) as any[]) {
+                const reservationId = String(req?.reservation_id || '').trim();
+                if (!reservationId || latestChangeByReservation.has(reservationId)) continue;
+                latestChangeByReservation.set(reservationId, req);
+            }
+            
             const cruiseDetails = await applyChangeOverlay('cruise', cruiseDetailsRaw, { metaMap: changeMetaMap, replaceMultiRow: true });
             const airportDetails = await applyChangeOverlay('airport', airportDetailsRaw, { metaMap: changeMetaMap, replaceMultiRow: true });
             const hotelDetails = await applyChangeOverlay('hotel', hotelDetailsRaw, { metaMap: changeMetaMap });
@@ -308,6 +342,22 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
             const tourDetails = await applyChangeOverlay('tour', tourDetailsRaw, { metaMap: changeMetaMap });
             const carDetails = await applyChangeOverlay('car_sht', carDetailsRaw, { metaMap: changeMetaMap });
             const cruiseCarDetails = await applyChangeOverlay('cruise_car', cruiseCarDetailsRaw, { metaMap: changeMetaMap, replaceMultiRow: true });
+
+            // ✅ 예약 마스터 정보도 snapshot_data로 업데이트 (UserReservationDetailModal과 동일)
+            reservations = reservations.map((res: any) => {
+                const reservationId = String(res.re_id || '').trim();
+                const changeRequest = latestChangeByReservation.get(reservationId);
+                if (!changeRequest) return res;
+                
+                const snapshot = changeRequest?.snapshot_data || null;
+                return {
+                    ...res,
+                    total_amount: snapshot?.total_amount ?? res.total_amount,
+                    manual_additional_fee: snapshot?.manual_additional_fee ?? res.manual_additional_fee,
+                    manual_additional_fee_detail: snapshot?.manual_additional_fee_detail ?? res.manual_additional_fee_detail,
+                    price_breakdown: snapshot?.price_breakdown ?? res.price_breakdown,
+                };
+            });
 
             // 스하차량 좌석 단가는 하드코딩이 아닌 rentcar_price 기준으로 계산
             const shtPriceCodes = Array.from(new Set(
@@ -378,7 +428,7 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
             };
 
             const resStatusMap = new Map<string, string>();
-            const reservationMetaMap = new Map<string, { total_amount: number; manual_additional_fee: number; manual_additional_fee_detail: string }>();
+            const reservationMetaMap = new Map<string, { total_amount: number; manual_additional_fee: number; manual_additional_fee_detail: string; price_breakdown?: any }>();
             reservations.forEach((r: any) => {
                 const reservationId = String(r.re_id || '').trim();
                 if (!reservationId) return;
@@ -387,6 +437,7 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                     total_amount: Number(r.total_amount || 0),
                     manual_additional_fee: Number(r.manual_additional_fee || 0),
                     manual_additional_fee_detail: String(r.manual_additional_fee_detail || '').trim(),
+                    price_breakdown: r.price_breakdown || null,
                 });
             });
 
@@ -457,6 +508,7 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                         reservation_total_amount: Number(reservationMeta?.total_amount || 0),
                         manual_additional_fee: Number(reservationMeta?.manual_additional_fee || 0),
                         manual_additional_fee_detail: String(reservationMeta?.manual_additional_fee_detail || '').trim(),
+                        price_breakdown: reservationMeta?.price_breakdown || null,
                     });
                 });
             });
@@ -1456,7 +1508,8 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                                                         switch (r.service_type) {
                                                             case 'cruise': {
                                                                 // 상세 표기: 크루즈명 / 스케줄 / 객실타입
-                                                                const storedRooms = Array.isArray(r.price_breakdown?.rooms) ? r.price_breakdown.rooms : [];
+                                                                const cruisePb = r.price_breakdown || (d as any)?.price_breakdown || null;
+                                                                const storedRooms = Array.isArray(cruisePb?.rooms) ? cruisePb.rooms : [];
                                                                 const storedRoom = storedRooms.find((room: any) =>
                                                                     (!room.room_price_code || room.room_price_code === d?.room_price_code) &&
                                                                     (!room.checkin || room.checkin === d?.checkin) &&
@@ -1468,13 +1521,6 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                                                                 if (cruiseName) descLines.push(`🚢 ${cruiseName}`);
                                                                 if (scheduleType !== '-' || roomType) descLines.push(`${scheduleType} / ${roomType || '-'}`);
                                                                 // cruise_rate_card: price_adult, price_child, price_infant, price_extra_bed, price_child_extra_bed, price_single
-                                                                const adultPrice = storedRoom?.adult?.unit_price ?? p?.price_adult ?? 0;
-                                                                const childPrice = storedRoom?.child?.unit_price ?? p?.price_child ?? 0;
-                                                                const childOlderPrice = storedRoom?.child_older?.unit_price ?? p?.price_child_older ?? p?.price_child ?? 0;
-                                                                const infantPrice = storedRoom?.infant?.unit_price ?? p?.price_infant ?? 0;
-                                                                const extraBedPrice = storedRoom?.extra_bed?.unit_price ?? p?.price_extra_bed ?? 0;
-                                                                const childExtraBedPrice = storedRoom?.child_extra_bed?.unit_price ?? p?.price_child_extra_bed ?? 0;
-                                                                const singlePrice = storedRoom?.single?.unit_price ?? p?.price_single ?? 0;
                                                                 const adultCount = storedRoom?.adult?.count ?? d?.adult_count ?? 0;
                                                                 const childCount = storedRoom?.child?.count ?? d?.child_count ?? 0;
                                                                 const childOlderCount = storedRoom?.child_older?.count ?? 0;
@@ -1482,13 +1528,29 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                                                                 const extraBedCount = storedRoom?.extra_bed?.count ?? d?.extra_bed_count ?? 0;
                                                                 const childExtraBedCount = storedRoom?.child_extra_bed?.count ?? d?.child_extra_bed_count ?? 0;
                                                                 const singleCount = storedRoom?.single?.count ?? d?.single_count ?? 0;
-                                                                if (adultCount > 0) calcLines.push(`성인 ${adultCount}명 × ${adultPrice.toLocaleString()}동`);
-                                                                if (extraBedCount > 0) calcLines.push(`엑스트라베드(성인) ${extraBedCount}명 × ${extraBedPrice.toLocaleString()}동`);
-                                                                if (childCount > 0) calcLines.push(`아동 ${childCount}명 × ${childPrice.toLocaleString()}동`);
-                                                                if (childOlderCount > 0) calcLines.push(`아동(8~11세) ${childOlderCount}명 × ${childOlderPrice.toLocaleString()}동`);
-                                                                if (childExtraBedCount > 0) calcLines.push(`아동 엑스트라베드 ${childExtraBedCount}명 × ${childExtraBedPrice.toLocaleString()}동`);
-                                                                if (infantCount > 0) calcLines.push(`유아 ${infantCount}명 × ${infantPrice.toLocaleString()}동`);
-                                                                if (singleCount > 0) calcLines.push(`싱글차지 ${singleCount}명 × ${singlePrice.toLocaleString()}동`);
+                                                                const pickUnit = (entry: any, count: number, fallback: number) => {
+                                                                    const unit = Number(entry?.unit_price || 0);
+                                                                    if (unit > 0) return unit;
+                                                                    const total = Number(entry?.total || 0);
+                                                                    if (count > 0 && total > 0) return Math.round(total / count);
+                                                                    return Number(fallback || 0);
+                                                                };
+                                                                const adultPrice = pickUnit(storedRoom?.adult, Number(adultCount || 0), Number(p?.price_adult || 0));
+                                                                const childPrice = pickUnit(storedRoom?.child, Number(childCount || 0), Number(p?.price_child || 0));
+                                                                const childOlderPrice = pickUnit(storedRoom?.child_older, Number(childOlderCount || 0), Number(p?.price_child_older || p?.price_child || 0));
+                                                                const infantPrice = pickUnit(storedRoom?.infant, Number(infantCount || 0), Number(p?.price_infant || 0));
+                                                                const extraBedPrice = pickUnit(storedRoom?.extra_bed, Number(extraBedCount || 0), Number(p?.price_extra_bed || 0));
+                                                                const childExtraBedPrice = pickUnit(storedRoom?.child_extra_bed, Number(childExtraBedCount || 0), Number(p?.price_child_extra_bed || 0));
+                                                                const singlePrice = pickUnit(storedRoom?.single, Number(singleCount || 0), Number(p?.price_single || 0));
+                                                                if (adultCount > 0) calcLines.push(`성인 ${adultPrice.toLocaleString()}동 × ${adultCount}명`);
+                                                                if (extraBedCount > 0) calcLines.push(`엑스트라베드(성인) ${extraBedPrice.toLocaleString()}동 × ${extraBedCount}명`);
+                                                                if (childCount > 0) calcLines.push(`아동 ${childPrice.toLocaleString()}동 × ${childCount}명`);
+                                                                if (childOlderCount > 0) calcLines.push(`아동(8~11세) ${childOlderPrice.toLocaleString()}동 × ${childOlderCount}명`);
+                                                                if (childExtraBedCount > 0) calcLines.push(`아동 엑스트라베드 ${childExtraBedPrice.toLocaleString()}동 × ${childExtraBedCount}명`);
+                                                                if (infantCount > 0) calcLines.push(`유아 ${infantPrice.toLocaleString()}동 × ${infantCount}명`);
+                                                                if (singleCount > 0) calcLines.push(`싱글차액 ${singlePrice.toLocaleString()}동 × ${singleCount}명`);
+                                                                const pbGrandTotal = Number(cruisePb?.grand_total || 0);
+                                                                if (pbGrandTotal > 0) rowAmountOverride = pbGrandTotal;
                                                                 break;
                                                             }
                                                             case 'airport': {
@@ -1578,13 +1640,25 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                                                             }
                                                         }
 
-                                                        const manualAdditionalFee = Number(r.manual_additional_fee || 0);
-                                                        const manualAdditionalFeeDetail = String(r.manual_additional_fee_detail || '').trim();
-                                                        if (manualAdditionalFee !== 0) {
-                                                            calcLines.push(`추가/차감 ${manualAdditionalFee > 0 ? '+' : ''}${manualAdditionalFee.toLocaleString()}동`);
+                                                        // 추가/차감은 reservation.price_breakdown 기준으로 표시 (통합 상세 모달과 동일)
+                                                        const priceBreakdown = r.price_breakdown || (d as any)?.price_breakdown || null;
+                                                        const additionalFeeItems = Array.isArray(priceBreakdown?.additional_fee_items) ? priceBreakdown.additional_fee_items : [];
+                                                        const additionalFeeDetail = String(priceBreakdown?.additional_fee_detail || r.manual_additional_fee_detail || '').trim();
+                                                        const manualAdditionalFee = Number(priceBreakdown?.additional_fee_manual ?? r.manual_additional_fee ?? 0);
+
+                                                        if (additionalFeeItems.length > 0) {
+                                                            // 추가/차감 항목별 상세 표시
+                                                            additionalFeeItems.forEach((item: any) => {
+                                                                const amount = Number(item?.amount || 0);
+                                                                if (!amount) return;
+                                                                calcLines.push(`${item?.name || '추가내역'} ${formatSignedDong(amount)}`);
+                                                            });
+                                                        } else if (manualAdditionalFee !== 0) {
+                                                            // 직접 추가/차감만 있는 경우
+                                                            calcLines.push(additionalFeeDetail ? `${additionalFeeDetail} ${formatSignedDong(manualAdditionalFee)}` : `추가/차감: ${formatSignedDong(manualAdditionalFee)}`);
                                                         }
-                                                        if (manualAdditionalFeeDetail) {
-                                                            calcLines.push(`추가내역: ${manualAdditionalFeeDetail}`);
+                                                        if (additionalFeeDetail && additionalFeeItems.length === 0 && manualAdditionalFee === 0) {
+                                                            calcLines.push(additionalFeeDetail);
                                                         }
 
                                                         // calcLines가 비어있거나 단가가 모두 0인 경우 총액 기반 fallback
@@ -1627,7 +1701,9 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
 
                                                         const rowAmount = mergedAirportReservationTotal !== null && Number.isFinite(mergedAirportReservationTotal)
                                                             ? mergedAirportReservationTotal
-                                                            : (hasReservationTotal && reservationRowCount <= 1 ? reservationRowTotal : rowAmountFallback);
+                                                            : (rowAmountOverride !== null
+                                                                ? Number(rowAmountOverride)
+                                                                : (hasReservationTotal && reservationRowCount <= 1 ? reservationRowTotal : rowAmountFallback));
 
                                                         return (
                                                             <tr key={`pay-row-${i}`} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>

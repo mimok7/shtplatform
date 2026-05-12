@@ -2791,28 +2791,28 @@ export default function ManagerSchedulePage() {
               <table className="min-w-full text-sm">
                 <thead className="bg-gray-50 text-gray-600 text-xs uppercase">
                   {key === 'reservation_cruise' && (
-                    <tr><th className={headCls}>상태</th><th className={headCls}>고객</th><th className={headCls}>체크인</th><th className={headCls}>크루즈</th><th className={headCls}>객실</th><th className="px-2 py-2 text-right font-semibold">액션</th></tr>
+                    <tr><th className={headCls}>고객</th><th className={headCls}>체크인</th><th className={headCls}>크루즈</th><th className={headCls}>객실</th><th className="px-2 py-2 text-right font-semibold">액션</th></tr>
                   )}
                   {key === 'reservation_car_sht' && (
-                    <tr><th className={headCls}>상태</th><th className={headCls}>고객</th><th className={headCls}>일자</th><th className={headCls}>차량</th><th className={headCls}>좌석</th><th className={headCls}>분류</th><th className={headCls}>승/하차 위치</th><th className="px-2 py-2 text-right font-semibold">액션</th></tr>
+                    <tr><th className={headCls}>고객</th><th className={headCls}>일자</th><th className={headCls}>차량</th><th className={headCls}>좌석</th><th className={headCls}>분류</th><th className={headCls}>승/하차 위치</th><th className="px-2 py-2 text-right font-semibold">액션</th></tr>
                   )}
                   {key === 'reservation_cruise_car' && (
-                    <tr><th className={headCls}>상태</th><th className={headCls}>고객</th><th className={headCls}>일자</th><th className={headCls}>차종</th><th className={headCls}>구분</th><th className={headCls}>승차</th><th className={headCls}>하차</th><th className="px-2 py-2 text-right font-semibold">액션</th></tr>
+                    <tr><th className={headCls}>고객</th><th className={headCls}>일자</th><th className={headCls}>차종</th><th className={headCls}>구분</th><th className={headCls}>승차</th><th className={headCls}>하차</th><th className="px-2 py-2 text-right font-semibold">액션</th></tr>
                   )}
                   {key === 'reservation_airport' && (
-                    <tr><th className={headCls}>상태</th><th className={headCls}>고객</th><th className={headCls}>일자</th><th className={headCls}>시간</th><th className={headCls}>항공편</th><th className={headCls}>공항</th><th className={headCls}>숙소</th><th className={headCls}>👥</th><th className={headCls}>🚗</th><th className={headCls}>🧳</th><th className={headCls}>요청</th><th className="px-2 py-2 text-right font-semibold">액션</th></tr>
+                    <tr><th className={headCls}>고객</th><th className={headCls}>일자</th><th className={headCls}>시간</th><th className={headCls}>항공편</th><th className={headCls}>공항</th><th className={headCls}>숙소</th><th className={headCls}>👥</th><th className={headCls}>🚗</th><th className={headCls}>🧳</th><th className={headCls}>요청</th><th className="px-2 py-2 text-right font-semibold">액션</th></tr>
                   )}
                   {key === 'reservation_hotel' && (
-                    <tr><th className={headCls}>상태</th><th className={headCls}>고객</th><th className={headCls}>체크인</th><th className={headCls}>박수</th><th className={headCls}>인원</th><th className={headCls}>객실수</th><th className={headCls}>요청</th><th className="px-2 py-2 text-right font-semibold">액션</th></tr>
+                    <tr><th className={headCls}>고객</th><th className={headCls}>체크인</th><th className={headCls}>박수</th><th className={headCls}>인원</th><th className={headCls}>객실수</th><th className={headCls}>요청</th><th className="px-2 py-2 text-right font-semibold">액션</th></tr>
                   )}
                   {key === 'reservation_tour' && (
-                    <tr><th className={headCls}>상태</th><th className={headCls}>고객</th><th className={headCls}>이용일</th><th className={headCls}>투어</th><th className={headCls}>인원</th><th className={headCls}>픽업</th><th className={headCls}>하차</th><th className={headCls}>요청</th><th className="px-2 py-2 text-right font-semibold">액션</th></tr>
+                    <tr><th className={headCls}>고객</th><th className={headCls}>이용일</th><th className={headCls}>투어</th><th className={headCls}>인원</th><th className={headCls}>픽업</th><th className={headCls}>하차</th><th className={headCls}>요청</th><th className="px-2 py-2 text-right font-semibold">액션</th></tr>
                   )}
                   {key === 'reservation_ticket' && (
-                    <tr><th className={headCls}>상태</th><th className={headCls}>고객</th><th className={headCls}>이용일</th><th className={headCls}>패키지</th><th className={headCls}>수량</th><th className={headCls}>픽업</th><th className={headCls}>하차</th><th className={headCls}>요청</th><th className="px-2 py-2 text-right font-semibold">액션</th></tr>
+                    <tr><th className={headCls}>고객</th><th className={headCls}>이용일</th><th className={headCls}>패키지</th><th className={headCls}>수량</th><th className={headCls}>픽업</th><th className={headCls}>하차</th><th className={headCls}>요청</th><th className="px-2 py-2 text-right font-semibold">액션</th></tr>
                   )}
                   {key === 'reservation_rentcar' && (
-                    <tr><th className={headCls}>상태</th><th className={headCls}>고객</th><th className={headCls}>픽업</th><th className={headCls}>리턴</th><th className={headCls}>차종</th><th className={headCls}>경로</th><th className={headCls}>구분</th><th className={headCls}>운전자</th><th className={headCls}>요청</th><th className="px-2 py-2 text-right font-semibold">액션</th></tr>
+                    <tr><th className={headCls}>고객</th><th className={headCls}>픽업</th><th className={headCls}>리턴</th><th className={headCls}>차종</th><th className={headCls}>경로</th><th className={headCls}>구분</th><th className={headCls}>운전자</th><th className={headCls}>요청</th><th className="px-2 py-2 text-right font-semibold">액션</th></tr>
                   )}
                 </thead>
                 <tbody className="divide-y divide-gray-100 bg-white">
@@ -2830,36 +2830,36 @@ export default function ManagerSchedulePage() {
                     const locationText = formatPickupDropoffText(pickup, dropoff);
                     const rowKey = `${s.re_id}-${s.service_table}-${s.segment_type || s.rentcar_phase || 'd'}-${i}`;
                     if (key === 'reservation_cruise') return (
-                      <tr key={rowKey} className="hover:bg-blue-50/40"><td className={cellCls}>{statusBadge(s)}</td><td className={`${cellCls} font-semibold`}>{cust}</td><td className={cellCls}>{r.checkin || dateText}</td><td className={cellCls}>{ci?.cruise_name || ci?.cruise || '-'}</td><td className={cellCls}>{r.room_type || ci?.room_type || '-'}</td><td className="px-2 py-1.5 align-top text-right">{actionBtn(s)}</td></tr>
+                      <tr key={rowKey} className="hover:bg-blue-50/40"><td className={`${cellCls} font-semibold`}>{cust}</td><td className={cellCls}>{r.checkin || dateText}</td><td className={cellCls}>{ci?.cruise_name || ci?.cruise || '-'}</td><td className={cellCls}>{r.room_type || ci?.room_type || '-'}</td><td className="px-2 py-1.5 align-top text-right">{actionBtn(s)}</td></tr>
                     );
                     if (key === 'reservation_car_sht') return (
-                      <tr key={rowKey} className="hover:bg-blue-50/40"><td className={cellCls}>{statusBadge(s)}</td><td className={`${cellCls} font-semibold`}>{cust}</td><td className={cellCls}>{dateText}</td><td className={cellCls}>{r.vehicle_number || '-'}</td><td className={cellCls}>{r.seat_number || '-'}</td><td className={cellCls}>{r.sht_category || '-'}</td><td className={pickupDropoffCellCls}>{locationText}</td><td className="px-2 py-1.5 align-top text-right">{actionBtn(s)}</td></tr>
+                      <tr key={rowKey} className="hover:bg-blue-50/40"><td className={`${cellCls} font-semibold`}>{cust}</td><td className={cellCls}>{dateText}</td><td className={cellCls}>{r.vehicle_number || '-'}</td><td className={cellCls}>{r.seat_number || '-'}</td><td className={cellCls}>{r.sht_category || '-'}</td><td className={pickupDropoffCellCls}>{locationText}</td><td className="px-2 py-1.5 align-top text-right">{actionBtn(s)}</td></tr>
                     );
                     if (key === 'reservation_cruise_car') {
                       const ri = (r as any)._rentcar_info || {};
                       return (
-                        <tr key={rowKey} className="hover:bg-blue-50/40"><td className={cellCls}>{statusBadge(s)}</td><td className={`${cellCls} font-semibold`}>{cust}</td><td className={cellCls}>{dateText}</td><td className={cellCls}>{ri.vehicle_type || r.vehicle_type || '-'}</td><td className={cellCls}>{r.way_type || ribbon || '-'}</td><td className={cellCls}>{r.pickup_location || '-'}</td><td className={cellCls}>{r.dropoff_location || '-'}</td><td className="px-2 py-1.5 align-top text-right">{actionBtn(s)}</td></tr>
+                        <tr key={rowKey} className="hover:bg-blue-50/40"><td className={`${cellCls} font-semibold`}>{cust}</td><td className={cellCls}>{dateText}</td><td className={cellCls}>{ri.vehicle_type || r.vehicle_type || '-'}</td><td className={cellCls}>{r.way_type || ribbon || '-'}</td><td className={cellCls}>{r.pickup_location || '-'}</td><td className={cellCls}>{r.dropoff_location || '-'}</td><td className="px-2 py-1.5 align-top text-right">{actionBtn(s)}</td></tr>
                       );
                     }
                     if (key === 'reservation_airport') return (
-                      <tr key={rowKey} className="hover:bg-blue-50/40"><td className={cellCls}>{statusBadge(s)}</td><td className={`${cellCls} font-semibold`}>{cust}</td><td className={cellCls}>{dateText}</td><td className={cellCls}>{timeText}</td><td className={cellCls}>{r.ra_flight_number || '-'}</td><td className={cellCls}>{r.ra_airport_location || '-'}</td><td className={`${cellCls} max-w-[180px] truncate`} title={r.accommodation_info || ''}>{r.accommodation_info || '-'}</td><td className={cellCls}>{r.ra_passenger_count || 0}</td><td className={cellCls}>{r.ra_car_count || 0}</td><td className={cellCls}>{r.ra_luggage_count || 0}</td><td className={`${cellCls} whitespace-pre-line max-w-[200px] break-words`}>{r.request_note || '-'}</td><td className="px-2 py-1.5 align-top text-right">{actionBtn(s)}</td></tr>
+                      <tr key={rowKey} className="hover:bg-blue-50/40"><td className={`${cellCls} font-semibold`}>{cust}</td><td className={cellCls}>{dateText}</td><td className={cellCls}>{timeText}</td><td className={cellCls}>{r.ra_flight_number || '-'}</td><td className={cellCls}>{r.ra_airport_location || '-'}</td><td className={`${cellCls} max-w-[180px] truncate`} title={r.accommodation_info || ''}>{r.accommodation_info || '-'}</td><td className={cellCls}>{r.ra_passenger_count || 0}</td><td className={cellCls}>{r.ra_car_count || 0}</td><td className={cellCls}>{r.ra_luggage_count || 0}</td><td className={`${cellCls} whitespace-pre-line max-w-[200px] break-words`}>{r.request_note || '-'}</td><td className="px-2 py-1.5 align-top text-right">{actionBtn(s)}</td></tr>
                     );
                     if (key === 'reservation_hotel') return (
-                      <tr key={rowKey} className="hover:bg-blue-50/40"><td className={cellCls}>{statusBadge(s)}</td><td className={`${cellCls} font-semibold`}>{cust}</td><td className={cellCls}>{r.checkin_date || dateText}</td><td className={cellCls}>{r.nights ? `${r.nights}박` : '-'}</td><td className={cellCls}>{r.guest_count ? `${r.guest_count}명` : '-'}</td><td className={cellCls}>{r.room_count ? `${r.room_count}개` : '-'}</td><td className={`${cellCls} whitespace-pre-line max-w-[260px] break-words`}>{r.request_note || '-'}</td><td className="px-2 py-1.5 align-top text-right">{actionBtn(s)}</td></tr>
+                      <tr key={rowKey} className="hover:bg-blue-50/40"><td className={`${cellCls} font-semibold`}>{cust}</td><td className={cellCls}>{r.checkin_date || dateText}</td><td className={cellCls}>{r.nights ? `${r.nights}박` : '-'}</td><td className={cellCls}>{r.guest_count ? `${r.guest_count}명` : '-'}</td><td className={cellCls}>{r.room_count ? `${r.room_count}개` : '-'}</td><td className={`${cellCls} whitespace-pre-line max-w-[260px] break-words`}>{r.request_note || '-'}</td><td className="px-2 py-1.5 align-top text-right">{actionBtn(s)}</td></tr>
                     );
                     if (key === 'reservation_tour') {
                       const ti = (r as any)._tour_info || {};
                       return (
-                        <tr key={rowKey} className="hover:bg-blue-50/40"><td className={cellCls}>{statusBadge(s)}</td><td className={`${cellCls} font-semibold`}>{cust}</td><td className={cellCls}>{r.usage_date || dateText}</td><td className={cellCls}>{ti.tour_name || '-'}</td><td className={cellCls}>{r.tour_capacity ? `${r.tour_capacity}명` : '-'}</td><td className={cellCls}>{r.pickup_location || '-'}</td><td className={cellCls}>{r.dropoff_location || '-'}</td><td className={`${cellCls} whitespace-pre-line max-w-[220px] break-words`}>{r.request_note || '-'}</td><td className="px-2 py-1.5 align-top text-right">{actionBtn(s)}</td></tr>
+                        <tr key={rowKey} className="hover:bg-blue-50/40"><td className={`${cellCls} font-semibold`}>{cust}</td><td className={cellCls}>{r.usage_date || dateText}</td><td className={cellCls}>{ti.tour_name || '-'}</td><td className={cellCls}>{r.tour_capacity ? `${r.tour_capacity}명` : '-'}</td><td className={cellCls}>{r.pickup_location || '-'}</td><td className={cellCls}>{r.dropoff_location || '-'}</td><td className={`${cellCls} whitespace-pre-line max-w-[220px] break-words`}>{r.request_note || '-'}</td><td className="px-2 py-1.5 align-top text-right">{actionBtn(s)}</td></tr>
                       );
                     }
                     if (key === 'reservation_ticket') return (
-                      <tr key={rowKey} className="hover:bg-blue-50/40"><td className={cellCls}>{statusBadge(s)}</td><td className={`${cellCls} font-semibold`}>{cust}</td><td className={cellCls}>{r.usage_date || dateText}</td><td className={cellCls}>{r.ticket_name || r.program_selection || '-'}</td><td className={cellCls}>{r.ticket_quantity ? `${r.ticket_quantity}매` : '-'}</td><td className={cellCls}>{r.pickup_location || '-'}</td><td className={cellCls}>{r.dropoff_location || '-'}</td><td className={`${cellCls} whitespace-pre-line max-w-[220px] break-words`}>{r.request_note || '-'}</td><td className="px-2 py-1.5 align-top text-right">{actionBtn(s)}</td></tr>
+                      <tr key={rowKey} className="hover:bg-blue-50/40"><td className={`${cellCls} font-semibold`}>{cust}</td><td className={cellCls}>{r.usage_date || dateText}</td><td className={cellCls}>{r.ticket_name || r.program_selection || '-'}</td><td className={cellCls}>{r.ticket_quantity ? `${r.ticket_quantity}매` : '-'}</td><td className={cellCls}>{r.pickup_location || '-'}</td><td className={cellCls}>{r.dropoff_location || '-'}</td><td className={`${cellCls} whitespace-pre-line max-w-[220px] break-words`}>{r.request_note || '-'}</td><td className="px-2 py-1.5 align-top text-right">{actionBtn(s)}</td></tr>
                     );
                     if (key === 'reservation_rentcar') {
                       const ri = (r as any)._rentcar_info || {};
                       return (
-                        <tr key={rowKey} className="hover:bg-blue-50/40"><td className={cellCls}>{statusBadge(s)}</td><td className={`${cellCls} font-semibold`}>{cust}</td><td className={cellCls}>{fmtDt(r.pickup_datetime)}</td><td className={cellCls}>{fmtDt(r.return_datetime)}</td><td className={cellCls}>{ri.vehicle_type || r.vehicle_type || '-'}</td><td className={cellCls}>{ri.route || r.route || '-'}</td><td className={cellCls}>{r.way_type || '-'}</td><td className={cellCls}>{r.driver_count ? `${r.driver_count}명` : '-'}</td><td className={`${cellCls} whitespace-pre-line max-w-[220px] break-words`}>{r.request_note || '-'}</td><td className="px-2 py-1.5 align-top text-right">{actionBtn(s)}</td></tr>
+                        <tr key={rowKey} className="hover:bg-blue-50/40"><td className={`${cellCls} font-semibold`}>{cust}</td><td className={cellCls}>{fmtDt(r.pickup_datetime)}</td><td className={cellCls}>{fmtDt(r.return_datetime)}</td><td className={cellCls}>{ri.vehicle_type || r.vehicle_type || '-'}</td><td className={cellCls}>{ri.route || r.route || '-'}</td><td className={cellCls}>{r.way_type || '-'}</td><td className={cellCls}>{r.driver_count ? `${r.driver_count}명` : '-'}</td><td className={`${cellCls} whitespace-pre-line max-w-[220px] break-words`}>{r.request_note || '-'}</td><td className="px-2 py-1.5 align-top text-right">{actionBtn(s)}</td></tr>
                       );
                     }
                     return null;
@@ -2892,51 +2892,51 @@ export default function ManagerSchedulePage() {
     let body: React.ReactNode = null;
 
     if (serviceType === 'cruise') {
-      head = (<tr><th className={headCls}>상태</th><th className={headCls}>고객</th><th className={headCls}>체크인</th><th className={headCls}>크루즈</th><th className={headCls}>객실</th><th className={headCls}>할인</th><th className="px-2 py-2 text-right font-semibold">액션</th></tr>);
+      head = (<tr><th className={headCls}>고객</th><th className={headCls}>체크인</th><th className={headCls}>크루즈</th><th className={headCls}>객실</th><th className={headCls}>할인</th><th className="px-2 py-2 text-right font-semibold">액션</th></tr>);
       body = list.map((r: any, i: number) => {
         const isPast = isPastDate(r.checkin);
         const room = `${r.roomType || ''}${r.category ? ` (${r.category})` : ''}`.trim();
-        return (<tr key={`${r.orderId}-${i}`} className={`hover:bg-blue-50/40 ${isPast ? 'opacity-60' : ''}`}><td className={cellCls}>{statusOf(r, isPast)}</td><td className={cellCls}>{custCell(r)}</td><td className={cellCls}>{fmtDate(parseDate(r.checkin))}</td><td className={cellCls}>{r.cruise || '-'}</td><td className={cellCls}>{room || '-'}</td><td className={cellCls}>{r.discount || '-'}</td><td className="px-2 py-1.5 align-top text-right">{actionBtn(r)}</td></tr>);
+        return (<tr key={`${r.orderId}-${i}`} className={`hover:bg-blue-50/40 ${isPast ? 'opacity-60' : ''}`}><td className={cellCls}>{custCell(r)}</td><td className={cellCls}>{fmtDate(parseDate(r.checkin))}</td><td className={cellCls}>{r.cruise || '-'}</td><td className={cellCls}>{room || '-'}</td><td className={cellCls}>{r.discount || '-'}</td><td className="px-2 py-1.5 align-top text-right">{actionBtn(r)}</td></tr>);
       });
     } else if (serviceType === 'vehicle') {
-      head = (<tr><th className={headCls}>상태</th><th className={headCls}>고객</th><th className={headCls}>탑승일</th><th className={headCls}>차량</th><th className={headCls}>좌석</th><th className={headCls}>분류</th><th className={headCls}>승/하차 위치</th><th className="px-2 py-2 text-right font-semibold">액션</th></tr>);
+      head = (<tr><th className={headCls}>고객</th><th className={headCls}>탑승일</th><th className={headCls}>차량</th><th className={headCls}>좌석</th><th className={headCls}>분류</th><th className={headCls}>승/하차 위치</th><th className="px-2 py-2 text-right font-semibold">액션</th></tr>);
       body = list.map((r: any, i: number) => {
         const isPast = isPastDate(r.boardingDate);
         const pickup = r.pickupLocation || r.boardingLocation;
         const dropoff = r.dropoffLocation;
         const locationText = formatPickupDropoffText(pickup, dropoff);
-        return (<tr key={`${r.orderId}-${i}`} className={`hover:bg-blue-50/40 ${isPast ? 'opacity-60' : ''}`}><td className={cellCls}>{statusOf(r, isPast)}</td><td className={cellCls}>{custCell(r)}</td><td className={cellCls}>{fmtDate(parseDate(r.boardingDate))}</td><td className={cellCls}>{r.vehicleNumber || '-'}</td><td className={cellCls}>{r.seatNumber || '-'}</td><td className={cellCls}>{r.category || '-'}</td><td className={pickupDropoffCellCls}>{locationText}</td><td className="px-2 py-1.5 align-top text-right">{actionBtn(r)}</td></tr>);
+        return (<tr key={`${r.orderId}-${i}`} className={`hover:bg-blue-50/40 ${isPast ? 'opacity-60' : ''}`}><td className={cellCls}>{custCell(r)}</td><td className={cellCls}>{fmtDate(parseDate(r.boardingDate))}</td><td className={cellCls}>{r.vehicleNumber || '-'}</td><td className={cellCls}>{r.seatNumber || '-'}</td><td className={cellCls}>{r.category || '-'}</td><td className={pickupDropoffCellCls}>{locationText}</td><td className="px-2 py-1.5 align-top text-right">{actionBtn(r)}</td></tr>);
       });
     } else if (serviceType === 'airport') {
-      head = (<tr><th className={headCls}>상태</th><th className={headCls}>고객</th><th className={headCls}>일자</th><th className={headCls}>시간</th><th className={headCls}>구분</th><th className={headCls}>경로</th><th className={headCls}>공항</th><th className={headCls}>편명</th><th className={headCls}>숙박지</th><th className={headCls}>👥</th><th className={headCls}>🚗</th><th className={headCls}>🧳</th><th className="px-2 py-2 text-right font-semibold">액션</th></tr>);
+      head = (<tr><th className={headCls}>고객</th><th className={headCls}>일자</th><th className={headCls}>시간</th><th className={headCls}>구분</th><th className={headCls}>경로</th><th className={headCls}>공항</th><th className={headCls}>편명</th><th className={headCls}>숙박지</th><th className={headCls}>👥</th><th className={headCls}>🚗</th><th className={headCls}>🧳</th><th className="px-2 py-2 text-right font-semibold">액션</th></tr>);
       body = list.map((r: any, i: number) => {
         const isPast = isPastDate(r.date);
         const tag = `${r.tripType || ''} ${r.category || ''}`.trim();
         const rawPlace = String(r.placeName || '').trim();
         const place = /^updating$/i.test(rawPlace) ? '-' : (rawPlace || '-');
-        return (<tr key={`${r.orderId}-${i}`} className={`hover:bg-blue-50/40 ${isPast ? 'opacity-60' : ''}`}><td className={cellCls}>{statusOf(r, isPast)}</td><td className={cellCls}>{custCell(r)}</td><td className={cellCls}>{fmtDate(parseDate(r.date))}</td><td className={cellCls}>{r.time || '-'}</td><td className={cellCls}>{tag || '-'}</td><td className={cellCls}>{r.route || '-'}</td><td className={cellCls}>{r.airportName || '-'}</td><td className={cellCls}>{r.flightNumber || '-'}</td><td className={`${cellCls} max-w-[160px] truncate`} title={place}>{place}</td><td className={cellCls}>{r.passengerCount || 0}</td><td className={cellCls}>{r.carCount || 0}</td><td className={cellCls}>{r.carrierCount || 0}</td><td className="px-2 py-1.5 align-top text-right">{actionBtn(r)}</td></tr>);
+        return (<tr key={`${r.orderId}-${i}`} className={`hover:bg-blue-50/40 ${isPast ? 'opacity-60' : ''}`}><td className={cellCls}>{custCell(r)}</td><td className={cellCls}>{fmtDate(parseDate(r.date))}</td><td className={cellCls}>{r.time || '-'}</td><td className={cellCls}>{tag || '-'}</td><td className={cellCls}>{r.route || '-'}</td><td className={cellCls}>{r.airportName || '-'}</td><td className={cellCls}>{r.flightNumber || '-'}</td><td className={`${cellCls} max-w-[160px] truncate`} title={place}>{place}</td><td className={cellCls}>{r.passengerCount || 0}</td><td className={cellCls}>{r.carCount || 0}</td><td className={cellCls}>{r.carrierCount || 0}</td><td className="px-2 py-1.5 align-top text-right">{actionBtn(r)}</td></tr>);
       });
     } else if (serviceType === 'hotel') {
-      head = (<tr><th className={headCls}>상태</th><th className={headCls}>고객</th><th className={headCls}>체크인</th><th className={headCls}>호텔</th><th className={headCls}>객실</th><th className={headCls}>박수</th><th className={headCls}>조식</th><th className={headCls}>성인</th><th className={headCls}>아동</th><th className={headCls}>유아</th><th className={headCls}>객실수</th><th className="px-2 py-2 text-right font-semibold">액션</th></tr>);
+      head = (<tr><th className={headCls}>고객</th><th className={headCls}>체크인</th><th className={headCls}>호텔</th><th className={headCls}>객실</th><th className={headCls}>박수</th><th className={headCls}>조식</th><th className={headCls}>성인</th><th className={headCls}>아동</th><th className={headCls}>유아</th><th className={headCls}>객실수</th><th className="px-2 py-2 text-right font-semibold">액션</th></tr>);
       body = list.map((r: any, i: number) => {
         const isPast = isPastDate(r.checkinDate);
-        return (<tr key={`${r.orderId}-${i}`} className={`hover:bg-blue-50/40 ${isPast ? 'opacity-60' : ''}`}><td className={cellCls}>{statusOf(r, isPast)}</td><td className={cellCls}>{custCell(r)}</td><td className={cellCls}>{fmtDate(parseDate(r.checkinDate))}</td><td className={cellCls}>{r.hotelName || '-'}</td><td className={cellCls}>{r.roomName || r.roomType || '-'}</td><td className={cellCls}>{r.days || 0}박</td><td className={cellCls}>{r.breakfastService ? '🍳' : '-'}</td><td className={cellCls}>{r.adult || 0}</td><td className={cellCls}>{r.child || 0}</td><td className={cellCls}>{r.toddler || 0}</td><td className={cellCls}>{r.roomCount || 0}</td><td className="px-2 py-1.5 align-top text-right">{actionBtn(r)}</td></tr>);
+        return (<tr key={`${r.orderId}-${i}`} className={`hover:bg-blue-50/40 ${isPast ? 'opacity-60' : ''}`}><td className={cellCls}>{custCell(r)}</td><td className={cellCls}>{fmtDate(parseDate(r.checkinDate))}</td><td className={cellCls}>{r.hotelName || '-'}</td><td className={cellCls}>{r.roomName || r.roomType || '-'}</td><td className={cellCls}>{r.days || 0}박</td><td className={cellCls}>{r.breakfastService ? '🍳' : '-'}</td><td className={cellCls}>{r.adult || 0}</td><td className={cellCls}>{r.child || 0}</td><td className={cellCls}>{r.toddler || 0}</td><td className={cellCls}>{r.roomCount || 0}</td><td className="px-2 py-1.5 align-top text-right">{actionBtn(r)}</td></tr>);
       });
     } else if (serviceType === 'tour') {
-      head = (<tr><th className={headCls}>상태</th><th className={headCls}>고객</th><th className={headCls}>시작일</th><th className={headCls}>투어</th><th className={headCls}>종류</th><th className={headCls}>픽업</th><th className={headCls}>인원</th><th className={headCls}>메모</th><th className="px-2 py-2 text-right font-semibold">액션</th></tr>);
+      head = (<tr><th className={headCls}>고객</th><th className={headCls}>시작일</th><th className={headCls}>투어</th><th className={headCls}>종류</th><th className={headCls}>픽업</th><th className={headCls}>인원</th><th className={headCls}>메모</th><th className="px-2 py-2 text-right font-semibold">액션</th></tr>);
       body = list.map((r: any, i: number) => {
         const isPast = isPastDate(r.startDate);
-        return (<tr key={`${r.orderId}-${i}`} className={`hover:bg-blue-50/40 ${isPast ? 'opacity-60' : ''}`}><td className={cellCls}>{statusOf(r, isPast)}</td><td className={cellCls}>{custCell(r)}</td><td className={cellCls}>{fmtDate(parseDate(r.startDate))}</td><td className={cellCls}>{r.tourName || '-'}</td><td className={cellCls}>{r.tourType || '-'}</td><td className={cellCls}>{r.pickupLocation || '-'}</td><td className={cellCls}>{r.participants || 0}명</td><td className={`${cellCls} whitespace-pre-line max-w-[220px] break-words`}>{r.memo || '-'}</td><td className="px-2 py-1.5 align-top text-right">{actionBtn(r)}</td></tr>);
+        return (<tr key={`${r.orderId}-${i}`} className={`hover:bg-blue-50/40 ${isPast ? 'opacity-60' : ''}`}><td className={cellCls}>{custCell(r)}</td><td className={cellCls}>{fmtDate(parseDate(r.startDate))}</td><td className={cellCls}>{r.tourName || '-'}</td><td className={cellCls}>{r.tourType || '-'}</td><td className={cellCls}>{r.pickupLocation || '-'}</td><td className={cellCls}>{r.participants || 0}명</td><td className={`${cellCls} whitespace-pre-line max-w-[220px] break-words`}>{r.memo || '-'}</td><td className="px-2 py-1.5 align-top text-right">{actionBtn(r)}</td></tr>);
       });
     } else if (serviceType === 'rentcar') {
-      head = (<tr><th className={headCls}>상태</th><th className={headCls}>고객</th><th className={headCls}>픽업일</th><th className={headCls}>시간</th><th className={headCls}>차량</th><th className={headCls}>구분</th><th className={headCls}>경로</th><th className={headCls}>위치</th><th className={headCls}>사용기간</th><th className={headCls}>👥</th><th className={headCls}>🚗</th><th className="px-2 py-2 text-right font-semibold">액션</th></tr>);
+      head = (<tr><th className={headCls}>고객</th><th className={headCls}>픽업일</th><th className={headCls}>시간</th><th className={headCls}>차량</th><th className={headCls}>구분</th><th className={headCls}>경로</th><th className={headCls}>위치</th><th className={headCls}>사용기간</th><th className={headCls}>👥</th><th className={headCls}>🚗</th><th className="px-2 py-2 text-right font-semibold">액션</th></tr>);
       body = list.map((r: any, i: number) => {
         const isPast = isPastDate(r.pickupDate);
         const loc = [r.pickupLocation, r.destination].filter(Boolean).join(' → ');
         return (<tr key={`${r.orderId}-${i}`} className={`hover:bg-blue-50/40 ${isPast ? 'opacity-60' : ''}`}><td className={cellCls}>{statusOf(r, isPast)}</td><td className={cellCls}>{custCell(r)}</td><td className={cellCls}>{fmtDate(parseDate(r.pickupDate))}</td><td className={cellCls}>{r.pickupTime || '-'}</td><td className={cellCls}>{r.carType || '-'}</td><td className={cellCls}>{r.tripType || '-'}</td><td className={cellCls}>{r.route || '-'}</td><td className={cellCls}>{loc || '-'}</td><td className={cellCls}>{r.usagePeriod || '-'}</td><td className={cellCls}>{r.passengerCount || 0}</td><td className={cellCls}>{r.carCount || 0}</td><td className="px-2 py-1.5 align-top text-right">{actionBtn(r)}</td></tr>);
       });
     } else if (serviceType === 'car') {
-      head = (<tr><th className={headCls}>상태</th><th className={headCls}>구분</th><th className={headCls}>고객</th><th className={headCls}>일자</th><th className={headCls}>시간</th><th className={headCls}>차량</th><th className={headCls}>장소</th><th className={headCls}>👥</th><th className={headCls}>🚗</th><th className="px-2 py-2 text-right font-semibold">액션</th></tr>);
+      head = (<tr><th className={headCls}>구분</th><th className={headCls}>고객</th><th className={headCls}>일자</th><th className={headCls}>시간</th><th className={headCls}>차량</th><th className={headCls}>장소</th><th className={headCls}>👥</th><th className={headCls}>🚗</th><th className="px-2 py-2 text-right font-semibold">액션</th></tr>);
       body = list.map((r: any, i: number) => {
         const pd = parseDate(r.pickupDatetime);
         const isPast = isPastDate(r.pickupDatetime);
@@ -2966,7 +2966,6 @@ export default function ManagerSchedulePage() {
       <table className="min-w-full text-sm">
         <thead className="bg-gray-50 text-gray-600 text-xs uppercase tracking-wider">
           <tr>
-            <th className="px-3 py-2.5 text-left font-semibold">상태</th>
             <th className="px-3 py-2.5 text-left font-semibold">타입</th>
             <th className="px-3 py-2.5 text-left font-semibold">고객명</th>
             <th className="px-3 py-2.5 text-left font-semibold">일자</th>
@@ -2991,11 +2990,6 @@ export default function ManagerSchedulePage() {
                 key={`${schedule.re_id}-${schedule.service_table}-${schedule.segment_type || schedule.rentcar_phase || 'd'}-${idx}`}
                 className="hover:bg-blue-50/40 transition-colors"
               >
-                <td className="px-3 py-2 align-top whitespace-nowrap">
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${schedule.re_status === 'confirmed' ? 'bg-green-100 text-green-800' : schedule.re_status === 'pending' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'}`}>
-                    {schedule.re_status === 'confirmed' ? '확정' : schedule.re_status === 'pending' ? '대기' : '취소'}
-                  </span>
-                </td>
                 <td className="px-3 py-2 align-top whitespace-nowrap">
                   <div className="flex items-center gap-1.5">
                     {getDisplayTypeIcon(schedule)}
@@ -4186,7 +4180,6 @@ export default function ManagerSchedulePage() {
       <table className="min-w-full text-sm">
         <thead className="bg-gray-50 text-gray-600 text-xs uppercase tracking-wider">
           <tr>
-            <th className="px-3 py-2.5 text-left font-semibold">상태</th>
             <th className="px-3 py-2.5 text-left font-semibold">타입</th>
             <th className="px-3 py-2.5 text-left font-semibold">고객명</th>
             <th className="px-3 py-2.5 text-left font-semibold">일자</th>
@@ -4207,11 +4200,6 @@ export default function ManagerSchedulePage() {
                 key={`${reservation.orderId}-${index}`}
                 className={`hover:bg-blue-50/40 transition-colors ${sum.isPast ? 'opacity-60' : ''}`}
               >
-                <td className="px-3 py-2 align-top whitespace-nowrap">
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${sum.isPast ? 'bg-gray-200 text-gray-700' : 'bg-blue-100 text-blue-800'}`}>
-                    {sum.isPast ? '완료' : '예정'}
-                  </span>
-                </td>
                 <td className="px-3 py-2 align-top whitespace-nowrap">
                   <div className="flex items-center gap-1.5">
                     <span className={`text-${info.color}-600`}>{info.icon}</span>

@@ -51,6 +51,8 @@ const formatScheduleType = (scheduleType: string | undefined): string => {
     return SCHEDULE_TYPE_MAP[scheduleType] || scheduleType;
 };
 
+const formatSignedDong = (amount: number): string => `${amount > 0 ? '+' : ''}${Number(amount || 0).toLocaleString()}동`;
+
 const normalizeShtSeatType = (value: string) => {
     const raw = String(value || '').trim().toUpperCase();
     if (!raw) return '';
@@ -1445,30 +1447,46 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                                                         switch (r.service_type) {
                                                             case 'cruise': {
                                                                 // 상세 표기: 크루즈명 / 스케줄 / 객실타입
-                                                                const cruiseName = p?.cruise_name || '';
-                                                                const scheduleType = formatScheduleType(p?.schedule_type);
-                                                                const roomType = p?.room_type || '';
+                                                                const cruisePb = r.price_breakdown || (d as any)?.price_breakdown || null;
+                                                                const storedRooms = Array.isArray(cruisePb?.rooms) ? cruisePb.rooms : [];
+                                                                const storedRoom = storedRooms.find((room: any) =>
+                                                                    (!room.room_price_code || room.room_price_code === d?.room_price_code) &&
+                                                                    (!room.checkin || room.checkin === d?.checkin) &&
+                                                                    Number(room.total || 0) === Number(d?.room_total_price || 0)
+                                                                ) || storedRooms.find((room: any) => room?.room_price_code === d?.room_price_code) || storedRooms[0] || null;
+                                                                const cruiseName = storedRoom?.cruise || p?.cruise_name || '';
+                                                                const scheduleType = formatScheduleType(storedRoom?.schedule || p?.schedule_type);
+                                                                const roomType = storedRoom?.room_type || p?.room_type || '';
                                                                 if (cruiseName) descLines.push(`🚢 ${cruiseName}`);
                                                                 if (scheduleType !== '-' || roomType) descLines.push(`${scheduleType} / ${roomType || '-'}`);
                                                                 // cruise_rate_card: price_adult, price_child, price_infant, price_extra_bed, price_child_extra_bed, price_single
-                                                                const adultPrice = p?.price_adult || 0;
-                                                                const childPrice = p?.price_child || 0;
-                                                                const infantPrice = p?.price_infant || 0;
-                                                                const extraBedPrice = p?.price_extra_bed || 0;
-                                                                const childExtraBedPrice = p?.price_child_extra_bed || 0;
-                                                                const singlePrice = p?.price_single || 0;
-                                                                const adultCount = d?.adult_count || 0;
-                                                                const childCount = d?.child_count || 0;
-                                                                const infantCount = d?.infant_count || 0;
-                                                                const extraBedCount = d?.extra_bed_count || 0;
-                                                                const childExtraBedCount = d?.child_extra_bed_count || 0;
-                                                                const singleCount = d?.single_count || 0;
-                                                                if (adultCount > 0) calcLines.push(`성인 ${adultCount}명 × ${adultPrice.toLocaleString()}동`);
-                                                                if (extraBedCount > 0) calcLines.push(`엑스트라베드(성인) ${extraBedCount}명 × ${extraBedPrice.toLocaleString()}동`);
-                                                                if (childCount > 0) calcLines.push(`아동 ${childCount}명 × ${childPrice.toLocaleString()}동`);
-                                                                if (childExtraBedCount > 0) calcLines.push(`아동 엑스트라베드 ${childExtraBedCount}명 × ${childExtraBedPrice.toLocaleString()}동`);
-                                                                if (infantCount > 0) calcLines.push(`유아 ${infantCount}명 × ${infantPrice.toLocaleString()}동`);
-                                                                if (singleCount > 0) calcLines.push(`싱글차지 ${singleCount}명 × ${singlePrice.toLocaleString()}동`);
+                                                                const adultCount = storedRoom?.adult?.count ?? d?.adult_count ?? 0;
+                                                                const childCount = storedRoom?.child?.count ?? d?.child_count ?? 0;
+                                                                const infantCount = storedRoom?.infant?.count ?? d?.infant_count ?? 0;
+                                                                const extraBedCount = storedRoom?.extra_bed?.count ?? d?.extra_bed_count ?? 0;
+                                                                const childExtraBedCount = storedRoom?.child_extra_bed?.count ?? d?.child_extra_bed_count ?? 0;
+                                                                const singleCount = storedRoom?.single?.count ?? d?.single_count ?? 0;
+                                                                const pickUnit = (entry: any, count: number, fallback: number) => {
+                                                                    const unit = Number(entry?.unit_price || 0);
+                                                                    if (unit > 0) return unit;
+                                                                    const total = Number(entry?.total || 0);
+                                                                    if (count > 0 && total > 0) return Math.round(total / count);
+                                                                    return Number(fallback || 0);
+                                                                };
+                                                                const adultPrice = pickUnit(storedRoom?.adult, Number(adultCount || 0), Number(p?.price_adult || 0));
+                                                                const childPrice = pickUnit(storedRoom?.child, Number(childCount || 0), Number(p?.price_child || 0));
+                                                                const infantPrice = pickUnit(storedRoom?.infant, Number(infantCount || 0), Number(p?.price_infant || 0));
+                                                                const extraBedPrice = pickUnit(storedRoom?.extra_bed, Number(extraBedCount || 0), Number(p?.price_extra_bed || 0));
+                                                                const childExtraBedPrice = pickUnit(storedRoom?.child_extra_bed, Number(childExtraBedCount || 0), Number(p?.price_child_extra_bed || 0));
+                                                                const singlePrice = pickUnit(storedRoom?.single, Number(singleCount || 0), Number(p?.price_single || 0));
+                                                                if (adultCount > 0) calcLines.push(`성인 ${adultPrice.toLocaleString()}동 × ${adultCount}명`);
+                                                                if (extraBedCount > 0) calcLines.push(`엑스트라베드(성인) ${extraBedPrice.toLocaleString()}동 × ${extraBedCount}명`);
+                                                                if (childCount > 0) calcLines.push(`아동 ${childPrice.toLocaleString()}동 × ${childCount}명`);
+                                                                if (childExtraBedCount > 0) calcLines.push(`아동 엑스트라베드 ${childExtraBedPrice.toLocaleString()}동 × ${childExtraBedCount}명`);
+                                                                if (infantCount > 0) calcLines.push(`유아 ${infantPrice.toLocaleString()}동 × ${infantCount}명`);
+                                                                if (singleCount > 0) calcLines.push(`싱글차액 ${singlePrice.toLocaleString()}동 × ${singleCount}명`);
+                                                                const pbGrandTotal = Number(cruisePb?.grand_total || 0);
+                                                                if (pbGrandTotal > 0) rowAmountOverride = pbGrandTotal;
                                                                 break;
                                                             }
                                                             case 'airport': {
@@ -1558,13 +1576,23 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                                                             }
                                                         }
 
-                                                        const manualAdditionalFee = Number(r.manual_additional_fee || 0);
-                                                        const manualAdditionalFeeDetail = String(r.manual_additional_fee_detail || '').trim();
-                                                        if (manualAdditionalFee > 0) {
-                                                            calcLines.push(`추가요금 ${manualAdditionalFee.toLocaleString()}동`);
+                                                        // 추가/차감은 reservation.price_breakdown 기준으로 표시 (매니저와 동일)
+                                                        const priceBreakdown = r.price_breakdown || (d as any)?.price_breakdown || null;
+                                                        const additionalFeeItems = Array.isArray(priceBreakdown?.additional_fee_items) ? priceBreakdown.additional_fee_items : [];
+                                                        const additionalFeeDetail = String(priceBreakdown?.additional_fee_detail || r.manual_additional_fee_detail || '').trim();
+                                                        const manualAdditionalFee = Number(priceBreakdown?.additional_fee_manual ?? r.manual_additional_fee ?? 0);
+
+                                                        if (additionalFeeItems.length > 0) {
+                                                            additionalFeeItems.forEach((item: any) => {
+                                                                const amount = Number(item?.amount || 0);
+                                                                if (!amount) return;
+                                                                calcLines.push(`${item?.name || '추가내역'} ${formatSignedDong(amount)}`);
+                                                            });
+                                                        } else if (manualAdditionalFee !== 0) {
+                                                            calcLines.push(additionalFeeDetail ? `${additionalFeeDetail} ${formatSignedDong(manualAdditionalFee)}` : `추가/차감: ${formatSignedDong(manualAdditionalFee)}`);
                                                         }
-                                                        if (manualAdditionalFeeDetail) {
-                                                            calcLines.push(`추가내역: ${manualAdditionalFeeDetail}`);
+                                                        if (additionalFeeDetail && additionalFeeItems.length === 0 && manualAdditionalFee === 0) {
+                                                            calcLines.push(additionalFeeDetail);
                                                         }
 
                                                         // calcLines가 비어있거나 단가가 모두 0인 경우 총액 기반 fallback
@@ -1607,7 +1635,9 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
 
                                                         const rowAmount = mergedAirportReservationTotal !== null && Number.isFinite(mergedAirportReservationTotal)
                                                             ? mergedAirportReservationTotal
-                                                            : (hasReservationTotal && reservationRowCount <= 1 ? reservationRowTotal : rowAmountFallback);
+                                                            : (rowAmountOverride !== null
+                                                                ? Number(rowAmountOverride)
+                                                                : (hasReservationTotal && reservationRowCount <= 1 ? reservationRowTotal : rowAmountFallback));
 
                                                         return (
                                                             <tr key={`pay-row-${i}`} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
