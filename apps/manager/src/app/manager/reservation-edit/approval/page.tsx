@@ -59,6 +59,26 @@ const STATUS_MAP: Record<string, { label: string; cls: string }> = {
     cancelled: { label: '취소', cls: 'bg-gray-100 text-gray-600' },
 };
 
+const REQUEST_SOURCE_TABS = [
+    { value: 'all', label: '전체' },
+    { value: 'customer', label: '고객 수정' },
+    { value: 'manager', label: '매니저 수정' },
+] as const;
+
+type RequestSourceTab = (typeof REQUEST_SOURCE_TABS)[number]['value'];
+
+function isManagerRole(role?: string | null): boolean {
+    return role === 'manager' || role === 'admin';
+}
+
+function getRequestSourceKind(role?: string | null): 'customer' | 'manager' {
+    return isManagerRole(role) ? 'manager' : 'customer';
+}
+
+function getRequestSourceLabel(kind: 'customer' | 'manager'): string {
+    return kind === 'manager' ? '매니저 수정' : '고객 수정';
+}
+
 /* ─── 필드 라벨 매핑 ─── */
 const FIELD_LABELS: Record<string, string> = {
     airport_price_code: '가격코드', ra_airport_location: '📍 장소', ra_flight_number: '✈️ 항공편',
@@ -121,6 +141,407 @@ function formatDisplayValue(value: unknown): string {
         } catch { /* fall through */ }
     }
     return strVal;
+}
+
+function formatCurrency(value: unknown): string {
+    if (value === null || value === undefined || value === '') return '-';
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return formatDisplayValue(value);
+    return `${parsed.toLocaleString('ko-KR')}원`;
+}
+
+const PRICE_FIELD_LABELS: Record<string, string> = {
+    schedule: '일정',
+    extra_bed: '엑스트라 베드',
+    room_count: '객실 수',
+    unit_price: '기준 단가',
+    child_older: '소아(고연령)',
+    guest_count: '총 인원',
+    child_extra_bed: '아동 엑스트라 베드',
+    room_price_code: '객실 가격 코드',
+    category_unit_prices: '카테고리별 단가',
+    category_prices_manual: '카테고리 단가 수동입력',
+    representative_unit_price: '대표 단가',
+    adult: '성인',
+    child: '아동',
+    infant: '유아',
+    single: '싱글',
+    source: '수정 출처',
+    options: '옵션',
+    car_total: '차량 합계',
+    service_type: '서비스 유형',
+    discount_rate: '할인율',
+    options_total: '옵션 합계',
+    discount_amount: '할인 금액',
+    pricing_version: '가격 버전',
+    calculated_total: '계산 총액',
+    discount_sequence: '할인 시퀀스',
+    additional_fee_detail: '추가요금 상세',
+    additional_fee_manual: '추가요금 수동입력',
+    discount_manual_amount: '수동 할인 금액',
+    template_id: '템플릿 ID',
+    amount: '금액',
+    qty: '수량',
+};
+
+const PRICE_FIELD_DESCRIPTIONS: Record<string, string> = {
+    schedule: '박/일 일정',
+    extra_bed: '엑스트라 베드 요금 정보',
+    room_count: '예약된 객실 개수',
+    unit_price: '기본 단가',
+    child_older: '고연령 아동 요금',
+    guest_count: '전체 탑승 인원',
+    child_extra_bed: '아동 엑스트라 베드 요금',
+    room_price_code: '가격 테이블 연결 코드',
+    category_unit_prices: '인원 카테고리별 단가',
+    category_prices_manual: '단가 수동입력 여부',
+    representative_unit_price: '대표 단가 값',
+    source: '수정이 생성된 위치',
+    options: '선택 옵션',
+    service_type: '서비스 분류',
+    pricing_version: '가격 계산 버전',
+    calculated_total: '최종 계산 금액',
+};
+
+const PERSON_LABELS: Record<string, string> = {
+    adult: '성인',
+    child: '아동',
+    infant: '유아',
+    single: '싱글',
+    extra_bed: '엑스트라 베드',
+    child_older: '소아(고연령)',
+    child_extra_bed: '아동 엑스트라 베드',
+};
+
+function getPriceFieldLabel(key: string): string {
+    return PRICE_FIELD_LABELS[key] || key;
+}
+
+function getPriceFieldDescription(key: string): string {
+    return PRICE_FIELD_DESCRIPTIONS[key] || '-';
+}
+
+function formatCountPriceSummary(value: unknown): string {
+    if (!value || typeof value !== 'object') return formatDisplayValue(value);
+    const obj = value as Record<string, unknown>;
+    const extra = Object.entries(obj)
+        .filter(([k]) => !['count', 'unit_price', 'total'].includes(k))
+        .map(([k, v]) => `${getPriceFieldLabel(k)} ${formatDisplayValue(v)}`)
+        .join(' / ');
+    const base = `수량 ${formatDisplayValue(obj.count)} / 단가 ${formatCurrency(obj.unit_price)} / 합계 ${formatCurrency(obj.total)}`;
+    return extra ? `${base} / ${extra}` : base;
+}
+
+function formatPriceKeyValue(key: string, value: unknown): string {
+    if (value === '-' || value === null || value === undefined || String(value).trim() === '') return '-';
+
+    if (key === 'schedule') {
+        const str = String(value);
+        const m = str.match(/^(\d+)N(\d+)D$/i);
+        if (m) return `${m[1]}박${m[2]}일`;
+    }
+
+    if (['adult', 'child', 'infant', 'single', 'extra_bed', 'child_older', 'child_extra_bed'].includes(key)) {
+        return formatCountPriceSummary(value);
+    }
+
+    if (key === 'category_unit_prices' && value && typeof value === 'object') {
+        return Object.entries(value as Record<string, unknown>)
+            .map(([k, v]) => `${PERSON_LABELS[k] || getPriceFieldLabel(k)} ${formatCurrency(v)}`)
+            .join(' | ');
+    }
+
+    if (key === 'source') {
+        const sourceMap: Record<string, string> = {
+            manager_reservation_edit: '매니저 예약 수정',
+            manager_quote_edit: '매니저 견적 수정',
+        };
+        return sourceMap[String(value)] || formatDisplayValue(value);
+    }
+
+    if (key === 'service_type') {
+        const typeMap: Record<string, string> = {
+            cruise: '크루즈',
+            hotel: '호텔',
+            tour: '투어',
+            airport: '공항',
+            car: '차량',
+            rentcar: '렌터카',
+        };
+        return typeMap[String(value)] || formatDisplayValue(value);
+    }
+
+    if (key === 'discount_rate') {
+        const n = Number(value);
+        return Number.isFinite(n) ? `${n.toLocaleString('ko-KR')}%` : formatDisplayValue(value);
+    }
+
+    if (['car_total', 'options_total', 'discount_amount', 'discount_manual_amount', 'additional_fee_manual', 'calculated_total', 'representative_unit_price'].includes(key)) {
+        return formatCurrency(value);
+    }
+
+    if (key === 'category_prices_manual') {
+        if (typeof value === 'boolean') return value ? '✅ 예' : '❌ 아니오';
+        const str = String(value).toLowerCase();
+        if (['y', 'yes', 'true', '1', '✅ 예'].includes(str) || String(value) === '✅ 예') return '✅ 예';
+        if (['n', 'no', 'false', '0', '❌ 아니오'].includes(str) || String(value) === '❌ 아니오') return '❌ 아니오';
+    }
+
+    if (typeof value === 'object') return JSON.stringify(value);
+    return formatDisplayValue(value);
+}
+
+function renderTopExtraFieldsTable(priceBreakdown: any): React.ReactNode {
+    if (!priceBreakdown || typeof priceBreakdown !== 'object') return null;
+
+    const topKnownKeys = new Set([
+        'subtotal',
+        'grand_total',
+        'additional_fee',
+        'adjustment_total',
+        'discount_total',
+        'total_by_group',
+        'rooms',
+        'additional_fee_items',
+        'currency',
+        'nights',
+        'booking_code',
+        'quote_id',
+    ]);
+
+    const topExtraEntries = Object.entries(priceBreakdown).filter(([key]) => !topKnownKeys.has(key));
+    if (topExtraEntries.length === 0) return null;
+
+    return (
+        <div className="border border-gray-200 rounded overflow-hidden">
+            <div className="bg-gray-100 px-2 py-1 text-[11px] font-medium text-gray-700">기타 상세 필드</div>
+            <table className="min-w-full text-[11px]">
+                <thead className="bg-gray-50 text-gray-600">
+                    <tr>
+                        <th className="px-2 py-1 text-left w-44">항목</th>
+                        <th className="px-2 py-1 text-left w-52">설명</th>
+                        <th className="px-2 py-1 text-left">값</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {topExtraEntries.map(([key, value]) => (
+                        <tr key={`pb-extra-${key}`} className="border-t border-gray-100 bg-white">
+                            <td className="px-2 py-1 text-gray-600">{getPriceFieldLabel(key)}</td>
+                            <td className="px-2 py-1 text-gray-500">{getPriceFieldDescription(key)}</td>
+                            <td className="px-2 py-1">{formatPriceKeyValue(key, value)}</td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    );
+}
+
+function renderPriceBreakdownTable(priceBreakdown: any): React.ReactNode {
+    if (!priceBreakdown || typeof priceBreakdown !== 'object') {
+        return <div className="text-[11px] text-gray-500">가격 상세 데이터가 없습니다.</div>;
+    }
+
+    const personKeys = ['adult', 'child', 'infant', 'single'];
+    const personLabels: Record<string, string> = {
+        adult: '성인',
+        child: '아동',
+        infant: '유아',
+        single: '싱글',
+    };
+    const topKnownKeys = new Set([
+        'subtotal',
+        'grand_total',
+        'additional_fee',
+        'adjustment_total',
+        'discount_total',
+        'total_by_group',
+        'rooms',
+        'additional_fee_items',
+        'currency',
+        'nights',
+        'booking_code',
+        'quote_id',
+    ]);
+
+    const rooms = Array.isArray(priceBreakdown.rooms) ? priceBreakdown.rooms : [];
+    const feeItems = Array.isArray(priceBreakdown.additional_fee_items) ? priceBreakdown.additional_fee_items : [];
+    const groupTotalEntries = priceBreakdown.total_by_group && typeof priceBreakdown.total_by_group === 'object'
+        ? Object.entries(priceBreakdown.total_by_group)
+        : [];
+
+    return (
+        <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-2 text-[11px] md:grid-cols-3">
+                <div className="rounded border border-gray-200 bg-white p-2">소계: <strong>{formatCurrency(priceBreakdown.subtotal)}</strong></div>
+                <div className="rounded border border-gray-200 bg-white p-2">총액: <strong>{formatCurrency(priceBreakdown.grand_total)}</strong></div>
+                <div className="rounded border border-gray-200 bg-white p-2">추가요금: <strong>{formatCurrency(priceBreakdown.additional_fee)}</strong></div>
+                <div className="rounded border border-gray-200 bg-white p-2">조정합계: <strong>{formatCurrency(priceBreakdown.adjustment_total)}</strong></div>
+                <div className="rounded border border-gray-200 bg-white p-2">할인합계: <strong>{formatCurrency(priceBreakdown.discount_total)}</strong></div>
+                <div className="rounded border border-gray-200 bg-white p-2">통화: <strong>{formatDisplayValue(priceBreakdown.currency)}</strong></div>
+            </div>
+
+            {groupTotalEntries.length > 0 && (
+                <div className="border border-gray-200 rounded overflow-hidden">
+                    <div className="bg-gray-100 px-2 py-1 text-[11px] font-medium text-gray-700">인원그룹별 합계 (total_by_group)</div>
+                    <table className="min-w-full text-[11px]">
+                        <thead className="bg-gray-50 text-gray-600">
+                            <tr>
+                                <th className="px-2 py-1 text-left">구분</th>
+                                <th className="px-2 py-1 text-right">금액</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {groupTotalEntries.map(([key, value]) => (
+                                <tr key={`pb-group-${key}`} className="border-t border-gray-100">
+                                    <td className="px-2 py-1">{personLabels[key] || key}</td>
+                                    <td className="px-2 py-1 text-right font-medium">{formatCurrency(value)}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+
+            {rooms.length > 0 && (
+                <div className="border border-gray-200 rounded overflow-hidden">
+                    <div className="bg-gray-100 px-2 py-1 text-[11px] font-medium text-gray-700">객실별 요금</div>
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full text-[11px]">
+                            <thead className="bg-gray-50 text-gray-600">
+                                <tr>
+                                    <th className="px-2 py-1 text-left">객실</th>
+                                    <th className="px-2 py-1 text-left">크루즈/타입</th>
+                                    <th className="px-2 py-1 text-left">체크인</th>
+                                    <th className="px-2 py-1 text-left">기본정보</th>
+                                    <th className="px-2 py-1 text-right">객실합계</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {rooms.map((room: any, index: number) => {
+                                    const adultCount = Number(room?.adult?.count || 0);
+                                    const childCount = Number(room?.child?.count || 0);
+                                    const infantCount = Number(room?.infant?.count || 0);
+                                    const singleCount = Number(room?.single?.count || 0);
+                                    const pax = `성인 ${adultCount} / 아동 ${childCount} / 유아 ${infantCount} / 싱글 ${singleCount}`;
+                                    const roomMetaEntries = Object.entries(room || {}).filter(([key]) => (
+                                        !['room_index', 'cruise', 'room_type', 'checkin', 'total', ...personKeys].includes(key)
+                                    ));
+                                    return (
+                                        <React.Fragment key={`pb-room-${index}`}>
+                                            <tr className="border-t border-gray-100 bg-white">
+                                                <td className="px-2 py-1">#{room?.room_index ?? index + 1}</td>
+                                                <td className="px-2 py-1">{room?.cruise || '-'} / {room?.room_type || '-'}</td>
+                                                <td className="px-2 py-1">{formatDisplayValue(room?.checkin)}</td>
+                                                <td className="px-2 py-1">{pax}</td>
+                                                <td className="px-2 py-1 text-right font-medium">{formatCurrency(room?.total)}</td>
+                                            </tr>
+                                            <tr className="border-t border-gray-100 bg-gray-50">
+                                                <td colSpan={5} className="px-2 py-2">
+                                                    <div className="font-medium text-gray-700 mb-1">인원타입 상세</div>
+                                                    <div className="overflow-x-auto">
+                                                        <table className="min-w-full text-[11px]">
+                                                            <thead className="text-gray-600">
+                                                                <tr>
+                                                                    <th className="px-2 py-1 text-left">구분</th>
+                                                                    <th className="px-2 py-1 text-right">수량</th>
+                                                                    <th className="px-2 py-1 text-right">단가</th>
+                                                                    <th className="px-2 py-1 text-right">합계</th>
+                                                                    <th className="px-2 py-1 text-left">기타</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                {personKeys.map((key) => {
+                                                                    const detail = room?.[key];
+                                                                    const detailObj = detail && typeof detail === 'object' ? detail : {};
+                                                                    const extra = Object.entries(detailObj)
+                                                                        .filter(([k]) => !['count', 'unit_price', 'total'].includes(k))
+                                                                        .map(([k, v]) => `${getPriceFieldLabel(k)}: ${formatPriceKeyValue(k, v)}`)
+                                                                        .join(' | ');
+                                                                    return (
+                                                                        <tr key={`pb-room-${index}-${key}`} className="border-t border-gray-100">
+                                                                            <td className="px-2 py-1">{personLabels[key]}</td>
+                                                                            <td className="px-2 py-1 text-right">{formatDisplayValue(detailObj?.count)}</td>
+                                                                            <td className="px-2 py-1 text-right">{formatCurrency(detailObj?.unit_price)}</td>
+                                                                            <td className="px-2 py-1 text-right font-medium">{formatCurrency(detailObj?.total)}</td>
+                                                                            <td className="px-2 py-1">{extra || '-'}</td>
+                                                                        </tr>
+                                                                    );
+                                                                })}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+
+                                                    {roomMetaEntries.length > 0 && (
+                                                        <div className="mt-2 border border-gray-200 rounded bg-white overflow-hidden">
+                                                            <div className="bg-gray-100 px-2 py-1 text-[11px] font-medium text-gray-700">객실 기타 상세</div>
+                                                            <table className="min-w-full text-[11px]">
+                                                                <thead className="bg-gray-50 text-gray-600">
+                                                                    <tr>
+                                                                        <th className="px-2 py-1 text-left w-44">항목</th>
+                                                                        <th className="px-2 py-1 text-left w-52">설명</th>
+                                                                        <th className="px-2 py-1 text-left">값</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody>
+                                                                    {roomMetaEntries.map(([k, v]) => (
+                                                                        <tr key={`pb-room-meta-${index}-${k}`} className="border-t border-gray-100">
+                                                                            <td className="px-2 py-1 text-gray-600">{getPriceFieldLabel(k)}</td>
+                                                                            <td className="px-2 py-1 text-gray-500">{getPriceFieldDescription(k)}</td>
+                                                                            <td className="px-2 py-1">{formatPriceKeyValue(k, v)}</td>
+                                                                        </tr>
+                                                                    ))}
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        </React.Fragment>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+
+            {feeItems.length > 0 && (
+                <div className="border border-gray-200 rounded overflow-hidden">
+                    <div className="bg-gray-100 px-2 py-1 text-[11px] font-medium text-gray-700">추가요금 항목</div>
+                    <table className="min-w-full text-[11px]">
+                        <thead className="bg-gray-50 text-gray-600">
+                            <tr>
+                                <th className="px-2 py-1 text-left">항목명</th>
+                                <th className="px-2 py-1 text-left">코드</th>
+                                <th className="px-2 py-1 text-left">수량</th>
+                                <th className="px-2 py-1 text-right">금액</th>
+                                <th className="px-2 py-1 text-left">기타</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {feeItems.map((item: any, idx: number) => {
+                                const extra = Object.entries(item || {})
+                                    .filter(([k]) => !['name', 'key', 'code', 'qty', 'quantity', 'amount'].includes(k))
+                                    .map(([k, v]) => `${getPriceFieldLabel(k)}: ${formatPriceKeyValue(k, v)}`)
+                                    .join(' | ');
+                                return (
+                                    <tr key={`pb-fee-${idx}`} className="border-t border-gray-100 bg-white">
+                                        <td className="px-2 py-1">{item?.name || `항목 ${idx + 1}`}</td>
+                                        <td className="px-2 py-1">{formatDisplayValue(item?.code ?? item?.key)}</td>
+                                        <td className="px-2 py-1">{formatDisplayValue(item?.qty ?? item?.quantity)}</td>
+                                        <td className="px-2 py-1 text-right font-medium">{formatCurrency(item?.amount)}</td>
+                                        <td className="px-2 py-1">{extra || '-'}</td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+
+        </div>
+    );
 }
 
 function extractChangedFields(
@@ -308,13 +729,21 @@ type GroupedDate = {
 
 export default function ReservationEditApprovalPage() {
     const [requests, setRequests] = useState<ChangeRequestRow[]>([]);
-    const [userMap, setUserMap] = useState<Record<string, { name?: string; email?: string }>>({});
-    const [statusFilter, setStatusFilter] = useState<RequestStatus | 'all'>('pending');
+    const [userMap, setUserMap] = useState<Record<string, { name?: string; email?: string; role?: string }>>({});
+    const [reservationUserMap, setReservationUserMap] = useState<Record<string, { name?: string; email?: string }>>({});
+    const [statusFilter, setStatusFilter] = useState<RequestStatus | 'all'>('all');
     const [loading, setLoading] = useState(false);
 
     const [selectedRequest, setSelectedRequest] = useState<ChangeRequestRow | null>(null);
     const [baseData, setBaseData] = useState<Record<string, any> | null>(null);
     const [tempData, setTempData] = useState<Record<string, any> | null>(null);
+    const [reservationSummary, setReservationSummary] = useState<{
+        total_amount?: number | null;
+        manual_additional_fee?: number | null;
+        manual_additional_fee_detail?: string | null;
+        price_breakdown?: any | null;
+        re_type?: string | null;
+    } | null>(null);
     const [airportBaseRows, setAirportBaseRows] = useState<any[]>([]);
     const [airportTempRows, setAirportTempRows] = useState<any[]>([]);
     const [detailLoading, setDetailLoading] = useState(false);
@@ -332,6 +761,7 @@ export default function ReservationEditApprovalPage() {
     const [processing, setProcessing] = useState(false);
     const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
     const [bulkNote, setBulkNote] = useState('');
+    const [sourceFilter, setSourceFilter] = useState<RequestSourceTab>('all');
 
     // 행별 승인용 - multi-row(airport, cruise_car) 타입에서 어떤 행만 처리할지 선택
     const [selectedRowKeys, setSelectedRowKeys] = useState<Set<string>>(new Set());
@@ -356,20 +786,57 @@ export default function ReservationEditApprovalPage() {
 
             const ids = Array.from(new Set(rows.map(r => r.requester_user_id).filter(Boolean)));
             if (ids.length > 0) {
-                const { data: usersData } = await supabase.from('users').select('id, name, email').in('id', ids);
-                const m: Record<string, { name?: string; email?: string }> = {};
-                (usersData || []).forEach((u: any) => { m[u.id] = { name: u.name, email: u.email }; });
+                const { data: usersData } = await supabase.from('users').select('id, name, email, role').in('id', ids);
+                const m: Record<string, { name?: string; email?: string; role?: string }> = {};
+                (usersData || []).forEach((u: any) => { m[u.id] = { name: u.name, email: u.email, role: u.role }; });
                 setUserMap(m);
             } else {
                 setUserMap({});
             }
+
+            const reservationIds = Array.from(new Set(rows.map(r => normalizeReservationId(r.reservation_id)).filter(Boolean)));
+            if (reservationIds.length > 0) {
+                const { data: reservationRows } = await supabase
+                    .from('reservation')
+                    .select('re_id, re_user_id')
+                    .in('re_id', reservationIds);
+                const ownerIds = Array.from(new Set((reservationRows || []).map((row: any) => row.re_user_id).filter(Boolean)));
+                const ownerMap: Record<string, { name?: string; email?: string }> = {};
+                if (ownerIds.length > 0) {
+                    const { data: ownerUsers } = await supabase.from('users').select('id, name, email').in('id', ownerIds);
+                    (ownerUsers || []).forEach((user: any) => {
+                        ownerMap[user.id] = { name: user.name, email: user.email };
+                    });
+                }
+                const nextReservationUserMap: Record<string, { name?: string; email?: string }> = {};
+                (reservationRows || []).forEach((row: any) => {
+                    nextReservationUserMap[row.re_id] = ownerMap[row.re_user_id] || {};
+                });
+                setReservationUserMap(nextReservationUserMap);
+            } else {
+                setReservationUserMap({});
+            }
         } catch (err) {
             console.error('수정 요청 목록 조회 실패:', err);
             setRequests([]);
+            setReservationUserMap({});
         } finally {
             setLoading(false);
         }
     }, [statusFilter]);
+
+    const visibleRequests = useMemo(() => {
+        if (sourceFilter === 'all') return requests;
+        return requests.filter(row => getRequestSourceKind(userMap[row.requester_user_id]?.role) === sourceFilter);
+    }, [requests, sourceFilter, userMap]);
+
+    const sourceCounts = useMemo(() => {
+        return requests.reduce((acc, row) => {
+            const kind = getRequestSourceKind(userMap[row.requester_user_id]?.role);
+            acc[kind] += 1;
+            return acc;
+        }, { customer: 0, manager: 0 } as Record<'customer' | 'manager', number>);
+    }, [requests, userMap]);
 
     const loadReservationContext = useCallback(async (reservationId: string, reType?: string) => {
         try {
@@ -485,6 +952,7 @@ export default function ReservationEditApprovalPage() {
         setDetailLoading(true);
         setBaseData(null);
         setTempData(null);
+        setReservationSummary(null);
         setAirportBaseRows([]);
         setAirportTempRows([]);
         setReservationContext(null);
@@ -495,6 +963,20 @@ export default function ReservationEditApprovalPage() {
             if (!mapping) return;
 
             const safeReservationId = normalizeReservationId(row.reservation_id);
+            const { data: reservationData, error: reservationError } = await supabase
+                .from('reservation')
+                .select('re_id, total_amount, manual_additional_fee, manual_additional_fee_detail, price_breakdown, re_type')
+                .eq('re_id', safeReservationId)
+                .maybeSingle();
+            if (reservationError) throw reservationError;
+            setReservationSummary(reservationData ? {
+                total_amount: reservationData.total_amount,
+                manual_additional_fee: reservationData.manual_additional_fee,
+                manual_additional_fee_detail: reservationData.manual_additional_fee_detail,
+                price_breakdown: reservationData.price_breakdown,
+                re_type: reservationData.re_type,
+            } : null);
+
             // 컨텍스트(크루즈명/체크인/사용일자/차종) 비동기 로드
             loadReservationContext(safeReservationId, row.re_type);
             if (row.re_type === 'airport') {
@@ -558,8 +1040,8 @@ export default function ReservationEditApprovalPage() {
     /* ── 카드 뷰용: quote_id 기반 크루즈명 + 모든 서비스 테이블 일괄 조회로 사용일자 수집 (예약 통합 상세 모달 패턴) ── */
     const [cruiseInfoByRes, setCruiseInfoByRes] = useState<Record<string, { cruiseName?: string; checkin?: string; usageDate?: string }>>({});
     useEffect(() => {
-        if (requests.length === 0) return;
-        const uniqIds = Array.from(new Set(requests.map(r => normalizeReservationId(r.reservation_id)).filter(Boolean)));
+        if (visibleRequests.length === 0) return;
+        const uniqIds = Array.from(new Set(visibleRequests.map(r => normalizeReservationId(r.reservation_id)).filter(Boolean)));
         const missing = uniqIds.filter(id => !(id in cruiseInfoByRes));
         if (missing.length === 0) return;
         let cancelled = false;
@@ -659,12 +1141,12 @@ export default function ReservationEditApprovalPage() {
             }
         })();
         return () => { cancelled = true; };
-    }, [requests]);
+    }, [visibleRequests]);
 
     /* ── 그룹화: 날짜 → 사용자 ── */
     const groupedRequests = useMemo((): GroupedDate[] => {
         const dateMap = new Map<string, Map<string, ChangeRequestRow[]>>();
-        requests.forEach(row => {
+        visibleRequests.forEach(row => {
             const date = row.submitted_at.slice(0, 10);
             if (!dateMap.has(date)) dateMap.set(date, new Map());
             const userMap2 = dateMap.get(date)!;
@@ -679,10 +1161,10 @@ export default function ReservationEditApprovalPage() {
                 return { userId, userName: u?.name || '-', email: u?.email || '-', rows };
             }),
         }));
-    }, [requests, userMap]);
+    }, [visibleRequests, userMap]);
 
     /* ── 체크박스 ── */
-    const pendingIds = useMemo(() => requests.filter(r => r.status === 'pending').map(r => r.id), [requests]);
+    const pendingIds = useMemo(() => visibleRequests.filter(r => r.status === 'pending').map(r => r.id), [visibleRequests]);
     const allChecked = pendingIds.length > 0 && pendingIds.every(id => checkedIds.has(id));
 
     const toggleAll = () => {
@@ -1032,6 +1514,7 @@ export default function ReservationEditApprovalPage() {
             setSelectedRequest(null);
             setBaseData(null);
             setTempData(null);
+            setReservationSummary(null);
             setManagerNote('');
         } catch (err: any) {
             console.error('요청 처리 실패:', err);
@@ -1052,6 +1535,30 @@ export default function ReservationEditApprovalPage() {
                             <p className="text-xs text-gray-500 mt-0.5">일별·사용자별로 그룹화된 수정 요청을 검토하고 승인/반려합니다.</p>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
+                            <div className="flex items-center rounded-md border border-gray-300 overflow-hidden">
+                                {REQUEST_SOURCE_TABS.map(tab => {
+                                    const active = sourceFilter === tab.value;
+                                    const count = tab.value === 'customer' ? sourceCounts.customer : tab.value === 'manager' ? sourceCounts.manager : requests.length;
+                                    return (
+                                        <button
+                                            key={tab.value}
+                                            onClick={() => {
+                                                setSourceFilter(tab.value);
+                                                setSelectedRequest(null);
+                                                setBaseData(null);
+                                                setTempData(null);
+                                                setReservationSummary(null);
+                                                setReservationContext(null);
+                                                setCheckedIds(new Set());
+                                            }}
+                                            className={`px-3 py-1.5 text-xs ${active ? 'bg-orange-500 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'} ${tab.value !== 'all' ? 'border-l border-gray-300' : ''}`}
+                                        >
+                                            {tab.label}
+                                            <span className={`ml-1 ${active ? 'text-orange-50' : 'text-gray-400'}`}>({count})</span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
                             {FILTER_BUTTONS.map(btn => {
                                 const active = statusFilter === btn.value;
                                 return (
@@ -1106,7 +1613,7 @@ export default function ReservationEditApprovalPage() {
                     <div className="space-y-4">
                         {loading ? (
                             <div className="bg-white rounded-lg shadow-sm border border-gray-100 py-10 text-center text-sm text-gray-500">불러오는 중...</div>
-                        ) : requests.length === 0 ? (
+                        ) : visibleRequests.length === 0 ? (
                             <div className="bg-white rounded-lg shadow-sm border border-gray-100 py-10 text-center text-sm text-gray-500">조회된 수정 요청이 없습니다.</div>
                         ) : (
                             groupedRequests.map(dateGroup => (
@@ -1222,14 +1729,15 @@ export default function ReservationEditApprovalPage() {
                                                     return (
                                                         <div key={cardKey}
                                                             className="border rounded-lg bg-white hover:shadow-md transition-all p-3 space-y-2 text-sm">
-                                                            {/* ① 고객명 */}
+                                                            {/* ① 예약자명 */}
                                                             <div className="flex items-center justify-between border-b border-gray-100 pb-2">
                                                                 <div className="font-bold text-gray-800 text-base">
-                                                                    👤 {userMap[row.requester_user_id]?.name || '-'}
+                                                                    👤 {reservationUserMap[normalizeReservationId(row.reservation_id)]?.name || userMap[row.requester_user_id]?.name || '-'}
                                                                 </div>
                                                                 <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-medium ${st.cls}`}>{st.label}</span>
                                                             </div>
-                                                            <div className="text-[11px] text-gray-500 -mt-1">{userMap[row.requester_user_id]?.email || '-'}</div>
+                                                            <div className="text-[11px] text-gray-500 -mt-1">{reservationUserMap[normalizeReservationId(row.reservation_id)]?.email || userMap[row.requester_user_id]?.email || '-'}</div>
+                                                            <div className="text-[11px] text-gray-400">요청자: {userMap[row.requester_user_id]?.name || '-'}</div>
 
                                                             {/* ② 서비스 + 서브타입 + 변경필드 */}
                                                             <div className="flex items-center gap-1.5 flex-wrap">
@@ -1284,6 +1792,25 @@ export default function ReservationEditApprovalPage() {
                                                                     📝 {row.manager_note}
                                                                 </div>
                                                             )}
+
+                                                            <div className="pt-2 border-t border-gray-100">
+                                                                <button
+                                                                    onClick={() => {
+                                                                        if (selectedRequest?.id === row.id) {
+                                                                            setSelectedRequest(null);
+                                                                            setBaseData(null);
+                                                                            setTempData(null);
+                                                                            setReservationSummary(null);
+                                                                            setReservationContext(null);
+                                                                            return;
+                                                                        }
+                                                                        loadComparison(row);
+                                                                    }}
+                                                                    className={`w-full px-2 py-1.5 text-[11px] rounded border transition-colors ${selectedRequest?.id === row.id ? 'bg-blue-600 text-white border-blue-600' : 'border-blue-300 text-blue-700 hover:bg-blue-50'}`}
+                                                                >
+                                                                    {selectedRequest?.id === row.id ? '상세 닫기' : '상세 보기'}
+                                                                </button>
+                                                            </div>
 
                                                             {/* 승인/반려 (대기 상태만) */}
                                                             {isPending ? (
@@ -1375,7 +1902,7 @@ export default function ReservationEditApprovalPage() {
 
                         {loading ? (
                             <div className="py-10 text-center text-sm text-gray-500">불러오는 중...</div>
-                        ) : requests.length === 0 ? (
+                        ) : visibleRequests.length === 0 ? (
                             <div className="py-10 text-center text-sm text-gray-500">조회된 수정 요청이 없습니다.</div>
                         ) : (
                             <div>
@@ -1474,8 +2001,8 @@ export default function ReservationEditApprovalPage() {
                     </div>
                 )}
 
-                {/* ── 상세 비교 패널 (테이블 뷰에서만) ── */}
-                {selectedRequest && viewMode === 'table' && (
+                {/* ── 상세 비교 패널 ── */}
+                {selectedRequest && (
                     <div className="bg-white rounded-lg shadow-sm border border-blue-200 p-4 space-y-4">
                         <div className="flex items-center justify-between border-b border-gray-200 pb-3">
                             <div>
@@ -1486,6 +2013,8 @@ export default function ReservationEditApprovalPage() {
                                     예약ID: {selectedRequest.reservation_id.slice(0, 8)}...
                                     {' · '}신청: {new Date(selectedRequest.submitted_at).toLocaleString('ko-KR')}
                                     {' · '}{userMap[selectedRequest.requester_user_id]?.name || '-'}
+                                    {' · '}예약자: {reservationUserMap[normalizeReservationId(selectedRequest.reservation_id)]?.name || '-'}
+                                    {' · '}{getRequestSourceLabel(getRequestSourceKind(userMap[selectedRequest.requester_user_id]?.role))}
                                 </p>
                                 {reservationContext && (reservationContext.cruiseName || reservationContext.checkin || reservationContext.usageDate || (reservationContext.vehicleTypes?.length || 0) > 0) && (
                                     <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
@@ -1516,14 +2045,35 @@ export default function ReservationEditApprovalPage() {
                                 <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_MAP[selectedRequest.status]?.cls || ''}`}>
                                     {STATUS_MAP[selectedRequest.status]?.label || selectedRequest.status}
                                 </span>
-                                <button onClick={() => { setSelectedRequest(null); setBaseData(null); setTempData(null); setReservationContext(null); }}
+                                <button onClick={() => { setSelectedRequest(null); setBaseData(null); setTempData(null); setReservationSummary(null); setReservationContext(null); }}
                                     className="text-xs text-gray-400 hover:text-gray-600 px-2 py-0.5 border border-gray-200 rounded">✕ 닫기</button>
                             </div>
                         </div>
 
                         {selectedRequest.customer_note && (
                             <div className="text-xs text-blue-700 bg-blue-50 border border-blue-100 rounded p-2">
-                                � 고객 메모: {selectedRequest.customer_note}
+                                고객 메모: {selectedRequest.customer_note}
+                            </div>
+                        )}
+
+                        {reservationSummary && (
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
+                                <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-2">
+                                    <div className="font-semibold text-gray-800">reservation</div>
+                                    <div className="space-y-1 text-gray-600">
+                                        <div>총액: {formatDisplayValue(reservationSummary.total_amount)}</div>
+                                        <div>수동 추가요금: {formatDisplayValue(reservationSummary.manual_additional_fee)}</div>
+                                        <div>수동 추가요금 상세: {formatDisplayValue(reservationSummary.manual_additional_fee_detail)}</div>
+                                    </div>
+                                </div>
+                                <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-2 md:col-span-2">
+                                    <div className="font-semibold text-gray-800">price_breakdown</div>
+                                    {renderPriceBreakdownTable(reservationSummary.price_breakdown)}
+                                </div>
+                                <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-2 overflow-auto max-h-96">
+                                    <div className="font-semibold text-gray-800">기타 상세 필드</div>
+                                    {renderTopExtraFieldsTable(reservationSummary.price_breakdown) || <div className="text-gray-400">추가 필드 없음</div>}
+                                </div>
                             </div>
                         )}
 

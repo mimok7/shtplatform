@@ -9,6 +9,11 @@ import { getCachedRole, getCookieRole, setCachedRole, clearCachedRole } from '@/
 import { clearAuthCache } from '@/hooks/useAuth';
 import { RoleContext } from '@/app/components/RoleContext';
 import ManagerSidebar from './ManagerSidebar';
+import { ReservationDetailModalProvider } from '@/contexts/ReservationDetailModalProvider';
+import ReservationDetailModalSwitch from './ReservationDetailModalSwitch';
+import PackageDetailModalContainer from './PackageDetailModalContainer';
+import GoogleSheetsDetailModal from './GoogleSheetsDetailModal';
+import { useReservationDetailModal } from '@/hooks/useReservationDetailModal';
 
 const TAB_SESSION_KEY = 'sht:tab:id';
 const ACTIVE_TAB_PREFIX = 'sht:active:tab:user:manager:';
@@ -49,17 +54,39 @@ interface ManagerLayoutProps {
 }
 
 export default function ManagerLayout({ children, title, activeTab }: ManagerLayoutProps) {
+  return (
+    <ReservationDetailModalProvider>
+      <ManagerLayoutContent children={children} title={title} activeTab={activeTab} />
+    </ReservationDetailModalProvider>
+  );
+}
+
+function ManagerLayoutContent({ children, title, activeTab }: ManagerLayoutProps) {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [userRole, setUserRole] = useState<string | null>(() => getCachedRole() || getCookieRole() || 'guest');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [sidebarMode, setSidebarMode] = useState<'auto' | 'manual'>('auto');
-  // ✅ 인증 완료 전까지 children 렌더링 차단 (403 방지)
   const [authReady, setAuthReady] = useState(false);
   const { latestReservation, unreadCount, clearLatestReservation } = useReservationListener(
     RESERVATION_REALTIME_NOTIFICATIONS_ENABLED && authReady && (userRole === 'manager' || userRole === 'admin'),
     user?.id || 'anonymous'
   );
+  
+  // Context에서 모달 상태 가져오기
+  const {
+    isOpen,
+    userInfo,
+    allUserServices,
+    loading,
+    modalKey,
+    closeModal,
+    isPackageOpen,
+    packageModalUserId,
+    closePackageModal,
+    googleSheetsDetail,
+    closeGoogleSheetsModal,
+  } = useReservationDetailModal();
 
   useEffect(() => {
     let cancelled = false;
@@ -325,6 +352,37 @@ export default function ManagerLayout({ children, title, activeTab }: ManagerLay
             </div>
           )}
         </div>
+
+        {/* ✅ 중앙 모달 렌더링: 모든 페이지에서 한 번만 */}
+        {isOpen && (
+          <ReservationDetailModalSwitch
+            key={modalKey}
+            isOpen={isOpen}
+            onClose={closeModal}
+            userInfo={userInfo}
+            allUserServices={allUserServices}
+            loading={loading}
+          />
+        )}
+
+        <PackageDetailModalContainer
+          userId={packageModalUserId}
+          isOpen={isPackageOpen}
+          onClose={closePackageModal}
+        />
+
+        <GoogleSheetsDetailModal
+          key={googleSheetsDetail.modalKey}
+          isOpen={googleSheetsDetail.isOpen}
+          onClose={closeGoogleSheetsModal}
+          selectedReservation={googleSheetsDetail.selectedReservation}
+          allOrderServices={googleSheetsDetail.allOrderServices}
+          loading={googleSheetsDetail.loading}
+          orderUserInfo={googleSheetsDetail.orderUserInfo}
+          relatedEmail={googleSheetsDetail.relatedEmail}
+          relatedDbServices={googleSheetsDetail.relatedDbServices}
+          relatedDbLoading={googleSheetsDetail.relatedDbLoading}
+        />
       </div>
     </RoleContext.Provider>
   );

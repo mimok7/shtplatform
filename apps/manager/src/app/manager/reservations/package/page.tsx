@@ -4,11 +4,11 @@ import React, { useState, useEffect } from 'react';
 import supabase from '@/lib/supabase';
 import { fetchTableInBatches } from '@/lib/fetchInBatches';
 import ManagerLayout from '@/components/ManagerLayout';
+import { openCentralPackageDetailModal } from '@/contexts/reservationDetailModalEvents';
 import {
     Package, Plus, Eye, User, Calendar, Mail, Search,
     Loader2, AlertCircle, RefreshCw, ChevronRight, CheckCircle2, Clock
 } from 'lucide-react';
-import PackageDetailModalContainer from '@/components/PackageDetailModalContainer';
 
 interface PackageReservation {
     re_id: string;
@@ -39,8 +39,6 @@ export default function PackageReservationsPage() {
     const [statusFilter, setStatusFilter] = useState('all');
 
     // 상세 보기용
-    const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-    const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
 
     useEffect(() => {
         loadPackageReservations();
@@ -108,8 +106,7 @@ export default function PackageReservationsPage() {
     };
 
     const handleViewDetail = (userId: string) => {
-        setSelectedUserId(userId);
-        setIsDetailModalOpen(true);
+        openCentralPackageDetailModal(userId);
     };
 
     const filteredReservations = reservations.filter(r => {
@@ -245,14 +242,6 @@ export default function PackageReservationsPage() {
                 )}
             </div>
 
-            {/* 상세 모달 */}
-            {isDetailModalOpen && selectedUserId && (
-                <PackageDetailModalContainer
-                    userId={selectedUserId}
-                    isOpen={isDetailModalOpen}
-                    onClose={() => setIsDetailModalOpen(false)}
-                />
-            )}
         </ManagerLayout>
     );
 }

@@ -5,8 +5,11 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import supabase from '@/lib/supabase';
 import ManagerLayout from '@/components/ManagerLayout';
-import ReservationDetailModalSwitch from '@/components/ReservationDetailModalSwitch';
-import PackageDetailModalContainer from '@/components/PackageDetailModalContainer';
+import {
+    openCentralPackageDetailModal,
+    openCentralReservationDetailModal,
+    updateCentralReservationDetailModal,
+} from '@/contexts/reservationDetailModalEvents';
 import {
     CheckSquare,
     Square,
@@ -108,6 +111,14 @@ const sortServices = (services: ServiceReservation[]) => {
 
 
 export default function BulkReservationPage() {
+    return (
+        <ManagerLayout title="예약 처리" activeTab="reservations">
+            <BulkReservationContent />
+        </ManagerLayout>
+    );
+}
+
+function BulkReservationContent() {
     const router = useRouter();
     const [reservations, setReservations] = useState<ReservationItem[]>([]);
     const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
@@ -121,16 +132,10 @@ export default function BulkReservationPage() {
     const [searchQuery, setSearchQuery] = useState<string>('');
     const [searchTrigger, setSearchTrigger] = useState<number>(0); // 검색 버튼 클릭용
     const [showBulkActionPanel, setShowBulkActionPanel] = useState(false);
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [isPackageModalOpen, setIsPackageModalOpen] = useState(false);
-    const [packageModalUserId, setPackageModalUserId] = useState<string | null>(null);
-    const [modalUserInfo, setModalUserInfo] = useState<any>(null);
-    const [modalUserServices, setModalUserServices] = useState<any[]>([]);
-    const [modalLoading, setModalLoading] = useState(false);
-    const [reservationDetails, setReservationDetails] = useState<any>(null);
-    const [modalKey, setModalKey] = useState(0); // 🔧 모달 열릴 때마다 증가 → 컴포넌트 완전 리마운트
     const [sortType, setSortType] = useState<SortType>('date'); // 정렬 타입
     const [userEmail, setUserEmail] = useState<string | null>(null); // 현재 사용자 이메일
+    const [pendingDetailUserInfo, setPendingDetailUserInfo] = useState<any>(null);
+    const [reservationDetails, setReservationDetails] = useState<any>(null);
 
     const totalServiceCount = useMemo(
         () => reservations.reduce((sum, r) => sum + r.services.length, 0),
@@ -443,19 +448,15 @@ export default function BulkReservationPage() {
         if (reservation.services?.some((s: ServiceReservation) => s.re_type === 'package')) {
             const userId = reservation.users?.id;
             if (userId) {
-                setPackageModalUserId(userId);
-                setIsPackageModalOpen(true);
+                openCentralPackageDetailModal(userId);
                 return;
             }
         }
-        setReservationDetails(null);
-        setModalUserServices([]);
-        setModalKey(prev => prev + 1); // 🔧 모달 key 증가 → 컴포넌트 리마운트
-        setModalLoading(true);
-        setIsModalOpen(true);
+        
+        openCentralReservationDetailModal({ userInfo: null, allUserServices: [], loading: true });
 
         // 사용자 정보 설정
-        setModalUserInfo({
+        const userInfo = {
             name: reservation.users?.name || '',
             email: reservation.users?.email || '',
             phone: reservation.users?.phone || '',
@@ -463,7 +464,9 @@ export default function BulkReservationPage() {
             child_birth_dates: reservation.users?.child_birth_dates || [],
             quote_title: reservation.quote?.title || '여행명 없음',
             created_at: reservation.re_created_at
-        });
+        };
+        setPendingDetailUserInfo(null);
+        setReservationDetails(null);
 
         try {
             // 🔧 서비스 목록을 DB에서 최신으로 재조회 (state의 stale 데이터 대신 DB 직접 조회)
@@ -481,9 +484,7 @@ export default function BulkReservationPage() {
 
             const allServiceIds = freshServices.map(s => s.re_id);
             if (allServiceIds.length === 0) {
-                setModalUserServices([]);
-                setReservationDetails({});
-                setModalLoading(false);
+                openCentralReservationDetailModal({ userInfo, allUserServices: [], loading: false });
                 return;
             }
 
@@ -960,28 +961,16 @@ export default function BulkReservationPage() {
                 }
             }
 
+            setPendingDetailUserInfo(userInfo);
             setReservationDetails(allDetails);
-
-            // 모달에 전달할 flattened list를 위해 (기존 흐름 유지)
-            // 단, 여기서는 setModalUserServices는 단순 re_id 리스트가 아니라 full enriched object가 필요할 수도 있지만,
-            // UserReservationDetailModal은 flattenedServices(== reservationDetails 기반)를 사용하도록 page.tsx가 수정되었음.
-            // 따라서 setModalUserServices는 크게 중요하지 않거나, 참조용으로만 쓰임.
-            // 하지만 기존 로직 호환성을 위해...
-            setModalUserServices(reservation.services); // 기본 서비스 리스트만 설정해둠
 
         } catch (error) {
             console.error('예약 상세 정보 로드 실패:', error);
             setReservationDetails({ error: '상세 정보를 불러올 수 없습니다.' });
+            setPendingDetailUserInfo(null);
         } finally {
-            setModalLoading(false);
+            updateCentralReservationDetailModal({ loading: false });
         }
-    };
-
-    const closeDetailsModal = () => {
-        setIsModalOpen(false);
-        setModalUserInfo(null);
-        setModalUserServices([]);
-        setReservationDetails(null);
     };
 
     // 서비스별 금액 계산 함수 (total_amount가 없을 때 사용)
@@ -1066,7 +1055,7 @@ export default function BulkReservationPage() {
         return total;
     };
 
-    // 결제 레코드 생성 함수 (확정 처리 시 호출)
+    // 결제 레코드 생성 함수 (상태 변경 시 호출)
     const createPaymentRecords = async (reservationIds: string[]) => {
         try {
             // 1. 해당 예약들의 상세 정보 조회
@@ -1076,7 +1065,7 @@ export default function BulkReservationPage() {
                 const chunk = reservationIds.slice(i, i + CHUNK);
                 const { data } = await supabase
                     .from('reservation')
-                    .select('re_id, re_user_id, re_quote_id, re_type, total_amount')
+                    .select('re_id, re_user_id, re_quote_id, re_type, total_amount, re_status')
                     .in('re_id', chunk);
                 allReservations = allReservations.concat(data || []);
             }
@@ -1109,19 +1098,24 @@ export default function BulkReservationPage() {
                 }
             }
 
-            // 4. 개별 결제 레코드 생성
-            const paymentRecords = newReservations.map(r => ({
-                id: crypto.randomUUID(),
-                reservation_id: r.re_id,
-                quote_id: r.re_quote_id || null,
-                user_id: r.re_user_id,
-                amount: Number(r.total_amount) || 0,
-                payment_method: 'BANK',
-                payment_status: 'pending',
-                memo: `자동 생성 - ${r.re_type} | ${r.re_quote_id ? `견적 ${r.re_quote_id}` : `개별예약 ${String(r.re_id).slice(0, 8)}`} (${new Date().toLocaleDateString()})`,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
-            }));
+            // 4. 개별 결제 레코드 생성 (예약 상태에 따라 payment_status 설정)
+            // 대기 → pending, 승인 → completed
+            const paymentRecords = newReservations.map(r => {
+                const status = String(r.re_status || '').toLowerCase();
+                const paymentStatus = status === 'approved' ? 'completed' : 'pending';
+                return {
+                    id: crypto.randomUUID(),
+                    reservation_id: r.re_id,
+                    quote_id: r.re_quote_id || null,
+                    user_id: r.re_user_id,
+                    amount: Number(r.total_amount) || 0,
+                    payment_method: 'BANK',
+                    payment_status: paymentStatus,
+                    memo: `자동 생성 - ${r.re_type} | ${r.re_quote_id ? `견적 ${r.re_quote_id}` : `개별예약 ${String(r.re_id).slice(0, 8)}`} (${new Date().toLocaleDateString()})`,
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString()
+                };
+            });
 
             // 5. 배치 삽입
             for (let i = 0; i < paymentRecords.length; i += CHUNK) {
@@ -1183,6 +1177,17 @@ export default function BulkReservationPage() {
                 if ((data?.length || 0) === 0) {
                     throw new Error('대기→승인 처리 실패: 변경된 예약이 없습니다. 권한(RLS) 또는 선택 항목을 확인해주세요.');
                 }
+                
+                // 대기→승인: 결제처리 상태를 'completed'로 변경
+                // 기존 결제레코드 업데이트
+                const { error: paymentError } = await supabase
+                    .from('reservation_payment')
+                    .update({ payment_status: 'completed', updated_at: new Date().toISOString() })
+                    .in('reservation_id', batch)
+                    .eq('payment_status', 'pending');
+                if (paymentError) {
+                    console.warn('결제 상태 업데이트 경고:', paymentError);
+                }
             }
 
             for (let i = 0; i < approvedIds.length; i += BATCH_SIZE) {
@@ -1198,6 +1203,9 @@ export default function BulkReservationPage() {
                 if ((data?.length || 0) === 0) {
                     throw new Error('승인→확정 처리 실패: 변경된 예약이 없습니다. 권한(RLS) 또는 선택 항목을 확인해주세요.');
                 }
+                
+                // 승인→확정: 결제처리 상태는 그대로 두고 예약 상태만 변경
+                // (예약확인서는 결제완료 상태로 유지, 자동 확정 금지)
             }
 
             let paymentMsg = '';
@@ -1488,34 +1496,7 @@ export default function BulkReservationPage() {
                     const singleCount = item.single_count || 0;
                     const childExtraBedCount = item.child_extra_bed_count || 0;
 
-                    // price_breakdown count 교정: 예약 수정 시 pb가 갱신 안 될 수 있으므로 실제 인원으로 재계산
-                    let pb = item.price_breakdown || item.service?.price_breakdown || null;
-                    if (pb) {
-                        const uA = item.roomPriceInfo?.price_adult || pb.adult?.unit_price || 0;
-                        const uC = item.roomPriceInfo?.price_child || pb.child?.unit_price || 0;
-                        const uI = item.roomPriceInfo?.price_infant || pb.infant?.unit_price || 0;
-                        const uE = item.roomPriceInfo?.price_extra_bed || pb.extra_bed?.unit_price || 0;
-                        const uS = item.roomPriceInfo?.price_single || pb.single?.unit_price || 0;
-                        const uCE = item.roomPriceInfo?.price_child_extra_bed || pb.child_extra_bed?.unit_price || 0;
-                        const tA = uA * adultCount;
-                        const tC = uC * childCount;
-                        const tI = uI * infantCount;
-                        const tE = uE * extraBedCount;
-                        const tS = uS * singleCount;
-                        const tCE = uCE * childExtraBedCount;
-                        const subtotal = tA + tC + tI + tE + tS + tCE;
-                        pb = {
-                            ...pb,
-                            adult: adultCount > 0 ? { ...(pb.adult || {}), unit_price: uA, count: adultCount, total: tA } : null,
-                            child: childCount > 0 ? { ...(pb.child || {}), unit_price: uC, count: childCount, total: tC } : null,
-                            infant: infantCount > 0 ? { ...(pb.infant || {}), unit_price: uI, count: infantCount, total: tI } : null,
-                            extra_bed: extraBedCount > 0 ? { ...(pb.extra_bed || {}), unit_price: uE, count: extraBedCount, total: tE } : null,
-                            single: singleCount > 0 ? { ...(pb.single || {}), unit_price: uS, count: singleCount, total: tS } : null,
-                            child_extra_bed: childExtraBedCount > 0 ? { ...(pb.child_extra_bed || {}), unit_price: uCE, count: childExtraBedCount, total: tCE } : null,
-                            subtotal,
-                            grand_total: subtotal + (pb.surcharge_total || 0) + (pb.option_total || 0),
-                        };
-                    }
+                    const pb = item.price_breakdown || item.service?.price_breakdown || null;
 
                     mapped.cruise = item.roomPriceInfo?.cruise_name || '크루즈';
                     mapped.cruiseName = item.roomPriceInfo?.cruise_name || '크루즈';
@@ -1530,12 +1511,12 @@ export default function BulkReservationPage() {
                     mapped.childExtraBedCount = childExtraBedCount;
                     mapped.extraBedCount = extraBedCount;
                     mapped.singleCount = singleCount;
-                    mapped.priceAdult = item.roomPriceInfo?.price_adult || 0;
-                    mapped.priceChild = item.roomPriceInfo?.price_child || 0;
-                    mapped.priceInfant = item.roomPriceInfo?.price_infant || 0;
-                    mapped.priceExtraBed = item.roomPriceInfo?.price_extra_bed || 0;
-                    mapped.priceSingle = item.roomPriceInfo?.price_single || 0;
-                    mapped.priceChildExtraBed = item.roomPriceInfo?.price_child_extra_bed || 0;
+                    mapped.priceAdult = pb?.adult?.unit_price || item.unit_price || item.roomPriceInfo?.price_adult || 0;
+                    mapped.priceChild = pb?.child?.unit_price || item.roomPriceInfo?.price_child || 0;
+                    mapped.priceInfant = pb?.infant?.unit_price || item.roomPriceInfo?.price_infant || 0;
+                    mapped.priceExtraBed = pb?.extra_bed?.unit_price || item.roomPriceInfo?.price_extra_bed || 0;
+                    mapped.priceSingle = pb?.single?.unit_price || item.roomPriceInfo?.price_single || 0;
+                    mapped.priceChildExtraBed = pb?.child_extra_bed?.unit_price || item.roomPriceInfo?.price_child_extra_bed || 0;
                     mapped.guest_count = item.guest_count;
                     mapped.checkin = item.checkin;
                     // cars is already in item.cars
@@ -1657,6 +1638,16 @@ export default function BulkReservationPage() {
         });
     }, [reservationDetails]);
 
+    useEffect(() => {
+        if (!pendingDetailUserInfo || !reservationDetails || reservationDetails.error) return;
+        openCentralReservationDetailModal({
+            userInfo: pendingDetailUserInfo,
+            allUserServices: flattenedServices,
+            loading: false,
+        });
+        setPendingDetailUserInfo(null);
+    }, [flattenedServices, pendingDetailUserInfo, reservationDetails]);
+
     const groupedReservations = useMemo(() => {
         const STATUS_ORDER = ['pending', 'approved', 'confirmed', 'completed', 'cancelled'];
         const STATUS_COLORS: Record<string, { bg: string; text: string; border: string; dot: string }> = {
@@ -1700,20 +1691,17 @@ export default function BulkReservationPage() {
 
     if (loading) {
         return (
-            <ManagerLayout title=" 처리" activeTab="reservations">
-                <div className="flex justify-center items-center h-64">
-                    <div className="text-center">
-                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-                        <p className="mt-4 text-gray-600">예약 목록을 불러오는 중...</p>
-                    </div>
+            <div className="flex justify-center items-center h-64">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+                    <p className="mt-4 text-gray-600">예약 목록을 불러오는 중...</p>
                 </div>
-            </ManagerLayout>
+            </div>
         );
     }
 
     return (
-        <ManagerLayout title="예약  처리" activeTab="reservations">
-            <div className="space-y-6">
+        <div className="space-y-6">
 
                 {/* 헤더 */}
                 <div className="flex items-center justify-between">
@@ -2065,25 +2053,7 @@ export default function BulkReservationPage() {
                     )}
                 </div>
 
-                <PackageDetailModalContainer
-                    userId={packageModalUserId}
-                    isOpen={isPackageModalOpen}
-                    onClose={() => { setIsPackageModalOpen(false); setPackageModalUserId(null); }}
-                />
-
-                {/* 상세보기 모달 */}
-                {isModalOpen && modalUserInfo && (
-                    <ReservationDetailModalSwitch
-                        key={modalKey}
-                        isOpen={isModalOpen}
-                        onClose={closeDetailsModal}
-                        userInfo={modalUserInfo}
-                        allUserServices={flattenedServices}
-                        loading={modalLoading}
-                    />
-                )}
-            </div >
-        </ManagerLayout >
-    );
-}
+            </div>
+        );
+    }
 

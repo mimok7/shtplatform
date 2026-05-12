@@ -283,7 +283,13 @@ export default function UserReservationDetailModal({
                     .map(s => s.tour_price_code);
                 const reservationIds = Array.from(new Set(
                     allUserServices
-                        .map(s => String(s.reservation_id || s.reservationId || '').trim())
+                        .flatMap((s: any) => [
+                            s?.reservation_id,
+                            s?.reservationId,
+                            s?.reservation?.re_id,
+                            s?.re_id,
+                        ])
+                        .map((id) => String(id || '').trim())
                         .filter(Boolean)
                 ));
 
@@ -689,8 +695,8 @@ export default function UserReservationDetailModal({
                                             <>
                                                 {adultCount > 0 && (
                                                     <div className="flex justify-between text-sm">
-                                                        <span className="text-gray-600">성인 {Number(service.priceAdult || service.unitPrice || 0).toLocaleString()}동 × {adultCount}명</span>
-                                                        <span className="font-medium">{(Number(service.priceAdult || service.unitPrice || 0) * adultCount).toLocaleString()}동</span>
+                                                        <span className="text-gray-600">성인 {Number(service.unitPrice || service.priceAdult || 0).toLocaleString()}동 × {adultCount}명</span>
+                                                        <span className="font-medium">{(Number(service.unitPrice || service.priceAdult || 0) * adultCount).toLocaleString()}동</span>
                                                     </div>
                                                 )}
                                                 {childCount > 0 && (

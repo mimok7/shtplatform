@@ -7,6 +7,12 @@ import { fetchTableInBatches, fetchServiceByReservationIds } from '../../../lib/
 import ManagerLayout from '../../../components/ManagerLayout';
 import ServiceCardBody from '@/components/ServiceCardBody';
 import {
+  openCentralPackageDetailModal,
+  openCentralReservationDetailModal,
+  setCentralReservationDetailModalLoading,
+  updateCentralReservationDetailModal,
+} from '../../../contexts/reservationDetailModalEvents';
+import {
   Ship,
   Plane,
   Building,
@@ -28,8 +34,6 @@ import {
   ChevronRight,
   ChevronLeft
 } from 'lucide-react';
-import ReservationDetailModalSwitch from '../../../components/ReservationDetailModalSwitch';
-import PackageDetailModalContainer from '../../../components/PackageDetailModalContainer';
 
 interface ReservationData {
   re_id: string;
@@ -98,16 +102,6 @@ export default function ManagerReservationsPage() {
   const [modalView, setModalView] = useState<'user' | 'reservation'>('user'); // 현재 보기 모드
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [selectedReservation, setSelectedReservation] = useState<any>(null);
-
-  // DB 예약 상세 모달 상태
-  const [isDBModalOpen, setIsDBModalOpen] = useState(false);
-  const [dbUserInfo, setDbUserInfo] = useState<any>(null);
-  const [dbUserServices, setDbUserServices] = useState<any[]>([]);
-  const [dbModalLoading, setDbModalLoading] = useState(false);
-
-  // 패키지 고객 전용 모달 상태
-  const [isPackageModalOpen, setIsPackageModalOpen] = useState(false);
-  const [packageModalUserId, setPackageModalUserId] = useState<string | null>(null);
 
   // ✅ 검색 기능
   const [searchName, setSearchName] = useState('');
@@ -600,8 +594,7 @@ export default function ManagerReservationsPage() {
     if (userGroup.userInfo?.id) {
       const hasPackage = userGroup.reservations.some((r: any) => r.re_type === 'package');
       if (hasPackage) {
-        setPackageModalUserId(userGroup.userInfo.id);
-        setIsPackageModalOpen(true);
+        openCentralPackageDetailModal(userGroup.userInfo.id);
       } else {
         loadAllUserReservations(userGroup.userInfo.id);
       }
@@ -613,8 +606,7 @@ export default function ManagerReservationsPage() {
     if (!userId) return;
 
     try {
-      setDbModalLoading(true);
-      setIsDBModalOpen(true);
+      openCentralReservationDetailModal({ userInfo: null, allUserServices: [], loading: true });
 
       // 1. 사용자 정보 조회
       const { data: userData, error: userError } = await supabase
@@ -624,7 +616,7 @@ export default function ManagerReservationsPage() {
         .single();
 
       if (userError) throw userError;
-      setDbUserInfo(userData);
+  updateCentralReservationDetailModal({ userInfo: userData });
 
       // 2. 사용자의 모든 예약 ID 조회
       const { data: reservations, error: resError } = await supabase
@@ -638,7 +630,7 @@ export default function ManagerReservationsPage() {
       const reservationIds = reservations.map((r: any) => r.re_id);
 
       if (reservationIds.length === 0) {
-        setDbUserServices([]);
+        updateCentralReservationDetailModal({ allUserServices: [], loading: false });
         return;
       }
 
@@ -853,13 +845,13 @@ export default function ManagerReservationsPage() {
         }))
       ];
 
-      setDbUserServices(allServices);
+      updateCentralReservationDetailModal({ userInfo: userData, allUserServices: allServices });
 
     } catch (error) {
       console.error('사용자 예약 정보 조회 실패:', error);
-      setDbUserServices([]);
+      updateCentralReservationDetailModal({ allUserServices: [] });
     } finally {
-      setDbModalLoading(false);
+      setCentralReservationDetailModalLoading(false);
     }
   };
 
@@ -1293,24 +1285,6 @@ export default function ManagerReservationsPage() {
             </div>
           </div>
         )}
-
-        {/* DB 예약 상세 모달 */}
-        <ReservationDetailModalSwitch
-          isOpen={isDBModalOpen}
-          onClose={() => setIsDBModalOpen(false)}
-          userInfo={dbUserInfo}
-          allUserServices={dbUserServices}
-          loading={dbModalLoading}
-        />
-
-        {/* 패키지 고객 전용 모달 */}
-        <PackageDetailModalContainer
-          userId={packageModalUserId}
-          isOpen={isPackageModalOpen}
-          onClose={() => { setIsPackageModalOpen(false); setPackageModalUserId(null); }}
-        />
-
-
       </div>
     </ManagerLayout>
   );

@@ -1494,13 +1494,7 @@ function DirectBookingContent() {
                                             </div>
                                         ))}
                                     </div>
-                                    <div className="mt-6 flex justify-between">
-                                        <button
-                                            onClick={createNewBooking}
-                                            className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
-                                        >
-                                            + 새 예약 생성
-                                        </button>
+                                    <div className="mt-6 flex justify-end">
                                         <button
                                             onClick={() => setShowQuoteSelector(false)}
                                             className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
@@ -1547,12 +1541,6 @@ function DirectBookingContent() {
                                                 예약 변경
                                             </button>
                                         )}
-                                        <button
-                                            onClick={createNewBooking}
-                                            className="bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600 whitespace-nowrap"
-                                        >
-                                            + 새 예약
-                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -1573,12 +1561,6 @@ function DirectBookingContent() {
                                             </p>
                                         </div>
                                     </div>
-                                    <button
-                                        onClick={createNewBooking}
-                                        className="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600 whitespace-nowrap"
-                                    >
-                                        수동 생성
-                                    </button>
                                 </div>
                             </div>
                         )}

@@ -1613,39 +1613,7 @@ export default function ManagerPaymentsPage() {
         }
       }
 
-      // 완료된 예약의 확인서 상태 자동 생성(upsert)
-      if (reservationIds.length > 0) {
-        // 이미 존재하는 상태 조회 (배치)
-        let existingSet = new Set<string>();
-        for (const batch of chunkArray(reservationIds, 100)) {
-          const { data: csRows } = await supabase
-            .from('confirmation_status')
-            .select('reservation_id')
-            .in('reservation_id', batch);
-          (csRows || []).forEach((r: any) => existingSet.add(r.reservation_id));
-        }
-        const missing = reservationIds.filter(id => !existingSet.has(id));
-        if (missing.length > 0) {
-          // 예약에서 quote_id 매핑 가져오기 (배치)
-          const qMap = new Map<string, string | null>();
-          for (const batch of chunkArray(missing, 100)) {
-            const { data: rRows } = await supabase
-              .from('reservation')
-              .select('re_id, re_quote_id')
-              .in('re_id', batch);
-            (rRows || []).forEach((r: any) => qMap.set(r.re_id, r.re_quote_id));
-          }
-          // 삽입도 배치로 분할
-          const insertsAll = missing.map((rid: string) => ({
-            reservation_id: rid,
-            quote_id: qMap.get(rid) || null,
-            status: 'waiting',
-          }));
-          for (const batch of chunkArray(insertsAll, 100)) {
-            await supabase.from('confirmation_status').insert(batch);
-          }
-        }
-      }
+      // ✅ 확인서 자동 생성 제거: 매니저가 명시적으로만 생성하도록 변경 (대기 상태로 유지)
 
       alert(`${successCount}건의 결제가 완료 처리되었습니다.`);
       setSelectedPayments(new Set());

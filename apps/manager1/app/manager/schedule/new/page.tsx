@@ -4,10 +4,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ManagerLayout from '@/components/ManagerLayout';
 import supabase from '@/lib/supabase';
-import ReservationDetailModalSwitch from '@/components/ReservationDetailModalSwitch';
-import PackageDetailModalContainer from '@/components/PackageDetailModalContainer';
-import GoogleSheetsDetailModal from '@/components/GoogleSheetsDetailModal';
 import ServiceCardBody from '@/components/ServiceCardBody';
+import {
+  closeCentralReservationDetailModal,
+  openCentralGoogleSheetsDetailModal,
+  openCentralPackageDetailModal,
+  openCentralReservationDetailModal,
+  setCentralReservationDetailModalLoading,
+  updateCentralGoogleSheetsDetailModal,
+  updateCentralReservationDetailModal,
+} from '@/contexts/reservationDetailModalEvents';
 import {
   Calendar,
   Clock,
@@ -196,24 +202,6 @@ export default function ManagerSchedulePage() {
   const [activeSearchQuery, setActiveSearchQuery] = useState(''); // 실제 검색에 사용되는 검색어
   const [selectedSchedule, setSelectedSchedule] = useState<any>(null);
 
-  // Google Sheets 모달 상태
-  const [selectedGoogleSheetsReservation, setSelectedGoogleSheetsReservation] = useState<any>(null);
-  const [isGoogleSheetsModalOpen, setIsGoogleSheetsModalOpen] = useState(false);
-  const [allOrderServices, setAllOrderServices] = useState<any[]>([]);
-  const [loadingOrderServices, setLoadingOrderServices] = useState(false);
-  const [orderUserInfo, setOrderUserInfo] = useState<any>(null); // SH_M 사용자 정보
-  const [relatedEmail, setRelatedEmail] = useState('');
-  const [relatedDbServices, setRelatedDbServices] = useState<any[]>([]);
-  const [relatedDbLoading, setRelatedDbLoading] = useState(false);
-
-  // DB 예약 상세 모달 상태 (schedule/page.tsx와 동일)
-  const [isDBModalOpen, setIsDBModalOpen] = useState(false);
-  const [dbUserInfo, setDbUserInfo] = useState<any>(null);
-  const [dbUserServices, setDbUserServices] = useState<any[]>([]);
-  const [dbModalLoading, setDbModalLoading] = useState(false);
-  const [isPackageModalOpen, setIsPackageModalOpen] = useState(false);
-  const [packageModalUserId, setPackageModalUserId] = useState<string | null>(null);
-
   // Google Sheets 데이터
   const [googleSheetsData, setGoogleSheetsData] = useState<any[]>([]);
   const [googleSheetsLoading, setGoogleSheetsLoading] = useState(true);
@@ -266,12 +254,11 @@ export default function ManagerSchedulePage() {
   // 주문 ID로 모든 서비스 조회 (Google Sheets - SH_M)
   const loadAllOrderServices = async (orderId: string) => {
     if (!orderId) {
-      setAllOrderServices([]);
-      setOrderUserInfo(null);
+      updateCentralGoogleSheetsDetailModal({ allOrderServices: [], orderUserInfo: null, loading: false });
       return null;
     }
 
-    setLoadingOrderServices(true);
+    updateCentralGoogleSheetsDetailModal({ loading: true });
     try {
       // sh_m 사용자 정보 조회
       const { data: userData } = await supabase
@@ -281,7 +268,7 @@ export default function ManagerSchedulePage() {
         .single();
 
       if (userData) {
-        setOrderUserInfo({
+        const orderUserInfo = {
           orderId: userData.order_id,
           email: userData.email,
           koreanName: userData.korean_name,
@@ -297,7 +284,8 @@ export default function ManagerSchedulePage() {
           requestNote: userData.request_note,
           specialNote: userData.special_note,
           memo: userData.memo
-        });
+        };
+        updateCentralGoogleSheetsDetailModal({ orderUserInfo });
         console.log('👤 sh_m 사용자 정보:', userData);
       }
 
@@ -426,17 +414,16 @@ export default function ManagerSchedulePage() {
       ];
 
       console.log('📋 로드된 주문 서비스:', allData.length, '개', allData);
-      setAllOrderServices(allData);
+      updateCentralGoogleSheetsDetailModal({ allOrderServices: allData });
       return {
         email: userData?.email || ''
       };
     } catch (error) {
       console.error('주문 서비스 조회 실패:', error);
-      setAllOrderServices([]);
-      setOrderUserInfo(null);
+      updateCentralGoogleSheetsDetailModal({ allOrderServices: [], orderUserInfo: null });
       return null;
     } finally {
-      setLoadingOrderServices(false);
+      updateCentralGoogleSheetsDetailModal({ loading: false });
     }
   };
 
@@ -501,14 +488,14 @@ export default function ManagerSchedulePage() {
   // 이메일 기준 DB 예약(추가 예약 포함) 조회
   const loadRelatedDbReservationsByEmail = async (email: string) => {
     const normalizedEmail = email?.trim();
-    setRelatedEmail(normalizedEmail || '');
+    updateCentralGoogleSheetsDetailModal({ relatedEmail: normalizedEmail || '' });
 
     if (!normalizedEmail) {
-      setRelatedDbServices([]);
+      updateCentralGoogleSheetsDetailModal({ relatedDbServices: [], relatedDbLoading: false });
       return;
     }
 
-    setRelatedDbLoading(true);
+    updateCentralGoogleSheetsDetailModal({ relatedDbLoading: true });
     try {
       const { data: usersData, error: usersError } = await supabase
         .from('users')
@@ -516,7 +503,7 @@ export default function ManagerSchedulePage() {
         .ilike('email', normalizedEmail);
 
       if (usersError || !usersData || usersData.length === 0) {
-        setRelatedDbServices([]);
+        updateCentralGoogleSheetsDetailModal({ relatedDbServices: [] });
         return;
       }
 
@@ -531,7 +518,7 @@ export default function ManagerSchedulePage() {
         .order('re_created_at', { ascending: false });
 
       if (reservationError || !reservations || reservations.length === 0) {
-        setRelatedDbServices([]);
+        updateCentralGoogleSheetsDetailModal({ relatedDbServices: [] });
         return;
       }
 
@@ -650,12 +637,12 @@ export default function ManagerSchedulePage() {
         return bTime - aTime;
       });
 
-      setRelatedDbServices(mergedServices);
+      updateCentralGoogleSheetsDetailModal({ relatedDbServices: mergedServices });
     } catch (error) {
       console.error('이메일 기준 DB 예약 조회 실패:', error);
-      setRelatedDbServices([]);
+      updateCentralGoogleSheetsDetailModal({ relatedDbServices: [] });
     } finally {
-      setRelatedDbLoading(false);
+      updateCentralGoogleSheetsDetailModal({ relatedDbLoading: false });
     }
   };
 
@@ -664,8 +651,7 @@ export default function ManagerSchedulePage() {
     if (!userId) return;
 
     try {
-      setDbModalLoading(true);
-      setIsDBModalOpen(true);
+      openCentralReservationDetailModal({ userInfo: null, allUserServices: [], loading: true });
 
       // 1. 사용자 정보 조회
       const { data: userData, error: userError } = await supabase
@@ -675,7 +661,7 @@ export default function ManagerSchedulePage() {
         .single();
 
       if (userError) throw userError;
-      setDbUserInfo(userData);
+  updateCentralReservationDetailModal({ userInfo: userData });
 
       // 2. 사용자의 모든 예약 ID 조회
       const { data: reservations, error: resError } = await supabase
@@ -689,10 +675,8 @@ export default function ManagerSchedulePage() {
 
       // 패키지 예약이 있으면 PackageDetailModalContainer로 라우팅
       if (reservations.some((r: any) => r.re_type === 'package')) {
-        setIsDBModalOpen(false);
-        setDbModalLoading(false);
-        setPackageModalUserId(userId);
-        setIsPackageModalOpen(true);
+        closeCentralReservationDetailModal();
+        openCentralPackageDetailModal(userId);
         return;
       }
 
@@ -701,7 +685,7 @@ export default function ManagerSchedulePage() {
       const packageIdSet = new Set(packageIds);
 
       if (reservationIds.length === 0) {
-        setDbUserServices([]);
+        updateCentralReservationDetailModal({ allUserServices: [], loading: false });
         return;
       }
 
@@ -1065,13 +1049,13 @@ export default function ManagerSchedulePage() {
         })),
       ];
 
-      setDbUserServices(allServices);
+      updateCentralReservationDetailModal({ userInfo: userData, allUserServices: allServices });
 
     } catch (error) {
       console.error('사용자 예약 정보 조회 실패:', error);
-      setDbUserServices([]);
+      updateCentralReservationDetailModal({ allUserServices: [] });
     } finally {
-      setDbModalLoading(false);
+      setCentralReservationDetailModalLoading(false);
     }
   };
 
@@ -1088,10 +1072,15 @@ export default function ManagerSchedulePage() {
     else if (isCarData(reservation)) serviceType = 'car';
 
     // 선택된 예약에 serviceType 추가
-    setSelectedGoogleSheetsReservation({ ...reservation, serviceType });
-    setIsGoogleSheetsModalOpen(true);
-    setRelatedDbServices([]);
-    setRelatedEmail('');
+    openCentralGoogleSheetsDetailModal({
+      selectedReservation: { ...reservation, serviceType },
+      allOrderServices: [],
+      loading: false,
+      orderUserInfo: null,
+      relatedEmail: '',
+      relatedDbServices: [],
+      relatedDbLoading: false,
+    });
 
     // 해당 주문 ID의 모든 서비스 조회
     let resolvedEmail = (reservation.email || '').trim();
@@ -4772,34 +4761,6 @@ export default function ManagerSchedulePage() {
         </div>
       </div >
 
-      {/* 패키지 예약 상세 모달 */}
-      <PackageDetailModalContainer
-        userId={packageModalUserId}
-        isOpen={isPackageModalOpen}
-        onClose={() => { setIsPackageModalOpen(false); setPackageModalUserId(null); }}
-      />
-
-      {/* DB 예약 상세 모달 */}
-      <ReservationDetailModalSwitch
-        isOpen={isDBModalOpen}
-        onClose={() => setIsDBModalOpen(false)}
-        userInfo={dbUserInfo}
-        allUserServices={dbUserServices}
-        loading={dbModalLoading}
-      />
-
-      {/* Google Sheets 예약 상세 모달 */}
-      <GoogleSheetsDetailModal
-        isOpen={isGoogleSheetsModalOpen}
-        onClose={() => setIsGoogleSheetsModalOpen(false)}
-        selectedReservation={selectedGoogleSheetsReservation}
-        allOrderServices={allOrderServices}
-        loading={loadingOrderServices}
-        orderUserInfo={orderUserInfo}
-        relatedEmail={relatedEmail}
-        relatedDbServices={relatedDbServices}
-        relatedDbLoading={relatedDbLoading}
-      />
     </ManagerLayout>
   );
 }

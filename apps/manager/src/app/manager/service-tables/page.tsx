@@ -71,10 +71,14 @@ const groupHotelByCheckinDate = (data: ServiceData[]) => {
 
 import React, { useState, useEffect } from 'react';
 import ManagerLayout from '../../../components/ManagerLayout';
-import ReservationDetailModalSwitch from '../../../components/ReservationDetailModalSwitch';
 import supabase from '../../../lib/supabase';
 import { fetchTableInBatches, fetchServiceByReservationIds } from '../../../lib/fetchInBatches';
 import { buildServiceMap } from '../../../lib/serviceMaps';
+import {
+    openCentralReservationDetailModal,
+    setCentralReservationDetailModalLoading,
+    updateCentralReservationDetailModal,
+} from '../../../contexts/reservationDetailModalEvents';
 import {
     Ship,
     Plane,
@@ -119,11 +123,6 @@ export default function ManagerServiceTablesPage() {
     const [currentUserEmail, setCurrentUserEmail] = useState('');
     const [deletingReservationId, setDeletingReservationId] = useState<string | null>(null);
 
-    // DB 예약 상세 모달 상태
-    const [isDBModalOpen, setIsDBModalOpen] = useState(false);
-    const [dbUserInfo, setDbUserInfo] = useState<any>(null);
-    const [dbUserServices, setDbUserServices] = useState<any[]>([]);
-    const [dbModalLoading, setDbModalLoading] = useState(false);
     // 보기 스타일: 테이블 / 카드
     const [viewStyle, setViewStyle] = useState<'table' | 'card'>('table');
     // ...existing code...
@@ -1072,8 +1071,7 @@ export default function ManagerServiceTablesPage() {
         if (!userId) return;
 
         try {
-            setDbModalLoading(true);
-            setIsDBModalOpen(true);
+            openCentralReservationDetailModal({ userInfo: null, allUserServices: [], loading: true });
 
             // 1. 사용자 정보 조회
             const { data: userData, error: userError } = await supabase
@@ -1083,7 +1081,7 @@ export default function ManagerServiceTablesPage() {
                 .single();
 
             if (userError) throw userError;
-            setDbUserInfo(userData);
+            updateCentralReservationDetailModal({ userInfo: userData });
 
             // 2. 사용자의 모든 예약 ID 조회
             const { data: reservations, error: resError } = await supabase
@@ -1097,7 +1095,7 @@ export default function ManagerServiceTablesPage() {
             const reservationIds = reservations.map(r => r.re_id);
 
             if (reservationIds.length === 0) {
-                setDbUserServices([]);
+                updateCentralReservationDetailModal({ allUserServices: [], loading: false });
                 return;
             }
 
@@ -1288,13 +1286,13 @@ export default function ManagerServiceTablesPage() {
                 }))
             ];
 
-            setDbUserServices(allServices);
+            updateCentralReservationDetailModal({ userInfo: userData, allUserServices: allServices });
 
         } catch (error) {
             console.error('사용자 예약 정보 조회 실패:', error);
-            setDbUserServices([]);
+            updateCentralReservationDetailModal({ allUserServices: [] });
         } finally {
-            setDbModalLoading(false);
+            setCentralReservationDetailModalLoading(false);
         }
     };
 
@@ -2112,15 +2110,6 @@ export default function ManagerServiceTablesPage() {
                         )
                     )}
                 </div>
-
-                {/* 사용자 예약 상세 모달 */}
-                <ReservationDetailModalSwitch
-                    isOpen={isDBModalOpen}
-                    onClose={() => setIsDBModalOpen(false)}
-                    userInfo={dbUserInfo}
-                    allUserServices={dbUserServices}
-                    loading={dbModalLoading}
-                />
             </div>
         </ManagerLayout>
     );

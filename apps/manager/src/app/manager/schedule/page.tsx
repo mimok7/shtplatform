@@ -4,8 +4,12 @@
 import React, { useState, useEffect } from 'react';
 import ManagerLayout from '@/components/ManagerLayout';
 import supabase from '@/lib/supabase';
-import ReservationDetailModalSwitch from '@/components/ReservationDetailModalSwitch';
 import ServiceCardBody from '@/components/ServiceCardBody';
+import {
+  openCentralReservationDetailModal,
+  setCentralReservationDetailModalLoading,
+  updateCentralReservationDetailModal,
+} from '@/contexts/reservationDetailModalEvents';
 import {
   Calendar,
   Clock,
@@ -31,12 +35,6 @@ export default function ManagerSchedulePage() {
   // 주/월간 보기에서 일별 그룹화 추가 (기본: 일별)
   const [groupMode, setGroupMode] = useState<'type' | 'day'>('day');
   const [typeFilter, setTypeFilter] = useState('all');
-  // DB 예약 상세 모달 상태
-  const [isDBModalOpen, setIsDBModalOpen] = useState(false);
-  const [dbUserInfo, setDbUserInfo] = useState<any>(null);
-  const [dbUserServices, setDbUserServices] = useState<any[]>([]);
-  const [dbModalLoading, setDbModalLoading] = useState(false);
-
   useEffect(() => {
     loadSchedules();
   }, [selectedDate, viewMode, typeFilter]);
@@ -388,8 +386,7 @@ export default function ManagerSchedulePage() {
     if (!userId) return;
 
     try {
-      setDbModalLoading(true);
-      setIsDBModalOpen(true);
+      openCentralReservationDetailModal({ userInfo: null, allUserServices: [], loading: true });
 
       // 1. 사용자 정보 조회
       const { data: userData, error: userError } = await supabase
@@ -399,7 +396,7 @@ export default function ManagerSchedulePage() {
         .single();
 
       if (userError) throw userError;
-      setDbUserInfo(userData);
+  updateCentralReservationDetailModal({ userInfo: userData });
 
       // 2. 사용자의 모든 예약 ID 조회
       const { data: reservations, error: resError } = await supabase
@@ -414,7 +411,7 @@ export default function ManagerSchedulePage() {
       const reservationIds = reservations.map(r => r.re_id);
 
       if (reservationIds.length === 0) {
-        setDbUserServices([]);
+        updateCentralReservationDetailModal({ allUserServices: [], loading: false });
         return;
       }
 
@@ -590,13 +587,13 @@ export default function ManagerSchedulePage() {
         }))
       ];
 
-      setDbUserServices(allServices);
+      updateCentralReservationDetailModal({ userInfo: userData, allUserServices: allServices });
 
     } catch (error) {
       console.error('사용자 예약 정보 조회 실패:', error);
-      setDbUserServices([]);
+      updateCentralReservationDetailModal({ allUserServices: [] });
     } finally {
-      setDbModalLoading(false);
+      setCentralReservationDetailModalLoading(false);
     }
   };
 
@@ -1050,15 +1047,6 @@ export default function ManagerSchedulePage() {
             </div>
           )}
         </div>
-
-        {/* DB 예약 상세 모달 */}
-        <ReservationDetailModalSwitch
-          isOpen={isDBModalOpen}
-          onClose={() => setIsDBModalOpen(false)}
-          userInfo={dbUserInfo}
-          allUserServices={dbUserServices}
-          loading={dbModalLoading}
-        />
       </div>
     </ManagerLayout>
   );
