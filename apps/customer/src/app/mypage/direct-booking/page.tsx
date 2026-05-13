@@ -242,11 +242,7 @@ function DirectBookingContent() {
                 setActiveQuoteId(sortedQuotes[0].id);
                 setActiveQuoteData(sortedQuotes[0]);
                 setIsFirstBooking(false);
-
-                // 견적이 2개 이상이면 선택 모달 표시
-                if (sortedQuotes.length > 1) {
-                    setShowQuoteSelector(true);
-                }
+                setShowQuoteSelector(false);
             } else {
                 // 견적 자동 생성은 중단하고, 예약 INSERT 시 DB 트리거로 생성한다.
                 setQuotesList([]);
@@ -1532,16 +1528,7 @@ function DirectBookingContent() {
                                             </p>
                                         </div>
                                     </div>
-                                    <div className="flex gap-2">
-                                        {quotesList.length > 1 && (
-                                            <button
-                                                onClick={() => setShowQuoteSelector(true)}
-                                                className="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600 whitespace-nowrap"
-                                            >
-                                                예약 변경
-                                            </button>
-                                        )}
-                                    </div>
+                                    <div className="flex gap-2" />
                                 </div>
                             </div>
                         )}

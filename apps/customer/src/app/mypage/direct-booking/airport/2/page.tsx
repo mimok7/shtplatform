@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import supabase from '../../../../../lib/supabase';
 import { getSessionUser } from '../../../../../lib/authHelpers';
+import { toDbDateTimeKst, toInputDateTime } from '@/lib/kstDateTime';
 import PageWrapper from '../../../../../components/PageWrapper';
 import SectionBox from '../../../../../components/SectionBox';
 
@@ -99,10 +100,10 @@ function AirportServiceContent() {
                         ...prev,
                         serviceData: {
                             pickup_location: airportData.ra_airport_location || '',
-                            pickup_datetime: airportData.ra_datetime ? new Date(airportData.ra_datetime).toISOString().slice(0, 16) : '',
+                            pickup_datetime: airportData.ra_datetime ? toInputDateTime(airportData.ra_datetime) : '',
                             pickup_flight_number: airportData.ra_flight_number || '',
                             sending_location: airportData.ra_airport_location || '',
-                            sending_datetime: airportData.ra_datetime ? new Date(airportData.ra_datetime).toISOString().slice(0, 16) : '',
+                            sending_datetime: airportData.ra_datetime ? toInputDateTime(airportData.ra_datetime) : '',
                             sending_flight_number: airportData.ra_flight_number || '',
                             passenger_count: airportData.ra_passenger_count || 1,
                             luggage_count: airportData.ra_luggage_count || 0,
@@ -283,7 +284,7 @@ function AirportServiceContent() {
                         airport_price_code: pickup.airport_code,
                         ra_airport_location: form.serviceData.pickup_location,
                         ra_flight_number: form.serviceData.pickup_flight_number || null,
-                        ra_datetime: form.serviceData.pickup_datetime ? new Date(form.serviceData.pickup_datetime).toISOString() : null,
+                        ra_datetime: toDbDateTimeKst(form.serviceData.pickup_datetime),
                         ra_stopover_location: form.serviceData.stopover_location || null,
                         ra_stopover_wait_minutes: form.serviceData.stopover_wait_minutes || 0,
                         ra_car_count: form.serviceData.car_count || 1,
@@ -314,7 +315,7 @@ function AirportServiceContent() {
                         airport_price_code: sending.airport_code,
                         ra_airport_location: form.serviceData.sending_location,
                         ra_flight_number: form.serviceData.sending_flight_number || null,
-                        ra_datetime: form.serviceData.sending_datetime ? new Date(form.serviceData.sending_datetime).toISOString() : null,
+                        ra_datetime: toDbDateTimeKst(form.serviceData.sending_datetime),
                         ra_stopover_location: form.serviceData.stopover_location || null,
                         ra_stopover_wait_minutes: form.serviceData.stopover_wait_minutes || 0,
                         ra_car_count: form.serviceData.car_count || 1,

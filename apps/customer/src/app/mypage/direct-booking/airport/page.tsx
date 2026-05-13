@@ -6,6 +6,7 @@ import supabase from '../../../../lib/supabase';
 import { refreshAuthBeforeSubmit } from '../../../../lib/authHelpers';
 import { useLoadingTimeout } from '../../../../hooks/useLoadingTimeout';
 import { hasInvalidLocationChars, normalizeLocationEnglishUpper } from '@/lib/locationInput';
+import { toDbDateTimeKst, toInputDateTime } from '@/lib/kstDateTime';
 import PageWrapper from '../../../../components/PageWrapper';
 import SectionBox from '../../../../components/SectionBox';
 
@@ -154,11 +155,11 @@ function DirectBookingAirportContent() {
                 airportCode1: first.airport_price_code || '',
                 pickupLocation: isPickup ? (first.accommodation_info || '') : '',
                 pickupAirportLocation: isPickup ? (first.ra_airport_location || '') : '',
-                pickupDatetime: isPickup && first.ra_datetime ? new Date(first.ra_datetime).toISOString().slice(0, 16) : '',
+                pickupDatetime: isPickup && first.ra_datetime ? toInputDateTime(first.ra_datetime) : '',
                 pickupFlightNumber: isPickup ? (first.ra_flight_number || '') : '',
                 sendingLocation: isPickup ? '' : (first.accommodation_info || ''),
                 sendingAirportLocation: isPickup ? '' : (first.ra_airport_location || ''),
-                sendingDatetime: !isPickup && first.ra_datetime ? new Date(first.ra_datetime).toISOString().slice(0, 16) : '',
+                sendingDatetime: !isPickup && first.ra_datetime ? toInputDateTime(first.ra_datetime) : '',
                 passengerCount: first.ra_passenger_count || 1,
                 luggageCount: first.ra_luggage_count || 0,
             }));
@@ -180,7 +181,7 @@ function DirectBookingAirportContent() {
                     airportCode2: second.airport_price_code || '',
                     sendingLocation: second.accommodation_info || '',
                     sendingAirportLocation: second.ra_airport_location || '',
-                    sendingDatetime: second.ra_datetime ? new Date(second.ra_datetime).toISOString().slice(0, 16) : '',
+                    sendingDatetime: second.ra_datetime ? toInputDateTime(second.ra_datetime) : '',
                 }));
                 if (priceInfo2?.price) setPrice2(priceInfo2.price);
             }
@@ -482,7 +483,7 @@ function DirectBookingAirportContent() {
                         ra_airport_location: airportLocation,
                         accommodation_info: location,
                         ra_flight_number: flightNum,
-                        ra_datetime: datetime ? new Date(datetime).toISOString() : null,
+                        ra_datetime: toDbDateTimeKst(datetime),
                         ra_passenger_count: form.passengerCount,
                         ra_luggage_count: form.luggageCount,
                         way_type: wayType,
@@ -540,9 +541,7 @@ function DirectBookingAirportContent() {
                     ra_airport_location: airportLocation,
                     accommodation_info: location,
                     ra_flight_number: flightNum,
-                    ra_datetime: datetime
-                        ? new Date(datetime).toISOString()
-                        : null,
+                    ra_datetime: toDbDateTimeKst(datetime),
                     ra_passenger_count: form.passengerCount,
                     ra_luggage_count: form.luggageCount, // 캐리어 수 저장
                     // request_note: form.requestNote || null,

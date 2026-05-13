@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import supabase from '@/lib/supabase';
 import { ensureMemberRole, getFastAuthUser } from '@/lib/reservationAuth';
+import { toDbDateTimeKst } from '@/lib/kstDateTime';
 
 function RentcarReservationContent() {
   const router = useRouter();
@@ -258,7 +259,7 @@ function RentcarReservationContent() {
         unit_price: mainService.price || 0, // 필수 컬럼
         car_count: formData.driver_count || 1,
         passenger_count: formData.passenger_count || 1,
-        pickup_datetime: formData.pickup_datetime ? new Date(formData.pickup_datetime).toISOString() : null,
+        pickup_datetime: toDbDateTimeKst(formData.pickup_datetime),
         pickup_location: formData.pickup_location || null,
         destination: formData.destination || null,
         luggage_count: formData.luggage_count || 0,

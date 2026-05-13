@@ -2578,6 +2578,23 @@ export default function ManagerSchedulePage() {
   const getDisplayTypeName = (schedule: any) => {
     return getTypeName(getScheduleServiceType(schedule));
   };
+  const isTruthyFlag = (value: any) => {
+    if (value === true) return true;
+    if (value === false || value == null) return false;
+    const normalized = String(value).trim().toLowerCase();
+    return ['true', 't', '1', 'yes', 'y', '신청', '있음'].includes(normalized);
+  };
+
+  const normalizeReservationStatus = (value: any) => String(value || '').trim().toLowerCase();
+  const getReservationStatusUi = (value: any) => {
+    const status = normalizeReservationStatus(value);
+    if (status === 'confirmed') return { label: '확정', className: 'bg-green-100 text-green-800' };
+    if (status === 'approved') return { label: '승인', className: 'bg-sky-100 text-sky-800' };
+    if (status === 'pending') return { label: '대기', className: 'bg-yellow-100 text-yellow-800' };
+    if (status === 'completed') return { label: '완료', className: 'bg-gray-100 text-gray-700' };
+    if (status === 'cancelled' || status === 'canceled') return { label: '취소', className: 'bg-red-100 text-red-800' };
+    return { label: String(value || '-'), className: 'bg-gray-100 text-gray-700' };
+  };
 
   const renderDbCardBody = (schedule: any) => {
     const row = schedule?.service_row || {};
@@ -2626,8 +2643,14 @@ export default function ManagerSchedulePage() {
         <div className="flex items-center justify-center w-9 h-9 rounded-full bg-gray-50 border border-gray-200">
           {getDisplayTypeIcon(schedule)}
         </div>
-        <h5 className="font-bold text-sm flex-1 truncate text-gray-800">
-          {getDisplayTypeName(schedule)}
+        <h5 className="font-bold text-sm flex-1 truncate text-gray-800 inline-flex items-center gap-1.5">
+          <span>{getDisplayTypeName(schedule)}</span>
+          {(schedule?.service_table === 'reservation_cruise' || schedule?.re_type === 'cruise') && (
+            <>
+              {isTruthyFlag(schedule?.service_row?.connecting_room) && <span className="text-slate-900" title="커넥팅룸 신청">🔗</span>}
+              {isTruthyFlag(schedule?.service_row?.birthday_event) && <span title="생일 이벤트 신청">🎂</span>}
+            </>
+          )}
         </h5>
         {schedule.segment_ribbon && (
           <span className={`px-2 py-0.5 rounded text-xs font-semibold ${(schedule.segment_type === 'return' || schedule.rentcar_phase === 'return') ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>
@@ -2635,9 +2658,14 @@ export default function ManagerSchedulePage() {
           </span>
         )}
         <div className="flex items-center gap-2">
-          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${schedule.re_status === 'confirmed' ? 'bg-green-100 text-green-800' : schedule.re_status === 'pending' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'}`}>
-            {schedule.re_status === 'confirmed' ? '확정' : schedule.re_status === 'pending' ? '대기' : '취소'}
-          </span>
+          {(() => {
+            const statusUi = getReservationStatusUi(schedule.re_status);
+            return (
+              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusUi.className}`}>
+                {statusUi.label}
+              </span>
+            );
+          })()}
           <button
             onClick={() => {
               setSelectedSchedule(schedule);
@@ -2754,11 +2782,14 @@ export default function ManagerSchedulePage() {
 
     const fmtDate = (v: any) => v ? new Date(v).toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul', month: '2-digit', day: '2-digit', weekday: 'short' }) : '-';
     const fmtDt = (v: any) => v ? new Date(v).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }) : '-';
-    const statusBadge = (s: any) => (
-      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${s.re_status === 'confirmed' ? 'bg-green-100 text-green-800' : s.re_status === 'pending' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'}`}>
-        {s.re_status === 'confirmed' ? '확정' : s.re_status === 'pending' ? '대기' : '취소'}
-      </span>
-    );
+    const statusBadge = (s: any) => {
+      const statusUi = getReservationStatusUi(s.re_status);
+      return (
+        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusUi.className}`}>
+          {statusUi.label}
+        </span>
+      );
+    };
     const actionBtn = (s: any) => (
       <button
         onClick={() => {
@@ -2770,6 +2801,13 @@ export default function ManagerSchedulePage() {
     );
     const cellCls = 'px-2 py-1.5 align-top text-xs text-gray-700 whitespace-nowrap';
     const headCls = 'px-2 py-2 text-left font-semibold';
+    const cruiseApplyIcons = (row: any) => (
+      <span className="inline-flex items-center gap-1">
+        {isTruthyFlag(row?.connecting_room) && <span title="커넥팅룸 신청">🔗</span>}
+        {isTruthyFlag(row?.birthday_event) && <span title="생일 이벤트 신청">🎂</span>}
+        {!isTruthyFlag(row?.connecting_room) && !isTruthyFlag(row?.birthday_event) && <span className="text-gray-300">-</span>}
+      </span>
+    );
 
     return (
       <div className="space-y-5">
@@ -2781,7 +2819,7 @@ export default function ManagerSchedulePage() {
               <table className="min-w-full text-sm">
                 <thead className="bg-gray-50 text-gray-600 text-xs uppercase">
                   {key === 'reservation_cruise' && (
-                    <tr><th className={headCls}>고객</th><th className={headCls}>체크인</th><th className={headCls}>크루즈</th><th className={headCls}>객실</th><th className="px-2 py-2 text-right font-semibold">액션</th></tr>
+                    <tr><th className={headCls}>고객</th><th className={headCls}>체크인</th><th className={headCls}>크루즈</th><th className={headCls}>객실</th><th className={headCls}>신청</th><th className="px-2 py-2 text-right font-semibold">액션</th></tr>
                   )}
                   {key === 'reservation_car_sht' && (
                     <tr><th className={headCls}>고객</th><th className={headCls}>일자</th><th className={headCls}>차량</th><th className={headCls}>좌석</th><th className={headCls}>분류</th><th className={headCls}>승/하차 위치</th><th className="px-2 py-2 text-right font-semibold">액션</th></tr>
@@ -2820,7 +2858,7 @@ export default function ManagerSchedulePage() {
                     const locationText = formatPickupDropoffText(pickup, dropoff);
                     const rowKey = `${s.re_id}-${s.service_table}-${s.segment_type || s.rentcar_phase || 'd'}-${i}`;
                     if (key === 'reservation_cruise') return (
-                      <tr key={rowKey} className="hover:bg-blue-50/40"><td className={`${cellCls} font-semibold`}>{cust}</td><td className={cellCls}>{r.checkin || dateText}</td><td className={cellCls}>{ci?.cruise_name || ci?.cruise || '-'}</td><td className={cellCls}>{r.room_type || ci?.room_type || '-'}</td><td className="px-2 py-1.5 align-top text-right">{actionBtn(s)}</td></tr>
+                      <tr key={rowKey} className="hover:bg-blue-50/40"><td className={`${cellCls} font-semibold`}>{cust}</td><td className={cellCls}>{r.checkin || dateText}</td><td className={cellCls}>{ci?.cruise_name || ci?.cruise || '-'}</td><td className={cellCls}>{r.room_type || ci?.room_type || '-'}</td><td className={cellCls}>{cruiseApplyIcons(r)}</td><td className="px-2 py-1.5 align-top text-right">{actionBtn(s)}</td></tr>
                     );
                     if (key === 'reservation_car_sht') return (
                       <tr key={rowKey} className="hover:bg-blue-50/40"><td className={`${cellCls} font-semibold`}>{cust}</td><td className={cellCls}>{dateText}</td><td className={cellCls}>{r.vehicle_number || '-'}</td><td className={cellCls}>{r.seat_number || '-'}</td><td className={cellCls}>{r.sht_category || '-'}</td><td className={pickupDropoffCellCls}>{locationText}</td><td className="px-2 py-1.5 align-top text-right">{actionBtn(s)}</td></tr>
@@ -2882,11 +2920,18 @@ export default function ManagerSchedulePage() {
     let body: React.ReactNode = null;
 
     if (serviceType === 'cruise') {
-      head = (<tr><th className={headCls}>고객</th><th className={headCls}>체크인</th><th className={headCls}>크루즈</th><th className={headCls}>객실</th><th className={headCls}>할인</th><th className="px-2 py-2 text-right font-semibold">액션</th></tr>);
+      head = (<tr><th className={headCls}>고객</th><th className={headCls}>체크인</th><th className={headCls}>크루즈</th><th className={headCls}>객실</th><th className={headCls}>신청</th><th className={headCls}>할인</th><th className="px-2 py-2 text-right font-semibold">액션</th></tr>);
       body = list.map((r: any, i: number) => {
         const isPast = isPastDate(r.checkin);
         const room = `${r.roomType || ''}${r.category ? ` (${r.category})` : ''}`.trim();
-        return (<tr key={`${r.orderId}-${i}`} className={`hover:bg-blue-50/40 ${isPast ? 'opacity-60' : ''}`}><td className={cellCls}>{custCell(r)}</td><td className={cellCls}>{fmtDate(parseDate(r.checkin))}</td><td className={cellCls}>{r.cruise || '-'}</td><td className={cellCls}>{room || '-'}</td><td className={cellCls}>{r.discount || '-'}</td><td className="px-2 py-1.5 align-top text-right">{actionBtn(r)}</td></tr>);
+        const applyIcons = (
+          <span className="inline-flex items-center gap-1">
+            {isTruthyFlag(r.connecting_room) && <span title="커넥팅룸 신청">🔗</span>}
+            {isTruthyFlag(r.birthday_event) && <span title="생일 이벤트 신청">🎂</span>}
+            {!isTruthyFlag(r.connecting_room) && !isTruthyFlag(r.birthday_event) && <span className="text-gray-300">-</span>}
+          </span>
+        );
+        return (<tr key={`${r.orderId}-${i}`} className={`hover:bg-blue-50/40 ${isPast ? 'opacity-60' : ''}`}><td className={cellCls}>{custCell(r)}</td><td className={cellCls}>{fmtDate(parseDate(r.checkin))}</td><td className={cellCls}>{r.cruise || '-'}</td><td className={cellCls}>{room || '-'}</td><td className={cellCls}>{applyIcons}</td><td className={cellCls}>{r.discount || '-'}</td><td className="px-2 py-1.5 align-top text-right">{actionBtn(r)}</td></tr>);
       });
     } else if (serviceType === 'vehicle') {
       head = (<tr><th className={headCls}>고객</th><th className={headCls}>탑승일</th><th className={headCls}>차량</th><th className={headCls}>좌석</th><th className={headCls}>분류</th><th className={headCls}>승/하차 위치</th><th className="px-2 py-2 text-right font-semibold">액션</th></tr>);

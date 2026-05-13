@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import supabase from '@/lib/supabase';
 import { getSessionUser, refreshAuthBeforeSubmit } from '@/lib/authHelpers';
 import { useLoadingTimeout } from '@/hooks/useLoadingTimeout';
+import { toDbDateTimeKst, toInputDateTime } from '@/lib/kstDateTime';
 import { normalizeLocationEnglishUpper } from '@/lib/locationInput';
 import PageWrapper from '@/components/PageWrapper';
 import SectionBox from '@/components/SectionBox';
@@ -150,12 +151,12 @@ function RentcarDirectBookingContent() {
                     routeOptions: routeOpts,
                     carTypeOptions: rentInfo?.vehicle_type ? [rentInfo.vehicle_type] : [],
                     routeLoading: false,
-                    pickup_datetime: row.pickup_datetime ? new Date(row.pickup_datetime).toISOString().slice(0, 16) : '',
+                    pickup_datetime: row.pickup_datetime ? toInputDateTime(row.pickup_datetime) : '',
                     pickup_location: row.pickup_location || '',
                     destination: row.destination || '',
                     via_location: row.via_location || '',
                     via_waiting: row.via_waiting || '',
-                    return_datetime: row.return_datetime ? new Date(row.return_datetime).toISOString().slice(0, 16) : '',
+                    return_datetime: row.return_datetime ? toInputDateTime(row.return_datetime) : '',
                     return_pickup_location: row.return_pickup_location || '',
                     return_destination: row.return_destination || '',
                     return_via_location: row.return_via_location || '',
@@ -404,13 +405,13 @@ function RentcarDirectBookingContent() {
                 return {
                     reservation_id: reservationId,
                     rentcar_price_code: vehicle.rentcar.rent_code,
-                    pickup_datetime: new Date(vehicle.pickup_datetime).toISOString(),
+                    pickup_datetime: toDbDateTimeKst(vehicle.pickup_datetime),
                     pickup_location: vehicle.pickup_location,
                     destination: vehicle.destination,
                     via_location: vehicle.via_location || null,
                     via_waiting: vehicle.via_waiting || null,
                     // 오는 편 (왕복만)
-                    return_datetime: isRoundTrip && vehicle.return_datetime ? new Date(vehicle.return_datetime).toISOString() : null,
+                    return_datetime: isRoundTrip ? toDbDateTimeKst(vehicle.return_datetime) : null,
                     return_pickup_location: isRoundTrip ? (vehicle.return_pickup_location || null) : null,
                     return_destination: isRoundTrip ? (vehicle.return_destination || null) : null,
                     return_via_location: isRoundTrip ? (vehicle.return_via_location || null) : null,

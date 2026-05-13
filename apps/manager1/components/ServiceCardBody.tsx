@@ -232,6 +232,18 @@ export default function ServiceCardBody({
         return (
             <div className="flex flex-col gap-1 text-sm text-gray-700 mt-1">
                 {renderCustomer()}
+                <div className="flex flex-wrap items-center gap-1.5 mb-0.5">
+                    {toBool(row?.connecting_room) && (
+                        <span className="inline-flex items-center rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-700 border border-indigo-100">
+                            🔗 커넥팅룸 신청
+                        </span>
+                    )}
+                    {toBool(row?.birthday_event) && (
+                        <span className="inline-flex items-center rounded-full bg-pink-50 px-2 py-0.5 text-[11px] font-semibold text-pink-700 border border-pink-100">
+                            🎂 생일 이벤트 신청
+                        </span>
+                    )}
+                </div>
                 <div className="flex items-start gap-2">
                     <span className="font-semibold text-green-700 text-xs mt-0.5">크루즈</span>
                     <span className="text-sm font-bold text-blue-700 break-words">{cruise}</span>

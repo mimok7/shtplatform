@@ -565,7 +565,8 @@ export default function UserReservationDetailModal({
                     if (baseService.serviceType === 'sht') {
                         return {
                             ...baseService,
-                            usageDate: baseService.usageDate || baseService.usage_date || null,
+                            usageDate: baseService.usageDate || baseService.usage_date || baseService.pickupDatetime || baseService.pickup_datetime || null,
+                            pickupDatetime: baseService.pickupDatetime || baseService.pickup_datetime || null,
                             category: baseService.category || baseService.sht_category || '-',
                             vehicleNumber: baseService.vehicleNumber || baseService.vehicle_number || baseService.dispatch_code || '-',
                             seatNumber: baseService.seatNumber || baseService.seat_number || '-',
@@ -638,6 +639,7 @@ export default function UserReservationDetailModal({
         else if (service.checkinDate) dateStr = service.checkinDate;
         else if (service.tourDate) dateStr = service.tourDate;
         else if (service.usageDate) dateStr = service.usageDate.split('T')[0];
+        else if (service.pickup_datetime) dateStr = String(service.pickup_datetime).split('T')[0];
         return dateStr;
     };
 
@@ -782,6 +784,15 @@ export default function UserReservationDetailModal({
                             const singleCount = Number(service.singleCount ?? service.single_count ?? 0);
                             const childExtraBedCount = Number(service.childExtraBedCount ?? service.child_extra_bed_count ?? 0);
                             const extraBedCount = Number(service.extraBedCount ?? service.extra_bed_count ?? 0);
+                            const toAppliedText = (value: any) => {
+                                if (value === true) return '신청';
+                                if (value === false || value == null) return '미신청';
+                                const normalized = String(value).trim().toLowerCase();
+                                if (['true', 't', '1', 'yes', 'y', '신청', '있음'].includes(normalized)) return '신청';
+                                return '미신청';
+                            };
+                            const connectingRoomText = toAppliedText(service.connecting_room);
+                            const birthdayEventText = toAppliedText(service.birthday_event);
 
                             const pb = normalizeCruisePriceBreakdown(rawPb, infantCount);
                             const roomTotalPrice = Number(service.room_total_price || 0);
@@ -809,6 +820,8 @@ export default function UserReservationDetailModal({
                                             <div><strong>결제방식:</strong> {service.paymentMethod}</div>
                                             <div><strong>성인:</strong> {adultCount}명</div>
                                             <div><strong>아동:</strong> {childCount}명</div>
+                                            <div><strong>커넥팅룸:</strong> {connectingRoomText}</div>
+                                            <div><strong>생일 이벤트:</strong> {birthdayEventText}</div>
                                             {infantCount > 0 && <div><strong>유아:</strong> {infantCount}명</div>}
                                             {childExtraBedCount > 0 && <div><strong>아동엑베:</strong> {childExtraBedCount}명</div>}
                                             {extraBedCount > 0 && <div><strong>엑스트라베드:</strong> {extraBedCount}개</div>}
@@ -944,12 +957,12 @@ export default function UserReservationDetailModal({
                     <>
                         {(() => {
                             const airportTypeRaw = String(service.category || service.way_type || '').toLowerCase();
-                            const isPickup = airportTypeRaw.includes('pickup') || airportTypeRaw.includes('픽업');
                             const isSending = airportTypeRaw.includes('sending') || airportTypeRaw.includes('샌딩');
                             // 변경: 공항 위치는 ra_airport_location에서 가져오기
                             const airportDisplay = service.ra_airport_location || '-';
                             // 변경: 하차위치/승차위치는 accommodation_info에서 가져오기
                             const dropoffDisplay = service.accommodation_info || '-';
+                            const locationLabel = isSending ? '승차위치' : '하차위치';
 
                             return (
                                 <div className="bg-green-50 rounded-lg p-3 mb-2 border border-green-100">
@@ -960,7 +973,7 @@ export default function UserReservationDetailModal({
                                         <div><strong>일시:</strong> {service.ra_datetime ? formatDatetimeOffset(service.ra_datetime) : '-'}</div>
                                         <div><strong>항공편:</strong> {service.flightNumber || service.ra_flight_number || '-'}</div>
                                         <div><strong>공항:</strong> {airportDisplay}</div>
-                                        <div><strong>하차위치:</strong> {dropoffDisplay}</div>
+                                        <div><strong>{locationLabel}:</strong> {dropoffDisplay}</div>
                                         {/* 변경: 목적지 → 경유지로 변경 */}
                                         {service.stopover && <div><strong>경유지:</strong> {service.stopover}</div>}
                                         {service.passengerCount && <div><strong>인원:</strong> {service.passengerCount}명</div>}
