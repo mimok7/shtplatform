@@ -91,6 +91,9 @@ interface CruiseRoomForm {
     checkin: string;
     room_total_price: number;
     room_price_code: string;
+    connecting_room: boolean;
+    birthday_event: boolean;
+    birthday_name: string;
 }
 
 interface AdditionalFeeItem {
@@ -99,6 +102,18 @@ interface AdditionalFeeItem {
     name: string;
     amount: number;
 }
+
+const BIRTHDAY_EVENT_FEE = 1000000;
+
+const toBoolean = (value: unknown): boolean => {
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'string') {
+        const normalized = value.trim().toLowerCase();
+        return normalized === 'true' || normalized === 't' || normalized === '1' || normalized === 'yes' || normalized === 'y';
+    }
+    if (typeof value === 'number') return value === 1;
+    return false;
+};
 
 const createEmptyRoomForm = (overrides: Partial<CruiseRoomForm> = {}): CruiseRoomForm => ({
     room_count: 1,
@@ -123,6 +138,9 @@ const createEmptyRoomForm = (overrides: Partial<CruiseRoomForm> = {}): CruiseRoo
     checkin: '',
     room_total_price: 0,
     room_price_code: '',
+    connecting_room: false,
+    birthday_event: false,
+    birthday_name: '',
     ...overrides,
 });
 
@@ -514,6 +532,9 @@ function CruiseReservationEditContent() {
             checkin: templateRoom.checkin,
             room_price_code: templateRoom.room_price_code,
             room_count: isCatherineHorizonCruise ? 1 : Math.max(1, templateRoom.room_count || 1),
+            connecting_room: Boolean(templateRoom.connecting_room),
+            birthday_event: Boolean(templateRoom.birthday_event),
+            birthday_name: templateRoom.birthday_name || '',
         }), templateDetail);
 
         setRoomForms((prev) => [...prev, nextRoom]);
@@ -599,9 +620,27 @@ function CruiseReservationEditContent() {
         }, 0);
     }, [visibleTourOptions, effectiveSelectedOptionIds]);
 
+    const birthdayEventCount = useMemo(() => {
+        return roomForms.filter((room) => Boolean(room.birthday_event)).length;
+    }, [roomForms]);
+
+    const birthdayEventAdditionalFee = useMemo(() => {
+        return birthdayEventCount * BIRTHDAY_EVENT_FEE;
+    }, [birthdayEventCount]);
+
+    const computedAdditionalFeeItems = useMemo(() => {
+        const birthdayItems: AdditionalFeeItem[] = Array.from({ length: birthdayEventCount }, (_, index) => ({
+            key: `birthday-event-${index}`,
+            template_id: null,
+            name: '생일이벤트 추가',
+            amount: BIRTHDAY_EVENT_FEE,
+        }));
+        return [...additionalFeeItems, ...birthdayItems];
+    }, [additionalFeeItems, birthdayEventCount]);
+
     const templateAdditionalFeeTotal = useMemo(() => {
-        return additionalFeeItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-    }, [additionalFeeItems]);
+        return computedAdditionalFeeItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+    }, [computedAdditionalFeeItems]);
 
     const totalAdditionalFee = useMemo(() => {
         return templateAdditionalFeeTotal + (Number(manualAdditionalFee) || 0);
@@ -1276,7 +1315,10 @@ function CruiseReservationEditContent() {
                         single_count: cruiseRow.single_count ?? 0,
                         checkin: cruiseRow.checkin || '',
                         room_total_price: cruiseRow.room_total_price || 0,
-                        room_price_code: cruiseRow.room_price_code || ''
+                        room_price_code: cruiseRow.room_price_code || '',
+                        connecting_room: toBoolean(cruiseRow.connecting_room),
+                        birthday_event: toBoolean(cruiseRow.birthday_event),
+                        birthday_name: cruiseRow.birthday_name || '',
                     }), roomDetail);
                 })
                 // detail 전달하여 카테고리별 가격으로 자동 계산
@@ -1368,6 +1410,9 @@ function CruiseReservationEditContent() {
                 checkin: room.checkin,
                 request_note: index === 0 ? finalRequestNote : null,
                 room_total_price: room.room_total_price,
+                connecting_room: Boolean(room.connecting_room),
+                birthday_event: Boolean(room.birthday_event),
+                birthday_name: room.birthday_name || null,
             }));
 
             console.log('📤 reservation_cruise 재저장 요청:', cruiseInsertData);
@@ -1558,7 +1603,7 @@ function CruiseReservationEditContent() {
                 adjustment_total: totalAdditionalFee,
                 additional_fee: totalAdditionalFee,
                 additional_fee_manual: manualAdditionalFee,
-                additional_fee_items: additionalFeeItems,
+                additional_fee_items: computedAdditionalFeeItems,
                 additional_fee_detail: additionalFeeDetail || null,
                 grand_total: grandTotal,
             };
@@ -1860,6 +1905,42 @@ function CruiseReservationEditContent() {
                                                             <option key={index} value={roomType}>{roomType}</option>
                                                         ))}
                                                     </select>
+                                                </div>
+
+                                                <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-3 bg-white/70 border border-purple-100 rounded p-3">
+                                                    <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={Boolean(room.connecting_room)}
+                                                            onChange={(e) => updateRoomAt(roomIndex, (r) => ({ ...r, connecting_room: e.target.checked }))}
+                                                            className="h-4 w-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                                                        />
+                                                        연결 객실
+                                                    </label>
+                                                    <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={Boolean(room.birthday_event)}
+                                                            onChange={(e) => updateRoomAt(roomIndex, (r) => ({
+                                                                ...r,
+                                                                birthday_event: e.target.checked,
+                                                                birthday_name: e.target.checked ? r.birthday_name : '',
+                                                            }))}
+                                                            className="h-4 w-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                                                        />
+                                                        생일 이벤트
+                                                    </label>
+                                                    <div>
+                                                        <label className="block text-xs font-medium text-gray-700 mb-1">생일 이름</label>
+                                                        <input
+                                                            type="text"
+                                                            value={room.birthday_name || ''}
+                                                            onChange={(e) => updateRoomAt(roomIndex, (r) => ({ ...r, birthday_name: e.target.value }))}
+                                                            disabled={!room.birthday_event}
+                                                            placeholder="예: 홍길동"
+                                                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm disabled:bg-gray-100 disabled:text-gray-400"
+                                                        />
+                                                    </div>
                                                 </div>
 
                                                 {!isCatherineHorizonCruise && (
@@ -2400,11 +2481,11 @@ function CruiseReservationEditContent() {
                                         />
                                         <p className="text-xs text-gray-500 mt-1">할인은 음수(-)로 입력하면 추가내역 차감으로 저장됩니다.</p>
                                     </div>
-                                    {additionalFeeItems.length > 0 && (
+                                    {computedAdditionalFeeItems.length > 0 && (
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700 mb-1">선택된 추가내역</label>
                                             <div className="space-y-2">
-                                                {additionalFeeItems.map((item) => (
+                                                {computedAdditionalFeeItems.map((item) => (
                                                     <div key={item.key} className="flex items-center justify-between gap-2 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2">
                                                         <div>
                                                             <div className="text-sm font-medium text-gray-900">{item.name}</div>
@@ -2412,15 +2493,21 @@ function CruiseReservationEditContent() {
                                                                 {item.amount >= 0 ? '+' : ''}{item.amount.toLocaleString()}동
                                                             </div>
                                                         </div>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => {
-                                                                setAdditionalFeeItems((prev) => prev.filter((fee) => fee.key !== item.key));
-                                                            }}
-                                                            className="px-2 py-1 text-xs rounded border border-red-200 text-red-600 bg-white hover:bg-red-50"
-                                                        >
-                                                            삭제
-                                                        </button>
+                                                        {item.key.startsWith('birthday-event-') ? (
+                                                            <span className="px-2 py-1 text-xs rounded border border-blue-200 text-blue-700 bg-blue-50">
+                                                                자동 반영
+                                                            </span>
+                                                        ) : (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setAdditionalFeeItems((prev) => prev.filter((fee) => fee.key !== item.key));
+                                                                }}
+                                                                className="px-2 py-1 text-xs rounded border border-red-200 text-red-600 bg-white hover:bg-red-50"
+                                                            >
+                                                                삭제
+                                                            </button>
+                                                        )}
                                                     </div>
                                                 ))}
                                             </div>

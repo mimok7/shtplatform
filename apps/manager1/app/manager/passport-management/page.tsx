@@ -46,6 +46,8 @@ interface CombinedRow {
     room_type?: string;
     checkin?: string;
     nextCheckin?: string;
+    reservationDate?: string;
+    reservationEmail?: string;
 }
 
 async function resizeImage(file: File): Promise<string> {
@@ -93,6 +95,14 @@ const todayDateKey = () => {
     return `${year}-${month}-${day}`;
 };
 
+const subtractDaysDateKey = (dateKey: string, days: number) => {
+    if (!dateKey) return '';
+    const d = new Date(`${dateKey}T00:00:00`);
+    if (Number.isNaN(d.getTime())) return '';
+    d.setDate(d.getDate() - days);
+    return d.toISOString().slice(0, 10);
+};
+
 const addDays = (dateKey: string, days: number) => {
     if (!dateKey) return null;
     const d = new Date(`${dateKey}T00:00:00`);
@@ -111,7 +121,10 @@ export default function PassportManagementPage() {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [typeFilter, setTypeFilter] = useState<'all' | 'passport_only' | 'boarding_only' | 'missing'>('all');
-    const [futureOnly, setFutureOnly] = useState(true);
+    const [futureOnly, setFutureOnly] = useState(false);
+    const [groupBy, setGroupBy] = useState<'checkin' | 'reservation'>('reservation');
+    const [reservationDateFilter, setReservationDateFilter] = useState<'last7' | 'all'>('last7');
+    const [viewMode, setViewMode] = useState<'list' | 'card'>('card');
     const [previewImage, setPreviewImage] = useState<string | null>(null);
     const [uploading, setUploading] = useState<string | null>(null);
 
@@ -152,12 +165,19 @@ export default function PassportManagementPage() {
             const cruiseReservationIds = Array.from(new Set(cruiseRows.map((c: any) => c.reservation_id).filter(Boolean)));
 
             const reservationUserMap: Record<string, string> = {};
+            const reservationDateMap: Record<string, string> = {};
+            const reservationEmailMap: Record<string, string> = {};
             if (cruiseReservationIds.length > 0) {
-                const resRows = await fetchTableInBatches<{ re_id: string; re_user_id: string }>(
+                const resRows = await fetchTableInBatches<{
+                    re_id: string;
+                    re_user_id: string;
+                    re_created_at?: string;
+                    reservation_date?: string;
+                }>(
                     'reservation',
                     're_id',
                     cruiseReservationIds as string[],
-                    're_id, re_user_id',
+                    're_id, re_user_id, re_created_at, reservation_date',
                     200
                 );
 
@@ -165,21 +185,34 @@ export default function PassportManagementPage() {
                     if (r.re_id && r.re_user_id) {
                         reservationUserMap[r.re_id] = r.re_user_id;
                     }
+                    const reservationCreatedAt = r.re_created_at;
+                    if (r.re_id && reservationCreatedAt) {
+                        reservationDateMap[r.re_id] = toDateKey(reservationCreatedAt);
+                    }
                 });
 
                 const unresolvedReservationIds = (cruiseReservationIds as string[]).filter((id) => !reservationUserMap[id]);
                 if (unresolvedReservationIds.length > 0) {
-                    const retryRows = await fetchTableInBatches<{ re_id: string; re_user_id: string }>(
+                    const retryRows = await fetchTableInBatches<{
+                        re_id: string;
+                        re_user_id: string;
+                        re_created_at?: string;
+                        reservation_date?: string;
+                    }>(
                         'reservation',
                         're_id',
                         unresolvedReservationIds,
-                        're_id, re_user_id',
+                        're_id, re_user_id, re_created_at, reservation_date',
                         20
                     );
 
                     (retryRows || []).forEach((r) => {
                         if (r.re_id && r.re_user_id) {
                             reservationUserMap[r.re_id] = r.re_user_id;
+                        }
+                        const reservationCreatedAt = r.re_created_at;
+                        if (r.re_id && reservationCreatedAt) {
+                            reservationDateMap[r.re_id] = toDateKey(reservationCreatedAt);
                         }
                     });
                 }
@@ -276,6 +309,8 @@ export default function PassportManagementPage() {
                     : (userMap[userId] || { id: userId });
                 const cruise = cruiseMap[reservationId];
                 const checkin = toDateKey(c.checkin);
+                const reservationDate = reservationDateMap[reservationId];
+                const reservationEmail = reservationEmailMap[reservationId] || '';
 
                 const key = [
                     user.name || (user as any).korean_name || '',
@@ -300,11 +335,21 @@ export default function PassportManagementPage() {
                         room_type: cruise?.room_type,
                         checkin,
                         nextCheckin,
+                        reservationDate,
+                        reservationEmail,
                     };
                 }
 
                 if (!grouped[key].reservation_ids.includes(reservationId)) {
                     grouped[key].reservation_ids.push(reservationId);
+                }
+                if (reservationDate) {
+                    if (!grouped[key].reservationDate || reservationDate < grouped[key].reservationDate) {
+                        grouped[key].reservationDate = reservationDate;
+                    }
+                }
+                if (reservationEmail && !grouped[key].reservationEmail) {
+                    grouped[key].reservationEmail = reservationEmail;
                 }
 
                 const boardingDocs = boardingByReservation[reservationId] || [];
@@ -335,6 +380,8 @@ export default function PassportManagementPage() {
                     room_type: '-',
                     checkin: nextCheckin,
                     nextCheckin,
+                    reservationDate: undefined,
+                    reservationEmail: '',
                 };
             });
 
@@ -380,25 +427,35 @@ export default function PassportManagementPage() {
                 (r.user as any).korean_name?.toLowerCase().includes(q) ||
                 (r.user as any).english_name?.toLowerCase().includes(q) ||
                 r.user.email?.toLowerCase().includes(q) ||
+                r.reservationEmail?.toLowerCase().includes(q) ||
                 r.cruise_name?.toLowerCase().includes(q) ||
                 r.room_type?.toLowerCase().includes(q) ||
-                r.checkin?.includes(q)
+                r.checkin?.includes(q) ||
+                r.reservationDate?.includes(q)
             );
         }
 
-        return list;
-    }, [rows, typeFilter, searchTerm, futureOnly]);
+        if (groupBy === 'reservation' && reservationDateFilter === 'last7') {
+            const today = todayDateKey();
+            const sevenDaysAgo = subtractDaysDateKey(today, 6);
+            list = list.filter((r) => !!r.reservationDate && r.reservationDate >= sevenDaysAgo && r.reservationDate <= today);
+        }
 
-    const groupedByCheckin = useMemo(() => {
+        return list;
+    }, [rows, typeFilter, searchTerm, futureOnly, reservationDateFilter, groupBy]);
+
+    const groupedByDate = useMemo(() => {
         const groups: Record<string, CombinedRow[]> = {};
         filtered.forEach((row) => {
-            const dateKey = row.checkin || '-';
+            const dateKey = groupBy === 'reservation'
+                ? (row.reservationDate || '-')
+                : (row.checkin || '-');
             if (!groups[dateKey]) groups[dateKey] = [];
             groups[dateKey].push(row);
         });
 
-        return Object.keys(groups).sort((a, b) => a.localeCompare(b)).map((dateKey) => ({ dateKey, rows: groups[dateKey] }));
-    }, [filtered]);
+        return Object.keys(groups).sort((a, b) => b.localeCompare(a)).map((dateKey) => ({ dateKey, rows: groups[dateKey] }));
+    }, [filtered, groupBy]);
 
     const handleUploadPassport = async (row: CombinedRow, file: File) => {
         if (!row.reservation_ids.length) {
@@ -502,7 +559,7 @@ export default function PassportManagementPage() {
 
                 {/* 필터 */}
                 <div className="bg-white rounded-lg shadow-sm p-6">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">문서 유형</label>
                             <div className="flex flex-wrap gap-2">
@@ -545,6 +602,65 @@ export default function PassportManagementPage() {
                                 />
                             </div>
                         </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">그룹 기준</label>
+                            <div className="flex gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setGroupBy('checkin')}
+                                    className={`text-xs px-3 py-1 rounded border transition-colors ${groupBy === 'checkin' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-gray-50 text-gray-600 border-gray-200'}`}
+                                >
+                                    체크인 순
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setGroupBy('reservation')}
+                                    className={`text-xs px-3 py-1 rounded border transition-colors ${groupBy === 'reservation' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-gray-50 text-gray-600 border-gray-200'}`}
+                                >
+                                    예약일 순
+                                </button>
+                            </div>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">예약일 필터</label>
+                            <div className="flex gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setReservationDateFilter('last7')}
+                                    disabled={groupBy !== 'reservation'}
+                                    className={`text-xs px-3 py-1 rounded border transition-colors ${reservationDateFilter === 'last7' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-gray-50 text-gray-600 border-gray-200'} ${groupBy !== 'reservation' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                >
+                                    최근 7일
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setReservationDateFilter('all')}
+                                    disabled={groupBy !== 'reservation'}
+                                    className={`text-xs px-3 py-1 rounded border transition-colors ${reservationDateFilter === 'all' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-gray-50 text-gray-600 border-gray-200'} ${groupBy !== 'reservation' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                >
+                                    전체
+                                </button>
+                            </div>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">보기</label>
+                            <div className="flex gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setViewMode('list')}
+                                    className={`text-xs px-3 py-1 rounded border transition-colors ${viewMode === 'list' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-gray-50 text-gray-600 border-gray-200'}`}
+                                >
+                                    리스트
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setViewMode('card')}
+                                    className={`text-xs px-3 py-1 rounded border transition-colors ${viewMode === 'card' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-gray-50 text-gray-600 border-gray-200'}`}
+                                >
+                                    카드(3열)
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -561,13 +677,14 @@ export default function PassportManagementPage() {
                         </div>
                     ) : (
                         <div className="divide-y divide-gray-100">
-                            {groupedByCheckin.map(group => (
+                            {groupedByDate.map(group => (
                                 <div key={group.dateKey}>
                                     <div className="px-4 py-2 bg-blue-50 border-y border-blue-100 text-sm font-semibold text-blue-800">
-                                        체크인 {group.dateKey} ({group.rows.length}건)
+                                        {groupBy === 'reservation' ? '예약일 기준' : '체크인 기준'} {group.dateKey === '-' ? '미확인' : group.dateKey} ({group.rows.length}건)
                                     </div>
-                                    {group.rows.map(row => (
-                                        <div key={row.key} className="p-4 hover:bg-gray-50 transition-colors">
+                                    <div className={viewMode === 'card' ? 'grid grid-cols-1 md:grid-cols-3 gap-4 p-4' : ''}>
+                                        {group.rows.map(row => (
+                                            <div key={row.key} className={`${viewMode === 'card' ? 'border border-gray-300 rounded-lg p-4 bg-white shadow-sm' : 'p-4 hover:bg-gray-50 transition-colors'}`}>
                                             <div className="flex flex-wrap gap-2 mb-3">
                                                 <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${row.passports.length > 0 ? 'bg-blue-100 text-blue-700' : 'bg-gray-200 text-gray-700'}`}>
                                                     여권 {row.passports.length > 0 ? `${row.passports.length}장` : '미등록'}
@@ -576,9 +693,9 @@ export default function PassportManagementPage() {
                                                     승선코드 {row.boardingCodes.length > 0 ? '등록' : '미등록'}
                                                 </span>
                                             </div>
-                                            <div className="flex flex-col md:flex-row md:items-start gap-4">
+                                            <div className={`flex flex-col ${viewMode === 'card' ? 'gap-4' : 'md:flex-row md:items-start gap-4'}`}>
                                                 {/* 사용자 정보 */}
-                                                <div className="flex-shrink-0 w-48">
+                                                <div className={`flex-shrink-0 ${viewMode === 'card' ? 'w-full' : 'w-48'}`}>
                                                     <div className="flex items-center gap-2 mb-1">
                                                         <User className="w-4 h-4 text-gray-400" />
                                                         <span className="text-sm font-medium text-gray-900">
@@ -588,7 +705,7 @@ export default function PassportManagementPage() {
                                                     {(row.user as any).english_name && (
                                                         <p className="text-xs text-gray-500 ml-6">{(row.user as any).english_name}</p>
                                                     )}
-                                                    <p className="text-xs text-gray-400 ml-6">이메일: {row.user.email || '-'}</p>
+                                                    <p className="text-xs text-gray-400 ml-6">이메일: {row.user.email || row.reservationEmail || '-'}</p>
                                                     <p className="text-xs text-gray-600 ml-6 mt-1">크루즈: {row.cruise_name || '-'}</p>
                                                     <p className="text-xs text-gray-600 ml-6">객실: {row.room_type || '-'}</p>
                                                     {row.checkin && (
@@ -597,6 +714,9 @@ export default function PassportManagementPage() {
                                                             체크인: {toDateKey(row.checkin)}
                                                         </p>
                                                     )}
+                                                    <p className="text-xs text-purple-600 ml-6 mt-1">
+                                                        예약일: {row.reservationDate || '-'}
+                                                    </p>
                                                 </div>
 
                                                 {/* 여권 사진 */}
@@ -687,8 +807,9 @@ export default function PassportManagementPage() {
                                                     </label>
                                                 </div>
                                             </div>
-                                        </div>
-                                    ))}
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
                             ))}
                         </div>

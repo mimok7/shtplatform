@@ -686,11 +686,13 @@ export default function ManagerPaymentsPage() {
       });
 
       setPayments(enrichedWithQuote);
+      setSelectedPayments(new Set(enrichedWithQuote.map((p: any) => p.id)));
       setHasMore((enrichedWithQuote?.length || 0) === currentPageSize);
       debugLog('💾 결제 목록 로드 완료:', enrichedWithQuote.length, '건');
     } catch (e) {
       console.error('결제 목록 로드 실패:', e);
       setPayments([]);
+      setSelectedPayments(new Set());
       setHasMore(false);
     } finally {
       setLoading(false);
@@ -837,7 +839,20 @@ export default function ManagerPaymentsPage() {
         return { ...r, quoteTitle: qId ? ((quotesMapNext.get(qId) as any)?.title || null) : null };
       });
 
+      const currentPaymentIds = new Set(payments.map((p: any) => p.id));
       setPayments(prev => prev.concat(enrichedNextWithQuote));
+      setSelectedPayments(prevSelected => {
+        const wasAllSelected =
+          currentPaymentIds.size > 0 &&
+          prevSelected.size === currentPaymentIds.size &&
+          Array.from(currentPaymentIds).every((id) => prevSelected.has(id));
+
+        if (!wasAllSelected) return prevSelected;
+
+        const next = new Set(prevSelected);
+        enrichedNextWithQuote.forEach((p: any) => next.add(p.id));
+        return next;
+      });
       if ((enrichedNextWithQuote?.length || 0) < currentPageSize) setHasMore(false);
     } catch (e) {
       console.error('다음 페이지 로드 실패:', e);
