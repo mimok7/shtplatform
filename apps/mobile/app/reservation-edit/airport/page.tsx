@@ -873,7 +873,7 @@ function AirportReservationEditContent() {
                                                     />
                                                 )}
                                                 <div className="shrink-0">
-                                                    <label className="block text-[10px] text-gray-400 mb-0.5">가격코드 (읽기전용)</label>
+                                                    <label className="block text-[10px] text-gray-700 mb-0.5">가격코드 (읽기전용)</label>
                                                     <input
                                                         type="text"
                                                         value={formData.airport_price_code}

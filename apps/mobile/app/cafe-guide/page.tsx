@@ -960,7 +960,7 @@ ${totalAmount > 0 ? `${formatAmount(totalAmount)}동` : '-'}
                             </div>
 
                             <div>
-                                <label className="block text-xs text-gray-500 mb-1">제목</label>
+                                <label className="block text-xs text-gray-700 mb-1">제목</label>
                                 <input
                                     value={generatedTitle}
                                     readOnly
@@ -970,7 +970,7 @@ ${totalAmount > 0 ? `${formatAmount(totalAmount)}동` : '-'}
                             </div>
 
                             <div>
-                                <label className="block text-xs text-gray-500 mb-1">내용</label>
+                                <label className="block text-xs text-gray-700 mb-1">내용</label>
                                 <div className="w-full min-h-[420px] border rounded-lg px-3 py-2 text-sm whitespace-pre-wrap break-words bg-white">
                                     {generatedBody || generatedHeader || '서비스 버튼을 눌러 안내문을 생성해 주세요.'}
                                 </div>

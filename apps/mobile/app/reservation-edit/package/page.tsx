@@ -1084,7 +1084,7 @@ function PackageReservationEditContent() {
                                     { label: '유아(좌석)', key: 'infant_seat' },
                                 ].map(({ label, key }) => (
                                     <div key={key}>
-                                        <label className="block text-xs text-gray-500 mb-1">{label}</label>
+                                        <label className="block text-xs text-gray-700 mb-1">{label}</label>
                                         <input
                                             type="number"
                                             value={(packageDetail as any)[key] || 0}
@@ -1108,7 +1108,7 @@ function PackageReservationEditContent() {
                                     { label: '크루즈 차량', key: 'cruise_vehicle' },
                                 ].map(({ label, key }) => (
                                     <div key={key}>
-                                        <label className="block text-xs text-gray-500 mb-1">{label}</label>
+                                        <label className="block text-xs text-gray-700 mb-1">{label}</label>
                                         <input
                                             type="text"
                                             value={(packageDetail as any)[key] || ''}
@@ -1131,7 +1131,7 @@ function PackageReservationEditContent() {
                                     { label: '드랍 좌석', key: 'sht_dropoff_seat' },
                                 ].map(({ label, key }) => (
                                     <div key={key}>
-                                        <label className="block text-xs text-gray-500 mb-1">{label}</label>
+                                        <label className="block text-xs text-gray-700 mb-1">{label}</label>
                                         <input
                                             type="text"
                                             value={(packageDetail as any)[key] || ''}
@@ -1156,7 +1156,7 @@ function PackageReservationEditContent() {
                                     { label: '유아(좌석) 단가', key: 'infant_seat_price' },
                                 ].map(({ label, key }) => (
                                     <div key={key}>
-                                        <label className="block text-xs text-gray-500 mb-1">{label}</label>
+                                        <label className="block text-xs text-gray-700 mb-1">{label}</label>
                                         <input
                                             type="number"
                                             value={(packageDetail as any)[key] || 0}
@@ -1184,7 +1184,7 @@ function PackageReservationEditContent() {
                         {/* 패키지 합계 및 추가 요청 */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-xs text-gray-500 mb-1">패키지 총 금액 (동)</label>
+                                <label className="block text-xs text-gray-700 mb-1">패키지 총 금액 (동)</label>
                                 <input
                                     type="number"
                                     value={packageDetail.total_price || 0}
@@ -1193,7 +1193,7 @@ function PackageReservationEditContent() {
                                 />
                             </div>
                             <div>
-                                <label className="block text-xs text-gray-500 mb-1">추가 요청사항</label>
+                                <label className="block text-xs text-gray-700 mb-1">추가 요청사항</label>
                                 <textarea
                                     value={packageDetail.additional_requests || ''}
                                     onChange={(e) => setPackageDetail(prev => prev ? { ...prev, additional_requests: e.target.value } : prev)}

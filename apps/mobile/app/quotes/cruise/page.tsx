@@ -1704,7 +1704,7 @@ function ManagerCruiseQuoteForm() {
                                 <h3 className="text-sm font-semibold text-gray-800 mb-2">👥 인원수 입력</h3>
                                 <div className="grid grid-cols-2 gap-2">
                                     <div>
-                                        <label className="block text-xs font-medium text-gray-600 mb-1">
+                                        <label className="block text-xs font-medium text-gray-700 mb-1">
                                             성인 ({formatVNDCurrency(selectedRateCard.price_adult)}/인)
                                         </label>
                                         <input
@@ -1718,7 +1718,7 @@ function ManagerCruiseQuoteForm() {
 
                                     {selectedRateCard.price_child != null && (
                                         <div>
-                                            <label className="block text-xs font-medium text-gray-600 mb-1">
+                                            <label className="block text-xs font-medium text-gray-700 mb-1">
                                                 아동 5~11세 ({formatVNDCurrency(selectedRateCard.price_child)}/인)
                                             </label>
                                             <input
@@ -1733,7 +1733,7 @@ function ManagerCruiseQuoteForm() {
 
                                     {selectedRateCard.price_child_extra_bed != null && selectedRateCard.extra_bed_available && (
                                         <div>
-                                            <label className="block text-xs font-medium text-gray-600 mb-1">
+                                            <label className="block text-xs font-medium text-gray-700 mb-1">
                                                 아동 엑스트라베드 ({formatVNDCurrency(selectedRateCard.price_child_extra_bed)}/인)
                                             </label>
                                             <input
@@ -1748,7 +1748,7 @@ function ManagerCruiseQuoteForm() {
 
                                     {selectedRateCard.price_infant != null && (
                                         <div>
-                                            <label className="block text-xs font-medium text-gray-600 mb-1">
+                                            <label className="block text-xs font-medium text-gray-700 mb-1">
                                                 유아 0~4세 ({formatVNDCurrency(selectedRateCard.price_infant)}/인)
                                             </label>
                                             <input
@@ -1763,7 +1763,7 @@ function ManagerCruiseQuoteForm() {
 
                                     {selectedRateCard.price_extra_bed != null && selectedRateCard.extra_bed_available && (
                                         <div>
-                                            <label className="block text-xs font-medium text-gray-600 mb-1">
+                                            <label className="block text-xs font-medium text-gray-700 mb-1">
                                                 엑스트라베드 ({formatVNDCurrency(selectedRateCard.price_extra_bed)}/인)
                                             </label>
                                             <input
@@ -1778,7 +1778,7 @@ function ManagerCruiseQuoteForm() {
 
                                     {selectedRateCard.price_single != null && selectedRateCard.single_available && (
                                         <div>
-                                            <label className="block text-xs font-medium text-gray-600 mb-1">
+                                            <label className="block text-xs font-medium text-gray-700 mb-1">
                                                 싱글차지 ({formatVNDCurrency(selectedRateCard.price_single)}/인)
                                             </label>
                                             <input
@@ -1851,7 +1851,7 @@ function ManagerCruiseQuoteForm() {
                                                 </div>
                                                 {isSelected && (
                                                     <div className="mt-2 flex items-center gap-2" onClick={e => e.stopPropagation()}>
-                                                        <label className="text-xs text-gray-600">수량:</label>
+                                                        <label className="text-xs text-gray-700">수량:</label>
                                                         <input
                                                             type="number"
                                                             min="1"
@@ -2042,7 +2042,7 @@ function ManagerCruiseQuoteForm() {
                                     <div className="grid grid-cols-1 gap-2">
                                         {selectedCarCategory && (
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-600 mb-1">경로</label>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">경로</label>
                                                 <select
                                                     value={vehicle.route || ''}
                                                     onChange={async (e) => {
@@ -2064,7 +2064,7 @@ function ManagerCruiseQuoteForm() {
                                         )}
 
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-600 mb-1">차량타입</label>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">차량타입</label>
                                             <select
                                                 value={vehicle.car_type}
                                                 onChange={async (e) => {
@@ -2087,7 +2087,7 @@ function ManagerCruiseQuoteForm() {
                                         </div>
 
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-600 mb-1">차량 및 인원수</label>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">차량 및 인원수</label>
                                             <input
                                                 type="number" min="0"
                                                 value={vehicle.count}

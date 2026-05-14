@@ -43,7 +43,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko">
-      <body className="bg-gray-50 text-gray-900 antialiased">
+      <body className="mobile-ui bg-gray-50 text-gray-900 antialiased">
         <AuthGate>{children}</AuthGate>
       </body>
     </html>

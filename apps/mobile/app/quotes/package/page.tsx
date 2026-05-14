@@ -235,7 +235,7 @@ function PackageQuoteForm() {
                         <h3 className="text-md font-bold mb-4">👥 인원 설정</h3>
                         <div className="grid grid-cols-3 gap-4">
                             <div>
-                                <label className="block text-xs font-bold text-gray-500 mb-1">성인</label>
+                                <label className="block text-xs font-bold text-gray-700 mb-1">성인</label>
                                 <select
                                     className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm"
                                     value={form.adultCount}
@@ -247,7 +247,7 @@ function PackageQuoteForm() {
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-gray-500 mb-1">아동 (2-11세)</label>
+                                <label className="block text-xs font-bold text-gray-700 mb-1">아동 (2-11세)</label>
                                 <select
                                     className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm"
                                     value={form.childCount}
@@ -259,7 +259,7 @@ function PackageQuoteForm() {
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-gray-500 mb-1">유아 (0-1세)</label>
+                                <label className="block text-xs font-bold text-gray-700 mb-1">유아 (0-1세)</label>
                                 <select
                                     className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm"
                                     value={form.infantCount}
@@ -272,7 +272,7 @@ function PackageQuoteForm() {
                             </div>
                         </div>
                         <div className="mt-4">
-                            <label className="block text-xs font-bold text-gray-500 mb-1">출발일</label>
+                            <label className="block text-xs font-bold text-gray-700 mb-1">출발일</label>
                             <input
                                 type="date"
                                 className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm"
@@ -281,7 +281,7 @@ function PackageQuoteForm() {
                             />
                         </div>
                         <div className="mt-4">
-                            <label className="block text-xs font-bold text-gray-500 mb-1">요청사항 (옵션)</label>
+                            <label className="block text-xs font-bold text-gray-700 mb-1">요청사항 (옵션)</label>
                             <textarea
                                 className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm"
                                 rows={3}

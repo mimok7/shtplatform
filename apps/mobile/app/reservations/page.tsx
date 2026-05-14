@@ -6,10 +6,11 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import supabase from '@/lib/supabase';
 import {
-  CheckSquare, Square, ArrowLeft, RefreshCw, CheckCircle,
-  XCircle, Clock, AlertTriangle, Users, Eye, X,
+  CheckSquare, Square, ArrowLeft, RefreshCw,
+  Clock, AlertTriangle, Users,
   Ship, Plane, Building, MapPin, Car, Bus, Package
 } from 'lucide-react';
+import ReservationDetailModal from '@/app/schedule/ReservationDetailModal';
 
 /* ── 타입 정의 ─────────────────────────────── */
 interface ServiceReservation {
@@ -30,22 +31,6 @@ interface ReservationItem {
   } | null;
   quote: { title: string } | null;
   services: ServiceReservation[];
-}
-
-interface DetailField {
-  label: string;
-  value: any;
-}
-
-interface DetailServiceItem {
-  type: string;
-  label: string;
-  sublabel?: string;
-  date?: string;
-  guest?: number;
-  price?: number;
-  feeSummary?: string[];
-  fields: DetailField[];
 }
 
 type BulkAction = 'approve' | 'confirm' | 'cancel' | 'delete' | 'status_update';
@@ -70,7 +55,8 @@ export default function ReservationsPage() {
   // 상세보기 모달
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailItem, setDetailItem] = useState<ReservationItem | null>(null);
-  const [detailServices, setDetailServices] = useState<DetailServiceItem[]>([]);
+  const [detailModalItem, setDetailModalItem] = useState<any | null>(null);
+  const [detailModalItems, setDetailModalItems] = useState<any[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailProcessing, setDetailProcessing] = useState(false);
 
@@ -369,30 +355,37 @@ export default function ReservationsPage() {
   /* ── 상세보기 ──────────────────────────── */
   const handleViewDetail = async (reservation: ReservationItem) => {
     setDetailItem(reservation);
-    setDetailOpen(true);
     setDetailLoading(true);
-    setDetailServices([]);
+    setDetailModalItems([]);
+    setDetailModalItem(null);
 
     try {
-      const serviceIds = reservation.services.map(s => s.re_id);
-      if (serviceIds.length === 0) return;
+      const serviceIds = reservation.services.map(s => s.re_id).filter(Boolean);
+      if (serviceIds.length === 0) {
+        setDetailOpen(true);
+        return;
+      }
 
       const cruiseIds = reservation.services.filter(s => s.re_type === 'cruise').map(s => s.re_id);
       const carIds = reservation.services.filter(s => s.re_type === 'car').map(s => s.re_id);
       const airportIds = reservation.services.filter(s => s.re_type === 'airport').map(s => s.re_id);
       const hotelIds = reservation.services.filter(s => s.re_type === 'hotel').map(s => s.re_id);
       const tourIds = reservation.services.filter(s => s.re_type === 'tour').map(s => s.re_id);
+      const ticketIds = reservation.services.filter(s => s.re_type === 'ticket').map(s => s.re_id);
+      const rentcarIds = reservation.services.filter(s => s.re_type === 'rentcar').map(s => s.re_id);
       const shtIds = reservation.services.filter(s => ['sht', 'car_sht'].includes(s.re_type)).map(s => s.re_id);
       const allCarQueryIds = [...cruiseIds, ...carIds];
 
       const [
-        cruiseRes, cruiseCarRes, airportRes, hotelRes, tourRes, shtRes,
+        cruiseRes, cruiseCarRes, airportRes, hotelRes, tourRes, ticketRes, rentcarRes, shtRes,
       ] = await Promise.all([
         cruiseIds.length > 0 ? supabase.from('reservation_cruise').select('*').in('reservation_id', cruiseIds) : { data: [] },
         allCarQueryIds.length > 0 ? supabase.from('reservation_cruise_car').select('*').in('reservation_id', allCarQueryIds) : { data: [] },
         airportIds.length > 0 ? supabase.from('reservation_airport').select('*').in('reservation_id', airportIds) : { data: [] },
         hotelIds.length > 0 ? supabase.from('reservation_hotel').select('*').in('reservation_id', hotelIds) : { data: [] },
         tourIds.length > 0 ? supabase.from('reservation_tour').select('*').in('reservation_id', tourIds) : { data: [] },
+        ticketIds.length > 0 ? supabase.from('reservation_ticket').select('*').in('reservation_id', ticketIds) : { data: [] },
+        rentcarIds.length > 0 ? supabase.from('reservation_rentcar').select('*').in('reservation_id', rentcarIds) : { data: [] },
         shtIds.length > 0 ? supabase.from('reservation_car_sht').select('*').in('reservation_id', shtIds) : { data: [] },
       ]);
 
@@ -416,195 +409,179 @@ export default function ReservationsPage() {
       const roomPriceMap = new Map((roomPrices.data || []).map(r => [r.id, r]));
       const carPriceMap = new Map((carPrices.data || []).map(r => [r.car_code, r]));
       const rentcarPriceMap = new Map((rentcarPrices.data || []).map((r: any) => [r.rentcar_code, r]));
+      const statusMap = new Map(reservation.services.map((s) => [s.re_id, s.re_status]));
+      const typeMap = new Map(reservation.services.map((s) => [s.re_id, s.re_type]));
 
-      const details: DetailServiceItem[] = [];
+      const baseHeader = {
+        source: 'new',
+        re_quote_id: reservation.re_quote_id,
+        quoteId: reservation.re_quote_id,
+        customerName: reservation.users?.name || '',
+        customerEnglishName: reservation.users?.english_name || '',
+        email: reservation.users?.email || '',
+        phone: reservation.users?.phone || '',
+        re_created_at: reservation.re_created_at,
+      };
 
-      (cruiseRes.data || []).forEach(r => {
+      const modalItems: any[] = [];
+
+      (cruiseRes.data || []).forEach((r: any) => {
         const info = roomPriceMap.get(r.room_price_code);
-        let feeSummary = [
-          formatLinePrice('성인', info?.price_adult, r.adult_count),
-          formatLinePrice('아동', info?.price_child, r.child_count),
-          formatLinePrice('유아', info?.price_infant, r.infant_count),
-          formatLinePrice('아동 엑스트라', info?.price_child_extra_bed, r.child_extra_bed_count),
-          formatLinePrice('엑스트라', info?.price_extra_bed, r.extra_bed_count),
-          formatLinePrice('싱글', info?.price_single, r.single_count),
-        ].filter(Boolean) as string[];
-
-        if (feeSummary.length === 0 && Number(r.room_total_price || 0) > 0) {
-          feeSummary = [`총액 ${formatDong(Number(r.room_total_price))}`];
-        }
-
-        details.push({
-          type: 'cruise',
-          label: info?.cruise_name || '크루즈',
-          sublabel: info?.room_type || '',
-          date: r.checkin,
-          guest: r.guest_count,
-          price: r.room_total_price,
-          feeSummary,
-          fields: [
-            { label: '일정', value: info?.schedule_type },
-            { label: '체크인', value: r.checkin },
-            { label: '객실수', value: r.room_count },
-            { label: '총 인원수', value: r.guest_count },
-            { label: '성인', value: r.adult_count },
-            { label: '아동', value: r.child_count },
-            { label: '유아', value: r.infant_count },
-            { label: '아동 엑스트라', value: r.child_extra_bed_count },
-            { label: '엑스트라', value: r.extra_bed_count },
-            { label: '싱글', value: r.single_count },
-            { label: '객실 총 금액', value: r.room_total_price },
-            { label: '요청사항', value: r.request_note },
-          ],
+        modalItems.push({
+          ...baseHeader,
+          ...r,
+          serviceType: 'cruise',
+          reservation_id: r.reservation_id,
+          reservationId: r.reservation_id,
+          re_id: r.reservation_id,
+          status: statusMap.get(r.reservation_id) || 'pending',
+          cruiseName: info?.cruise_name || '크루즈',
+          cruise: info?.cruise_name || '크루즈',
+          roomType: info?.room_type || r.room_price_code || '',
+          paymentMethod: r.payment_method || '',
+          totalPrice: Number(r.room_total_price || 0),
+          totalAmount: Number(r.room_total_price || 0),
         });
       });
-      (cruiseCarRes.data || []).forEach(r => {
+
+      (cruiseCarRes.data || []).forEach((r: any) => {
         const rentcarInfo = rentcarPriceMap.get(r.car_price_code);
         const carInfo = carPriceMap.get(r.car_price_code);
-        const vehicleType = rentcarInfo?.vehicle_type || carInfo?.car_type;
-        const unitPrice = rentcarInfo?.price || carInfo?.price || calculateUnitPrice(r.car_total_price, (r.car_count || r.passenger_count || 0));
-        const quantity = Number(r.car_count || 0) > 0 ? Number(r.car_count || 0) : Number(r.passenger_count || 0);
-        const quantityLabel = Number(r.car_count || 0) > 0 ? '대' : '명';
-        const routeText = [r.pickup_location, r.dropoff_location].filter(Boolean).join(' → ');
-
-        const vehicleFeeSummary = [formatGenericPrice(unitPrice, quantity, quantityLabel)].filter(Boolean) as string[];
-        if (vehicleFeeSummary.length === 0 && Number(r.car_total_price || 0) > 0) {
-          vehicleFeeSummary.push(`총액 ${formatDong(Number(r.car_total_price))}`);
-        }
-
-        details.push({
-          type: 'vehicle',
-          label: '크루즈 차량',
-          // 요청사항: 카드 하단 첫 줄은 경로 대신 차종을 표시
-          sublabel: vehicleType || '',
-          date: r.pickup_datetime,
-          price: r.car_total_price,
-          feeSummary: vehicleFeeSummary,
-          fields: [
-            { label: '크루즈', value: carInfo?.cruise },
-            { label: '차량명', value: vehicleType },
-            { label: '카테고리', value: carInfo?.car_category },
-            { label: '경로', value: routeText },
-            { label: '차량 수', value: r.car_count },
-            { label: '승객 수', value: r.passenger_count },
-            { label: '픽업 장소', value: r.pickup_location },
-            { label: '하차 장소', value: r.dropoff_location },
-            { label: '픽업 일시', value: r.pickup_datetime },
-            { label: '차량 총 금액', value: r.car_total_price },
-            { label: '요청사항', value: r.request_note },
-          ],
-        });
-      });
-      (airportRes.data || []).forEach(r => {
-        const quantity = Number(r.ra_passenger_count || 0) > 0 ? Number(r.ra_passenger_count || 0) : Number(r.ra_car_count || 0);
-        const unitPrice = calculateUnitPrice(r.total_price, quantity);
-        const feeSummary = [formatGenericPrice(unitPrice, quantity, Number(r.ra_passenger_count || 0) > 0 ? '명' : '대')].filter(Boolean) as string[];
-        if (feeSummary.length === 0 && Number(r.total_price || 0) > 0) {
-          feeSummary.push(`총액 ${formatDong(Number(r.total_price))}`);
-        }
-        details.push({
-          type: 'airport',
-          label: '공항',
-          sublabel: `${r.ra_airport_location || ''} / ${r.ra_flight_number || ''}`,
-          date: r.ra_datetime ? new Date(r.ra_datetime).toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' }) : '',
-          guest: r.ra_passenger_count,
-          price: r.total_price,
-          feeSummary,
-          fields: [
-            { label: '구분', value: r.way_type || r.ra_way_type },
-            { label: '일시', value: r.ra_datetime },
-            { label: '인원', value: r.ra_passenger_count },
-            { label: '차량수', value: r.ra_car_count },
-            { label: '수하물', value: r.ra_luggage_count },
-            { label: '항공편', value: r.ra_flight_number },
-            { label: '공항 위치', value: r.ra_airport_location },
-            { label: '숙소 정보', value: r.accommodation_info },
-            { label: '요청사항', value: r.request_note },
-          ],
-        });
-      });
-      (hotelRes.data || []).forEach(r => {
-        const quantity = Number(r.room_count || 0) > 0 ? Number(r.room_count || 0) : Number(r.guest_count || 0);
-        const unitPrice = calculateUnitPrice(r.total_price, quantity);
-        const feeSummary = [formatGenericPrice(unitPrice, quantity, Number(r.room_count || 0) > 0 ? '객실' : '명')].filter(Boolean) as string[];
-        if (feeSummary.length === 0 && Number(r.total_price || 0) > 0) {
-          feeSummary.push(`총액 ${formatDong(Number(r.total_price))}`);
-        }
-        details.push({
-          type: 'hotel',
-          label: '호텔',
-          sublabel: r.hotel_category || '',
-          date: r.checkin_date,
-          guest: r.guest_count,
-          price: r.total_price,
-          feeSummary,
-          fields: [
-            { label: '호텔 카테고리', value: r.hotel_category },
-            { label: '체크인', value: r.checkin_date },
-            { label: '숙박일수', value: r.nights },
-            { label: '객실수', value: r.room_count },
-            { label: '투숙객', value: r.guest_count },
-            { label: '총 금액', value: r.total_price },
-            { label: '요청사항', value: r.request_note },
-          ],
-        });
-      });
-      (tourRes.data || []).forEach(r => {
-        const quantity = Number(r.tour_capacity || 0);
-        const unitPrice = calculateUnitPrice(r.total_price, quantity);
-        const feeSummary = [formatGenericPrice(unitPrice, quantity, '명')].filter(Boolean) as string[];
-        if (feeSummary.length === 0 && Number(r.total_price || 0) > 0) {
-          feeSummary.push(`총액 ${formatDong(Number(r.total_price))}`);
-        }
-        details.push({
-          type: 'tour',
-          label: '투어',
-          sublabel: '',
-          date: r.usage_date,
-          guest: r.tour_capacity,
-          price: r.total_price,
-          feeSummary,
-          fields: [
-            { label: '사용일', value: r.usage_date },
-            { label: '인원', value: r.tour_capacity },
-            { label: '픽업 위치', value: r.pickup_location },
-            { label: '하차 위치', value: r.dropoff_location },
-            { label: '총 금액', value: r.total_price },
-            { label: '요청사항', value: r.request_note },
-          ],
-        });
-      });
-      (shtRes.data || []).forEach(r => {
-        const quantity = 1;
-        const unitPrice = calculateUnitPrice(r.car_total_price, quantity);
-        const feeSummary = [formatGenericPrice(unitPrice, quantity, '건')].filter(Boolean) as string[];
-        if (feeSummary.length === 0 && Number(r.car_total_price || 0) > 0) {
-          feeSummary.push(`총액 ${formatDong(Number(r.car_total_price))}`);
-        }
-        details.push({
-          type: 'sht',
-          label: '스하차량',
-          sublabel: `${r.vehicle_number || ''} / ${r.seat_number || ''}`,
-          date: r.usage_date,
-          price: r.car_total_price,
-          feeSummary,
-          fields: [
-            { label: '탑승일', value: r.usage_date },
-            { label: '차량번호', value: r.vehicle_number },
-            { label: '좌석번호', value: r.seat_number },
-            { label: '구분', value: r.service_type },
-            { label: '카테고리', value: r.category },
-            { label: '색상', value: r.color_label },
-            { label: '탑승자명', value: r.name },
-            { label: '총 금액', value: r.car_total_price },
-            { label: '요청사항', value: r.request_note },
-          ],
+        const baseType = typeMap.get(r.reservation_id);
+        modalItems.push({
+          ...baseHeader,
+          ...r,
+          serviceType: baseType === 'car' ? 'car' : 'vehicle',
+          reservation_id: r.reservation_id,
+          reservationId: r.reservation_id,
+          re_id: r.reservation_id,
+          status: statusMap.get(r.reservation_id) || 'pending',
+          carType: rentcarInfo?.vehicle_type || carInfo?.car_type || '',
+          route: [r.pickup_location, r.dropoff_location].filter(Boolean).join(' → '),
+          passengerCount: Number(r.passenger_count || 0),
+          pickupDatetime: r.pickup_datetime || '',
+          pickupLocation: r.pickup_location || '',
+          dropoffLocation: r.dropoff_location || '',
+          totalPrice: Number(r.car_total_price || 0),
+          totalAmount: Number(r.car_total_price || 0),
         });
       });
 
-      setDetailServices(details);
+      (airportRes.data || []).forEach((r: any) => {
+        modalItems.push({
+          ...baseHeader,
+          ...r,
+          serviceType: 'airport',
+          reservation_id: r.reservation_id,
+          reservationId: r.reservation_id,
+          re_id: r.reservation_id,
+          status: statusMap.get(r.reservation_id) || 'pending',
+          passengerCount: Number(r.ra_passenger_count || 0),
+          carCount: Number(r.ra_car_count || 0),
+          totalPrice: Number(r.total_price || 0),
+          totalAmount: Number(r.total_price || 0),
+          flightNumber: r.ra_flight_number || '',
+          airportName: r.ra_airport_location || '',
+        });
+      });
+
+      (hotelRes.data || []).forEach((r: any) => {
+        modalItems.push({
+          ...baseHeader,
+          ...r,
+          serviceType: 'hotel',
+          reservation_id: r.reservation_id,
+          reservationId: r.reservation_id,
+          re_id: r.reservation_id,
+          status: statusMap.get(r.reservation_id) || 'pending',
+          hotelName: r.hotel_category || '호텔',
+          checkinDate: r.checkin_date || '',
+          guestCount: Number(r.guest_count || 0),
+          roomCount: Number(r.room_count || 0),
+          totalPrice: Number(r.total_price || 0),
+          totalAmount: Number(r.total_price || 0),
+        });
+      });
+
+      (tourRes.data || []).forEach((r: any) => {
+        modalItems.push({
+          ...baseHeader,
+          ...r,
+          serviceType: 'tour',
+          reservation_id: r.reservation_id,
+          reservationId: r.reservation_id,
+          re_id: r.reservation_id,
+          status: statusMap.get(r.reservation_id) || 'pending',
+          tourName: '투어',
+          tourDate: r.usage_date || '',
+          tourCapacity: Number(r.tour_capacity || 0),
+          pickupLocation: r.pickup_location || '',
+          dropoffLocation: r.dropoff_location || '',
+          totalPrice: Number(r.total_price || 0),
+          totalAmount: Number(r.total_price || 0),
+        });
+      });
+
+      (ticketRes.data || []).forEach((r: any) => {
+        modalItems.push({
+          ...baseHeader,
+          ...r,
+          serviceType: 'ticket',
+          reservation_id: r.reservation_id,
+          reservationId: r.reservation_id,
+          re_id: r.reservation_id,
+          status: statusMap.get(r.reservation_id) || 'pending',
+          ticketName: r.ticket_name || r.program_selection || '',
+          usageDate: r.usage_date || '',
+          ticketQuantity: Number(r.ticket_quantity || 0),
+          totalPrice: Number(r.total_price || 0),
+          totalAmount: Number(r.total_price || 0),
+        });
+      });
+
+      (rentcarRes.data || []).forEach((r: any) => {
+        modalItems.push({
+          ...baseHeader,
+          ...r,
+          serviceType: 'rentcar',
+          reservation_id: r.reservation_id,
+          reservationId: r.reservation_id,
+          re_id: r.reservation_id,
+          status: statusMap.get(r.reservation_id) || 'pending',
+          passengerCount: Number(r.passenger_count || 0),
+          carCount: Number(r.car_count || 0),
+          totalPrice: Number(r.total_price || 0),
+          totalAmount: Number(r.total_price || 0),
+        });
+      });
+
+      (shtRes.data || []).forEach((r: any) => {
+        modalItems.push({
+          ...baseHeader,
+          ...r,
+          serviceType: 'sht',
+          reservation_id: r.reservation_id,
+          reservationId: r.reservation_id,
+          re_id: r.reservation_id,
+          status: statusMap.get(r.reservation_id) || 'pending',
+          usageDate: r.usage_date || '',
+          vehicleNumber: r.vehicle_number || '',
+          seatNumber: r.seat_number || '',
+          totalPrice: Number(r.car_total_price || 0),
+          totalAmount: Number(r.car_total_price || 0),
+        });
+      });
+
+      setDetailModalItems(modalItems);
+      setDetailModalItem(modalItems[0] || {
+        ...baseHeader,
+        reservationId: reservation.services[0]?.re_id || '',
+        re_id: reservation.services[0]?.re_id || '',
+      });
+      setDetailOpen(true);
     } catch (err) {
       console.error('상세 로드 실패:', err);
+      setDetailOpen(true);
     } finally {
       setDetailLoading(false);
     }
@@ -617,17 +594,6 @@ export default function ReservationsPage() {
     confirmed: '확정',
     cancelled: '취소됨',
   }[s] || s);
-  const getStatusColor = (s: string) => ({
-    approved: 'bg-blue-100 text-blue-700',
-    confirmed: 'bg-green-100 text-green-700',
-    cancelled: 'bg-red-100 text-red-700',
-  }[s] || 'bg-yellow-100 text-yellow-700');
-  const getStatusIcon = (s: string) => ({
-    approved: <CheckCircle className="w-3.5 h-3.5 text-blue-600" />,
-    confirmed: <CheckCircle className="w-3.5 h-3.5 text-green-600" />,
-    cancelled: <XCircle className="w-3.5 h-3.5 text-red-600" />,
-  }[s] || <Clock className="w-3.5 h-3.5 text-yellow-600" />);
-
   const getTypeIcon = (type: string) => {
     const map: Record<string, React.ReactNode> = {
       cruise: <Ship className="w-3.5 h-3.5 text-blue-600" />,
@@ -657,14 +623,6 @@ export default function ReservationsPage() {
     vehicle: 'bg-cyan-100 text-cyan-700', sht: 'bg-indigo-100 text-indigo-700',
     car_sht: 'bg-indigo-100 text-indigo-700', package: 'bg-pink-100 text-pink-700',
   }[type] || 'bg-gray-100 text-gray-700');
-
-  const hasValue = (value: any) => {
-    if (value === undefined || value === null) return false;
-    if (typeof value === 'number') return value !== 0;
-    const str = String(value).trim();
-    if (str === '' || str === '0' || str === '0명' || str === '0대' || str === '0객실') return false;
-    return true;
-  };
 
   const detailProcessInfo = useMemo(() => {
     if (!detailItem) return { count: 0, label: '처리' };
@@ -867,134 +825,19 @@ export default function ReservationsPage() {
         )}
       </div>
 
-      {/* 상세 모달 */}
-      {detailOpen && detailItem && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-start justify-center pt-0 sm:pt-2 bg-black/40" onClick={() => setDetailOpen(false)}>
-          <div className="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl max-h-[95vh] sm:max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="sticky top-0 bg-white border-b px-4 py-3 flex items-center justify-between">
-              <h2 className="font-bold text-gray-800">예약 상세</h2>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={moveToReservationEdit}
-                  className="px-2.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap bg-blue-500 text-white"
-                >
-                  수정
-                </button>
-                <button
-                  onClick={handleDetailProcess}
-                  disabled={detailLoading || detailProcessing || detailProcessInfo.count === 0}
-                  className={`px-2.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap ${
-                    detailLoading || detailProcessing || detailProcessInfo.count === 0
-                      ? 'bg-gray-300 text-gray-500'
-                      : 'bg-green-500 text-white'
-                  }`}
-                >
-                  {detailProcessing ? '처리중...' : `${detailProcessInfo.label} (${detailProcessInfo.count})`}
-                </button>
-                <button onClick={() => setDetailOpen(false)} className="p-1 rounded-full hover:bg-gray-100">
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-
-            <div className="p-4 space-y-4">
-              {/* 고객 정보 */}
-              <div className="bg-gray-50 rounded-xl p-4">
-                <h3 className="text-sm font-semibold text-gray-600 mb-2">고객 정보</h3>
-                <p className="font-bold text-lg text-gray-800">{detailItem.users?.name || 'N/A'}</p>
-                {detailItem.users?.english_name && (
-                  <p className="text-sm text-gray-500">{detailItem.users.english_name}</p>
-                )}
-                <p className="text-sm text-gray-500">{detailItem.users?.email || ''}</p>
-              </div>
-
-              {/* 서비스 목록 */}
-              {detailLoading ? (
-                <div className="flex justify-center py-8">
-                  <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-500 rounded-full animate-spin" />
-                </div>
-              ) : detailServices.length === 0 ? (
-                <p className="text-center text-sm text-gray-500 py-8">서비스 정보가 없습니다.</p>
-              ) : (
-                <div className="space-y-3">
-                  {detailServices.map((svc, i) => (
-                    <div key={i} className="bg-white border rounded-xl p-3 space-y-1">
-                      <div className="flex items-center gap-2">
-                        {getTypeIcon(svc.type)}
-                        <span className="font-semibold text-sm text-gray-800">{svc.label}</span>
-                      </div>
-                      {svc.sublabel && (
-                        <p className="text-sm text-gray-600 ml-6">{svc.sublabel}</p>
-                      )}
-                      <div className="flex items-center justify-between ml-6">
-                        {hasValue(svc.date) && <span className="text-xs text-gray-500">{svc.date}</span>}
-                        {hasValue(svc.guest) && <span className="text-xs text-gray-500">👥 {svc.guest}명</span>}
-                        {hasValue(svc.price) && Number(svc.price) > 0 && (
-                          <span className="text-sm font-semibold text-green-600">
-                            {Number(svc.price).toLocaleString()}동
-                          </span>
-                        )}
-                      </div>
-
-                      {svc.feeSummary && svc.feeSummary.length > 0 && (
-                        <div className="mt-2 ml-6 rounded-lg bg-amber-50 border border-amber-200 p-2">
-                          <div className="text-[11px] font-semibold text-amber-800 mb-1">요금 내역</div>
-                          <div className="space-y-1">
-                            {svc.feeSummary.map((line, idx) => (
-                              <div key={`${svc.type}-fee-${idx}`} className="text-xs text-amber-900">
-                                {line}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {svc.fields && svc.fields.length > 0 && (
-                        <div className="mt-2 ml-6 border-t pt-2 grid grid-cols-1 gap-1">
-                          {svc.fields
-                            .filter((f) => hasValue(f.value))
-                            .filter((f) => /요청사항|특별요청|추가사항|메모|노트/i.test(f.label))
-                            .map((f, idx) => (
-                              <div key={`${f.label}-${idx}`} className="flex items-start justify-between gap-2">
-                                <span className="text-xs text-gray-500">{f.label}</span>
-                                <span className="text-xs text-gray-700 text-right break-all">
-                                  {typeof f.value === 'number' && /금액/.test(f.label)
-                                    ? `${Number(f.value).toLocaleString()}동`
-                                    : String(f.value)}
-                                </span>
-                              </div>
-                            ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      <ReservationDetailModal
+        isOpen={detailOpen}
+        onClose={() => setDetailOpen(false)}
+        onEdit={detailItem ? (() => moveToReservationEdit()) : undefined}
+        onProcess={detailItem ? handleDetailProcess : undefined}
+        processLoading={detailProcessing}
+        processDisabled={detailLoading || detailProcessing || detailProcessInfo.count === 0}
+        processLabel={`${detailProcessInfo.label} (${detailProcessInfo.count})`}
+        item={detailModalItem}
+        items={detailModalItems}
+      />
     </div>
   );
-}
-
-function formatDong(value: number) {
-  return `${Number(value).toLocaleString()}동`;
-}
-
-function formatLinePrice(label: string, unitPrice?: number, count?: number) {
-  if (!unitPrice || !count) return null;
-  return `${label} ${formatDong(unitPrice)} × ${count}명`;
-}
-
-function calculateUnitPrice(total?: number, quantity?: number) {
-  if (!total || !quantity) return null;
-  return Math.round(Number(total) / Number(quantity));
-}
-
-function formatGenericPrice(unitPrice?: number | null, quantity?: number, unitLabel: string = '명') {
-  if (!unitPrice || !quantity) return null;
-  return `${formatDong(unitPrice)} × ${quantity}${unitLabel}`;
 }
 
 /* ── Select 컴포넌트 ─── */
@@ -1006,7 +849,7 @@ function Select({ value, onChange, label, options }: {
 }) {
   return (
     <div className="flex-1">
-      {label && <label className="block text-xs text-gray-500 mb-0.5">{label}</label>}
+      {label && <label className="block text-xs text-gray-700 mb-0.5">{label}</label>}
       <select value={value} onChange={onChange} className="w-full px-2 py-1.5 text-xs border rounded-lg bg-white">
         {options.map(([val, txt]) => (
           <option key={val} value={val}>{txt}</option>

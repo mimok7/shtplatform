@@ -232,7 +232,14 @@ export default function SchedulePage() {
 
       const userMap = new Map(shM.map((u: any) => [
         u.order_id,
-        { korean_name: u.korean_name, english_name: u.english_name, email: u.email },
+        {
+          korean_name: u.korean_name,
+          english_name: u.english_name,
+          email: u.email,
+          phone: u.phone_number || u.phone || '',
+          nickname: u.nickname || '',
+          child_birth_dates: u.child_birth_dates || [],
+        },
       ]));
 
       const oldMapped = [
@@ -419,6 +426,9 @@ export default function SchedulePage() {
           customerName: user?.name || '',
           customerEnglishName: user?.english_name || '',
           email: user?.email || '',
+          phone: user?.phone_number || '',
+          nickname: user?.nickname || '',
+          child_birth_dates: user?.child_birth_dates || [],
         };
 
         if (r.re_type === 'cruise') {

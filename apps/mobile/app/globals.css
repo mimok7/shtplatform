@@ -5,6 +5,14 @@
   --foreground: #1e293b;
 }
 
+.mobile-ui {
+  --ui-label: #1d4ed8;
+  --ui-card-border: #dbe4f0;
+  --ui-card-radius: 14px;
+  --ui-card-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
+  --ui-card-shadow-soft: 0 4px 10px rgba(15, 23, 42, 0.04);
+}
+
 html, body {
   margin: 0;
   padding: 0;
@@ -18,4 +26,26 @@ html, body {
 
 * {
   box-sizing: border-box;
+}
+
+/* Unified item-name color across all mobile pages for better readability. */
+.mobile-ui label {
+  color: var(--ui-label) !important;
+}
+
+/* Make card-like surfaces visually consistent across pages. */
+.mobile-ui :where(div, section, article, li)[class*="bg-white"][class*="rounded"][class*="border"] {
+  border-color: var(--ui-card-border) !important;
+  border-radius: var(--ui-card-radius) !important;
+  box-shadow: var(--ui-card-shadow);
+}
+
+.mobile-ui :where(div, section, article, li)[class*="bg-gray-50"][class*="rounded"][class*="border"] {
+  border-color: var(--ui-card-border) !important;
+  border-radius: var(--ui-card-radius) !important;
+  box-shadow: var(--ui-card-shadow-soft);
+}
+
+.mobile-ui :where(div, section, article, li)[class*="rounded"][class*="border"] :where(h2, h3, h4) {
+  letter-spacing: -0.01em;
 }

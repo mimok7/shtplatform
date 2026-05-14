@@ -204,7 +204,7 @@ function AirportForm({ userId, quoteId, onComplete }: { userId: string; quoteId?
                 <h4 className="font-medium text-gray-700">{prefix} ({cat || '-'})</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
-                        <label className="text-xs text-gray-600">경로</label>
+                        <label className="text-xs text-gray-700">경로</label>
                         <select value={rt} onChange={e => setForm(p => ({ ...p, [num === 1 ? 'route1' : 'route2']: e.target.value }))}
                             className="w-full px-3 py-2 border rounded-lg text-sm">
                             <option value="">선택</option>
@@ -212,7 +212,7 @@ function AirportForm({ userId, quoteId, onComplete }: { userId: string; quoteId?
                         </select>
                     </div>
                     <div>
-                        <label className="text-xs text-gray-600">차량 타입</label>
+                        <label className="text-xs text-gray-700">차량 타입</label>
                         <select value={vt} onChange={e => setForm(p => ({ ...p, [num === 1 ? 'vehicleType1' : 'vehicleType2']: e.target.value }))}
                             className="w-full px-3 py-2 border rounded-lg text-sm">
                             <option value="">선택</option>
@@ -247,17 +247,17 @@ function AirportForm({ userId, quoteId, onComplete }: { userId: string; quoteId?
                     <h4 className="font-medium text-blue-800">픽업 정보</h4>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                         <div>
-                            <label className="text-xs text-gray-600">하차 위치 (영문)</label>
+                            <label className="text-xs text-gray-700">하차 위치 (영문)</label>
                             <input type="text" value={form.pickupLocation} onChange={e => setForm(p => ({ ...p, pickupLocation: e.target.value }))}
                                 className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="Hotel name in English" />
                         </div>
                         <div>
-                            <label className="text-xs text-gray-600">항공편 도착 일시</label>
+                            <label className="text-xs text-gray-700">항공편 도착 일시</label>
                             <input type="datetime-local" value={form.pickupDatetime} onChange={e => setForm(p => ({ ...p, pickupDatetime: e.target.value }))}
                                 className="w-full px-3 py-2 border rounded-lg text-sm" />
                         </div>
                         <div>
-                            <label className="text-xs text-gray-600">항공편명</label>
+                            <label className="text-xs text-gray-700">항공편명</label>
                             <input type="text" value={form.pickupFlightNumber} onChange={e => setForm(p => ({ ...p, pickupFlightNumber: e.target.value }))}
                                 className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="예: VN123" />
                         </div>
@@ -270,12 +270,12 @@ function AirportForm({ userId, quoteId, onComplete }: { userId: string; quoteId?
                     <h4 className="font-medium text-green-800">샌딩 정보</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div>
-                            <label className="text-xs text-gray-600">승차 위치 (영문)</label>
+                            <label className="text-xs text-gray-700">승차 위치 (영문)</label>
                             <input type="text" value={form.sendingLocation} onChange={e => setForm(p => ({ ...p, sendingLocation: e.target.value }))}
                                 className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="Hotel name in English" />
                         </div>
                         <div>
-                            <label className="text-xs text-gray-600">승차 시간</label>
+                            <label className="text-xs text-gray-700">승차 시간</label>
                             <input type="datetime-local" value={form.sendingDatetime} onChange={e => setForm(p => ({ ...p, sendingDatetime: e.target.value }))}
                                 className="w-full px-3 py-2 border rounded-lg text-sm" />
                         </div>
@@ -285,12 +285,12 @@ function AirportForm({ userId, quoteId, onComplete }: { userId: string; quoteId?
 
             <div className="grid grid-cols-2 gap-3">
                 <div>
-                    <label className="text-xs text-gray-600">승객 수</label>
+                    <label className="text-xs text-gray-700">승객 수</label>
                     <input type="number" min={1} value={form.passengerCount} onChange={e => setForm(p => ({ ...p, passengerCount: Number(e.target.value) }))}
                         className="w-full px-3 py-2 border rounded-lg text-sm" />
                 </div>
                 <div>
-                    <label className="text-xs text-gray-600">수하물 개수</label>
+                    <label className="text-xs text-gray-700">수하물 개수</label>
                     <input type="number" min={0} value={form.luggageCount} onChange={e => setForm(p => ({ ...p, luggageCount: Number(e.target.value) }))}
                         className="w-full px-3 py-2 border rounded-lg text-sm" />
                 </div>
@@ -467,19 +467,19 @@ function HotelForm({ userId, quoteId, onComplete }: { userId: string; quoteId?: 
 
             <div className="grid grid-cols-3 gap-3">
                 <div>
-                    <label className="text-xs text-gray-600">객실 수</label>
+                    <label className="text-xs text-gray-700">객실 수</label>
                     <input type="number" min={1} value={formData.room_count}
                         onChange={e => setFormData(p => ({ ...p, room_count: e.target.value }))}
                         className="w-full px-3 py-2 border rounded-lg text-sm" />
                 </div>
                 <div>
-                    <label className="text-xs text-gray-600">성인 수</label>
+                    <label className="text-xs text-gray-700">성인 수</label>
                     <input type="number" min={1} value={formData.adult_count}
                         onChange={e => setFormData(p => ({ ...p, adult_count: e.target.value }))}
                         className="w-full px-3 py-2 border rounded-lg text-sm" />
                 </div>
                 <div>
-                    <label className="text-xs text-gray-600">아동 수</label>
+                    <label className="text-xs text-gray-700">아동 수</label>
                     <input type="number" min={0} value={formData.child_count}
                         onChange={e => setFormData(p => ({ ...p, child_count: e.target.value }))}
                         className="w-full px-3 py-2 border rounded-lg text-sm" />
@@ -487,7 +487,7 @@ function HotelForm({ userId, quoteId, onComplete }: { userId: string; quoteId?: 
             </div>
 
             <div>
-                <label className="text-xs text-gray-600">특별 요청사항</label>
+                <label className="text-xs text-gray-700">특별 요청사항</label>
                 <textarea value={formData.special_requests} onChange={e => setFormData(p => ({ ...p, special_requests: e.target.value }))}
                     className="w-full px-3 py-2 border rounded-lg text-sm" rows={3} placeholder="요청사항을 입력해주세요" />
             </div>
@@ -631,12 +631,12 @@ function TourForm({ userId, quoteId, onComplete }: { userId: string; quoteId?: s
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                    <label className="text-xs text-gray-600">투어 날짜</label>
+                    <label className="text-xs text-gray-700">투어 날짜</label>
                     <input type="date" value={formData.tour_date} onChange={e => setFormData(p => ({ ...p, tour_date: e.target.value }))}
                         className="w-full px-3 py-2 border rounded-lg text-sm" />
                 </div>
                 <div>
-                    <label className="text-xs text-gray-600">인원 수</label>
+                    <label className="text-xs text-gray-700">인원 수</label>
                     <input type="number" min={1} value={guestCount} onChange={e => setGuestCount(Number(e.target.value))}
                         className="w-full px-3 py-2 border rounded-lg text-sm" />
                 </div>
@@ -644,19 +644,19 @@ function TourForm({ userId, quoteId, onComplete }: { userId: string; quoteId?: s
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                    <label className="text-xs text-gray-600">픽업 장소</label>
+                    <label className="text-xs text-gray-700">픽업 장소</label>
                     <input type="text" value={formData.pickup_location} onChange={e => setFormData(p => ({ ...p, pickup_location: e.target.value }))}
                         className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="예: 호텔 로비" />
                 </div>
                 <div>
-                    <label className="text-xs text-gray-600">하차 장소</label>
+                    <label className="text-xs text-gray-700">하차 장소</label>
                     <input type="text" value={formData.dropoff_location} onChange={e => setFormData(p => ({ ...p, dropoff_location: e.target.value }))}
                         className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="예: 호텔 로비" />
                 </div>
             </div>
 
             <div>
-                <label className="text-xs text-gray-600">특별 요청사항</label>
+                <label className="text-xs text-gray-700">특별 요청사항</label>
                 <textarea value={formData.special_requests} onChange={e => setFormData(p => ({ ...p, special_requests: e.target.value }))}
                     className="w-full px-3 py-2 border rounded-lg text-sm" rows={3} />
             </div>
@@ -776,7 +776,7 @@ function RentcarForm({ userId, quoteId, onComplete }: { userId: string; quoteId?
             {form.wayType && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
-                        <label className="text-xs text-gray-600">경로</label>
+                        <label className="text-xs text-gray-700">경로</label>
                         <select value={form.route} onChange={e => setForm(p => ({ ...p, route: e.target.value, carType: '', rentcarCode: '' }))}
                             className="w-full px-3 py-2 border rounded-lg text-sm">
                             <option value="">선택</option>
@@ -784,7 +784,7 @@ function RentcarForm({ userId, quoteId, onComplete }: { userId: string; quoteId?
                         </select>
                     </div>
                     <div>
-                        <label className="text-xs text-gray-600">차량 타입</label>
+                        <label className="text-xs text-gray-700">차량 타입</label>
                         <select value={form.carType} onChange={e => setForm(p => ({ ...p, carType: e.target.value }))}
                             className="w-full px-3 py-2 border rounded-lg text-sm">
                             <option value="">선택</option>
@@ -800,22 +800,22 @@ function RentcarForm({ userId, quoteId, onComplete }: { userId: string; quoteId?
                 <h4 className="font-medium text-gray-700">가는편 (픽업)</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
-                        <label className="text-xs text-gray-600">픽업 일시</label>
+                        <label className="text-xs text-gray-700">픽업 일시</label>
                         <input type="datetime-local" value={form.pickup_datetime} onChange={e => setForm(p => ({ ...p, pickup_datetime: e.target.value }))}
                             className="w-full px-3 py-2 border rounded-lg text-sm" />
                     </div>
                     <div>
-                        <label className="text-xs text-gray-600">출발지</label>
+                        <label className="text-xs text-gray-700">출발지</label>
                         <input type="text" value={form.pickup_location} onChange={e => setForm(p => ({ ...p, pickup_location: e.target.value }))}
                             className="w-full px-3 py-2 border rounded-lg text-sm" />
                     </div>
                     <div>
-                        <label className="text-xs text-gray-600">목적지</label>
+                        <label className="text-xs text-gray-700">목적지</label>
                         <input type="text" value={form.destination} onChange={e => setForm(p => ({ ...p, destination: e.target.value }))}
                             className="w-full px-3 py-2 border rounded-lg text-sm" />
                     </div>
                     <div>
-                        <label className="text-xs text-gray-600">경유지</label>
+                        <label className="text-xs text-gray-700">경유지</label>
                         <input type="text" value={form.via_location} onChange={e => setForm(p => ({ ...p, via_location: e.target.value }))}
                             className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="없으면 비워두세요" />
                     </div>
@@ -827,22 +827,22 @@ function RentcarForm({ userId, quoteId, onComplete }: { userId: string; quoteId?
                     <h4 className="font-medium text-green-700">오는편 (샌딩)</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div>
-                            <label className="text-xs text-gray-600">샌딩 일시</label>
+                            <label className="text-xs text-gray-700">샌딩 일시</label>
                             <input type="datetime-local" value={form.return_datetime} onChange={e => setForm(p => ({ ...p, return_datetime: e.target.value }))}
                                 className="w-full px-3 py-2 border rounded-lg text-sm" />
                         </div>
                         <div>
-                            <label className="text-xs text-gray-600">출발지</label>
+                            <label className="text-xs text-gray-700">출발지</label>
                             <input type="text" value={form.return_pickup_location} onChange={e => setForm(p => ({ ...p, return_pickup_location: e.target.value }))}
                                 className="w-full px-3 py-2 border rounded-lg text-sm" />
                         </div>
                         <div>
-                            <label className="text-xs text-gray-600">목적지</label>
+                            <label className="text-xs text-gray-700">목적지</label>
                             <input type="text" value={form.return_destination} onChange={e => setForm(p => ({ ...p, return_destination: e.target.value }))}
                                 className="w-full px-3 py-2 border rounded-lg text-sm" />
                         </div>
                         <div>
-                            <label className="text-xs text-gray-600">경유지</label>
+                            <label className="text-xs text-gray-700">경유지</label>
                             <input type="text" value={form.return_via_location} onChange={e => setForm(p => ({ ...p, return_via_location: e.target.value }))}
                                 className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="없으면 비워두세요" />
                         </div>
@@ -852,24 +852,24 @@ function RentcarForm({ userId, quoteId, onComplete }: { userId: string; quoteId?
 
             <div className="grid grid-cols-3 gap-3">
                 <div>
-                    <label className="text-xs text-gray-600">승객 수</label>
+                    <label className="text-xs text-gray-700">승객 수</label>
                     <input type="number" min={1} value={form.passenger_count} onChange={e => setForm(p => ({ ...p, passenger_count: Number(e.target.value) }))}
                         className="w-full px-3 py-2 border rounded-lg text-sm" />
                 </div>
                 <div>
-                    <label className="text-xs text-gray-600">차량 수</label>
+                    <label className="text-xs text-gray-700">차량 수</label>
                     <input type="number" min={1} value={form.car_count} onChange={e => setForm(p => ({ ...p, car_count: Number(e.target.value) }))}
                         className="w-full px-3 py-2 border rounded-lg text-sm" />
                 </div>
                 <div>
-                    <label className="text-xs text-gray-600">짐 개수</label>
+                    <label className="text-xs text-gray-700">짐 개수</label>
                     <input type="number" min={0} value={form.luggage_count} onChange={e => setForm(p => ({ ...p, luggage_count: Number(e.target.value) }))}
                         className="w-full px-3 py-2 border rounded-lg text-sm" />
                 </div>
             </div>
 
             <div>
-                <label className="text-xs text-gray-600">요청사항</label>
+                <label className="text-xs text-gray-700">요청사항</label>
                 <textarea value={form.request_note} onChange={e => setForm(p => ({ ...p, request_note: e.target.value }))}
                     className="w-full px-3 py-2 border rounded-lg text-sm" rows={3} />
             </div>
@@ -1313,7 +1313,7 @@ function CruiseForm({ userId, quoteId, onComplete }: { userId: string; quoteId?:
                         { key: 'room_count', label: '객실 수', min: 1 },
                     ].map(f => (
                         <div key={f.key}>
-                            <label className="text-xs text-gray-600">{f.label}</label>
+                            <label className="text-xs text-gray-700">{f.label}</label>
                             <input type="number" min={f.min || 0} value={(form as any)[f.key]}
                                 onChange={e => setForm(p => ({ ...p, [f.key]: Number(e.target.value) }))}
                                 className="w-full px-3 py-2 border rounded-lg text-sm" />
@@ -1327,7 +1327,7 @@ function CruiseForm({ userId, quoteId, onComplete }: { userId: string; quoteId?:
                 <h4 className="font-medium text-blue-800">🚗 차량 서비스 (선택)</h4>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                     <div>
-                        <label className="text-xs text-gray-600">이용방식</label>
+                        <label className="text-xs text-gray-700">이용방식</label>
                         <select value={vehicleForm.car_category}
                             onChange={e => setVehicleForm(p => ({ ...p, car_category: e.target.value, route: '', car_type: '', car_code: '' }))}
                             className="w-full px-3 py-2 border rounded-lg text-sm"
@@ -1339,7 +1339,7 @@ function CruiseForm({ userId, quoteId, onComplete }: { userId: string; quoteId?:
                     </div>
                     {vehicleForm.car_category && (
                         <div>
-                            <label className="text-xs text-gray-600">경로</label>
+                            <label className="text-xs text-gray-700">경로</label>
                             <select value={vehicleForm.route}
                                 onChange={e => setVehicleForm(p => ({ ...p, route: e.target.value, car_type: '', car_code: '' }))}
                                 className="w-full px-3 py-2 border rounded-lg text-sm">
@@ -1350,7 +1350,7 @@ function CruiseForm({ userId, quoteId, onComplete }: { userId: string; quoteId?:
                     )}
                     {vehicleForm.route && (
                         <div>
-                            <label className="text-xs text-gray-600">차량 타입</label>
+                            <label className="text-xs text-gray-700">차량 타입</label>
                             <select value={vehicleForm.car_type}
                                 onChange={e => {
                                     const nextType = e.target.value;
@@ -1370,7 +1370,7 @@ function CruiseForm({ userId, quoteId, onComplete }: { userId: string; quoteId?:
                     <div className="flex items-center gap-3">
                         <span className="text-sm text-blue-600 font-medium">차량 가격: {carPrice.toLocaleString()}동</span>
                         <div>
-                            <label className="text-xs text-gray-600 mr-1">수량</label>
+                            <label className="text-xs text-gray-700 mr-1">수량</label>
                             <input type="number" min={1} value={vehicleForm.count}
                                 onChange={e => setVehicleForm(p => ({ ...p, count: Number(e.target.value) }))}
                                 className="w-16 px-2 py-1 border rounded text-sm" />
@@ -1399,19 +1399,19 @@ function CruiseForm({ userId, quoteId, onComplete }: { userId: string; quoteId?:
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                    <label className="text-xs text-gray-600">픽업 장소</label>
+                    <label className="text-xs text-gray-700">픽업 장소</label>
                     <input type="text" value={form.pickup_location} onChange={e => setForm(p => ({ ...p, pickup_location: e.target.value }))}
                         className="w-full px-3 py-2 border rounded-lg text-sm" />
                 </div>
                 <div>
-                    <label className="text-xs text-gray-600">드롭오프 장소</label>
+                    <label className="text-xs text-gray-700">드롭오프 장소</label>
                     <input type="text" value={form.dropoff_location} onChange={e => setForm(p => ({ ...p, dropoff_location: e.target.value }))}
                         className="w-full px-3 py-2 border rounded-lg text-sm" />
                 </div>
             </div>
 
             <div>
-                <label className="text-xs text-gray-600">요청사항</label>
+                <label className="text-xs text-gray-700">요청사항</label>
                 <textarea value={form.request_note} onChange={e => setForm(p => ({ ...p, request_note: e.target.value }))}
                     className="w-full px-3 py-2 border rounded-lg text-sm" rows={3} />
             </div>

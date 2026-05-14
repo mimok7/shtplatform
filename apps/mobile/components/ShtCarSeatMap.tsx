@@ -173,7 +173,7 @@ export default function ShtCarSeatMap({
                 for (const batch of chunkArray(reservationIds, RESERVATION_BATCH_SIZE)) {
                     const { data: rows, error: reservationError } = await supabase
                         .from('reservation')
-                        .select('re_id, re_user_id, contact_name, applicant_name, name, contact_email, applicant_email, email')
+                        .select('re_id, re_user_id')
                         .in('re_id', batch);
 
                     if (reservationError) {
@@ -191,14 +191,6 @@ export default function ShtCarSeatMap({
                 (reservationRows || []).forEach((row: any) => {
                     if (row?.re_id && row?.re_user_id) {
                         reservationUserIdById.set(String(row.re_id), String(row.re_user_id));
-                    }
-                    const fallbackName = String(row?.contact_name || row?.applicant_name || row?.name || '').trim();
-                    if (row?.re_id && fallbackName) {
-                        fallbackNameByReservationId.set(String(row.re_id), fallbackName);
-                    }
-                    const fallback = String(row?.contact_email || row?.applicant_email || row?.email || '').trim();
-                    if (row?.re_id && fallback) {
-                        fallbackEmailByReservationId.set(String(row.re_id), fallback);
                     }
                 });
 

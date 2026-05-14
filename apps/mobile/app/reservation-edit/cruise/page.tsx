@@ -1952,7 +1952,7 @@ function CruiseReservationEditContent() {
                                                             { key: 'single_count', label: '싱글' },
                                                         ].map(({ key, label }) => (
                                                             <div key={key}>
-                                                                <label className="block text-xs text-gray-500 mb-1">{label}</label>
+                                                                <label className="block text-xs text-gray-700 mb-1">{label}</label>
                                                                 <input
                                                                     type="number"
                                                                     min="0"
@@ -1997,7 +1997,7 @@ function CruiseReservationEditContent() {
                                                             { label: '싱글', field: 'price_single' },
                                                         ].map(({ label, field }) => (
                                                             <div key={label} className="bg-gray-100 px-2 py-1 rounded">
-                                                                <label className="block text-gray-500 text-center mb-1">{label}</label>
+                                                                <label className="block text-gray-700 text-center mb-1">{label}</label>
                                                                 <input
                                                                     type="number"
                                                                     min="0"
