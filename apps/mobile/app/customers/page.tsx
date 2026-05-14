@@ -346,7 +346,7 @@ export default function CustomerManagement() {
           </div>
         </div>
 
-        <div className="mb-2 flex flex-col sm:flex-row gap-2">
+        <div className="mb-2 flex flex-row items-center gap-2">
           <div className="flex-1 min-w-0">
             <input
               type="text"
@@ -364,7 +364,7 @@ export default function CustomerManagement() {
           <button
             onClick={() => void searchCustomers()}
             disabled={searchLoading}
-            className="px-4 py-2 rounded-md bg-blue-600 text-white text-sm hover:bg-blue-700 disabled:opacity-60"
+            className="shrink-0 px-4 py-2 rounded-md bg-blue-600 text-white text-sm hover:bg-blue-700 disabled:opacity-60 whitespace-nowrap"
           >
             {searchLoading ? '검색 중...' : '검색'}
           </button>
