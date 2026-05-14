@@ -485,7 +485,7 @@ function PackageReservationEditContent() {
     };
 
     const handleSave = async () => {
-        if (!reservationId) return;
+        if (!reservationId || !reservation) return;
 
         setSaving(true);
         try {

@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import supabase from '@/lib/supabase';
 import { saveAdditionalFeeTemplateFromInput } from '@/lib/additionalFeeTemplate';
 import { recordReservationChange } from '@/lib/reservationChangeTracker';
-import { calculateReservationPricing } from '@sht/domain/pricing';
+import { calculateReservationPricing } from '@/lib/pricing';
 import ManagerLayout from '../_components/MobileReservationLayout';
 import {
     Save,

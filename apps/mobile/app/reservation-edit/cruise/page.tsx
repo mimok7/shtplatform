@@ -1249,7 +1249,10 @@ function CruiseReservationEditContent() {
             const optionsMatch = storedRequestNote.match(/\[OPTIONS:([^\]]*)\]/);
             let parsedOptionIds: number[] = [];
             if (optionsMatch && optionsMatch[1]) {
-                parsedOptionIds = optionsMatch[1].split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
+                parsedOptionIds = optionsMatch[1]
+                    .split(',')
+                    .map((id: string) => parseInt(id.trim(), 10))
+                    .filter((id: number) => !isNaN(id));
             }
 
             const childBirthDatesMatch = storedRequestNote.match(/\[CHILD_BIRTH_DATES:([^\]]*)\]/);
@@ -1257,13 +1260,13 @@ function CruiseReservationEditContent() {
             const childOlderCountsMatch = storedRequestNote.match(/\[CHILD_OLDER_COUNTS:([^\]]*)\]/);
 
             const parsedChildBirthDates = childBirthDatesMatch?.[1]
-                ? childBirthDatesMatch[1].split(',').map((d) => d.trim()).filter(Boolean)
+                ? childBirthDatesMatch[1].split(',').map((d: string) => d.trim()).filter(Boolean)
                 : [];
             const parsedInfantBirthDates = infantBirthDatesMatch?.[1]
-                ? infantBirthDatesMatch[1].split(',').map((d) => d.trim()).filter(Boolean)
+                ? infantBirthDatesMatch[1].split(',').map((d: string) => d.trim()).filter(Boolean)
                 : [];
             const parsedChildOlderCounts = childOlderCountsMatch?.[1]
-                ? childOlderCountsMatch[1].split(',').map((v) => parseInt(v.trim(), 10) || 0)
+                ? childOlderCountsMatch[1].split(',').map((v: string) => parseInt(v.trim(), 10) || 0)
                 : [];
 
             setChildBirthDates(parsedChildBirthDates);
@@ -1359,6 +1362,10 @@ function CruiseReservationEditContent() {
 
     const handleSave = async () => {
         if (!reservation) return;
+        if (!reservationId) {
+            alert('예약 ID가 없습니다.');
+            return;
+        }
 
         try {
             setSaving(true);

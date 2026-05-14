@@ -692,7 +692,7 @@ function extractLegacyChangedRows(snapshotData: any): Array<{ field: string; bef
     const rows = requested
         .filter((r: any) => r && typeof r === 'object' && ('field' in r || 'before' in r || 'after' in r))
         .map((r: any) => ({ field: String(r.field || ''), before: r.before, after: r.after }))
-        .filter((r) => !isHeaderLikeChangedRow(r));
+        .filter((r: { field: unknown; before: unknown; after: unknown }) => !isHeaderLikeChangedRow(r));
     return rows;
 }
 
@@ -1328,7 +1328,7 @@ export default function ReservationEditApprovalPage() {
                 if (!req || req.status !== 'pending') continue;
                 try {
                     if (nextStatus === 'approved') {
-                        await applySingleApprove(req, userId, bulkNote || null as any);
+                        await applySingleApprove(req, userId, bulkNote || undefined);
                     } else {
                         const upd: Record<string, any> = { status: 'rejected', reviewed_at: new Date().toISOString(), manager_note: bulkNote || null };
                         if (userId) upd.reviewed_by = userId;
@@ -1818,7 +1818,7 @@ export default function ReservationEditApprovalPage() {
                                                                                 const filter = entry.requestedRow
                                                                                     ? (r: any) => r?.id === entry.requestedRow.id
                                                                                     : undefined;
-                                                                                await applySingleApprove(row, user?.id, null, filter);
+                                                                                await applySingleApprove(row, user?.id, undefined, filter);
                                                                                 // 최적화: 전체 리로드 없이 해당 행 상태만 교체 → 승인 버튼 자동 숨김
                                                                                 setRequests(prev => prev.map(r => r.id === row.id ? { ...r, status: 'approved', reviewed_at: new Date().toISOString() } : r));
                                                                             } catch (err: any) {
