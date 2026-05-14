@@ -26,18 +26,18 @@ const calculator = new CruisePriceCalculator(supabase);
  */
 function MobileQuoteLayout({ title, children }: { title: string; children: React.ReactNode }) {
     return (
-        <div className="min-h-screen bg-slate-50 pb-20">
+        <div className="min-h-screen bg-slate-50 pb-20 overflow-x-hidden text-xs">
             <header className="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-slate-200">
-                <div className="max-w-screen-md mx-auto flex items-center justify-between px-3 py-2.5">
+                <div className="max-w-screen-md mx-auto flex items-center justify-between px-2 py-2">
                     <Link href="/" className="flex items-center gap-1 text-slate-600 active:text-slate-900">
                         <ArrowLeft className="w-5 h-5" />
-                        <span className="text-sm">홈</span>
+                        <span className="text-xs">홈</span>
                     </Link>
-                    <h1 className="text-sm font-bold text-slate-800">{title}</h1>
+                    <h1 className="text-xs font-semibold text-slate-800">{title}</h1>
                     <Link href="/quotes" className="text-xs text-blue-600 active:text-blue-800">목록</Link>
                 </div>
             </header>
-            <div className="max-w-screen-md mx-auto px-2 py-3">
+            <div className="max-w-screen-md mx-auto w-full min-w-0 px-2 py-2 overflow-x-hidden">
                 {children}
             </div>
         </div>
@@ -51,14 +51,14 @@ const formatVND = (value: number | null | undefined): string => {
 };
 
 // 공용 탭 (quoteId 유지) + 오늘 타이틀 선택/작업 시작 컨트롤
-function ManagerServiceTabs({ active }: { active: 'cruise' | 'airport' | 'hotel' | 'rentcar' | 'tour' | 'comprehensive' | 'package' }) {
+function ManagerServiceTabs({ active, pageRawRate }: { active: 'cruise' | 'airport' | 'hotel' | 'rentcar' | 'tour' | 'comprehensive' | 'package'; pageRawRate?: number | null }) {
     const router = useRouter();
     const searchParams = useSearchParams();
     const quoteId = searchParams.get('quoteId');
     const [titlesToday, setTitlesToday] = useState<any[]>([]);
     const [creating, setCreating] = useState(false);
     const [titleInput, setTitleInput] = useState('');
-    const makeHref = (key: string, id?: string | null) => `/manager/quotes/${key}${id ? `?quoteId=${id}` : (quoteId ? `?quoteId=${quoteId}` : '')}`;
+    const makeHref = (key: string, id?: string | null) => `/quotes/${key}${id ? `?quoteId=${id}` : (quoteId ? `?quoteId=${quoteId}` : '')}`;
     const Tab = ({ keyName, label }: { keyName: typeof active; label: string }) => (
         <button
             type="button"
@@ -103,29 +103,34 @@ function ManagerServiceTabs({ active }: { active: 'cruise' | 'airport' | 'hotel'
     };
 
     return (
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex flex-wrap gap-2">
-                <Tab keyName="cruise" label="크루즈" />
-                <Tab keyName="airport" label="공항" />
-                <Tab keyName="hotel" label="호텔" />
-                <Tab keyName="rentcar" label="렌트카" />
-                <Tab keyName="tour" label="투어" />
-                <Tab keyName="package" label="패키지" />
-                <Tab keyName="comprehensive" label="전체" />
+        <div className="mb-2 w-full min-w-0 flex flex-col gap-2">
+            <div className="flex flex-wrap items-center gap-1.5">
+                <div className="flex flex-wrap gap-1.5">
+                    <Tab keyName="cruise" label="크루즈" />
+                    <Tab keyName="airport" label="공항" />
+                    <Tab keyName="hotel" label="호텔" />
+                    <Tab keyName="rentcar" label="렌트카" />
+                    <Tab keyName="tour" label="투어" />
+                    <Tab keyName="package" label="패키지" />
+                    <Tab keyName="comprehensive" label="전체" />
+                </div>
+                {pageRawRate !== null && pageRawRate !== undefined && (
+                    <span className="text-[10px] text-gray-500 whitespace-nowrap">환율(DB raw): {pageRawRate}</span>
+                )}
             </div>
-            <div className="flex items-center gap-2">
-                <select onChange={(e) => e.target.value && onPickTitle(e.target.value)} className="border p-1.5 rounded text-xs bg-white max-w-[240px]">
+            <div className="w-full min-w-0 grid grid-cols-2 gap-1.5">
+                <select onChange={(e) => e.target.value && onPickTitle(e.target.value)} className="border h-8 px-2 rounded text-[11px] bg-white w-full min-w-0">
                     <option value="">오늘 작성한 타이틀 선택</option>
                     {titlesToday.map(t => (
-                        <option key={t.id} value={t.id}>{t.title} — {new Date(t.created_at).toLocaleTimeString()}</option>
+                        <option key={t.id} value={t.id}>{t.title} — {new Date(t.created_at).toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul' })}</option>
                     ))}
                 </select>
-                <input value={titleInput} onChange={(e) => setTitleInput(e.target.value)} placeholder="타이틀" className="border p-1.5 rounded text-xs" />
+                <input value={titleInput} onChange={(e) => setTitleInput(e.target.value)} placeholder="타이틀" className="border h-8 px-2 rounded text-[11px] w-full min-w-0" />
                 <button
                     type="button"
                     onClick={startNew}
                     disabled={creating}
-                    className="text-xs bg-green-600 text-white px-3 sm:px-4 py-2 rounded min-w-[96px] sm:min-w-[120px] text-center"
+                    className="col-span-2 h-8 text-[11px] bg-green-600 text-white px-2 rounded text-center"
                     aria-label="작업 시작"
                 >
                     {creating ? '생성중...' : '작업 시작'}
@@ -393,8 +398,6 @@ function ManagerCruiseQuoteForm() {
                 }
             }
 
-            outCar += `해당 환율은 참고용 네이버 환율로, 실제 결제하시는 금액과 차이가 있을 수 있습니다.^^`;
-
             return outCar;
         }
 
@@ -500,8 +503,6 @@ function ManagerCruiseQuoteForm() {
                 const diffWon = roundKrwToHundred(vndToKrw(diff, EXCHANGE_RATE));
                 outCmp += `${cheapest.cruiseName} ${cheapest.roomName} 객실과\n`;
                 outCmp += `${mostExpensive.cruiseName} ${mostExpensive.roomName} 객실의\n차이는 ${formatDong(diff)}(원화: ${diffWon.toLocaleString()}원) 입니다.`;
-                // 사용자 요청: 비교보기 하단 문구 추가
-                outCmp += `\n\n해당 환율은 참고용 네이버 환율로, 실제 결제하시는 금액과 차이가 있을 수 있습니다.^^`;
             } else {
                 outCmp += `비교할 수 있는 객실이 부족합니다.`;
             }
@@ -786,9 +787,6 @@ function ManagerCruiseQuoteForm() {
                 out += `\n비교할 수 있는 객실이 부족합니다.\n`;
             }
         }
-
-        // 문구는 요약의 맨 아래에 한 줄 띄워 표시
-        out += `\n\n해당 환율은 참고용 네이버 환율로, 실제 결제하시는 금액과 차이가 있을 수 있습니다.^^`;
 
         return out;
     };
@@ -1408,7 +1406,7 @@ function ManagerCruiseQuoteForm() {
                     return;
                 }
 
-                const autoTitle = `${form.cruise_name || '크루즈'} 견적 ${new Date().toLocaleDateString('ko-KR')}`;
+                const autoTitle = `${form.cruise_name || '크루즈'} 견적 ${new Date().toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' })}`;
                 const { data: createdQuote, error: createError } = await supabase
                     .from('quote')
                     .insert({
@@ -1425,7 +1423,7 @@ function ManagerCruiseQuoteForm() {
                 }
 
                 effectiveQuoteId = createdQuote.id;
-                router.replace(`/manager/quotes/cruise?quoteId=${effectiveQuoteId}`);
+                router.replace(`/quotes/cruise?quoteId=${effectiveQuoteId}`);
             }
 
             // 1. 객실 데이터 저장 (cruise_rate_card 기반 - sht-customer와 동일)
@@ -1549,19 +1547,19 @@ function ManagerCruiseQuoteForm() {
     };
 
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-2 w-full min-w-0 overflow-x-hidden">
             {/* 상단 간단 타이틀 스트립 (매니저 전용) */}
-            <div className="lg:col-span-2 -mt-2 -mb-2">
+            <div className="-mt-1 -mb-1 min-w-0">
                 <div className="text-xs text-gray-600">행복여행 이름: <span className="font-semibold text-gray-900">{resolveLocalQuoteTitle(quote) ?? quote?.title ?? '로딩 중...'}</span></div>
             </div>
             {/* 좌측: 입력 카드 (2칸 차지) */}
             <div>
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-                    <div className="flex items-center justify-between mb-4">
-                        <h2 className="text-lg font-semibold text-gray-800">크루즈 견적</h2>
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 min-w-0">
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                        <h2 className="text-sm font-semibold text-gray-800">크루즈 견적</h2>
                         {/* 할인 버튼들 */}
-                        <div className="flex items-center gap-2">
-                            <span className="text-sm text-gray-600">할인:</span>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="text-xs text-gray-600">할인:</span>
                             {[3, 5, 8, 10].map(discount => (
                                 <button
                                     key={discount}
@@ -1588,15 +1586,7 @@ function ManagerCruiseQuoteForm() {
                         </div>
                     </div>
 
-                    {/* 간단 안내 카드 */}
-                    <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg p-4 mb-4">
-                        <h3 className="text-white text-sm font-semibold mb-1">🚢 크루즈 예약 안내</h3>
-                        <p className="text-white/90 text-xs">
-                            날짜와 일정을 선택하면 크루즈/객실 옵션이 제공되고 인원별 가격이 자동 계산됩니다.
-                        </p>
-                    </div>
-
-                    <form onSubmit={handleSubmit} className="space-y-5">
+                    <form onSubmit={handleSubmit} className="space-y-3 min-w-0 [&_label]:text-xs [&_input]:text-xs [&_select]:text-xs [&_textarea]:text-xs">
                         {/* 체크인 날짜 */}
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">📅 체크인 날짜</label>
@@ -1618,7 +1608,7 @@ function ManagerCruiseQuoteForm() {
                                         key={opt}
                                         type="button"
                                         onClick={() => setForm({ ...form, schedule: opt })}
-                                        className={`px-3 py-2 rounded-md border text-sm ${form.schedule === opt ? 'bg-blue-500 text-white border-blue-500' : 'bg-blue-50 text-blue-700 border-gray-300 hover:bg-blue-100'}`}
+                                        className={`px-2 py-1.5 rounded-md border text-xs ${form.schedule === opt ? 'bg-blue-500 text-white border-blue-500' : 'bg-blue-50 text-blue-700 border-gray-300 hover:bg-blue-100'}`}
                                     >
                                         {opt}
                                     </button>
@@ -1646,7 +1636,7 @@ function ManagerCruiseQuoteForm() {
                         {availablePackages.length > 0 && (
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">🎁 프로모션 패키지 (선택)</label>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div className="grid grid-cols-1 gap-2">
                                     {availablePackages.map((pkg: any) => {
                                         const config = pkg.price_config || {};
                                         const includes = config.includes || {};
@@ -1688,54 +1678,31 @@ function ManagerCruiseQuoteForm() {
                             </div>
                         )}
 
-                        {/* 객실 선택 (요금 카드 기반 - 카드 형식) */}
+                        {/* 객실 선택 (요금 카드 기반 - 드롭다운, 객실명만 노출) */}
                         {roomTypeCards.length > 0 && (
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">🛏 객실 선택</label>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <label className="block text-sm font-medium text-gray-700 mb-1">🛏 객실 선택</label>
+                                <select
+                                    value={form.room_type}
+                                    onChange={e => setForm({ ...form, room_type: e.target.value })}
+                                    className="w-full border border-gray-300 p-2 rounded-md focus:ring-2 focus:ring-blue-500"
+                                    required
+                                >
+                                    <option value="">객실을 선택하세요</option>
                                     {roomTypeCards.map((card) => (
-                                        <button
-                                            key={card.id}
-                                            type="button"
-                                            onClick={() => setForm({ ...form, room_type: card.room_type })}
-                                            className={`border rounded-lg p-4 text-left transition-all ${form.room_type === card.room_type
-                                                ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-500'
-                                                : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50/50'
-                                                }`}
-                                        >
-                                            <div className="font-semibold text-gray-800">{card.room_type}</div>
-                                            {card.room_type_en && (
-                                                <div className="text-xs text-gray-500">{card.room_type_en}</div>
-                                            )}
-                                            <div className="mt-2 text-sm text-blue-600 font-medium">
-                                                성인 {formatVNDCurrency(card.price_adult)}/인
-                                            </div>
-                                            {card.price_child != null && (
-                                                <div className="text-xs text-gray-500">
-                                                    아동 {formatVNDCurrency(card.price_child)}/인
-                                                </div>
-                                            )}
-                                            {card.season_name && (
-                                                <span className="inline-block mt-1 px-2 py-0.5 bg-yellow-100 text-yellow-700 text-xs rounded-full">
-                                                    {card.season_name}
-                                                </span>
-                                            )}
-                                            {card.is_promotion && (
-                                                <span className="inline-block mt-1 ml-1 px-2 py-0.5 bg-red-100 text-red-600 text-xs rounded-full">
-                                                    프로모션
-                                                </span>
-                                            )}
-                                        </button>
+                                        <option key={card.id} value={card.room_type}>
+                                            {card.room_type}
+                                        </option>
                                     ))}
-                                </div>
+                                </select>
                             </div>
                         )}
 
                         {/* 인원수 입력 */}
                         {form.room_type && selectedRateCard && (
-                            <div className="border border-blue-200 rounded-lg p-4 bg-blue-50/50">
-                                <h3 className="text-lg font-semibold text-gray-800 mb-3">👥 인원수 입력</h3>
-                                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                            <div className="border border-blue-200 rounded-lg p-3 bg-blue-50/50">
+                                <h3 className="text-sm font-semibold text-gray-800 mb-2">👥 인원수 입력</h3>
+                                <div className="grid grid-cols-2 gap-2">
                                     <div>
                                         <label className="block text-xs font-medium text-gray-600 mb-1">
                                             성인 ({formatVNDCurrency(selectedRateCard.price_adult)}/인)
@@ -1829,8 +1796,8 @@ function ManagerCruiseQuoteForm() {
 
                         {/* 당일투어 선택 옵션 */}
                         {form.schedule === '당일' && tourOptions.length > 0 && form.room_type && (
-                            <div className="border border-purple-200 rounded-lg p-4 bg-purple-50/50">
-                                <h3 className="text-lg font-semibold text-gray-800 mb-3">🎯 선택 옵션</h3>
+                            <div className="border border-purple-200 rounded-lg p-3 bg-purple-50/50">
+                                <h3 className="text-sm font-semibold text-gray-800 mb-2">🎯 선택 옵션</h3>
                                 <p className="text-xs text-gray-500 mb-3">원하시는 추가 옵션을 선택하고 수량을 입력하세요.</p>
                                 <div className="space-y-3">
                                     {tourOptions.map((option) => {
@@ -1912,9 +1879,9 @@ function ManagerCruiseQuoteForm() {
 
                         {/* 가격 미리보기 */}
                         {priceResult && (
-                            <div className="border border-green-200 rounded-lg p-4 bg-green-50">
+                            <div className="border border-green-200 rounded-lg p-3 bg-green-50">
                                 <div className="flex justify-between items-center mb-3">
-                                    <h3 className="text-lg font-semibold text-gray-800">💰 예상 금액</h3>
+                                    <h3 className="text-sm font-semibold text-gray-800">💰 예상 금액</h3>
                                     <button
                                         type="button"
                                         onClick={calculatePrice}
@@ -1925,7 +1892,7 @@ function ManagerCruiseQuoteForm() {
                                     </button>
                                 </div>
 
-                                <div className="space-y-1 mb-3">
+                                <div className="space-y-1 mb-2">
                                     {priceResult.items.map((item, idx) => (
                                         <div key={idx} className="flex justify-between text-sm">
                                             <span className="text-gray-600">{item.label} × {item.count}명</span>
@@ -2003,7 +1970,7 @@ function ManagerCruiseQuoteForm() {
                                     </div>
                                 )}
 
-                                <div className="flex justify-between text-lg font-bold mt-3 border-t-2 border-green-300 pt-3">
+                                <div className="flex justify-between text-sm font-bold mt-2 border-t-2 border-green-300 pt-2">
                                     <span className="text-gray-800">총 예상 금액</span>
                                     <span className="text-green-700">{formatVNDCurrency(priceResult.grand_total)}</span>
                                 </div>
@@ -2024,12 +1991,12 @@ function ManagerCruiseQuoteForm() {
                         )}
 
                         {/* 차량 선택 영역 */}
-                        <div className="space-y-4">
-                            <h3 className="text-lg font-semibold text-gray-800">🚗 차량 선택</h3>
+                        <div className="space-y-2">
+                            <h3 className="text-sm font-semibold text-gray-800">🚗 차량 선택</h3>
 
-                            <div>
+                            <div className="min-w-0">
                                 <label className="block text-sm font-medium text-gray-700 mb-2">차량구분</label>
-                                <div className="flex gap-2">
+                                <div className="flex flex-wrap gap-1.5">
                                     {carCategoryHardcoded.map(category => (
                                         <button
                                             key={category}
@@ -2046,7 +2013,7 @@ function ManagerCruiseQuoteForm() {
                                                     car_code: ''
                                                 })));
                                             }}
-                                            className={`px-4 py-2 border rounded-lg transition-colors ${selectedCarCategory === category
+                                            className={`px-3 py-1.5 border rounded-lg transition-colors text-xs ${selectedCarCategory === category
                                                 ? 'bg-green-500 text-white border-green-500'
                                                 : 'bg-gray-50 border-gray-300 hover:bg-gray-100 text-gray-700'
                                                 }`}
@@ -2058,7 +2025,7 @@ function ManagerCruiseQuoteForm() {
                             </div>
 
                             {vehicleForm.map((vehicle, vehicleIndex) => (
-                                <div key={vehicleIndex} className="border border-green-200 rounded-lg p-4 bg-green-50">
+                                <div key={vehicleIndex} className="border border-green-200 rounded-lg p-3 bg-green-50 min-w-0">
                                     <div className="flex items-center justify-between mb-3">
                                         <h4 className="font-medium text-gray-900">차량 {vehicleIndex + 1}</h4>
                                         {vehicleForm.length > 1 && (
@@ -2072,7 +2039,7 @@ function ManagerCruiseQuoteForm() {
                                         )}
                                     </div>
 
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                    <div className="grid grid-cols-1 gap-2">
                                         {selectedCarCategory && (
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-600 mb-1">경로</label>
@@ -2136,7 +2103,7 @@ function ManagerCruiseQuoteForm() {
                                 <button
                                     type="button"
                                     onClick={handleAddVehicle}
-                                    className="w-full border-2 border-dashed border-green-300 rounded-lg p-4 text-green-600 hover:border-green-400 hover:text-green-700 transition-colors"
+                                    className="w-full border-2 border-dashed border-green-300 rounded-lg p-3 text-xs text-green-600 hover:border-green-400 hover:text-green-700 transition-colors"
                                 >
                                     + 차량 추가 (최대 3개)
                                 </button>
@@ -2156,18 +2123,18 @@ function ManagerCruiseQuoteForm() {
                         </div>
 
                         {/* 제출 버튼 */}
-                        <div className="flex justify-end space-x-4 mt-6">
+                        <div className="flex justify-end gap-2 mt-4">
                             <button
                                 type="button"
-                                onClick={() => router.push('/manager/quotes')}
-                                className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                                onClick={() => router.push('/quotes')}
+                                className="px-3 py-1.5 border border-gray-300 rounded-lg text-xs text-gray-700 hover:bg-gray-50 transition-colors"
                             >
                                 취소
                             </button>
                             <button
                                 type="submit"
                                 disabled={loading}
-                                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                                className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs hover:bg-blue-700 disabled:opacity-50 transition-colors"
                             >
                                 {loading ? '저장 중...' : priceResult ? `견적 추가 (${formatVND(priceResult.grand_total)})` : '견적 추가'}
                             </button>
@@ -2178,51 +2145,59 @@ function ManagerCruiseQuoteForm() {
 
             {/* 우측: 안내 카드 */}
             <div>
-                <div ref={rightCardRef} className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-                    <h3 className="text-md font-semibold text-gray-800 mb-2">안내</h3>
+                <div ref={rightCardRef} className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 min-w-0 overflow-x-hidden">
+                    <h3 className="text-sm font-semibold text-gray-800 mb-2">안내</h3>
                     {/* 자연어 요약 카드 (안내 상단) */}
-                    <div ref={naturalRef} className="mt-4 border-t pt-3 bg-white p-3 rounded">
-                        <div className="flex items-center justify-between">
-                            <h5 className="text-sm font-medium text-gray-700 mb-2">자연어 요약</h5>
-                            <div className="flex flex-wrap items-center gap-2">
-                                <button type="button" onClick={copyNaturalOnly} className="text-xs bg-blue-500 text-white px-2 py-1 rounded">자연어 복사</button>
-                                <button type="button" onClick={regenerateNatural} disabled={regenerating} className="text-xs bg-gray-200 text-gray-800 px-2 py-1 rounded">
-                                    {regenerating ? '생성중...' : '자연어 생성'}
-                                </button>
-                                <button type="button" onClick={() => setIsComparisonMode(!isComparisonMode)} className={`text-xs px-2 py-1 rounded ${isComparisonMode ? 'bg-green-500 text-white' : 'bg-orange-500 text-white'}`}>
-                                    {isComparisonMode ? '비교 해제' : '비교 보기'}
-                                </button>
-                                <button type="button" onClick={() => setIsCarComparisonMode(!isCarComparisonMode)} className={`text-xs px-2 py-1 rounded ${isCarComparisonMode ? 'bg-purple-500 text-white' : 'bg-indigo-500 text-white'}`}>
-                                    {isCarComparisonMode ? '차량비교 해제' : '차량비교'}
-                                </button>
-                            </div>
+                    <div ref={naturalRef} className="mt-4 border-t pt-3">
+                        <h5 className="text-sm font-semibold text-gray-800 mb-3">📝 자연어 요약</h5>
+                        
+                        {/* 액션 버튼 그룹 (1행 4열 - 파스텔 톤) */}
+                        <div className="flex flex-wrap gap-2 mb-3">
+                            <button
+                                type="button"
+                                onClick={copyNaturalOnly}
+                                className="flex-1 min-w-fit px-3 py-2 text-xs font-medium bg-blue-200 hover:bg-blue-300 text-blue-700 rounded-lg transition-colors active:scale-95"
+                            >
+                                📋 복사
+                            </button>
+                            <button
+                                type="button"
+                                onClick={regenerateNatural}
+                                disabled={regenerating}
+                                className="flex-1 min-w-fit px-3 py-2 text-xs font-medium bg-cyan-200 hover:bg-cyan-300 text-cyan-700 rounded-lg transition-colors active:scale-95 disabled:opacity-50"
+                            >
+                                {regenerating ? '생성중...' : '🔄 생성'}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setIsComparisonMode(!isComparisonMode)}
+                                className={`flex-1 min-w-fit px-3 py-2 text-xs font-medium rounded-lg transition-colors active:scale-95 ${isComparisonMode ? 'bg-emerald-200 hover:bg-emerald-300 text-emerald-700' : 'bg-orange-200 hover:bg-orange-300 text-orange-700'}`}
+                            >
+                                {isComparisonMode ? '✓ 비교중' : '🔍 비교'}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setIsCarComparisonMode(!isCarComparisonMode)}
+                                className={`flex-1 min-w-fit px-3 py-2 text-xs font-medium rounded-lg transition-colors active:scale-95 ${isCarComparisonMode ? 'bg-violet-200 hover:bg-violet-300 text-violet-700' : 'bg-indigo-200 hover:bg-indigo-300 text-indigo-700'}`}
+                            >
+                                {isCarComparisonMode ? '✓ 차량비교' : '🚗 차량비교'}
+                            </button>
                         </div>
+
                         {/* 텍스트 전용 컨테이너(헤더/버튼 제외) */}
-                        <div ref={naturalTextRef} className="text-sm text-gray-700 whitespace-pre-wrap">
-                            {naturalSummary}
+                        <div ref={naturalTextRef} className="text-xs text-gray-700 whitespace-pre-wrap break-words bg-slate-50 p-3 rounded-lg border-2 border-black">
+                            {naturalSummary || <span className="text-gray-400 italic">자연어 요약이 없습니다. 크루즈, 객실, 인원을 선택하고 생성 버튼을 눌러주세요.</span>}
                         </div>
                     </div>
-                    <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
-                        <div className="text-xs text-yellow-800">
-                            {quoteId ? (
-                                <>현재 견적 ID: <span className="font-mono break-all">{quoteId}</span></>
-                            ) : (
-                                <>쿼리스트링 예: <code>?quoteId=00000000-0000-0000-0000-000000000000</code></>
-                            )}
-                        </div>
-                        {quote && (
-                            <div className="mt-2 text-xs text-gray-700 space-y-1">
-                                <div>견적명: <span className="font-medium text-blue-600">{quote?.title}</span></div>
-                                <div>상태: <span className="text-orange-600">{quote?.status}</span></div>
-                            </div>
-                        )}
 
-                        <div className="mt-4 border-t pt-3">
+                    {/* 상세 서비스 정보 */}
+                    <div className="mt-4">
+                        <div className="mt-4 pt-3">
                             <h5 className="text-sm font-medium text-gray-700 mb-2">상세 서비스 정보</h5>
                             {loading ? (
                                 <div className="text-xs text-gray-400">로딩 중...</div>
                             ) : (
-                                <div className="space-y-3 text-sm text-gray-700">
+                                <div className="space-y-2 text-xs text-gray-700 break-words">
                                     {/* 객실 */}
                                     {detailedServices.rooms && detailedServices.rooms.length > 0 && (
                                         <div>
@@ -2232,7 +2207,7 @@ function ManagerCruiseQuoteForm() {
                                                     <div key={i} className="p-2 border rounded bg-white">
                                                         <div className="text-xs text-gray-600">기본 정보:</div>
                                                         <div className="text-sm font-medium">
-                                                            {r.roomInfo?.room_code ? `객실 코드: ${r.roomInfo.room_code}` : ''} {r.item?.quantity ? `(수량: ${r.item.quantity})` : ''}
+                                                            {r.item?.quantity ? `수량: ${r.item.quantity}` : ''}
                                                         </div>
                                                         <div className="text-xs text-gray-500">
                                                             {(() => {
@@ -2281,7 +2256,7 @@ function ManagerCruiseQuoteForm() {
                                                 {detailedServices.cars.map((c: any, i: number) => (
                                                     <div key={i} className="p-2 border rounded bg-white">
                                                         <div className="text-xs text-gray-600">기본 정보:</div>
-                                                        <div className="text-sm font-medium">{c.carInfo?.car_code ? `차량 코드: ${c.carInfo.car_code}` : ''} {c.item?.quantity ? `(수량: ${c.item.quantity})` : ''}</div>
+                                                        <div className="text-sm font-medium">{c.item?.quantity ? `수량: ${c.item.quantity}` : ''}</div>
                                                         <div className="mt-2 text-xs text-gray-600">가격 정보:</div>
                                                         {c.priceInfo && c.priceInfo.length > 0 && c.priceInfo.map((p: any, pi: number) => (
                                                             <div key={pi} className="mt-1 p-2 bg-gray-50 rounded">
@@ -2305,7 +2280,7 @@ function ManagerCruiseQuoteForm() {
                                                 {detailedServices.airports.map((a: any, i: number) => (
                                                     <div key={i} className="p-2 border rounded bg-white">
                                                         <div className="text-xs text-gray-600">기본 정보:</div>
-                                                        <div className="text-sm font-medium">{a.airportInfo?.airport_code ? `공항 코드: ${a.airportInfo.airport_code}` : ''} {a.item?.quantity ? `(승객수: ${a.item.quantity})` : ''}</div>
+                                                        <div className="text-sm font-medium">{a.item?.quantity ? `승객수: ${a.item.quantity}` : ''}</div>
                                                         {a.priceInfo && a.priceInfo.length > 0 && (
                                                             <div className="mt-2">
                                                                 <div className="text-xs text-gray-600">가격 정보:</div>
@@ -2333,7 +2308,6 @@ function ManagerCruiseQuoteForm() {
                                                 {detailedServices.hotels.map((h: any, i: number) => (
                                                     <div key={i} className="p-2 border rounded bg-white">
                                                         <div className="text-xs text-gray-600">기본 정보:</div>
-                                                        <div className="text-sm font-medium">{h.hotelInfo?.hotel_code ? `호텔 코드: ${h.hotelInfo.hotel_code}` : ''}</div>
                                                         {h.priceInfo && h.priceInfo.length > 0 && h.priceInfo.map((p: any, pi: number) => (
                                                             <div key={pi} className="mt-1 p-2 bg-gray-50 rounded">
                                                                 <div className="text-sm">{p.hotel_name ? `호텔명: ${p.hotel_name}` : ''} {p.room_name ? ` / 객실명: ${p.room_name}` : ''}</div>
@@ -2356,7 +2330,6 @@ function ManagerCruiseQuoteForm() {
                                                 {detailedServices.rentcars.map((rc: any, i: number) => (
                                                     <div key={i} className="p-2 border rounded bg-white">
                                                         <div className="text-xs text-gray-600">기본 정보:</div>
-                                                        <div className="text-sm font-medium">{rc.rentcarInfo?.rentcar_code ? `렌트카 코드: ${rc.rentcarInfo.rentcar_code}` : ''}</div>
                                                         {rc.priceInfo && rc.priceInfo.length > 0 && rc.priceInfo.map((p: any, pi: number) => (
                                                             <div key={pi} className="mt-1 p-2 bg-gray-50 rounded">
                                                                 <div className="text-sm">{p.way_type ? `이용방식: ${p.way_type}` : ''}</div>
@@ -2379,7 +2352,7 @@ function ManagerCruiseQuoteForm() {
                                                 {detailedServices.tours.map((t: any, i: number) => (
                                                     <div key={i} className="p-2 border rounded bg-white">
                                                         <div className="text-xs text-gray-600">기본 정보:</div>
-                                                        <div className="text-sm font-medium">{t.tourInfo?.tour_code ? `투어 코드: ${t.tourInfo.tour_code}` : ''} {t.tourInfo?.tour_date ? ` / 날짜: ${t.tourInfo.tour_date}` : ''} {t.item?.quantity ? ` / 참가자수: ${t.item.quantity}` : ''}</div>
+                                                        <div className="text-sm font-medium">{t.tourInfo?.tour_date ? `날짜: ${t.tourInfo.tour_date}` : ''} {t.item?.quantity ? ` / 참가자수: ${t.item.quantity}` : ''}</div>
                                                         {t.priceInfo && t.priceInfo.length > 0 && t.priceInfo.map((p: any, pi: number) => (
                                                             <div key={pi} className="mt-1 p-2 bg-gray-50 rounded">
                                                                 <div className="text-sm">{p.tour_name ? `투어명: ${p.tour_name}` : ''} {p.tour_capacity ? ` / 정원: ${p.tour_capacity}` : ''} {p.tour_vehicle ? ` / 차량: ${p.tour_vehicle}` : ''}</div>
@@ -2400,13 +2373,10 @@ function ManagerCruiseQuoteForm() {
                                                     return (
                                                         <div className="mt-4 p-3 bg-gray-50 border border-gray-200 rounded">
                                                             <div className="text-sm text-gray-600">합계 (동화)</div>
-                                                            <div className="text-lg font-bold text-red-600 mt-1">{formatDong(totalSummary.totalDong)}</div>
+                                                            <div className="text-sm font-bold text-red-600 mt-1">{formatDong(totalSummary.totalDong)}</div>
                                                             <div className="text-sm text-gray-600 mt-2">합계 (원화)</div>
-                                                            <div className="text-lg font-bold text-blue-600 mt-1">{totalSummary.totalWon.toLocaleString()}원</div>
-                                                            <div className="text-xs text-gray-500 mt-1">적용 환율: {exchangeRate ? formatExchangeRate(exchangeRate) : '—'}</div>
-                                                            {rawExchangeRate !== null && (
-                                                                <div className="text-xs text-gray-400 mt-1">(DB raw: {rawExchangeRate})</div>
-                                                            )}
+                                                            <div className="text-sm font-bold text-blue-600 mt-1">{totalSummary.totalWon.toLocaleString()}원</div>
+
                                                         </div>
                                                     );
                                                 })()}
@@ -2416,8 +2386,6 @@ function ManagerCruiseQuoteForm() {
                                 </div>
                             )}
                         </div>
-
-
                     </div>
                 </div>
             </div>
@@ -2489,12 +2457,7 @@ export default function ManagerCruiseQuoteNewPage() {
             </MobileQuoteLayout>
         }>
             <MobileQuoteLayout title="견적 입력">
-                <div className="flex items-center justify-between w-full">
-                    <ManagerServiceTabs active="cruise" />
-                    {pageRawRate !== null && (
-                        <div className="text-sm text-gray-500">환율(DB raw): {pageRawRate}</div>
-                    )}
-                </div>
+                <ManagerServiceTabs active="cruise" pageRawRate={pageRawRate} />
                 <ManagerCruiseQuoteForm />
             </MobileQuoteLayout>
         </Suspense>

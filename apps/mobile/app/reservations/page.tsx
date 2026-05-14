@@ -70,6 +70,7 @@ export default function ReservationsPage() {
   const [detailItem, setDetailItem] = useState<ReservationItem | null>(null);
   const [detailServices, setDetailServices] = useState<DetailServiceItem[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailProcessing, setDetailProcessing] = useState(false);
 
   useEffect(() => { loadReservations(); }, [filter, serviceFilter, searchTrigger, sortType]);
 
@@ -261,6 +262,63 @@ export default function ReservationsPage() {
     }
   };
 
+  const getNextStatus = (status: string): 'approved' | 'confirmed' | null => {
+    if (status === 'pending') return 'approved';
+    if (status === 'approved') return 'confirmed';
+    return null;
+  };
+
+  const handleDetailProcess = async () => {
+    if (!detailItem) return;
+
+    const updates = detailItem.services
+      .map((s) => ({ id: s.re_id, nextStatus: getNextStatus(s.re_status) }))
+      .filter((s): s is { id: string; nextStatus: 'approved' | 'confirmed' } => !!s.nextStatus);
+
+    if (updates.length === 0) {
+      alert('처리 가능한 상태(대기/승인)가 없습니다.');
+      return;
+    }
+
+    if (!confirm(`상세 예약 ${updates.length}건을 처리하시겠습니까?\n(대기→승인, 승인→확정)`)) return;
+
+    setDetailProcessing(true);
+    try {
+      const approvedIds = updates.filter((u) => u.nextStatus === 'approved').map((u) => u.id);
+      const confirmedIds = updates.filter((u) => u.nextStatus === 'confirmed').map((u) => u.id);
+
+      if (approvedIds.length > 0) {
+        const { error } = await supabase.from('reservation').update({ re_status: 'approved' }).in('re_id', approvedIds);
+        if (error) throw new Error(error.message);
+      }
+
+      if (confirmedIds.length > 0) {
+        const { error } = await supabase.from('reservation').update({ re_status: 'confirmed' }).in('re_id', confirmedIds);
+        if (error) throw new Error(error.message);
+        await createPaymentRecords(confirmedIds);
+      }
+
+      setDetailItem((prev) => {
+        if (!prev) return prev;
+        const nextMap = new Map(updates.map((u) => [u.id, u.nextStatus]));
+        return {
+          ...prev,
+          services: prev.services.map((svc) => ({
+            ...svc,
+            re_status: nextMap.get(svc.re_id) || svc.re_status,
+          })),
+        };
+      });
+
+      alert(`${updates.length}건 처리 완료`);
+      await loadReservations();
+    } catch (err: any) {
+      alert(`오류: ${err.message || '상세 처리에 실패했습니다.'}`);
+    } finally {
+      setDetailProcessing(false);
+    }
+  };
+
   /* ── 결제 레코드 생성 ─────────────────── */
   const createPaymentRecords = async (reservationIds: string[]) => {
     try {
@@ -446,7 +504,7 @@ export default function ReservationsPage() {
           type: 'airport',
           label: '공항',
           sublabel: `${r.ra_airport_location || ''} / ${r.ra_flight_number || ''}`,
-          date: r.ra_datetime ? new Date(r.ra_datetime).toLocaleDateString('ko-KR') : '',
+          date: r.ra_datetime ? new Date(r.ra_datetime).toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' }) : '',
           guest: r.ra_passenger_count,
           price: r.total_price,
           feeSummary,
@@ -606,24 +664,36 @@ export default function ReservationsPage() {
     return true;
   };
 
+  const detailProcessInfo = useMemo(() => {
+    if (!detailItem) return { count: 0, label: '처리' };
+    const pendingCount = detailItem.services.filter((s) => s.re_status === 'pending').length;
+    const approvedCount = detailItem.services.filter((s) => s.re_status === 'approved').length;
+    const count = pendingCount + approvedCount;
+
+    if (count === 0) return { count, label: '처리 불가' };
+    if (pendingCount > 0 && approvedCount > 0) return { count, label: '승인/확정 처리' };
+    if (pendingCount > 0) return { count, label: '승인 처리' };
+    return { count, label: '확정 처리' };
+  }, [detailItem]);
+
   /* ── UI ──────────────────────────────────── */
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
       {/* 헤더 */}
-      <div className="bg-white border-b shadow-sm px-4 py-3">
-        <div className="flex items-center gap-3 mb-3">
+      <div className="bg-white border-b shadow-sm px-2 py-2">
+        <div className="flex items-center gap-2 mb-2">
           <Link href="/" className="p-1.5 rounded-lg hover:bg-gray-100">
             <ArrowLeft className="w-5 h-5 text-gray-600" />
           </Link>
-          <h1 className="text-lg font-bold text-gray-800 flex-1">⚡ 예약 처리</h1>
+          <h1 className="text-base font-bold text-gray-800 flex-1">⚡ 예약 처리</h1>
           <button onClick={loadReservations} className="p-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600">
             <RefreshCw className="w-4 h-4" />
           </button>
         </div>
 
         {/* 필터 */}
-        <div className="space-y-2">
-          <div className="flex gap-2">
+        <div className="space-y-1">
+          <div className="flex gap-1">
             <Select value={sortType} onChange={e => setSortType(e.target.value as SortType)} label="정렬"
               options={[['date', '예약일순'], ['name', '고객명순']]} />
             <Select value={filter} onChange={e => setFilter(e.target.value as any)} label="상태"
@@ -633,57 +703,59 @@ export default function ReservationsPage() {
                 ['tour', '투어'], ['rentcar', '렌터카'], ['vehicle', '차량'], ['sht', '스하차량'], ['package', '패키지']]} />
           </div>
 
-          {/* 검색 */}
-          <form onSubmit={e => { e.preventDefault(); setSearchTrigger(v => v + 1); }} className="flex gap-2">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder="이름/이메일 검색..."
-              className="flex-1 px-3 py-2 text-sm border rounded-lg bg-gray-50"
-            />
-            <button type="submit" className="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm">검색</button>
-          </form>
+          {/* 검색 & 일괄 처리 (1행) */}
+          <div className="flex gap-1 items-end">
+            <form onSubmit={e => { e.preventDefault(); setSearchTrigger(v => v + 1); }} className="flex gap-1 flex-1">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="이름검색..."
+                className="flex-1 px-2 py-1.5 text-xs border rounded-lg bg-gray-50"
+              />
+              <button type="submit" className="px-3 py-1.5 bg-blue-500 text-white rounded-lg text-xs font-medium">검색</button>
+            </form>
 
-          {/* 일괄 처리 */}
-          <div className="flex gap-2 items-center">
-            <Select value={bulkAction} onChange={e => setBulkAction(e.target.value as BulkAction)} label=""
-              options={[[ 'approve', '승인'], ['confirm', '확정'], ['cancel', '취소'], ['status_update', '상태변경'], ['delete', '삭제']]} />
-            {bulkAction === 'status_update' && (
-              <Select value={newStatus} onChange={e => setNewStatus(e.target.value)} label=""
-                options={[[ 'pending', '대기중'], ['approved', '승인'], ['confirmed', '확정'], ['cancelled', '취소']]} />
-            )}
-            <button
-              onClick={handleBulkAction}
-              disabled={selectedItems.size === 0 || processing}
-              className={`px-4 py-2 rounded-lg text-sm font-medium ${
-                selectedItems.size === 0 ? 'bg-gray-300 text-gray-500' :
-                bulkAction === 'delete' ? 'bg-red-500 text-white' : 'bg-green-500 text-white'
-              }`}
-            >
-              {processing ? '처리중...' : `${selectedItems.size}건 처리`}
-            </button>
+            {/* 일괄 처리 */}
+            <div className="flex gap-1 items-center">
+              <Select value={bulkAction} onChange={e => setBulkAction(e.target.value as BulkAction)} label=""
+                options={[[ 'approve', '승인'], ['confirm', '확정'], ['cancel', '취소'], ['status_update', '상태변경'], ['delete', '삭제']]} />
+              {bulkAction === 'status_update' && (
+                <Select value={newStatus} onChange={e => setNewStatus(e.target.value)} label=""
+                  options={[[ 'pending', '대기중'], ['approved', '승인'], ['confirmed', '확정'], ['cancelled', '취소']]} />
+              )}
+              <button
+                onClick={handleBulkAction}
+                disabled={selectedItems.size === 0 || processing}
+                className={`px-2 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap ${
+                  selectedItems.size === 0 ? 'bg-gray-300 text-gray-500' :
+                  bulkAction === 'delete' ? 'bg-red-500 text-white' : 'bg-green-500 text-white'
+                }`}
+              >
+                {processing ? '처리중...' : `${selectedItems.size}건 처리`}
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
       {/* 에러 */}
       {error && (
-        <div className="mx-4 mt-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+        <div className="mx-2 mt-2 bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-xs">
           ⚠️ {error}
         </div>
       )}
 
       {/* 삭제 경고 */}
       {bulkAction === 'delete' && selectedItems.size > 0 && (
-        <div className="mx-4 mt-4 bg-red-50 border border-red-200 px-4 py-3 rounded-lg flex items-center gap-2 text-red-700 text-sm">
+        <div className="mx-2 mt-2 bg-red-50 border border-red-200 px-3 py-2 rounded-lg flex items-center gap-2 text-red-700 text-xs">
           <AlertTriangle className="w-4 h-4" />
           <span>삭제된 예약은 복구할 수 없습니다.</span>
         </div>
       )}
 
       {/* 콘텐츠 */}
-      <div className="px-4 py-4">
+      <div className="px-2 py-2">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20">
             <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-500 rounded-full animate-spin" />
@@ -756,10 +828,6 @@ export default function ReservationsPage() {
                             <span className="font-semibold text-gray-800">{reservation.users?.name || 'N/A'}</span>
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="text-xs text-gray-500">여행명:</span>
-                            <span className="text-sm text-gray-600 italic truncate">{reservation.quote?.title || 'N/A'}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
                             <span className="text-xs text-gray-500">영문:</span>
                             <span className="text-sm text-gray-600">
                               {reservation.users?.english_name || reservation.users?.email?.split('@')[0] || 'N/A'}
@@ -770,7 +838,7 @@ export default function ReservationsPage() {
                         {/* 하단 */}
                         <div className="flex items-center justify-between">
                           <span className="text-xs text-gray-400">
-                            {new Date(reservation.re_created_at).toLocaleDateString('ko-KR')}
+                            {new Date(reservation.re_created_at).toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' })}
                           </span>
                           <span className="text-xs text-gray-400">{reservation.services.length}개 서비스</span>
                         </div>
@@ -790,9 +858,22 @@ export default function ReservationsPage() {
           <div className="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl max-h-[95vh] sm:max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="sticky top-0 bg-white border-b px-4 py-3 flex items-center justify-between">
               <h2 className="font-bold text-gray-800">예약 상세</h2>
-              <button onClick={() => setDetailOpen(false)} className="p-1 rounded-full hover:bg-gray-100">
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleDetailProcess}
+                  disabled={detailLoading || detailProcessing || detailProcessInfo.count === 0}
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap ${
+                    detailLoading || detailProcessing || detailProcessInfo.count === 0
+                      ? 'bg-gray-300 text-gray-500'
+                      : 'bg-green-500 text-white'
+                  }`}
+                >
+                  {detailProcessing ? '처리중...' : `${detailProcessInfo.label} (${detailProcessInfo.count})`}
+                </button>
+                <button onClick={() => setDetailOpen(false)} className="p-1 rounded-full hover:bg-gray-100">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             <div className="p-4 space-y-4">
@@ -804,9 +885,6 @@ export default function ReservationsPage() {
                   <p className="text-sm text-gray-500">{detailItem.users.english_name}</p>
                 )}
                 <p className="text-sm text-gray-500">{detailItem.users?.email || ''}</p>
-                {detailItem.quote?.title && (
-                  <p className="text-sm text-gray-600 mt-1 italic">📋 {detailItem.quote.title}</p>
-                )}
               </div>
 
               {/* 서비스 목록 */}
@@ -908,7 +986,7 @@ function Select({ value, onChange, label, options }: {
   return (
     <div className="flex-1">
       {label && <label className="block text-xs text-gray-500 mb-0.5">{label}</label>}
-      <select value={value} onChange={onChange} className="w-full px-2 py-1.5 text-sm border rounded-lg bg-white">
+      <select value={value} onChange={onChange} className="w-full px-2 py-1.5 text-xs border rounded-lg bg-white">
         {options.map(([val, txt]) => (
           <option key={val} value={val}>{txt}</option>
         ))}

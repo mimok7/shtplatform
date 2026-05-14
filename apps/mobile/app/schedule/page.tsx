@@ -89,7 +89,7 @@ const getPlus8DateTimeParts = (value: string | null | undefined) => {
   const yyyy = plus8.getFullYear();
   const mm = String(plus8.getMonth() + 1).padStart(2, '0');
   const dd = String(plus8.getDate()).padStart(2, '0');
-  const time = plus8.toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit', hour12: true });
+  const time = plus8.toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul', hour: 'numeric', minute: '2-digit', hour12: true });
   return { date: `${yyyy}-${mm}-${dd}`, time };
 };
 
@@ -849,7 +849,7 @@ function DateRow({ date, time }: { date: Date | null; time?: string }) {
     <div className="flex items-center gap-2">
       <Calendar className="w-3.5 h-3.5 text-gray-400" />
       <span className="text-sm font-medium">
-        {date ? date.toLocaleDateString('ko-KR') : '-'}
+        {date ? date.toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' }) : '-'}
         {time && <span className="text-gray-500 ml-1">{time}</span>}
       </span>
     </div>

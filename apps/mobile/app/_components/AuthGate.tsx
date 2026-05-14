@@ -113,8 +113,8 @@ export default function AuthGate({ children }: AuthGateProps) {
   // 환경변수 미설정 + 비공개 경로 → 로그인 리다이렉트 중
   if (!hasSupabaseEnv) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
-        <div className="w-full max-w-md bg-white rounded-2xl shadow-lg border border-red-200 p-6">
+      <div className="min-h-screen bg-slate-50 flex flex-col items-start justify-center p-4">
+        <div className="w-full bg-white rounded-2xl shadow-lg border border-red-200 p-4">
           <h2 className="text-lg font-semibold text-slate-900">⚠️ 환경 변수 설정 필요</h2>
           <p className="mt-2 text-sm text-slate-600">
             모바일 앱 실행을 위해 Supabase 환경변수를 설정해주세요.

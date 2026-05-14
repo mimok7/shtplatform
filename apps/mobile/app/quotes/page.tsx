@@ -258,7 +258,7 @@ export default function MobileQuotesPage() {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 pb-20">
       {/* 상단 헤더 */}
       <header className="sticky top-0 z-20 bg-white/95 backdrop-blur border-b border-slate-200">
-        <div className="max-w-md mx-auto flex items-center justify-between px-4 py-3">
+        <div className="flex items-center justify-between px-2 py-2">
           <Link href="/" className="flex items-center gap-1 text-slate-600 active:text-slate-900">
             <ArrowLeft className="w-5 h-5" />
             <span className="text-sm">홈</span>
@@ -276,49 +276,13 @@ export default function MobileQuotesPage() {
         </div>
       </header>
 
-      <main className="max-w-md mx-auto px-4 pt-4 space-y-4">
-        {/* 통계 카드 (4개 압축) */}
-        <div className="grid grid-cols-2 gap-2">
-          <StatCard
-            label="검토 대기"
-            value={stats.submitted}
-            loading={statsLoading}
-            active={filter === 'submitted'}
-            onClick={() => handleFilterChange('submitted')}
-            color="text-yellow-700"
-            ring="ring-yellow-400"
-            icon={<Clock className="w-4 h-4 text-yellow-600" />}
-          />
-          <StatCard
-            label="승인됨"
-            value={stats.approved}
-            loading={statsLoading}
-            active={filter === 'approved'}
-            onClick={() => handleFilterChange('approved')}
-            color="text-green-700"
-            ring="ring-green-400"
-            icon={<CheckCircle className="w-4 h-4 text-green-600" />}
-          />
-          <StatCard
-            label="작성 중"
-            value={stats.draft}
-            loading={statsLoading}
-            active={filter === 'draft'}
-            onClick={() => handleFilterChange('draft')}
-            color="text-slate-700"
-            ring="ring-slate-400"
-            icon={<FileEdit className="w-4 h-4 text-slate-600" />}
-          />
-          <StatCard
-            label="전체"
-            value={stats.total}
-            loading={statsLoading}
-            active={filter === 'all'}
-            onClick={() => handleFilterChange('all')}
-            color="text-blue-700"
-            ring="ring-blue-400"
-            icon={<FileText className="w-4 h-4 text-blue-600" />}
-          />
+      <main className="w-full px-2 pt-2 space-y-2">
+        {/* 통계 - 한 줄 칩 (최소 공간) */}
+        <div className="flex gap-1.5 overflow-hidden">
+          <StatChip label="대기" value={stats.submitted} loading={statsLoading} active={filter === 'submitted'} onClick={() => handleFilterChange('submitted')} color="bg-yellow-100 text-yellow-800 ring-yellow-400" />
+          <StatChip label="승인" value={stats.approved} loading={statsLoading} active={filter === 'approved'} onClick={() => handleFilterChange('approved')} color="bg-green-100 text-green-800 ring-green-400" />
+          <StatChip label="작성중" value={stats.draft} loading={statsLoading} active={filter === 'draft'} onClick={() => handleFilterChange('draft')} color="bg-slate-100 text-slate-700 ring-slate-400" />
+          <StatChip label="전체" value={stats.total} loading={statsLoading} active={filter === 'all'} onClick={() => handleFilterChange('all')} color="bg-blue-100 text-blue-800 ring-blue-400" />
         </div>
 
         {/* 검색 */}
@@ -420,9 +384,9 @@ export default function MobileQuotesPage() {
   );
 }
 
-/* ─── 통계 카드 ──────────────────────────── */
-function StatCard({
-  label, value, loading, active, onClick, color, ring, icon,
+/* ─── 통계 칩 (한 줄, 최소 공간) ──────────────────────────── */
+function StatChip({
+  label, value, loading, active, onClick, color,
 }: {
   label: string;
   value: number;
@@ -430,24 +394,15 @@ function StatCard({
   active: boolean;
   onClick: () => void;
   color: string;
-  ring: string;
-  icon: React.ReactNode;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`bg-white rounded-2xl shadow-sm p-3 text-left active:scale-[0.98] transition ${
-        active ? `ring-2 ${ring}` : ''
-      }`}
+      className={`flex-1 min-w-0 px-1.5 py-1 rounded-md text-[11px] font-medium active:scale-95 transition flex items-center justify-center gap-1 ${color} ${active ? 'ring-2' : 'ring-0 opacity-80'}`}
     >
-      <div className="flex items-center justify-between">
-        <span className="text-[11px] text-slate-500 font-medium">{label}</span>
-        {icon}
-      </div>
-      <div className={`mt-1 text-xl font-bold ${color}`}>
-        {loading ? '…' : value.toLocaleString()}
-      </div>
+      <span className="truncate">{label}</span>
+      <span className="font-bold">{loading ? '…' : value.toLocaleString()}</span>
     </button>
   );
 }
@@ -491,9 +446,9 @@ function QuoteCard({
         </p>
 
         <div className="space-y-0.5 text-[11px] text-slate-500">
-          <div>📅 {quote.created_at ? new Date(quote.created_at).toLocaleDateString('ko-KR') : '-'}</div>
+          <div>📅 {quote.created_at ? new Date(quote.created_at).toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' }) : '-'}</div>
           {quote.approved_at && (
-            <div>✅ 승인 {new Date(quote.approved_at).toLocaleDateString('ko-KR')}</div>
+            <div>✅ 승인 {new Date(quote.approved_at).toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' })}</div>
           )}
           {quote.total_price != null && (
             <div className="text-slate-700">

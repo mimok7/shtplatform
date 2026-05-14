@@ -413,6 +413,12 @@ importers:
 
   apps/mobile:
     dependencies:
+      '@sht/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
+      '@sht/types':
+        specifier: workspace:*
+        version: link:../../packages/types
       '@supabase/supabase-js':
         specifier: ^2.100.0
         version: 2.105.4

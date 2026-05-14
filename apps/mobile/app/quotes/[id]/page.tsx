@@ -21,11 +21,11 @@ import supabase from '@/lib/supabase';
 const fmt = (v: any) => (v == null || v === '' ? '-' : Number(v).toLocaleString());
 const fmtDate = (v: any) => {
   if (!v) return '-';
-  try { return new Date(v).toLocaleDateString('ko-KR'); } catch { return String(v); }
+  try { return new Date(v).toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' }); } catch { return String(v); }
 };
 const fmtDateTime = (v: any) => {
   if (!v) return '-';
-  try { return new Date(v).toLocaleString('ko-KR'); } catch { return String(v); }
+  try { return new Date(v).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' }); } catch { return String(v); }
 };
 
 const SERVICE_META: Record<string, { label: string; icon: any; color: string; bg: string }> = {
@@ -238,7 +238,7 @@ export default function MobileQuoteDetailPage() {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 pb-24">
       {/* Header */}
       <header className="sticky top-0 z-20 bg-white/95 backdrop-blur border-b border-slate-200">
-        <div className="max-w-md mx-auto flex items-center justify-between px-4 py-3">
+        <div className="flex items-center justify-between px-2 py-2">
           <Link href="/quotes" className="flex items-center gap-1 text-slate-600 active:text-slate-900">
             <ArrowLeft className="w-5 h-5" />
             <span className="text-sm">목록</span>
@@ -255,7 +255,7 @@ export default function MobileQuoteDetailPage() {
         </div>
       </header>
 
-      <main className="max-w-md mx-auto px-4 pt-4 space-y-4">
+      <main className="w-full px-2 pt-2 space-y-4">
         {/* 헤더 카드 */}
         <section className="bg-white rounded-2xl shadow-sm p-4">
           <div className="flex items-start justify-between gap-2 mb-2">
@@ -473,7 +473,7 @@ function Sheet({ children, onClose, title }: { children: React.ReactNode; onClos
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative w-full max-w-md bg-white rounded-t-3xl p-5 pb-8 shadow-2xl animate-in slide-in-from-bottom">
+      <div className="relative w-full bg-white rounded-t-3xl p-4 pb-6 shadow-2xl animate-in slide-in-from-bottom">
         <div className="w-10 h-1 bg-slate-300 rounded-full mx-auto mb-4" />
         <h3 className="text-base font-bold text-slate-800 mb-3">{title}</h3>
         {children}

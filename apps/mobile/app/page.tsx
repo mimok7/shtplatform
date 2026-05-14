@@ -50,8 +50,8 @@ export default function HomePage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex flex-col items-center p-4 pb-10">
-      <div className="w-full max-w-md flex justify-end pt-2">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex flex-col p-4 pb-10">
+      <div className="w-full flex justify-end pt-2">
         <button
           type="button"
           onClick={handleLogout}
@@ -73,7 +73,7 @@ export default function HomePage() {
         <p className="mt-2 text-xs text-slate-500">매니저 모바일 (manager1 mirror)</p>
       </div>
 
-      <section className="w-full max-w-md">
+      <section className="w-full">
         <h2 className="px-1 mb-2 text-xs font-semibold text-slate-500 flex items-center gap-1">
           <span>⭐</span> 즐겨찾기
         </h2>

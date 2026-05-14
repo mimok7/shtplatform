@@ -79,19 +79,19 @@ function LoginPageContent() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-100 to-blue-100 flex flex-col items-center p-6">
+    <div className="min-h-screen bg-gradient-to-br from-slate-100 to-blue-100 flex flex-col p-4">
       {/* 상단 로고 */}
-      <div className="pt-8 pb-6">
+      <div className="pt-4 pb-4">
         <img
           src="/logo.png"
           alt="스테이하롱 로고"
-          className="h-24 w-auto"
+          className="h-20 w-auto mx-auto"
         />
       </div>
 
       {/* 중앙 로그인 폼 */}
-      <div className="flex-1 flex items-center justify-center w-full">
-        <div className="w-full max-w-sm bg-white rounded-2xl shadow-lg p-6">
+      <div className="flex-1 flex items-start justify-start w-full">
+        <div className="w-full bg-white rounded-2xl shadow-lg p-4">
           {/* 로고 (제거됨) */}
 
         <h1 className="text-2xl font-bold text-slate-900">매니저 로그인</h1>
@@ -159,8 +159,8 @@ function LoginPageContent() {
 
 function LoginFallback() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-100 to-blue-100 flex items-center justify-center p-6">
-      <div className="w-full max-w-sm bg-white rounded-2xl shadow-lg p-6 text-center text-slate-600">
+    <div className="min-h-screen bg-gradient-to-br from-slate-100 to-blue-100 flex flex-col items-start justify-start p-4">
+      <div className="w-full bg-white rounded-2xl shadow-lg p-4 text-center text-slate-600 mt-20">
         로그인 화면을 준비하는 중입니다...
       </div>
     </div>

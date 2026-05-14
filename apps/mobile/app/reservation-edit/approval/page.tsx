@@ -1,0 +1,2222 @@
+'use client';
+
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import ManagerLayout from '../_components/MobileReservationLayout';
+import supabase from '@/lib/supabase';
+
+type RequestStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
+
+type ChangeRequestRow = {
+    id: string;
+    reservation_id: string;
+    re_type: string;
+    requester_user_id: string;
+    status: RequestStatus;
+    customer_note: string | null;
+    manager_note: string | null;
+    submitted_at: string;
+    reviewed_at: string | null;
+    snapshot_data: any | null;
+};
+
+const SERVICE_TABLE_MAP: Record<string, { baseTable: string; tempTable: string }> = {
+    airport: { baseTable: 'reservation_airport', tempTable: 'reservation_change_airport' },
+    car_sht: { baseTable: 'reservation_car_sht', tempTable: 'reservation_change_car_sht' },
+    sht: { baseTable: 'reservation_car_sht', tempTable: 'reservation_change_car_sht' },
+    sht_car: { baseTable: 'reservation_car_sht', tempTable: 'reservation_change_car_sht' },
+    cruise: { baseTable: 'reservation_cruise', tempTable: 'reservation_change_cruise' },
+    cruise_car: { baseTable: 'reservation_cruise_car', tempTable: 'reservation_change_cruise_car' },
+    car: { baseTable: 'reservation_cruise_car', tempTable: 'reservation_change_cruise_car' },
+    hotel: { baseTable: 'reservation_hotel', tempTable: 'reservation_change_hotel' },
+    rentcar: { baseTable: 'reservation_rentcar', tempTable: 'reservation_change_rentcar' },
+    tour: { baseTable: 'reservation_tour', tempTable: 'reservation_change_tour' },
+};
+
+const EXCLUDED_FIELDS = new Set(['id', 'request_id', 'created_at', 'updated_at', 'reservation_id']);
+const TABLE_SPECIFIC_EXCLUDED_FIELDS: Record<string, Set<string>> = {
+    // 운영 스키마 캐시에 없는 컬럼 전송 방지
+    reservation_airport: new Set(['ra_airport_name']),
+    reservation_tour: new Set(['accommodation_info']),
+    // reservation_car_sht 에는 accommodation_info 컬럼이 없음 (change 테이블에만 존재) → 400 방지
+    reservation_car_sht: new Set(['accommodation_info']),
+};
+
+function normalizeReservationId(value?: string): string {
+    if (!value) return '';
+    return String(value).split(':')[0].trim();
+}
+
+const TYPE_NAME_MAP: Record<string, string> = {
+    airport: '✈️ 공항', car_sht: '🚙 스하차량', cruise: '🚢 크루즈',
+    sht: '🚙 스하차량', sht_car: '🚙 스하차량',
+    cruise_car: '🚙 크루즈차량', car: '🚙 크루즈차량', hotel: '🏨 호텔', rentcar: '🚗 렌터카', tour: '🎫 투어',
+};
+
+const STATUS_MAP: Record<string, { label: string; cls: string }> = {
+    pending: { label: '대기', cls: 'bg-yellow-100 text-yellow-700' },
+    approved: { label: '승인', cls: 'bg-green-100 text-green-700' },
+    rejected: { label: '반려', cls: 'bg-red-100 text-red-700' },
+    cancelled: { label: '취소', cls: 'bg-gray-100 text-gray-600' },
+};
+
+const REQUEST_SOURCE_TABS = [
+    { value: 'all', label: '전체' },
+    { value: 'customer', label: '고객 수정' },
+    { value: 'manager', label: '매니저 수정' },
+] as const;
+
+type RequestSourceTab = (typeof REQUEST_SOURCE_TABS)[number]['value'];
+
+function isManagerRole(role?: string | null): boolean {
+    return role === 'manager' || role === 'admin';
+}
+
+function getRequestSourceKind(role?: string | null): 'customer' | 'manager' {
+    return isManagerRole(role) ? 'manager' : 'customer';
+}
+
+function getRequestSourceLabel(kind: 'customer' | 'manager'): string {
+    return kind === 'manager' ? '매니저 수정' : '고객 수정';
+}
+
+/* ─── 필드 라벨 매핑 ─── */
+const FIELD_LABELS: Record<string, string> = {
+    airport_price_code: '가격코드', ra_airport_location: '📍 장소', ra_flight_number: '✈️ 항공편',
+    ra_datetime: '🕐 일시', ra_stopover_location: '🔄 경유지', ra_stopover_wait_minutes: '⏱️ 경유대기(분)',
+    ra_car_count: '🚗 차량수', ra_passenger_count: '👥 승객수', ra_luggage_count: '🧳 수하물수',
+    ra_airport_name: '공항명', way_type: '이용방식', accommodation_info: '숙소정보',
+    hotel_price_code: '가격코드', checkin_date: '📅 체크인', guest_count: '👥 총인원',
+    adult_count: '🧑 성인', child_count: '👶 아동', infant_count: '👼 유아',
+    breakfast_service: '🍳 조식', hotel_category: '호텔등급', schedule: '일정',
+    room_count: '객실수', assignment_code: '배정코드',
+    rentcar_price_code: '가격코드', pickup_datetime: '🕐 픽업시간(Ⅰ)', pickup_location: '📍 승차위치(Ⅰ)',
+    destination: '🎯 하차위치(Ⅰ)', via_location: '🔄 경유지(Ⅰ)', via_waiting: '⏱️ 경유대기(Ⅰ)',
+    return_datetime: '🕐 픽업시간(Ⅱ)', return_pickup_location: '📍 승차위치(Ⅱ)',
+    return_destination: '🎯 하차위치(Ⅱ)', return_via_location: '🔄 경유지(Ⅱ)', return_via_waiting: '⏱️ 경유대기(Ⅱ)',
+    car_count: '🚗 차량수', passenger_count: '👥 승객수', luggage_count: '🧳 수하물',
+    rentcar_count: '렌터카수',
+    tour_price_code: '가격코드', usage_date: '📅 사용일', tour_capacity: '👥 정원',
+    dropoff_location: '🎯 하차장소',
+    room_price_code: '객실코드', checkin: '📅 승선일', room_total_price: '객실총가격',
+    boarding_code: '승선코드', boarding_assist: '승선도움',
+    child_extra_bed_count: '아동엑베', extra_bed_count: '엑스트라베드', single_count: '싱글',
+    connecting_room: '커넥팅룸', birthday_event: '생일이벤트', birthday_name: '생일자',
+    vehicle_number: '🔢 차량번호', seat_number: '💺 좌석', sht_category: '차량분류',
+    car_price_code: '가격코드', car_total_price: '차량총가격',
+    request_note: '📝 요청사항', dispatch_code: '📦 배차코드', dispatch_memo: '배차메모',
+    pickup_confirmed_at: '승차확인', unit_price: '단가', total_price: '총가격',
+    route: '경로', vehicle_type: '차종', rental_type: '렌탈타입',
+    pickup_accommodation_info: '픽업 숙소 정보',
+    sending_accommodation_info: '샌딩 숙소 정보',
+    pickup_airport_location: '픽업 공항 위치',
+    sending_airport_location: '샌딩 공항 위치',
+};
+
+function getFieldLabel(field: string): string {
+    return FIELD_LABELS[field] || field;
+}
+
+function normalizeValue(value: unknown): string {
+    if (value === null || value === undefined) return '';
+    if (typeof value === 'object') {
+        try { return JSON.stringify(value); } catch { return String(value); }
+    }
+    return String(value);
+}
+
+function formatDisplayValue(value: unknown): string {
+    if (value === null || value === undefined || String(value).trim() === '') return '-';
+    if (typeof value === 'boolean') return value ? '✅ 예' : '❌ 아니오';
+    if (typeof value === 'number') return value.toLocaleString('ko-KR');
+    if (typeof value === 'object') {
+        try { return JSON.stringify(value); } catch { return String(value); }
+    }
+    const strVal = String(value);
+    if (/^\d{4}-\d{2}-\d{2}T/.test(strVal) || /^\d{4}-\d{2}-\d{2} \d{2}:/.test(strVal)) {
+        try {
+            const d = new Date(strVal);
+            if (!isNaN(d.getTime())) {
+                return d.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+            }
+        } catch { /* fall through */ }
+    }
+    return strVal;
+}
+
+function formatCurrency(value: unknown): string {
+    if (value === null || value === undefined || value === '') return '-';
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return formatDisplayValue(value);
+    return `${parsed.toLocaleString('ko-KR')}원`;
+}
+
+const PRICE_FIELD_LABELS: Record<string, string> = {
+    schedule: '일정',
+    extra_bed: '엑스트라 베드',
+    room_count: '객실 수',
+    unit_price: '기준 단가',
+    child_older: '소아(고연령)',
+    guest_count: '총 인원',
+    child_extra_bed: '아동 엑스트라 베드',
+    room_price_code: '객실 가격 코드',
+    category_unit_prices: '카테고리별 단가',
+    category_prices_manual: '카테고리 단가 수동입력',
+    representative_unit_price: '대표 단가',
+    adult: '성인',
+    child: '아동',
+    infant: '유아',
+    single: '싱글',
+    source: '수정 출처',
+    options: '옵션',
+    car_total: '차량 합계',
+    service_type: '서비스 유형',
+    discount_rate: '할인율',
+    options_total: '옵션 합계',
+    discount_amount: '할인 금액',
+    pricing_version: '가격 버전',
+    calculated_total: '계산 총액',
+    discount_sequence: '할인 시퀀스',
+    additional_fee_detail: '추가요금 상세',
+    additional_fee_manual: '추가요금 수동입력',
+    discount_manual_amount: '수동 할인 금액',
+    template_id: '템플릿 ID',
+    amount: '금액',
+    qty: '수량',
+};
+
+const PRICE_FIELD_DESCRIPTIONS: Record<string, string> = {
+    schedule: '박/일 일정',
+    extra_bed: '엑스트라 베드 요금 정보',
+    room_count: '예약된 객실 개수',
+    unit_price: '기본 단가',
+    child_older: '고연령 아동 요금',
+    guest_count: '전체 탑승 인원',
+    child_extra_bed: '아동 엑스트라 베드 요금',
+    room_price_code: '가격 테이블 연결 코드',
+    category_unit_prices: '인원 카테고리별 단가',
+    category_prices_manual: '단가 수동입력 여부',
+    representative_unit_price: '대표 단가 값',
+    source: '수정이 생성된 위치',
+    options: '선택 옵션',
+    service_type: '서비스 분류',
+    pricing_version: '가격 계산 버전',
+    calculated_total: '최종 계산 금액',
+};
+
+const PERSON_LABELS: Record<string, string> = {
+    adult: '성인',
+    child: '아동',
+    infant: '유아',
+    single: '싱글',
+    extra_bed: '엑스트라 베드',
+    child_older: '소아(고연령)',
+    child_extra_bed: '아동 엑스트라 베드',
+};
+
+function getPriceFieldLabel(key: string): string {
+    return PRICE_FIELD_LABELS[key] || key;
+}
+
+function getPriceFieldDescription(key: string): string {
+    return PRICE_FIELD_DESCRIPTIONS[key] || '-';
+}
+
+function formatCountPriceSummary(value: unknown): string {
+    if (!value || typeof value !== 'object') return formatDisplayValue(value);
+    const obj = value as Record<string, unknown>;
+    const extra = Object.entries(obj)
+        .filter(([k]) => !['count', 'unit_price', 'total'].includes(k))
+        .map(([k, v]) => `${getPriceFieldLabel(k)} ${formatDisplayValue(v)}`)
+        .join(' / ');
+    const base = `수량 ${formatDisplayValue(obj.count)} / 단가 ${formatCurrency(obj.unit_price)} / 합계 ${formatCurrency(obj.total)}`;
+    return extra ? `${base} / ${extra}` : base;
+}
+
+function formatPriceKeyValue(key: string, value: unknown): string {
+    if (value === '-' || value === null || value === undefined || String(value).trim() === '') return '-';
+
+    if (key === 'schedule') {
+        const str = String(value);
+        const m = str.match(/^(\d+)N(\d+)D$/i);
+        if (m) return `${m[1]}박${m[2]}일`;
+    }
+
+    if (['adult', 'child', 'infant', 'single', 'extra_bed', 'child_older', 'child_extra_bed'].includes(key)) {
+        return formatCountPriceSummary(value);
+    }
+
+    if (key === 'category_unit_prices' && value && typeof value === 'object') {
+        return Object.entries(value as Record<string, unknown>)
+            .map(([k, v]) => `${PERSON_LABELS[k] || getPriceFieldLabel(k)} ${formatCurrency(v)}`)
+            .join(' | ');
+    }
+
+    if (key === 'source') {
+        const sourceMap: Record<string, string> = {
+            manager_reservation_edit: '매니저 예약 수정',
+            manager_quote_edit: '매니저 견적 수정',
+        };
+        return sourceMap[String(value)] || formatDisplayValue(value);
+    }
+
+    if (key === 'service_type') {
+        const typeMap: Record<string, string> = {
+            cruise: '크루즈',
+            hotel: '호텔',
+            tour: '투어',
+            airport: '공항',
+            car: '차량',
+            rentcar: '렌터카',
+        };
+        return typeMap[String(value)] || formatDisplayValue(value);
+    }
+
+    if (key === 'discount_rate') {
+        const n = Number(value);
+        return Number.isFinite(n) ? `${n.toLocaleString('ko-KR')}%` : formatDisplayValue(value);
+    }
+
+    if (['car_total', 'options_total', 'discount_amount', 'discount_manual_amount', 'additional_fee_manual', 'calculated_total', 'representative_unit_price'].includes(key)) {
+        return formatCurrency(value);
+    }
+
+    if (key === 'category_prices_manual') {
+        if (typeof value === 'boolean') return value ? '✅ 예' : '❌ 아니오';
+        const str = String(value).toLowerCase();
+        if (['y', 'yes', 'true', '1', '✅ 예'].includes(str) || String(value) === '✅ 예') return '✅ 예';
+        if (['n', 'no', 'false', '0', '❌ 아니오'].includes(str) || String(value) === '❌ 아니오') return '❌ 아니오';
+    }
+
+    if (typeof value === 'object') return JSON.stringify(value);
+    return formatDisplayValue(value);
+}
+
+function renderTopExtraFieldsTable(priceBreakdown: any): React.ReactNode {
+    if (!priceBreakdown || typeof priceBreakdown !== 'object') return null;
+
+    const topKnownKeys = new Set([
+        'subtotal',
+        'grand_total',
+        'additional_fee',
+        'adjustment_total',
+        'discount_total',
+        'total_by_group',
+        'rooms',
+        'additional_fee_items',
+        'currency',
+        'nights',
+        'booking_code',
+        'quote_id',
+    ]);
+
+    const topExtraEntries = Object.entries(priceBreakdown).filter(([key]) => !topKnownKeys.has(key));
+    if (topExtraEntries.length === 0) return null;
+
+    return (
+        <div className="border border-gray-200 rounded overflow-hidden">
+            <div className="bg-gray-100 px-2 py-1 text-[11px] font-medium text-gray-700">기타 상세 필드</div>
+            <table className="min-w-full text-[11px]">
+                <thead className="bg-gray-50 text-gray-600">
+                    <tr>
+                        <th className="px-2 py-1 text-left w-44">항목</th>
+                        <th className="px-2 py-1 text-left w-52">설명</th>
+                        <th className="px-2 py-1 text-left">값</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {topExtraEntries.map(([key, value]) => (
+                        <tr key={`pb-extra-${key}`} className="border-t border-gray-100 bg-white">
+                            <td className="px-2 py-1 text-gray-600">{getPriceFieldLabel(key)}</td>
+                            <td className="px-2 py-1 text-gray-500">{getPriceFieldDescription(key)}</td>
+                            <td className="px-2 py-1">{formatPriceKeyValue(key, value)}</td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    );
+}
+
+function renderPriceBreakdownTable(priceBreakdown: any): React.ReactNode {
+    if (!priceBreakdown || typeof priceBreakdown !== 'object') {
+        return <div className="text-[11px] text-gray-500">가격 상세 데이터가 없습니다.</div>;
+    }
+
+    const personKeys = ['adult', 'child', 'infant', 'single'];
+    const personLabels: Record<string, string> = {
+        adult: '성인',
+        child: '아동',
+        infant: '유아',
+        single: '싱글',
+    };
+    const topKnownKeys = new Set([
+        'subtotal',
+        'grand_total',
+        'additional_fee',
+        'adjustment_total',
+        'discount_total',
+        'total_by_group',
+        'rooms',
+        'additional_fee_items',
+        'currency',
+        'nights',
+        'booking_code',
+        'quote_id',
+    ]);
+
+    const rooms = Array.isArray(priceBreakdown.rooms) ? priceBreakdown.rooms : [];
+    const feeItems = Array.isArray(priceBreakdown.additional_fee_items) ? priceBreakdown.additional_fee_items : [];
+    const groupTotalEntries = priceBreakdown.total_by_group && typeof priceBreakdown.total_by_group === 'object'
+        ? Object.entries(priceBreakdown.total_by_group)
+        : [];
+
+    return (
+        <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-2 text-[11px] md:grid-cols-3">
+                <div className="rounded border border-gray-200 bg-white p-2">소계: <strong>{formatCurrency(priceBreakdown.subtotal)}</strong></div>
+                <div className="rounded border border-gray-200 bg-white p-2">총액: <strong>{formatCurrency(priceBreakdown.grand_total)}</strong></div>
+                <div className="rounded border border-gray-200 bg-white p-2">추가요금: <strong>{formatCurrency(priceBreakdown.additional_fee)}</strong></div>
+                <div className="rounded border border-gray-200 bg-white p-2">조정합계: <strong>{formatCurrency(priceBreakdown.adjustment_total)}</strong></div>
+                <div className="rounded border border-gray-200 bg-white p-2">할인합계: <strong>{formatCurrency(priceBreakdown.discount_total)}</strong></div>
+                <div className="rounded border border-gray-200 bg-white p-2">통화: <strong>{formatDisplayValue(priceBreakdown.currency)}</strong></div>
+            </div>
+
+            {groupTotalEntries.length > 0 && (
+                <div className="border border-gray-200 rounded overflow-hidden">
+                    <div className="bg-gray-100 px-2 py-1 text-[11px] font-medium text-gray-700">인원그룹별 합계 (total_by_group)</div>
+                    <table className="min-w-full text-[11px]">
+                        <thead className="bg-gray-50 text-gray-600">
+                            <tr>
+                                <th className="px-2 py-1 text-left">구분</th>
+                                <th className="px-2 py-1 text-right">금액</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {groupTotalEntries.map(([key, value]) => (
+                                <tr key={`pb-group-${key}`} className="border-t border-gray-100">
+                                    <td className="px-2 py-1">{personLabels[key] || key}</td>
+                                    <td className="px-2 py-1 text-right font-medium">{formatCurrency(value)}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+
+            {rooms.length > 0 && (
+                <div className="border border-gray-200 rounded overflow-hidden">
+                    <div className="bg-gray-100 px-2 py-1 text-[11px] font-medium text-gray-700">객실별 요금</div>
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full text-[11px]">
+                            <thead className="bg-gray-50 text-gray-600">
+                                <tr>
+                                    <th className="px-2 py-1 text-left">객실</th>
+                                    <th className="px-2 py-1 text-left">크루즈/타입</th>
+                                    <th className="px-2 py-1 text-left">체크인</th>
+                                    <th className="px-2 py-1 text-left">기본정보</th>
+                                    <th className="px-2 py-1 text-right">객실합계</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {rooms.map((room: any, index: number) => {
+                                    const adultCount = Number(room?.adult?.count || 0);
+                                    const childCount = Number(room?.child?.count || 0);
+                                    const infantCount = Number(room?.infant?.count || 0);
+                                    const singleCount = Number(room?.single?.count || 0);
+                                    const pax = `성인 ${adultCount} / 아동 ${childCount} / 유아 ${infantCount} / 싱글 ${singleCount}`;
+                                    const roomMetaEntries = Object.entries(room || {}).filter(([key]) => (
+                                        !['room_index', 'cruise', 'room_type', 'checkin', 'total', ...personKeys].includes(key)
+                                    ));
+                                    return (
+                                        <React.Fragment key={`pb-room-${index}`}>
+                                            <tr className="border-t border-gray-100 bg-white">
+                                                <td className="px-2 py-1">#{room?.room_index ?? index + 1}</td>
+                                                <td className="px-2 py-1">{room?.cruise || '-'} / {room?.room_type || '-'}</td>
+                                                <td className="px-2 py-1">{formatDisplayValue(room?.checkin)}</td>
+                                                <td className="px-2 py-1">{pax}</td>
+                                                <td className="px-2 py-1 text-right font-medium">{formatCurrency(room?.total)}</td>
+                                            </tr>
+                                            <tr className="border-t border-gray-100 bg-gray-50">
+                                                <td colSpan={5} className="px-2 py-2">
+                                                    <div className="font-medium text-gray-700 mb-1">인원타입 상세</div>
+                                                    <div className="overflow-x-auto">
+                                                        <table className="min-w-full text-[11px]">
+                                                            <thead className="text-gray-600">
+                                                                <tr>
+                                                                    <th className="px-2 py-1 text-left">구분</th>
+                                                                    <th className="px-2 py-1 text-right">수량</th>
+                                                                    <th className="px-2 py-1 text-right">단가</th>
+                                                                    <th className="px-2 py-1 text-right">합계</th>
+                                                                    <th className="px-2 py-1 text-left">기타</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                {personKeys.map((key) => {
+                                                                    const detail = room?.[key];
+                                                                    const detailObj = detail && typeof detail === 'object' ? detail : {};
+                                                                    const extra = Object.entries(detailObj)
+                                                                        .filter(([k]) => !['count', 'unit_price', 'total'].includes(k))
+                                                                        .map(([k, v]) => `${getPriceFieldLabel(k)}: ${formatPriceKeyValue(k, v)}`)
+                                                                        .join(' | ');
+                                                                    return (
+                                                                        <tr key={`pb-room-${index}-${key}`} className="border-t border-gray-100">
+                                                                            <td className="px-2 py-1">{personLabels[key]}</td>
+                                                                            <td className="px-2 py-1 text-right">{formatDisplayValue(detailObj?.count)}</td>
+                                                                            <td className="px-2 py-1 text-right">{formatCurrency(detailObj?.unit_price)}</td>
+                                                                            <td className="px-2 py-1 text-right font-medium">{formatCurrency(detailObj?.total)}</td>
+                                                                            <td className="px-2 py-1">{extra || '-'}</td>
+                                                                        </tr>
+                                                                    );
+                                                                })}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+
+                                                    {roomMetaEntries.length > 0 && (
+                                                        <div className="mt-2 border border-gray-200 rounded bg-white overflow-hidden">
+                                                            <div className="bg-gray-100 px-2 py-1 text-[11px] font-medium text-gray-700">객실 기타 상세</div>
+                                                            <table className="min-w-full text-[11px]">
+                                                                <thead className="bg-gray-50 text-gray-600">
+                                                                    <tr>
+                                                                        <th className="px-2 py-1 text-left w-44">항목</th>
+                                                                        <th className="px-2 py-1 text-left w-52">설명</th>
+                                                                        <th className="px-2 py-1 text-left">값</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody>
+                                                                    {roomMetaEntries.map(([k, v]) => (
+                                                                        <tr key={`pb-room-meta-${index}-${k}`} className="border-t border-gray-100">
+                                                                            <td className="px-2 py-1 text-gray-600">{getPriceFieldLabel(k)}</td>
+                                                                            <td className="px-2 py-1 text-gray-500">{getPriceFieldDescription(k)}</td>
+                                                                            <td className="px-2 py-1">{formatPriceKeyValue(k, v)}</td>
+                                                                        </tr>
+                                                                    ))}
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        </React.Fragment>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+
+            {feeItems.length > 0 && (
+                <div className="border border-gray-200 rounded overflow-hidden">
+                    <div className="bg-gray-100 px-2 py-1 text-[11px] font-medium text-gray-700">추가요금 항목</div>
+                    <table className="min-w-full text-[11px]">
+                        <thead className="bg-gray-50 text-gray-600">
+                            <tr>
+                                <th className="px-2 py-1 text-left">항목명</th>
+                                <th className="px-2 py-1 text-left">코드</th>
+                                <th className="px-2 py-1 text-left">수량</th>
+                                <th className="px-2 py-1 text-right">금액</th>
+                                <th className="px-2 py-1 text-left">기타</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {feeItems.map((item: any, idx: number) => {
+                                const extra = Object.entries(item || {})
+                                    .filter(([k]) => !['name', 'key', 'code', 'qty', 'quantity', 'amount'].includes(k))
+                                    .map(([k, v]) => `${getPriceFieldLabel(k)}: ${formatPriceKeyValue(k, v)}`)
+                                    .join(' | ');
+                                return (
+                                    <tr key={`pb-fee-${idx}`} className="border-t border-gray-100 bg-white">
+                                        <td className="px-2 py-1">{item?.name || `항목 ${idx + 1}`}</td>
+                                        <td className="px-2 py-1">{formatDisplayValue(item?.code ?? item?.key)}</td>
+                                        <td className="px-2 py-1">{formatDisplayValue(item?.qty ?? item?.quantity)}</td>
+                                        <td className="px-2 py-1 text-right font-medium">{formatCurrency(item?.amount)}</td>
+                                        <td className="px-2 py-1">{extra || '-'}</td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+
+        </div>
+    );
+}
+
+function extractChangedFields(
+    baseData: Record<string, any> | null,
+    tempData: Record<string, any> | null,
+    baseTable?: string,
+) {
+    if (!tempData) return [] as Array<{ field: string; before: unknown; after: unknown }>;
+    const keys = new Set<string>([...Object.keys(baseData || {}), ...Object.keys(tempData || {})]);
+    const tableExcluded = (baseTable && TABLE_SPECIFIC_EXCLUDED_FIELDS[baseTable]) || new Set<string>();
+    return Array.from(keys)
+        .filter(key => !EXCLUDED_FIELDS.has(key) && !tableExcluded.has(key))
+        .map(key => ({ field: key, before: baseData?.[key], after: tempData?.[key] }))
+        .filter(row => row.after !== undefined)
+        .filter(row => normalizeValue(row.before) !== normalizeValue(row.after));
+}
+
+function extractAirportSnapshotChangedFields(snapshotData: any) {
+    const originalRows = Array.isArray(snapshotData?.original) ? snapshotData.original : [];
+    const requestedRows = Array.isArray(snapshotData?.requested) ? snapshotData.requested : [];
+    if (requestedRows.length === 0) return [] as Array<{ field: string; before: unknown; after: unknown }>;
+
+    const originalByKey = new Map<string, any>();
+    originalRows.forEach((row: any, idx: number) => {
+        const key = String(row?.id || row?.way_type || idx);
+        originalByKey.set(key, row);
+    });
+
+    const rows: Array<{ field: string; before: unknown; after: unknown }> = [];
+    requestedRows.forEach((row: any, idx: number) => {
+        const key = String(row?.id || row?.way_type || idx);
+        const original = originalByKey.get(key) || {};
+        const way = String(row?.way_type || original?.way_type || '').toLowerCase();
+
+        const accommodationField = way === 'pickup' ? 'pickup_accommodation_info' : way === 'sending' ? 'sending_accommodation_info' : 'accommodation_info';
+        const airportField = way === 'pickup' ? 'pickup_airport_location' : way === 'sending' ? 'sending_airport_location' : 'ra_airport_location';
+
+        const beforeAccommodation = original?.accommodation_info;
+        const afterAccommodation = row?.accommodation_info;
+        if (afterAccommodation !== undefined && normalizeValue(beforeAccommodation) !== normalizeValue(afterAccommodation)) {
+            rows.push({ field: accommodationField, before: beforeAccommodation, after: afterAccommodation });
+        }
+
+        const beforeAirport = original?.ra_airport_location;
+        const afterAirport = row?.ra_airport_location;
+        if (afterAirport !== undefined && normalizeValue(beforeAirport) !== normalizeValue(afterAirport)) {
+            rows.push({ field: airportField, before: beforeAirport, after: afterAirport });
+        }
+    });
+
+    return rows;
+}
+
+function extractAirportRowsChangedFields(baseRows: any[], tempRows: any[]) {
+    const rows: Array<{ field: string; before: unknown; after: unknown }> = [];
+    const baseByWay = new Map<string, any>();
+    (baseRows || []).forEach((row: any) => {
+        const way = String(row?.way_type || '').toLowerCase();
+        if (way) baseByWay.set(way, row);
+    });
+
+    (tempRows || []).forEach((row: any) => {
+        const way = String(row?.way_type || '').toLowerCase();
+        const base = baseByWay.get(way) || {};
+
+        const accommodationField = way === 'pickup' ? 'pickup_accommodation_info' : way === 'sending' ? 'sending_accommodation_info' : 'accommodation_info';
+        const airportField = way === 'pickup' ? 'pickup_airport_location' : way === 'sending' ? 'sending_airport_location' : 'ra_airport_location';
+
+        if (row?.accommodation_info !== undefined && normalizeValue(base?.accommodation_info) !== normalizeValue(row?.accommodation_info)) {
+            rows.push({ field: accommodationField, before: base?.accommodation_info, after: row?.accommodation_info });
+        }
+        if (row?.ra_airport_location !== undefined && normalizeValue(base?.ra_airport_location) !== normalizeValue(row?.ra_airport_location)) {
+            rows.push({ field: airportField, before: base?.ra_airport_location, after: row?.ra_airport_location });
+        }
+    });
+
+    return rows;
+}
+
+function extractSnapshotChangedFields(snapshotData: any, baseTable?: string) {
+    const toRows = (v: any): any[] => {
+        if (Array.isArray(v)) return v;
+        if (v && typeof v === 'object') return [v];
+        return [];
+    };
+
+    const originalRows = toRows(snapshotData?.original);
+    const requestedRows = toRows(snapshotData?.requested);
+    if (requestedRows.length === 0) return [] as Array<{ field: string; before: unknown; after: unknown }>;
+
+    const originalByKey = new Map<string, any>();
+    originalRows.forEach((row: any, idx: number) => {
+        const key = String(row?.id || idx);
+        originalByKey.set(key, row);
+    });
+
+    const rows: Array<{ field: string; before: unknown; after: unknown }> = [];
+    requestedRows.forEach((row: any, idx: number) => {
+        const key = String(row?.id || idx);
+        const original = originalByKey.get(key) || {};
+        rows.push(...extractChangedFields(original, row, baseTable));
+    });
+
+    return rows;
+}
+
+/* ─── 실제로 변경된 requested 행만 추출 (snapshot.original과 비교) ─── */
+function filterActuallyChangedRequestedRows(
+    requestedRows: any[],
+    originalRows: any[],
+    baseTable?: string,
+): any[] {
+    if (!Array.isArray(requestedRows) || requestedRows.length === 0) return [];
+    const tableExcluded = (baseTable && TABLE_SPECIFIC_EXCLUDED_FIELDS[baseTable]) || new Set<string>();
+
+    const originalByKey = new Map<string, any>();
+    (originalRows || []).forEach((row: any, idx: number) => {
+        const key = String(row?.id || row?.way_type || idx);
+        originalByKey.set(key, row);
+    });
+
+    return requestedRows.filter((row: any, idx: number) => {
+        const key = String(row?.id || row?.way_type || idx);
+        const original = originalByKey.get(key) || {};
+        return Object.keys(row || {}).some((k) => {
+            if (EXCLUDED_FIELDS.has(k) || tableExcluded.has(k)) return false;
+            return normalizeValue(original?.[k]) !== normalizeValue(row?.[k]);
+        });
+    });
+}
+
+function isHeaderLikeChangedRow(row: { field: unknown; before: unknown; after: unknown }): boolean {
+    const f = normalizeValue(row.field).trim();
+    const b = normalizeValue(row.before).trim();
+    const a = normalizeValue(row.after).trim();
+
+    // 구형/오염 스냅샷: 헤더 텍스트 자체가 데이터로 저장된 경우 제거
+    if (f === 'field' || f === 'before' || f === 'after') return true;
+    if (f === '필드' && (b.includes('기존값') || a.includes('수정요청'))) return true;
+    if (f.includes('기존값') || f.includes('수정요청')) return true;
+    if (b === '🔵 기존값' || a === '🟠 수정요청') return true;
+
+    return false;
+}
+
+function extractLegacyChangedRows(snapshotData: any): Array<{ field: string; before: unknown; after: unknown }> {
+    const requested = Array.isArray(snapshotData?.requested) ? snapshotData.requested : [];
+    const rows = requested
+        .filter((r: any) => r && typeof r === 'object' && ('field' in r || 'before' in r || 'after' in r))
+        .map((r: any) => ({ field: String(r.field || ''), before: r.before, after: r.after }))
+        .filter((r) => !isHeaderLikeChangedRow(r));
+    return rows;
+}
+
+function getSnapshotChangedRows(row: ChangeRequestRow): Array<{ field: string; before: unknown; after: unknown }> {
+    const legacyRows = extractLegacyChangedRows(row.snapshot_data);
+    if (legacyRows.length > 0) return legacyRows;
+
+    if (row.re_type === 'airport') {
+        return extractAirportSnapshotChangedFields(row.snapshot_data).filter((r) => !isHeaderLikeChangedRow(r));
+    }
+    const mapping = SERVICE_TABLE_MAP[row.re_type];
+    return extractSnapshotChangedFields(row.snapshot_data, mapping?.baseTable).filter((r) => !isHeaderLikeChangedRow(r));
+}
+
+// 행별 승인 키 계산 (id 우선, 없으면 way_type+index)
+function rowKeyOf(r: any, idx: number): string {
+    if (r?.id) return `id:${r.id}`;
+    if (r?.way_type) return `wt:${r.way_type}:${idx}`;
+    return `idx:${idx}`;
+}
+
+const FILTER_BUTTONS: Array<{ value: RequestStatus | 'all'; label: string }> = [
+    { value: 'all', label: '전체' },
+    { value: 'pending', label: '대기' },
+    { value: 'approved', label: '승인' },
+    { value: 'rejected', label: '반려' },
+    { value: 'cancelled', label: '취소' },
+];
+
+type GroupedDate = {
+    date: string;
+    users: { userId: string; userName: string; email: string; rows: ChangeRequestRow[] }[];
+};
+
+export default function ReservationEditApprovalPage() {
+    const [requests, setRequests] = useState<ChangeRequestRow[]>([]);
+    const [userMap, setUserMap] = useState<Record<string, { name?: string; email?: string; role?: string }>>({});
+    const [reservationUserMap, setReservationUserMap] = useState<Record<string, { name?: string; email?: string }>>({});
+    const [statusFilter, setStatusFilter] = useState<RequestStatus | 'all'>('all');
+    const [loading, setLoading] = useState(false);
+
+    const [selectedRequest, setSelectedRequest] = useState<ChangeRequestRow | null>(null);
+    const [baseData, setBaseData] = useState<Record<string, any> | null>(null);
+    const [tempData, setTempData] = useState<Record<string, any> | null>(null);
+    const [reservationSummary, setReservationSummary] = useState<{
+        total_amount?: number | null;
+        manual_additional_fee?: number | null;
+        manual_additional_fee_detail?: string | null;
+        price_breakdown?: any | null;
+        re_type?: string | null;
+    } | null>(null);
+    const [airportBaseRows, setAirportBaseRows] = useState<any[]>([]);
+    const [airportTempRows, setAirportTempRows] = useState<any[]>([]);
+    const [detailLoading, setDetailLoading] = useState(false);
+
+    // 상세 패널 상단 표시용: 크루즈명 / 체크인 / 사용일자 / 차종
+    const [reservationContext, setReservationContext] = useState<{
+        cruiseName?: string;
+        checkin?: string;
+        usageDate?: string;
+        usageDateLabel?: string;
+        vehicleTypes?: string[];
+    } | null>(null);
+
+    const [managerNote, setManagerNote] = useState('');
+    const [processing, setProcessing] = useState(false);
+    const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
+    const [bulkNote, setBulkNote] = useState('');
+    const [sourceFilter, setSourceFilter] = useState<RequestSourceTab>('all');
+
+    // 행별 승인용 - multi-row(airport, cruise_car) 타입에서 어떤 행만 처리할지 선택
+    const [selectedRowKeys, setSelectedRowKeys] = useState<Set<string>>(new Set());
+
+    // 보기 모드: 테이블 / 카드 (기본값: 카드)
+    const [viewMode, setViewMode] = useState<'table' | 'card'>('card');
+
+    const loadRequests = useCallback(async () => {
+        setLoading(true);
+        try {
+            let query = supabase
+                .from('reservation_change_request')
+                .select('id, reservation_id, re_type, requester_user_id, status, customer_note, manager_note, submitted_at, reviewed_at, snapshot_data')
+                .order('submitted_at', { ascending: false });
+            if (statusFilter !== 'all') query = query.eq('status', statusFilter);
+
+            const { data, error } = await query;
+            if (error) throw error;
+
+            const rows = (data || []) as ChangeRequestRow[];
+            setRequests(rows);
+
+            const ids = Array.from(new Set(rows.map(r => r.requester_user_id).filter(Boolean)));
+            if (ids.length > 0) {
+                const { data: usersData } = await supabase.from('users').select('id, name, email, role').in('id', ids);
+                const m: Record<string, { name?: string; email?: string; role?: string }> = {};
+                (usersData || []).forEach((u: any) => { m[u.id] = { name: u.name, email: u.email, role: u.role }; });
+                setUserMap(m);
+            } else {
+                setUserMap({});
+            }
+
+            const reservationIds = Array.from(new Set(rows.map(r => normalizeReservationId(r.reservation_id)).filter(Boolean)));
+            if (reservationIds.length > 0) {
+                const { data: reservationRows } = await supabase
+                    .from('reservation')
+                    .select('re_id, re_user_id')
+                    .in('re_id', reservationIds);
+                const ownerIds = Array.from(new Set((reservationRows || []).map((row: any) => row.re_user_id).filter(Boolean)));
+                const ownerMap: Record<string, { name?: string; email?: string }> = {};
+                if (ownerIds.length > 0) {
+                    const { data: ownerUsers } = await supabase.from('users').select('id, name, email').in('id', ownerIds);
+                    (ownerUsers || []).forEach((user: any) => {
+                        ownerMap[user.id] = { name: user.name, email: user.email };
+                    });
+                }
+                const nextReservationUserMap: Record<string, { name?: string; email?: string }> = {};
+                (reservationRows || []).forEach((row: any) => {
+                    nextReservationUserMap[row.re_id] = ownerMap[row.re_user_id] || {};
+                });
+                setReservationUserMap(nextReservationUserMap);
+            } else {
+                setReservationUserMap({});
+            }
+        } catch (err) {
+            console.error('수정 요청 목록 조회 실패:', err);
+            setRequests([]);
+            setReservationUserMap({});
+        } finally {
+            setLoading(false);
+        }
+    }, [statusFilter]);
+
+    const visibleRequests = useMemo(() => {
+        if (sourceFilter === 'all') return requests;
+        return requests.filter(row => getRequestSourceKind(userMap[row.requester_user_id]?.role) === sourceFilter);
+    }, [requests, sourceFilter, userMap]);
+
+    const sourceCounts = useMemo(() => {
+        return requests.reduce((acc, row) => {
+            const kind = getRequestSourceKind(userMap[row.requester_user_id]?.role);
+            acc[kind] += 1;
+            return acc;
+        }, { customer: 0, manager: 0 } as Record<'customer' | 'manager', number>);
+    }, [requests, userMap]);
+
+    const loadReservationContext = useCallback(async (reservationId: string, reType?: string) => {
+        try {
+            // 1) 크루즈 컨텍스트는 항상 시도 (예약 자체가 어떤 타입이든 크루즈 정보가 있을 수 있음)
+            const { data: rc } = await supabase
+                .from('reservation_cruise')
+                .select('room_price_code, checkin')
+                .eq('reservation_id', reservationId)
+                .maybeSingle();
+
+            let cruiseName = '';
+            const checkin = rc?.checkin || '';
+            if (rc?.room_price_code) {
+                const { data: card } = await supabase
+                    .from('cruise_rate_card')
+                    .select('cruise_name')
+                    .eq('id', rc.room_price_code)
+                    .maybeSingle();
+                cruiseName = card?.cruise_name || '';
+            }
+
+            // 2) 차량 차종 (cruise_car 통해)
+            const { data: cars } = await supabase
+                .from('reservation_cruise_car')
+                .select('car_price_code')
+                .eq('reservation_id', reservationId);
+            const carCodes = Array.from(new Set((cars || []).map((c: any) => c?.car_price_code).filter(Boolean)));
+            const vehicleTypes: string[] = [];
+            if (carCodes.length > 0) {
+                const { data: rps } = await supabase
+                    .from('rentcar_price')
+                    .select('rent_code, vehicle_type')
+                    .in('rent_code', carCodes);
+                (rps || []).forEach((p: any) => { if (p?.vehicle_type) vehicleTypes.push(p.vehicle_type); });
+            }
+
+            // 3) 서비스별 사용일자 조회 (re_type별)
+            let usageDate = '';
+            let usageDateLabel = '';
+            try {
+                switch (reType) {
+                    case 'airport': {
+                        const { data } = await supabase
+                            .from('reservation_airport')
+                            .select('ra_datetime')
+                            .eq('reservation_id', reservationId)
+                            .order('ra_datetime', { ascending: true })
+                            .limit(1)
+                            .maybeSingle();
+                        usageDate = data?.ra_datetime || '';
+                        usageDateLabel = '공항 일시';
+                        break;
+                    }
+                    case 'hotel': {
+                        const { data } = await supabase
+                            .from('reservation_hotel')
+                            .select('checkin_date')
+                            .eq('reservation_id', reservationId)
+                            .maybeSingle();
+                        usageDate = data?.checkin_date || '';
+                        usageDateLabel = '체크인';
+                        break;
+                    }
+                    case 'rentcar': {
+                        const { data } = await supabase
+                            .from('reservation_rentcar')
+                            .select('pickup_datetime')
+                            .eq('reservation_id', reservationId)
+                            .maybeSingle();
+                        usageDate = data?.pickup_datetime || '';
+                        usageDateLabel = '픽업일시';
+                        break;
+                    }
+                    case 'tour': {
+                        const { data } = await supabase
+                            .from('reservation_tour')
+                            .select('usage_date')
+                            .eq('reservation_id', reservationId)
+                            .maybeSingle();
+                        usageDate = data?.usage_date || '';
+                        usageDateLabel = '투어일자';
+                        break;
+                    }
+                    case 'sht':
+                    case 'sht_car':
+                    case 'car_sht': {
+                        const { data } = await supabase
+                            .from('reservation_car_sht')
+                            .select('pickup_datetime')
+                            .eq('reservation_id', reservationId)
+                            .maybeSingle();
+                        usageDate = data?.pickup_datetime || '';
+                        usageDateLabel = '스하차량 픽업';
+                        break;
+                    }
+                    default:
+                        break;
+                }
+            } catch (e) {
+                console.warn('사용일자 조회 실패:', e);
+            }
+
+            setReservationContext({ cruiseName, checkin, usageDate, usageDateLabel, vehicleTypes });
+        } catch (err) {
+            console.error('예약 컨텍스트 조회 실패:', err);
+            setReservationContext(null);
+        }
+    }, []);
+
+    const loadComparison = useCallback(async (row: ChangeRequestRow) => {
+        setSelectedRequest(row);
+        setManagerNote(row.manager_note || '');
+        setDetailLoading(true);
+        setBaseData(null);
+        setTempData(null);
+        setReservationSummary(null);
+        setAirportBaseRows([]);
+        setAirportTempRows([]);
+        setReservationContext(null);
+        setSelectedRowKeys(new Set());
+
+        try {
+            const mapping = SERVICE_TABLE_MAP[row.re_type];
+            if (!mapping) return;
+
+            const safeReservationId = normalizeReservationId(row.reservation_id);
+            const { data: reservationData, error: reservationError } = await supabase
+                .from('reservation')
+                .select('re_id, total_amount, manual_additional_fee, manual_additional_fee_detail, price_breakdown, re_type')
+                .eq('re_id', safeReservationId)
+                .maybeSingle();
+            if (reservationError) throw reservationError;
+            setReservationSummary(reservationData ? {
+                total_amount: reservationData.total_amount,
+                manual_additional_fee: reservationData.manual_additional_fee,
+                manual_additional_fee_detail: reservationData.manual_additional_fee_detail,
+                price_breakdown: reservationData.price_breakdown,
+                re_type: reservationData.re_type,
+            } : null);
+
+            // 컨텍스트(크루즈명/체크인/사용일자/차종) 비동기 로드
+            loadReservationContext(safeReservationId, row.re_type);
+            if (row.re_type === 'airport') {
+                const [baseRowsRes, tempRowsRes] = await Promise.all([
+                    supabase.from(mapping.baseTable).select('*').eq('reservation_id', safeReservationId).order('created_at', { ascending: false }),
+                    supabase.from(mapping.tempTable).select('*').eq('request_id', row.id).eq('reservation_id', safeReservationId),
+                ]);
+                if (baseRowsRes.error) throw baseRowsRes.error;
+                if (tempRowsRes.error) throw tempRowsRes.error;
+
+                const bRows = Array.isArray(baseRowsRes.data) ? baseRowsRes.data : [];
+                const tRows = Array.isArray(tempRowsRes.data) ? tempRowsRes.data : [];
+                setAirportBaseRows(bRows);
+                setAirportTempRows(tRows);
+                setBaseData((bRows[0] as Record<string, any>) || null);
+                setTempData((tRows[0] as Record<string, any>) || null);
+
+                // 변경된 행만 기본 선택
+                const originalRowsForDiff = Array.isArray(row.snapshot_data?.original) ? row.snapshot_data.original : [];
+                const requestedRows = Array.isArray(row.snapshot_data?.requested) ? row.snapshot_data.requested : tRows;
+                const changedReq = filterActuallyChangedRequestedRows(requestedRows as any[], originalRowsForDiff, mapping.baseTable);
+                const initial = new Set<string>();
+                (changedReq.length > 0 ? changedReq : requestedRows).forEach((r: any, idx: number) => {
+                    initial.add(rowKeyOf(r, idx));
+                });
+                setSelectedRowKeys(initial);
+            } else {
+                const [baseRes, tempRes] = await Promise.all([
+                    supabase.from(mapping.baseTable).select('*').eq('reservation_id', safeReservationId)
+                        .order('created_at', { ascending: false }).limit(1).maybeSingle(),
+                    supabase.from(mapping.tempTable).select('*').eq('request_id', row.id)
+                        .eq('reservation_id', safeReservationId).maybeSingle(),
+                ]);
+                if (baseRes.error) throw baseRes.error;
+                if (tempRes.error) throw tempRes.error;
+
+                setBaseData((baseRes.data as Record<string, any>) || null);
+                setTempData((tempRes.data as Record<string, any>) || null);
+
+                // cruise_car 도 multi-row일 수 있음 — snapshot 기반 초기 선택
+                if (row.re_type === 'cruise_car' || row.re_type === 'car' || row.re_type === 'car_sht' || row.re_type === 'sht' || row.re_type === 'sht_car') {
+                    const originalRowsForDiff = Array.isArray(row.snapshot_data?.original) ? row.snapshot_data.original : [];
+                    const requestedRows = Array.isArray(row.snapshot_data?.requested) ? row.snapshot_data.requested : [];
+                    const changedReq = filterActuallyChangedRequestedRows(requestedRows, originalRowsForDiff, mapping.baseTable);
+                    const initial = new Set<string>();
+                    (changedReq.length > 0 ? changedReq : requestedRows).forEach((r: any, idx: number) => {
+                        initial.add(rowKeyOf(r, idx));
+                    });
+                    setSelectedRowKeys(initial);
+                }
+            }
+        } catch (err) {
+            console.error('비교 데이터 조회 실패:', err);
+        } finally {
+            setDetailLoading(false);
+        }
+    }, [loadReservationContext]);
+
+    useEffect(() => { loadRequests(); }, [loadRequests]);
+
+    /* ── 카드 뷰용: quote_id 기반 크루즈명 + 모든 서비스 테이블 일괄 조회로 사용일자 수집 (예약 통합 상세 모달 패턴) ── */
+    const [cruiseInfoByRes, setCruiseInfoByRes] = useState<Record<string, { cruiseName?: string; checkin?: string; usageDate?: string }>>({});
+    useEffect(() => {
+        if (visibleRequests.length === 0) return;
+        const uniqIds = Array.from(new Set(visibleRequests.map(r => normalizeReservationId(r.reservation_id)).filter(Boolean)));
+        const missing = uniqIds.filter(id => !(id in cruiseInfoByRes));
+        if (missing.length === 0) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                // 1) reservation 메타 (re_quote_id, re_type)
+                const { data: resvRows } = await supabase
+                    .from('reservation')
+                    .select('re_id, re_quote_id, re_type')
+                    .in('re_id', missing);
+                const resvMetaById = new Map<string, { quoteId?: string }>();
+                (resvRows || []).forEach((r: any) => {
+                    resvMetaById.set(r.re_id, { quoteId: r.re_quote_id });
+                });
+                const quoteIds = Array.from(new Set((resvRows || []).map((r: any) => r.re_quote_id).filter(Boolean)));
+
+                // 2) 같은 견적 내 cruise 형제 예약 → cruise_name
+                const siblingCruiseByQuote = new Map<string, string[]>();
+                if (quoteIds.length > 0) {
+                    const { data: siblings } = await supabase
+                        .from('reservation')
+                        .select('re_id, re_quote_id, re_type')
+                        .in('re_quote_id', quoteIds)
+                        .eq('re_type', 'cruise');
+                    (siblings || []).forEach((s: any) => {
+                        if (!s.re_quote_id) return;
+                        const list = siblingCruiseByQuote.get(s.re_quote_id) || [];
+                        list.push(s.re_id);
+                        siblingCruiseByQuote.set(s.re_quote_id, list);
+                    });
+                }
+                const cruiseResIds = Array.from(new Set(Array.from(siblingCruiseByQuote.values()).flat()));
+                const cruiseByResId = new Map<string, { roomPriceCode?: string; checkin?: string }>();
+                if (cruiseResIds.length > 0) {
+                    const { data: cruiseRows } = await supabase
+                        .from('reservation_cruise')
+                        .select('reservation_id, room_price_code, checkin')
+                        .in('reservation_id', cruiseResIds);
+                    (cruiseRows || []).forEach((c: any) => {
+                        cruiseByResId.set(c.reservation_id, { roomPriceCode: c.room_price_code, checkin: c.checkin });
+                    });
+                }
+                const codes = Array.from(new Set(Array.from(cruiseByResId.values()).map(v => v.roomPriceCode).filter(Boolean) as string[]));
+                const codeToName = new Map<string, string>();
+                if (codes.length > 0) {
+                    const { data: cards } = await supabase
+                        .from('cruise_rate_card')
+                        .select('id, cruise_name')
+                        .in('id', codes);
+                    (cards || []).forEach((c: any) => { if (c?.id) codeToName.set(c.id, c.cruise_name || ''); });
+                }
+
+                // 3) 사용일자: 모든 서비스 테이블을 reservation_id 기준으로 일괄 조회 (예약 통합 상세 모달과 동일 패턴)
+                const usageDateById = new Map<string, string>();
+                const setIfEmpty = (id: string, v?: string | null) => {
+                    if (!id || !v) return;
+                    if (!usageDateById.has(id)) usageDateById.set(id, String(v));
+                };
+                const [airRes, shtRes, ccarRes, cruiseUseRes, hotelRes, rentRes, tourRes] = await Promise.all([
+                    supabase.from('reservation_airport').select('reservation_id, ra_datetime').in('reservation_id', missing),
+                    supabase.from('reservation_car_sht').select('reservation_id, pickup_datetime').in('reservation_id', missing),
+                    supabase.from('reservation_cruise_car').select('reservation_id, pickup_datetime').in('reservation_id', missing),
+                    supabase.from('reservation_cruise').select('reservation_id, checkin').in('reservation_id', missing),
+                    supabase.from('reservation_hotel').select('reservation_id, checkin_date').in('reservation_id', missing),
+                    supabase.from('reservation_rentcar').select('reservation_id, pickup_datetime').in('reservation_id', missing),
+                    supabase.from('reservation_tour').select('reservation_id, usage_date').in('reservation_id', missing),
+                ]);
+                (airRes.data || []).forEach((r: any) => setIfEmpty(r.reservation_id, r.ra_datetime));
+                (shtRes.data || []).forEach((r: any) => setIfEmpty(r.reservation_id, r.pickup_datetime));
+                (ccarRes.data || []).forEach((r: any) => setIfEmpty(r.reservation_id, r.pickup_datetime));
+                (cruiseUseRes.data || []).forEach((r: any) => setIfEmpty(r.reservation_id, r.checkin));
+                (hotelRes.data || []).forEach((r: any) => setIfEmpty(r.reservation_id, r.checkin_date));
+                (rentRes.data || []).forEach((r: any) => setIfEmpty(r.reservation_id, r.pickup_datetime));
+                (tourRes.data || []).forEach((r: any) => setIfEmpty(r.reservation_id, r.usage_date));
+
+                // 4) 최종 매핑
+                const next: Record<string, { cruiseName?: string; checkin?: string; usageDate?: string }> = {};
+                missing.forEach(id => {
+                    const meta = resvMetaById.get(id);
+                    const quoteId = meta?.quoteId;
+                    let cruiseName = '';
+                    let checkin = '';
+                    if (quoteId && siblingCruiseByQuote.has(quoteId)) {
+                        for (const cruiseResId of siblingCruiseByQuote.get(quoteId)!) {
+                            const cd = cruiseByResId.get(cruiseResId);
+                            if (cd?.roomPriceCode) cruiseName = codeToName.get(cd.roomPriceCode) || cruiseName;
+                            if (cd?.checkin) checkin = cd.checkin;
+                            if (cruiseName) break;
+                        }
+                    }
+                    next[id] = { cruiseName, checkin, usageDate: usageDateById.get(id) || '' };
+                });
+
+                if (!cancelled) setCruiseInfoByRes(prev => ({ ...prev, ...next }));
+            } catch (err) {
+                console.error('카드 부가정보 일괄 조회 실패:', err);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [visibleRequests]);
+
+    /* ── 그룹화: 날짜 → 사용자 ── */
+    const groupedRequests = useMemo((): GroupedDate[] => {
+        const dateMap = new Map<string, Map<string, ChangeRequestRow[]>>();
+        visibleRequests.forEach(row => {
+            const date = row.submitted_at.slice(0, 10);
+            if (!dateMap.has(date)) dateMap.set(date, new Map());
+            const userMap2 = dateMap.get(date)!;
+            const uid = row.requester_user_id || '__unknown__';
+            if (!userMap2.has(uid)) userMap2.set(uid, []);
+            userMap2.get(uid)!.push(row);
+        });
+        return Array.from(dateMap.entries()).map(([date, uMap]) => ({
+            date,
+            users: Array.from(uMap.entries()).map(([userId, rows]) => {
+                const u = userMap[userId];
+                return { userId, userName: u?.name || '-', email: u?.email || '-', rows };
+            }),
+        }));
+    }, [visibleRequests, userMap]);
+
+    /* ── 체크박스 ── */
+    const pendingIds = useMemo(() => visibleRequests.filter(r => r.status === 'pending').map(r => r.id), [visibleRequests]);
+    const allChecked = pendingIds.length > 0 && pendingIds.every(id => checkedIds.has(id));
+
+    const toggleAll = () => {
+        if (allChecked) {
+            setCheckedIds(new Set());
+        } else {
+            setCheckedIds(new Set(pendingIds));
+        }
+    };
+
+    const toggleOne = (id: string) => {
+        setCheckedIds(prev => {
+            const next = new Set(prev);
+            next.has(id) ? next.delete(id) : next.add(id);
+            return next;
+        });
+    };
+
+    const toggleGroupDate = (dateGroup: GroupedDate) => {
+        const ids = dateGroup.users.flatMap(u => u.rows.filter(r => r.status === 'pending').map(r => r.id));
+        const allIn = ids.every(id => checkedIds.has(id));
+        setCheckedIds(prev => {
+            const next = new Set(prev);
+            ids.forEach(id => allIn ? next.delete(id) : next.add(id));
+            return next;
+        });
+    };
+
+    const toggleGroupUser = (rows: ChangeRequestRow[]) => {
+        const ids = rows.filter(r => r.status === 'pending').map(r => r.id);
+        const allIn = ids.every(id => checkedIds.has(id));
+        setCheckedIds(prev => {
+            const next = new Set(prev);
+            ids.forEach(id => allIn ? next.delete(id) : next.add(id));
+            return next;
+        });
+    };
+
+    /* ── 단건 승인 처리 내부 함수 (applyStatus에서 공유) ── */
+    const applySingleApprove = async (
+        req: ChangeRequestRow,
+        userId: string | undefined,
+        noteOverride?: string,
+        rowFilter?: (r: any) => boolean,
+    ) => {
+        const mapping = SERVICE_TABLE_MAP[req.re_type];
+        if (!mapping) throw new Error(`지원하지 않는 서비스 타입: ${req.re_type}`);
+        const safeReservationId = normalizeReservationId(req.reservation_id);
+        const tableExcluded = TABLE_SPECIFIC_EXCLUDED_FIELDS[mapping.baseTable] || new Set<string>();
+
+        const snapshotRequestedRows = Array.isArray(req.snapshot_data?.requested)
+            ? req.snapshot_data.requested : [];
+
+        const isMultiRow = mapping.baseTable === 'reservation_airport'
+            || mapping.baseTable === 'reservation_cruise_car'
+            || mapping.baseTable === 'reservation_car_sht';
+
+        if (isMultiRow && snapshotRequestedRows.length > 0) {
+            const { data: currentRows, error: curErr } = await supabase
+                .from(mapping.baseTable).select('*').eq('reservation_id', safeReservationId);
+            if (curErr) throw curErr;
+            const baseRows = Array.isArray(currentRows) ? currentRows : [];
+            const processedIds = new Set<string>();
+
+            // ✅ 실제로 변경된 행만 필터링 (픽업/드롭 독립 승인)
+            const originalRowsForDiff = Array.isArray(req.snapshot_data?.original) ? req.snapshot_data.original : [];
+            const actuallyChanged = filterActuallyChangedRequestedRows(snapshotRequestedRows, originalRowsForDiff, mapping.baseTable);
+            const candidateRows = actuallyChanged.length > 0 ? actuallyChanged : snapshotRequestedRows;
+            // ✅ rowFilter 적용 (카드별 단행 승인)
+            const rowsToProcess = rowFilter ? candidateRows.filter(rowFilter) : candidateRows;
+            if (rowsToProcess.length === 0) {
+                throw new Error('처리할 대상 행이 없습니다.');
+            }
+
+            for (const requestedRow of rowsToProcess) {
+                const payload: Record<string, any> = {};
+                let target: any = null;
+
+                // 1️⃣ id로 정확히 매칭
+                if (requestedRow?.id) {
+                    target = baseRows.find((r: any) => r?.id === requestedRow.id);
+                }
+                // 2️⃣ id가 없으면 way_type으로 매칭 (픽업/드롭 구분)
+                if (!target && requestedRow?.way_type) {
+                    target = baseRows.find((r: any) => r?.way_type === requestedRow.way_type);
+                }
+
+                const referenceKeys = new Set<string>(Object.keys(target || baseRows[0] || {}));
+                Object.keys(requestedRow || {}).forEach(key => {
+                    if (!EXCLUDED_FIELDS.has(key) && !tableExcluded.has(key) &&
+                        (referenceKeys.size === 0 || referenceKeys.has(key)))
+                        payload[key] = requestedRow[key];
+                });
+                if (Object.keys(payload).length === 0) continue;
+
+                // ✅ 기존 행이 있을 때만 UPDATE — 없으면 스킵 (잡아 INSERT로 새 행 추가 금지)
+                if (target?.id) {
+                    processedIds.add(target.id);
+                    const { error } = await supabase.from(mapping.baseTable).update(payload).eq('id', target.id);
+                    if (error) throw error;
+                } else {
+                    console.warn('⚠️ 매칭되는 기존 행을 찾지 못해 스킵:', { way_type: requestedRow?.way_type, id: requestedRow?.id });
+                }
+            }
+
+            // ✅ 기존 행 중 처리되지 않은 행 보존 확인
+            const unprocessedRows = baseRows.filter((r: any) => !processedIds.has(r?.id));
+            if (unprocessedRows.length > 0) {
+                console.log(`ℹ️ ${unprocessedRows.length}개 기존 행 유지:`, unprocessedRows.map(r => ({ id: r.id, way_type: r.way_type })));
+            }
+        } else {
+            // 임시 테이블에서 직접 로드
+            const { data: tmpRow } = await supabase.from(mapping.tempTable).select('*')
+                .eq('request_id', req.id).eq('reservation_id', safeReservationId).maybeSingle();
+            if (!tmpRow) throw new Error('임시 데이터 없음');
+            const payload: Record<string, any> = {};
+            Object.keys(tmpRow).forEach(key => {
+                if (!EXCLUDED_FIELDS.has(key) && !tableExcluded.has(key)) payload[key] = tmpRow[key];
+            });
+            // ✅ 상위 예약(reservation) 존재만 확인. 서비스 테이블에 이미 행이 있으면 UPDATE, 없으면 INSERT 허용
+            // (.maybeSingle()은 행이 2개 이상일 때 에러를 던지므로 .limit(1) 배열 체크로 변경)
+            const { data: existingArr, error: existingErr } = await supabase
+                .from(mapping.baseTable)
+                .select('reservation_id')
+                .eq('reservation_id', safeReservationId)
+                .limit(1);
+            if (existingErr) throw existingErr;
+            const hasExisting = Array.isArray(existingArr) && existingArr.length > 0;
+            if (hasExisting) {
+                // 동일 reservation_id 의 모든 행에 대해 공유 필드 UPDATE (좌석/차량별 행이 여러개일 경우 대응)
+                const { error } = await supabase.from(mapping.baseTable).update(payload).eq('reservation_id', safeReservationId);
+                if (error) throw error;
+            } else {
+                // 상위 예약은 있지만 서비스 행이 아직 없는 경우(예: 고객이 나중 장소만 추가) → INSERT 허용
+                const { error } = await supabase.from(mapping.baseTable).insert({ reservation_id: safeReservationId, ...payload });
+                if (error) throw error;
+            }
+        }
+
+        const upd: Record<string, any> = { status: 'approved', reviewed_at: new Date().toISOString(), manager_note: noteOverride ?? null };
+        if (userId) upd.reviewed_by = userId;
+        const { error } = await supabase.from('reservation_change_request').update(upd).eq('id', req.id);
+        if (error) throw error;
+    };
+
+    /* ── 일괄 처리 ── */
+    const applyBulkStatus = async (nextStatus: 'approved' | 'rejected') => {
+        const ids = Array.from(checkedIds);
+        if (ids.length === 0) { alert('선택된 항목이 없습니다.'); return; }
+        if (!confirm(`선택된 ${ids.length}건을 ${nextStatus === 'approved' ? '승인' : '반려'} 하시겠습니까?`)) return;
+
+        setProcessing(true);
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            const userId = user?.id;
+            let successCount = 0;
+            const errors: string[] = [];
+
+            for (const id of ids) {
+                const req = requests.find(r => r.id === id);
+                if (!req || req.status !== 'pending') continue;
+                try {
+                    if (nextStatus === 'approved') {
+                        await applySingleApprove(req, userId, bulkNote || null as any);
+                    } else {
+                        const upd: Record<string, any> = { status: 'rejected', reviewed_at: new Date().toISOString(), manager_note: bulkNote || null };
+                        if (userId) upd.reviewed_by = userId;
+                        const { error } = await supabase.from('reservation_change_request').update(upd).eq('id', id);
+                        if (error) throw error;
+                    }
+                    successCount++;
+                } catch (e: any) {
+                    errors.push(`${id.slice(0, 6)}: ${e?.message || '오류'}`);
+                }
+            }
+
+            if (errors.length > 0) {
+                alert(`${successCount}건 처리 완료, ${errors.length}건 실패:\n${errors.join('\n')}`);
+            } else {
+                alert(`${successCount}건 ${nextStatus === 'approved' ? '승인' : '반려'} 완료`);
+            }
+            setCheckedIds(new Set());
+            setBulkNote('');
+            setSelectedRequest(null);
+            await loadRequests();
+        } catch (err: any) {
+            alert(`처리 중 오류: ${err?.message || JSON.stringify(err)}`);
+        } finally {
+            setProcessing(false);
+        }
+    };
+
+    const changedFields = useMemo(() => {
+        const mapping = selectedRequest ? SERVICE_TABLE_MAP[selectedRequest.re_type] : undefined;
+
+        if (selectedRequest?.re_type === 'airport') {
+            const fromSnapshot = extractAirportSnapshotChangedFields(selectedRequest.snapshot_data);
+            if (fromSnapshot.length > 0) return fromSnapshot;
+
+            const fromRows = extractAirportRowsChangedFields(airportBaseRows, airportTempRows);
+            if (fromRows.length > 0) return fromRows;
+        }
+
+        const genericSnapshot = extractSnapshotChangedFields(selectedRequest?.snapshot_data, mapping?.baseTable);
+        if (genericSnapshot.length > 0) return genericSnapshot;
+
+        return extractChangedFields(baseData, tempData, mapping?.baseTable);
+    }, [selectedRequest, baseData, tempData, airportBaseRows, airportTempRows]);
+
+    const canApproveSelectedRequest = useMemo(() => {
+        if (!selectedRequest) return false;
+        if (tempData) return true;
+        const isCruiseCar = selectedRequest.re_type === 'cruise_car' || selectedRequest.re_type === 'car';
+        if (selectedRequest.re_type !== 'airport' && !isCruiseCar) return false;
+
+        const snapshotCount = Array.isArray(selectedRequest.snapshot_data?.requested)
+            ? selectedRequest.snapshot_data.requested.length
+            : 0;
+
+        return snapshotCount > 0 || airportTempRows.length > 0;
+    }, [selectedRequest, tempData, airportTempRows]);
+
+    const applyStatus = async (nextStatus: 'approved' | 'rejected') => {
+        if (!selectedRequest || processing) return;
+        const mapping = SERVICE_TABLE_MAP[selectedRequest.re_type];
+        if (!mapping) { alert(`지원하지 않는 서비스 타입: ${selectedRequest.re_type}`); return; }
+        const airportSnapshotRequested = Array.isArray(selectedRequest.snapshot_data?.requested)
+            ? selectedRequest.snapshot_data.requested : [];
+        const isMultiRowType = selectedRequest.re_type === 'airport' || selectedRequest.re_type === 'cruise_car' || selectedRequest.re_type === 'car' || selectedRequest.re_type === 'car_sht' || selectedRequest.re_type === 'sht' || selectedRequest.re_type === 'sht_car';
+        const canApproveFromAirportRows = isMultiRowType && airportTempRows.length > 0;
+        const canApproveFromAirportSnapshot = isMultiRowType && airportSnapshotRequested.length > 0;
+        if (nextStatus === 'approved' && !tempData && !canApproveFromAirportSnapshot && !canApproveFromAirportRows) {
+            alert('승인할 임시 데이터가 없습니다.');
+            return;
+        }
+        if (!confirm(nextStatus === 'approved' ? '해당 수정 요청을 승인하시겠습니까?' : '해당 수정 요청을 반려하시겠습니까?')) return;
+
+        setProcessing(true);
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            const safeReservationId = normalizeReservationId(selectedRequest.reservation_id);
+
+            if (nextStatus === 'approved') {
+                const tableExcluded = TABLE_SPECIFIC_EXCLUDED_FIELDS[mapping.baseTable] || new Set<string>();
+                const snapshotRequestedRows = Array.isArray(selectedRequest.snapshot_data?.requested)
+                    ? selectedRequest.snapshot_data.requested : [];
+                const airportRequestedRows = snapshotRequestedRows.length > 0 ? snapshotRequestedRows : airportTempRows;
+
+                if ((mapping.baseTable === 'reservation_airport' || mapping.baseTable === 'reservation_cruise_car' || mapping.baseTable === 'reservation_car_sht') && airportRequestedRows.length > 0) {
+                    // ✅ 픽업/드롭 독립 처리: 기존 행 조회 → 매칭되는 행만 UPDATE (매칭 안 되면 스킵 — 새 행 추가 금지)
+                    const { data: currentRows, error: currentRowsError } = await supabase
+                        .from(mapping.baseTable).select('*').eq('reservation_id', safeReservationId);
+                    if (currentRowsError) throw currentRowsError;
+                    const baseRows = Array.isArray(currentRows) ? currentRows : [];
+                    const processedIds = new Set<string>();
+
+                    // ✅ 실제로 변경된 행만 필터링 (건당 승인: 픽업만 수정 시 드롭 행은 건들지 않음)
+                    const originalRowsForDiff = Array.isArray(selectedRequest.snapshot_data?.original)
+                        ? selectedRequest.snapshot_data.original : [];
+                    const actuallyChanged = filterActuallyChangedRequestedRows(airportRequestedRows, originalRowsForDiff, mapping.baseTable);
+                    const candidateRows = actuallyChanged.length > 0 ? actuallyChanged : airportRequestedRows;
+                    // ✅ 매니저가 상세 패널에서 체크한 행만 처리 (선택이 비어있으면 전체)
+                    const rowsToProcess = (selectedRowKeys.size > 0)
+                        ? candidateRows.filter((r: any, idx: number) => selectedRowKeys.has(rowKeyOf(r, idx)))
+                        : candidateRows;
+                    if (rowsToProcess.length === 0) {
+                        alert('선택된 행이 없습니다. 처리할 행을 1개 이상 체크해주세요.');
+                        setProcessing(false);
+                        return;
+                    }
+
+                    for (const requestedRow of rowsToProcess) {
+                        const payload: Record<string, any> = {};
+                        let target: any = null;
+
+                        // 1️⃣ id로 정확히 매칭
+                        if (requestedRow?.id) {
+                            target = baseRows.find((r: any) => r?.id === requestedRow.id);
+                        }
+                        // 2️⃣ id가 없으면 way_type으로 매칭 (픽업/드롭 구분)
+                        if (!target && requestedRow?.way_type) {
+                            target = baseRows.find((r: any) => r?.way_type === requestedRow.way_type);
+                        }
+
+                        // payload 구성: 요청된 필드만 포함
+                        const referenceKeys = new Set<string>(Object.keys(target || baseRows[0] || {}));
+                        Object.keys(requestedRow || {}).forEach(key => {
+                            const allowedByReference = referenceKeys.size === 0 || referenceKeys.has(key);
+                            if (!EXCLUDED_FIELDS.has(key) && !tableExcluded.has(key) && allowedByReference)
+                                payload[key] = requestedRow[key];
+                        });
+
+                        if (Object.keys(payload).length === 0) continue;
+
+                        // ✅ 기존 행이 있을 때만 UPDATE — 없으면 스킵 (새 행 추가 금지)
+                        if (target?.id) {
+                            processedIds.add(target.id);
+                            const { error: updateErr } = await supabase.from(mapping.baseTable).update(payload).eq('id', target.id);
+                            if (updateErr) throw updateErr;
+                        } else {
+                            console.warn('⚠️ 매칭되는 기존 행을 찾지 못해 스킵:', { way_type: requestedRow?.way_type, id: requestedRow?.id });
+                        }
+                    }
+
+                    // ✅ 기존 행 중 처리되지 않은 행(드롭 수정 시 픽업, 픽업 수정 시 드롭) 보존 확인
+                    const unprocessedRows = baseRows.filter((r: any) => !processedIds.has(r?.id));
+                    if (unprocessedRows.length > 0) {
+                        console.log(`ℹ️ ${unprocessedRows.length}개 기존 행 유지:`, unprocessedRows.map(r => ({ id: r.id, way_type: r.way_type })));
+                    }
+                } else {
+                    const payload: Record<string, any> = {};
+                    Object.keys(tempData || {}).forEach(key => {
+                        if (!EXCLUDED_FIELDS.has(key) && !tableExcluded.has(key)) payload[key] = (tempData as any)[key];
+                    });
+                    // ✅ .maybeSingle()은 행이 2개 이상일 때 에러가 나므로 .limit(1) 배열 체크로 대체
+                    const { data: existingArr, error: existingErr } = await supabase
+                        .from(mapping.baseTable)
+                        .select('reservation_id')
+                        .eq('reservation_id', safeReservationId)
+                        .limit(1);
+                    if (existingErr) throw existingErr;
+                    const hasExisting = Array.isArray(existingArr) && existingArr.length > 0;
+                    if (hasExisting) {
+                        // 동일 reservation_id 의 모든 행에 대해 공유 필드 UPDATE
+                        const { error: updateErr } = await supabase.from(mapping.baseTable).update(payload).eq('reservation_id', safeReservationId);
+                        if (updateErr) throw updateErr;
+                    } else {
+                        // 상위 예약은 있지만 서비스 행이 아직 없는 경우 → INSERT 허용
+                        const { error: insErr } = await supabase.from(mapping.baseTable).insert({ reservation_id: safeReservationId, ...payload });
+                        if (insErr) throw insErr;
+                    }
+                }
+            }
+
+            const upd: Record<string, any> = {
+                status: nextStatus,
+                reviewed_at: new Date().toISOString(),
+                manager_note: managerNote || null,
+            };
+            if (user?.id) upd.reviewed_by = user.id;
+
+            const { error: reqErr } = await supabase.from('reservation_change_request').update(upd).eq('id', selectedRequest.id);
+            if (reqErr) throw reqErr;
+
+            alert(nextStatus === 'approved' ? '수정 요청을 승인 했습니다.' : '수정 요청을 반려 했습니다.');
+            await loadRequests();
+            setSelectedRequest(null);
+            setBaseData(null);
+            setTempData(null);
+            setReservationSummary(null);
+            setManagerNote('');
+        } catch (err: any) {
+            console.error('요청 처리 실패:', err);
+            alert(`처리 중 오류: ${err?.message || JSON.stringify(err)}`);
+        } finally {
+            setProcessing(false);
+        }
+    };
+
+    return (
+        <ManagerLayout title="예약 수정 승인" activeTab="reservation-edit-approval">
+            <div className="space-y-4">
+                {/* ── 상단 필터 + 일괄처리 바 ── */}
+                <div className="bg-white rounded-lg shadow-sm p-4 border border-orange-100 space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <h2 className="text-base font-semibold text-gray-800">🛡️ 고객 수정 신청 검토</h2>
+                            <p className="text-xs text-gray-500 mt-0.5">일별·사용자별로 그룹화된 수정 요청을 검토하고 승인/반려합니다.</p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <div className="flex items-center rounded-md border border-gray-300 overflow-hidden">
+                                {REQUEST_SOURCE_TABS.map(tab => {
+                                    const active = sourceFilter === tab.value;
+                                    const count = tab.value === 'customer' ? sourceCounts.customer : tab.value === 'manager' ? sourceCounts.manager : requests.length;
+                                    return (
+                                        <button
+                                            key={tab.value}
+                                            onClick={() => {
+                                                setSourceFilter(tab.value);
+                                                setSelectedRequest(null);
+                                                setBaseData(null);
+                                                setTempData(null);
+                                                setReservationSummary(null);
+                                                setReservationContext(null);
+                                                setCheckedIds(new Set());
+                                            }}
+                                            className={`px-3 py-1.5 text-xs ${active ? 'bg-orange-500 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'} ${tab.value !== 'all' ? 'border-l border-gray-300' : ''}`}
+                                        >
+                                            {tab.label}
+                                            <span className={`ml-1 ${active ? 'text-orange-50' : 'text-gray-400'}`}>({count})</span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                            {FILTER_BUTTONS.map(btn => {
+                                const active = statusFilter === btn.value;
+                                return (
+                                    <button key={btn.value} onClick={() => { setStatusFilter(btn.value); setCheckedIds(new Set()); }}
+                                        className={`px-3 py-1.5 text-xs rounded-md border transition-colors whitespace-nowrap ${active ? 'bg-orange-500 border-orange-500 text-white' : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'}`}>
+                                        {btn.label}
+                                    </button>
+                                );
+                            })}
+                            <button onClick={loadRequests} className="px-3 py-1.5 text-xs rounded-md bg-blue-600 text-white hover:bg-blue-700">새로고침</button>
+                            <div className="flex items-center rounded-md border border-gray-300 overflow-hidden">
+                                <button
+                                    onClick={() => setViewMode('table')}
+                                    className={`px-3 py-1.5 text-xs ${viewMode === 'table' ? 'bg-gray-700 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+                                >📋 테이블</button>
+                                <button
+                                    onClick={() => setViewMode('card')}
+                                    className={`px-3 py-1.5 text-xs border-l border-gray-300 ${viewMode === 'card' ? 'bg-gray-700 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+                                >🗂️ 카드</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* 일괄처리 영역 */}
+                    {checkedIds.size > 0 && (
+                        <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-orange-100">
+                            <span className="text-xs font-medium text-orange-700">✔ {checkedIds.size}건 선택됨</span>
+                            <input
+                                value={bulkNote}
+                                onChange={e => setBulkNote(e.target.value)}
+                                placeholder="일괄 처리 메모 (선택)"
+                                className="flex-1 min-w-[180px] px-2 py-1 text-xs border border-gray-300 rounded"
+                            />
+                            <button onClick={() => applyBulkStatus('approved')} disabled={processing}
+                                className="px-4 py-1.5 text-xs rounded-md bg-green-600 text-white hover:bg-green-700 disabled:opacity-60 font-medium">
+                                ✅ 일괄 승인
+                            </button>
+                            <button onClick={() => applyBulkStatus('rejected')} disabled={processing}
+                                className="px-4 py-1.5 text-xs rounded-md bg-red-600 text-white hover:bg-red-700 disabled:opacity-60 font-medium">
+                                ❌ 일괄 반려
+                            </button>
+                            <button onClick={() => setCheckedIds(new Set())}
+                                className="px-3 py-1.5 text-xs rounded-md border border-gray-300 text-gray-600 hover:bg-gray-50">
+                                선택 해제
+                            </button>
+                        </div>
+                    )}
+                </div>
+
+                {/* ── 그룹화 테이블 / 카드 뷰 ── */}
+                {viewMode === 'card' ? (
+                    <div className="space-y-4">
+                        {loading ? (
+                            <div className="bg-white rounded-lg shadow-sm border border-gray-100 py-10 text-center text-sm text-gray-500">불러오는 중...</div>
+                        ) : visibleRequests.length === 0 ? (
+                            <div className="bg-white rounded-lg shadow-sm border border-gray-100 py-10 text-center text-sm text-gray-500">조회된 수정 요청이 없습니다.</div>
+                        ) : (
+                            groupedRequests.map(dateGroup => (
+                                <div key={dateGroup.date} className="space-y-3">
+                                    <div className="bg-orange-50 border-b border-orange-100 px-3 py-2 text-xs font-bold text-orange-700 rounded-t-lg">
+                                        📅 {dateGroup.date}
+                                        <span className="ml-2 text-orange-500 font-normal">
+                                            ({dateGroup.users.reduce((s, u) => s + u.rows.length, 0)}건)
+                                        </span>
+                                    </div>
+                                    <div className="grid grid-cols-5 gap-3 px-1">
+                                        {dateGroup.users.flatMap(userGroup =>
+                                            userGroup.rows.flatMap(row => {
+                                                // ── 1단계: row → row entries (multi-row면 snapshot.requested 행별로) ──
+                                                const mapping = SERVICE_TABLE_MAP[row.re_type];
+                                                const isMulti = !!mapping && (
+                                                    mapping.baseTable === 'reservation_airport'
+                                                    || mapping.baseTable === 'reservation_cruise_car'
+                                                    || mapping.baseTable === 'reservation_car_sht'
+                                                );
+                                                const requestedArr: any[] = Array.isArray(row.snapshot_data?.requested) ? row.snapshot_data.requested : [];
+                                                const originalArr: any[] = Array.isArray(row.snapshot_data?.original) ? row.snapshot_data.original : [];
+                                                const rowEntries: Array<{ requestedRow?: any; originalRow?: any; subIdx?: number }> =
+                                                    isMulti && requestedArr.length > 0
+                                                        ? requestedArr.map((rr, i) => ({
+                                                            requestedRow: rr,
+                                                            originalRow: originalArr.find((o: any) => o?.id === rr?.id) || originalArr[i],
+                                                            subIdx: i,
+                                                        }))
+                                                        : [{}];
+
+                                                // ── 2단계: 각 row entry를 변경필드별로 다시 펼침 ──
+                                                type FieldCard = { entry: typeof rowEntries[number]; field: string; before: any; after: any };
+                                                const cards: FieldCard[] = [];
+                                                rowEntries.forEach((entry) => {
+                                                    let changed: { field: string; before: any; after: any }[] = [];
+                                                    if (entry.requestedRow) {
+                                                        const orig = entry.originalRow || {};
+                                                        const req = entry.requestedRow || {};
+                                                        const fields = new Set<string>([...Object.keys(orig), ...Object.keys(req)]);
+                                                        const norm = (v: any) => v === null || v === undefined ? '' : String(v);
+                                                        fields.forEach(f => {
+                                                            if (['id', 'reservation_id', 'created_at', 'updated_at'].includes(f)) return;
+                                                            if (norm(orig[f]) !== norm(req[f])) changed.push({ field: f, before: orig[f], after: req[f] });
+                                                        });
+                                                    } else {
+                                                        changed = getSnapshotChangedRows(row);
+                                                    }
+                                                    if (changed.length === 0) {
+                                                        cards.push({ entry, field: '', before: null, after: null });
+                                                    } else {
+                                                        changed.forEach(c => cards.push({ entry, ...c }));
+                                                    }
+                                                });
+
+                                                return cards.map((card, cardIdx) => {
+                                                    const { entry, field, before, after } = card;
+                                                    const st = STATUS_MAP[row.status] || STATUS_MAP.cancelled;
+                                                    const isPending = row.status === 'pending';
+                                                    const cardKey = `${row.id}::${entry.requestedRow?.id ?? entry.subIdx ?? 'na'}::${field || 'none'}::${cardIdx}`;
+
+                                                    // ── 서브타입 라벨 ──
+                                                    let subLabel = '';
+                                                    const rr = entry.requestedRow || {};
+                                                    if (row.re_type === 'airport') {
+                                                        const w = String(rr.way_type || '').toLowerCase();
+                                                        if (w === 'pickup' || w.includes('픽업')) subLabel = '🛬 픽업';
+                                                        else if (w === 'sending' || w === 'drop' || w === 'dropoff' || w.includes('샌딩') || w.includes('드롭')) subLabel = '🛫 샌딩';
+                                                    } else if (row.re_type === 'sht') {
+                                                        const c = String(rr.sht_category || rr.category || '').toLowerCase();
+                                                        if (c.includes('pickup') || c.includes('픽업')) subLabel = '🛬 픽업';
+                                                        else if (c.includes('drop') || c.includes('드롭')) subLabel = '🛫 드롭';
+                                                        else if (entry.subIdx !== undefined) subLabel = `🚐 ${entry.subIdx + 1}호차`;
+                                                    } else if (row.re_type === 'cruise_car' && entry.subIdx !== undefined) {
+                                                        subLabel = `🚙 차량 ${entry.subIdx + 1}`;
+                                                    }
+
+                                                    // ── 사용일자 ──
+                                                    const cruiseInfo = cruiseInfoByRes[normalizeReservationId(row.reservation_id)] || {};
+                                                    const pickFirst = (...keys: string[]) => {
+                                                        const src = entry.requestedRow || requestedArr[0] || originalArr[0] || {};
+                                                        for (const k of keys) if (src && src[k]) return src[k];
+                                                        return '';
+                                                    };
+                                                    let usageDate = '';
+                                                    if (row.re_type === 'airport') usageDate = pickFirst('ra_datetime') || cruiseInfo.usageDate || '';
+                                                    else if (row.re_type === 'sht' || row.re_type === 'cruise_car') usageDate = pickFirst('pickup_datetime', 'usage_date') || cruiseInfo.usageDate || '';
+                                                    else if (row.re_type === 'cruise') usageDate = cruiseInfo.checkin || pickFirst('checkin');
+                                                    else if (row.re_type === 'hotel') usageDate = pickFirst('checkin_date') || cruiseInfo.usageDate || '';
+                                                    else if (row.re_type === 'rentcar') usageDate = pickFirst('pickup_datetime') || cruiseInfo.usageDate || '';
+                                                    else if (row.re_type === 'tour') usageDate = pickFirst('usage_date', 'tour_date') || cruiseInfo.usageDate || '';
+                                                    const rawUsageDate = String(usageDate || '').trim();
+                                                    const hasTimeInUsageDate = /([T\s]\d{2}:\d{2})|(:\d{2})/.test(rawUsageDate) || /[zZ]$|[+-]\d{2}:?\d{2}$/.test(rawUsageDate);
+                                                    let usageDateStr = '';
+                                                    if (rawUsageDate) {
+                                                        if (!hasTimeInUsageDate && /^\d{4}-\d{2}-\d{2}$/.test(rawUsageDate)) {
+                                                            usageDateStr = rawUsageDate;
+                                                        } else {
+                                                            const parsed = new Date(rawUsageDate);
+                                                            usageDateStr = Number.isNaN(parsed.getTime())
+                                                                ? rawUsageDate.replace('T', ' ').slice(0, 16)
+                                                                : parsed.toLocaleString('ko-KR', {
+                                                                    timeZone: 'Asia/Seoul',
+                                                                    year: '2-digit',
+                                                                    month: '2-digit',
+                                                                    day: '2-digit',
+                                                                    hour: '2-digit',
+                                                                    minute: '2-digit'
+                                                                });
+                                                        }
+                                                    }
+
+                                                    return (
+                                                        <div key={cardKey}
+                                                            className="border rounded-lg bg-white hover:shadow-md transition-all p-3 space-y-2 text-sm">
+                                                            {/* ① 예약자명 */}
+                                                            <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+                                                                <div className="font-bold text-gray-800 text-base">
+                                                                    👤 {reservationUserMap[normalizeReservationId(row.reservation_id)]?.name || userMap[row.requester_user_id]?.name || '-'}
+                                                                </div>
+                                                                <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-medium ${st.cls}`}>{st.label}</span>
+                                                            </div>
+                                                            <div className="text-[11px] text-gray-500 -mt-1">{reservationUserMap[normalizeReservationId(row.reservation_id)]?.email || userMap[row.requester_user_id]?.email || '-'}</div>
+                                                            <div className="text-[11px] text-gray-400">요청자: {userMap[row.requester_user_id]?.name || '-'}</div>
+
+                                                            {/* ② 서비스 + 서브타입 + 변경필드 */}
+                                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                                <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 font-medium text-[12px]">
+                                                                    {TYPE_NAME_MAP[row.re_type] || row.re_type}
+                                                                </span>
+                                                                {subLabel && (
+                                                                    <span className="px-1.5 py-0.5 rounded bg-orange-50 text-orange-700 text-[12px] font-medium">{subLabel}</span>
+                                                                )}
+                                                                {field && (
+                                                                    <span className="px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 text-[12px] font-medium">
+                                                                        ✏️ {getFieldLabel(field)}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+
+                                                            {/* ③ 크루즈명 + ④ 사용일자 */}
+                                                            {(cruiseInfo.cruiseName || usageDateStr) && (
+                                                                <div className="flex flex-wrap gap-1.5">
+                                                                    {cruiseInfo.cruiseName && (
+                                                                        <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[11px]">🚢 {cruiseInfo.cruiseName}</span>
+                                                                    )}
+                                                                    {usageDateStr && (
+                                                                        <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[11px]">📅 {usageDateStr}</span>
+                                                                    )}
+                                                                </div>
+                                                            )}
+
+                                                            {/* 신청일 + 예약 ID */}
+                                                            <div className="text-[11px] text-gray-400">
+                                                                신청 {new Date(row.submitted_at).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                                                {' · '}🔗 {row.reservation_id.slice(0, 8)}
+                                                            </div>
+
+                                                            {/* 변경 내역 (단일 필드) */}
+                                                            {field ? (
+                                                                <div className="bg-gray-50 rounded p-2 text-[12px]">
+                                                                    <div className="text-gray-700 font-medium mb-1">{getFieldLabel(field)}</div>
+                                                                    <div className="flex items-start gap-2 text-gray-600">
+                                                                        <span className="line-through flex-1 break-words whitespace-pre-wrap">{formatDisplayValue(before) || '-'}</span>
+                                                                        <span className="text-gray-400 mt-0.5">→</span>
+                                                                        <span className="text-orange-700 font-semibold flex-1 break-words whitespace-pre-wrap">{formatDisplayValue(after) || '-'}</span>
+                                                                    </div>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="text-[12px] text-gray-400 italic">변경 사항 없음</div>
+                                                            )}
+
+
+                                                            <div className="pt-2 border-t border-gray-100">
+                                                                <button
+                                                                    onClick={() => {
+                                                                        if (selectedRequest?.id === row.id) {
+                                                                            setSelectedRequest(null);
+                                                                            setBaseData(null);
+                                                                            setTempData(null);
+                                                                            setReservationSummary(null);
+                                                                            setReservationContext(null);
+                                                                            return;
+                                                                        }
+                                                                        loadComparison(row);
+                                                                    }}
+                                                                    className={`w-full px-2 py-1.5 text-[11px] rounded border transition-colors ${selectedRequest?.id === row.id ? 'bg-blue-600 text-white border-blue-600' : 'border-blue-300 text-blue-700 hover:bg-blue-50'}`}
+                                                                >
+                                                                    {selectedRequest?.id === row.id ? '상세 닫기' : '상세 보기'}
+                                                                </button>
+                                                            </div>
+
+                                                            {/* 승인/반려 (대기 상태만) */}
+                                                            {isPending ? (
+                                                                <div className="flex gap-2 pt-2 border-t border-gray-100">
+                                                                    <button
+                                                                        onClick={async () => {
+                                                                            if (!confirm(entry.requestedRow ? '이 카드의 변경만 승인하시겠습니까?' : '이 수정 요청을 승인하시겠습니까?')) return;
+                                                                            setProcessing(true);
+                                                                            try {
+                                                                                const { data: { user } } = await supabase.auth.getUser();
+                                                                                const filter = entry.requestedRow
+                                                                                    ? (r: any) => r?.id === entry.requestedRow.id
+                                                                                    : undefined;
+                                                                                await applySingleApprove(row, user?.id, null, filter);
+                                                                                // 최적화: 전체 리로드 없이 해당 행 상태만 교체 → 승인 버튼 자동 숨김
+                                                                                setRequests(prev => prev.map(r => r.id === row.id ? { ...r, status: 'approved', reviewed_at: new Date().toISOString() } : r));
+                                                                            } catch (err: any) {
+                                                                                alert(`승인 실패: ${err?.message || '오류'}`);
+                                                                            } finally {
+                                                                                setProcessing(false);
+                                                                            }
+                                                                        }}
+                                                                        disabled={processing}
+                                                                        className="flex-1 px-2 py-1.5 text-[11px] rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-60 font-medium"
+                                                                    >
+                                                                        ✅ 승인
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={async () => {
+                                                                            if (!confirm('이 수정 요청을 반려하시겠습니까?')) return;
+                                                                            setProcessing(true);
+                                                                            try {
+                                                                                const { data: { user } } = await supabase.auth.getUser();
+                                                                                const upd: Record<string, any> = {
+                                                                                    status: 'rejected',
+                                                                                    reviewed_at: new Date().toISOString(),
+                                                                                    manager_note: null
+                                                                                };
+                                                                                if (user?.id) upd.reviewed_by = user.id;
+                                                                                const { error } = await supabase.from('reservation_change_request').update(upd).eq('id', row.id);
+                                                                                if (error) throw error;
+                                                                                // 최적화: 전체 리로드 없이 해당 행만 상태 교체
+                                                                                setRequests(prev => prev.map(r => r.id === row.id ? { ...r, status: 'rejected', reviewed_at: new Date().toISOString() } : r));
+                                                                            } catch (err: any) {
+                                                                                alert(`반려 실패: ${err?.message || '오류'}`);
+                                                                            } finally {
+                                                                                setProcessing(false);
+                                                                            }
+                                                                        }}
+                                                                        disabled={processing}
+                                                                        className="flex-1 px-2 py-1.5 text-[11px] rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-60 font-medium"
+                                                                    >
+                                                                        ❌ 반려
+                                                                    </button>
+                                                                </div>
+                                                            ) : row.reviewed_at ? (
+                                                                <div className="text-[10px] text-gray-500 pt-2 border-t border-gray-100">
+                                                                    처리: {new Date(row.reviewed_at).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                                                </div>
+                                                            ) : null}
+                                                        </div>
+                                                    );
+                                                });
+                                            })
+                                        )}
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                ) : (
+                    <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
+                        {/* 테이블 헤더 */}
+                        <div className="grid grid-cols-[32px_130px_120px_1fr_1fr_70px_140px_60px] items-center bg-gray-50 border-b border-gray-200 px-3 py-2 text-xs font-semibold text-gray-600">
+                            <div className="flex items-center justify-center">
+                                {pendingIds.length > 0 && (
+                                    <input type="checkbox" checked={allChecked} onChange={toggleAll}
+                                        className="rounded border-gray-300 text-orange-500 focus:ring-orange-400 w-3.5 h-3.5" />
+                                )}
+                            </div>
+                            <div>서비스</div>
+                            <div>필드</div>
+                            <div>🔵 기존값</div>
+                            <div>🟠 수정요청</div>
+                            <div className="text-center">상태</div>
+                            <div>신청일시</div>
+                            <div className="text-center">상세</div>
+                        </div>
+
+                        {loading ? (
+                            <div className="py-10 text-center text-sm text-gray-500">불러오는 중...</div>
+                        ) : visibleRequests.length === 0 ? (
+                            <div className="py-10 text-center text-sm text-gray-500">조회된 수정 요청이 없습니다.</div>
+                        ) : (
+                            <div>
+                                {groupedRequests.map(dateGroup => {
+                                    const datePendingIds = dateGroup.users.flatMap(u => u.rows.filter(r => r.status === 'pending').map(r => r.id));
+                                    const dateAllChecked = datePendingIds.length > 0 && datePendingIds.every(id => checkedIds.has(id));
+                                    return (
+                                        <div key={dateGroup.date}>
+                                            {/* 날짜 그룹 헤더 */}
+                                            <div className="grid grid-cols-[32px_1fr] items-center bg-orange-50 border-b border-orange-100 px-3 py-1.5">
+                                                <div className="flex items-center justify-center">
+                                                    {datePendingIds.length > 0 && (
+                                                        <input type="checkbox" checked={dateAllChecked}
+                                                            onChange={() => toggleGroupDate(dateGroup)}
+                                                            className="rounded border-gray-300 text-orange-500 w-3.5 h-3.5" />
+                                                    )}
+                                                </div>
+                                                <div className="text-xs font-bold text-orange-700">
+                                                    📅 {dateGroup.date}
+                                                    <span className="ml-2 text-orange-500 font-normal">
+                                                        ({dateGroup.users.reduce((s, u) => s + u.rows.length, 0)}건)
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            {dateGroup.users.map(userGroup => {
+                                                const userPendingIds = userGroup.rows.filter(r => r.status === 'pending').map(r => r.id);
+                                                const userAllChecked = userPendingIds.length > 0 && userPendingIds.every(id => checkedIds.has(id));
+                                                return (
+                                                    <div key={userGroup.userId}>
+                                                        {/* 사용자 서브헤더 */}
+                                                        <div className="grid grid-cols-[32px_1fr] items-center bg-blue-50 border-b border-blue-100 px-3 py-1">
+                                                            <div className="flex items-center justify-center">
+                                                                {userPendingIds.length > 0 && (
+                                                                    <input type="checkbox" checked={userAllChecked}
+                                                                        onChange={() => toggleGroupUser(userGroup.rows)}
+                                                                        className="rounded border-gray-300 text-blue-500 w-3.5 h-3.5" />
+                                                                )}
+                                                            </div>
+                                                            <div className="text-xs font-semibold text-blue-700">
+                                                                👤 {userGroup.userName}
+                                                                <span className="ml-1.5 text-blue-400 font-normal text-[11px]">{userGroup.email}</span>
+                                                                <span className="ml-2 text-blue-500 font-normal">({userGroup.rows.length}건)</span>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* 행 목록 */}
+                                                        {userGroup.rows.map(row => {
+                                                            const st = STATUS_MAP[row.status] || STATUS_MAP.cancelled;
+                                                            const isSelected = selectedRequest?.id === row.id;
+                                                            const isPending = row.status === 'pending';
+                                                            const changedRows = getSnapshotChangedRows(row);
+                                                            const displayRows = changedRows.length > 0
+                                                                ? changedRows
+                                                                : [{ field: '', before: '-', after: '-' }];
+
+                                                            return displayRows.map((changedRow, index) => (
+                                                                <div key={`${row.id}-${changedRow.field || 'empty'}-${index}`}
+                                                                    className={`grid grid-cols-[32px_130px_120px_1fr_1fr_70px_140px_60px] items-start px-3 py-2 border-b border-gray-100 text-xs hover:bg-gray-50 transition-colors ${isSelected ? 'bg-blue-50' : ''}`}>
+                                                                    <div className="flex items-center justify-center">
+                                                                        {isPending ? (
+                                                                            <input type="checkbox" checked={checkedIds.has(row.id)}
+                                                                                onChange={() => toggleOne(row.id)}
+                                                                                className="rounded border-gray-300 text-orange-500 w-3.5 h-3.5" />
+                                                                        ) : <span className="w-3.5 h-3.5" />}
+                                                                    </div>
+                                                                    <div>
+                                                                        <span className="font-medium text-gray-800">{TYPE_NAME_MAP[row.re_type] || row.re_type}</span>
+                                                                    </div>
+                                                                    <div className="text-gray-700 font-medium truncate">{changedRow.field ? getFieldLabel(changedRow.field) : '-'}</div>
+                                                                    <div className="text-gray-500 truncate">{formatDisplayValue(changedRow.before)}</div>
+                                                                    <div className="text-orange-700 font-medium truncate">{formatDisplayValue(changedRow.after)}</div>
+                                                                    <div className="text-center">
+                                                                        <span className={`px-1.5 py-0.5 rounded-full text-[11px] ${st.cls}`}>{st.label}</span>
+                                                                    </div>
+                                                                    <div className="text-gray-500">
+                                                                        {new Date(row.submitted_at).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                                                    </div>
+                                                                    <div className="text-center">
+                                                                        <button onClick={() => loadComparison(row)}
+                                                                            className={`px-2 py-1 text-[11px] rounded border transition-colors ${isSelected ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-300 text-gray-600 hover:bg-gray-100'}`}>
+                                                                            {isSelected ? '닫기' : '상세'}
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            ));
+                                                        })}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* ── 상세 비교 모달 ── */}
+                {selectedRequest && (
+                    <div
+                        className="fixed inset-0 z-50 bg-black/40 px-4 py-6 sm:px-8 flex items-start sm:items-center justify-center"
+                        onClick={() => { setSelectedRequest(null); setBaseData(null); setTempData(null); setReservationSummary(null); setReservationContext(null); }}
+                    >
+                    <div
+                        className="bg-white rounded-lg shadow-xl border border-blue-200 p-4 space-y-4 w-[90vw] max-w-[90vw] max-h-[92vh] overflow-y-auto"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between border-b border-gray-200 pb-3">
+                            <div>
+                                <h3 className="text-sm font-semibold text-gray-800">
+                                    {TYPE_NAME_MAP[selectedRequest.re_type] || selectedRequest.re_type} 수정 비교
+                                </h3>
+                                <p className="text-xs text-gray-500 mt-0.5">
+                                    예약ID: {selectedRequest.reservation_id.slice(0, 8)}...
+                                    {' · '}신청: {new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })}
+                                    {' · '}{userMap[selectedRequest.requester_user_id]?.name || '-'}
+                                    {' · '}예약자: {reservationUserMap[normalizeReservationId(selectedRequest.reservation_id)]?.name || '-'}
+                                    {' · '}{getRequestSourceLabel(getRequestSourceKind(userMap[selectedRequest.requester_user_id]?.role))}
+                                </p>
+                                {reservationContext && (reservationContext.cruiseName || reservationContext.checkin || reservationContext.usageDate || (reservationContext.vehicleTypes?.length || 0) > 0) && (
+                                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                                        {reservationContext.cruiseName && (
+                                            <span className="px-2 py-1 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-100">
+                                                🚢 크루즈: <strong>{reservationContext.cruiseName}</strong>
+                                            </span>
+                                        )}
+                                        {reservationContext.checkin && (
+                                            <span className="px-2 py-1 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-100">
+                                                📅 체크인: <strong>{String(reservationContext.checkin).slice(0, 10)}</strong>
+                                            </span>
+                                        )}
+                                        {reservationContext.usageDate && (
+                                            <span className="px-2 py-1 rounded-md bg-cyan-50 text-cyan-700 border border-cyan-100">
+                                                🗓️ {reservationContext.usageDateLabel || '사용일자'}: <strong>{String(reservationContext.usageDate).replace('T', ' ').slice(0, 16)}</strong>
+                                            </span>
+                                        )}
+                                        {reservationContext.vehicleTypes && reservationContext.vehicleTypes.length > 0 && (
+                                            <span className="px-2 py-1 rounded-md bg-amber-50 text-amber-700 border border-amber-100">
+                                                🚙 차종: <strong>{Array.from(new Set(reservationContext.vehicleTypes)).join(', ')}</strong>
+                                            </span>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_MAP[selectedRequest.status]?.cls || ''}`}>
+                                    {STATUS_MAP[selectedRequest.status]?.label || selectedRequest.status}
+                                </span>
+                                <button onClick={() => { setSelectedRequest(null); setBaseData(null); setTempData(null); setReservationSummary(null); setReservationContext(null); }}
+                                    className="text-xs text-gray-400 hover:text-gray-600 px-2 py-0.5 border border-gray-200 rounded">✕ 닫기</button>
+                            </div>
+                        </div>
+
+                        {selectedRequest.customer_note && (
+                            <div className="text-xs text-blue-700 bg-blue-50 border border-blue-100 rounded p-2">
+                                고객 메모: {selectedRequest.customer_note}
+                            </div>
+                        )}
+
+                        {reservationSummary && (
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
+                                <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-2">
+                                    <div className="font-semibold text-gray-800">reservation</div>
+                                    <div className="space-y-1 text-gray-600">
+                                        <div>총액: {formatDisplayValue(reservationSummary.total_amount)}</div>
+                                        <div>수동 추가요금: {formatDisplayValue(reservationSummary.manual_additional_fee)}</div>
+                                        <div>수동 추가요금 상세: {formatDisplayValue(reservationSummary.manual_additional_fee_detail)}</div>
+                                    </div>
+                                </div>
+                                <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-2 md:col-span-2">
+                                    <div className="font-semibold text-gray-800">price_breakdown</div>
+                                    {renderPriceBreakdownTable(reservationSummary.price_breakdown)}
+                                </div>
+                                <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-2 overflow-auto max-h-96">
+                                    <div className="font-semibold text-gray-800">기타 상세 필드</div>
+                                    {renderTopExtraFieldsTable(reservationSummary.price_breakdown) || <div className="text-gray-400">추가 필드 없음</div>}
+                                </div>
+                            </div>
+                        )}
+
+                        {detailLoading ? (
+                            <div className="flex justify-center items-center h-24">
+                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
+                            </div>
+                        ) : (
+                            <>
+                                {/* 🆕 multi-row 타입(공항/크루즈 차량): 행별 개별 승인 체크박스 */}
+                                {(selectedRequest.re_type === 'airport' || selectedRequest.re_type === 'cruise_car' || selectedRequest.re_type === 'car' || selectedRequest.re_type === 'car_sht' || selectedRequest.re_type === 'sht' || selectedRequest.re_type === 'sht_car') && (() => {
+                                    const requestedRows = Array.isArray(selectedRequest.snapshot_data?.requested)
+                                        ? selectedRequest.snapshot_data.requested : [];
+                                    const originalRows = Array.isArray(selectedRequest.snapshot_data?.original)
+                                        ? selectedRequest.snapshot_data.original : [];
+                                    if (requestedRows.length === 0) return null;
+                                    const mapping = SERVICE_TABLE_MAP[selectedRequest.re_type];
+                                    const changedSet = new Set(
+                                        filterActuallyChangedRequestedRows(requestedRows, originalRows, mapping?.baseTable || '')
+                                            .map((r: any, i: number) => rowKeyOf(r, i))
+                                    );
+                                    return (
+                                        <div className="border border-orange-200 bg-orange-50/50 rounded-lg p-3 space-y-2">
+                                            <div className="text-xs font-semibold text-orange-700">
+                                                ✅ 처리할 행을 선택하세요 (체크된 행만 승인됩니다)
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                {requestedRows.map((r: any, idx: number) => {
+                                                    const key = rowKeyOf(r, idx);
+                                                    const isChanged = changedSet.has(key);
+                                                    const checked = selectedRowKeys.has(key);
+                                                    const wayLabel = r?.way_type === 'pickup' ? '🛬 픽업'
+                                                        : r?.way_type === 'sending' ? '🛫 샌딩(드롭)'
+                                                            : r?.sht_category === 'Pickup' ? '🛬 픽업'
+                                                                : r?.sht_category === 'Drop-off' ? '🛫 드롭'
+                                                                    : r?.way_type || r?.sht_category
+                                                                    || (selectedRequest.re_type === 'cruise_car' ? `🚙 차량 ${idx + 1}` : `행 ${idx + 1}`);
+                                                    const summary = [
+                                                        r?.ra_datetime || r?.pickup_datetime || r?.usage_date,
+                                                        r?.ra_flight_number,
+                                                        r?.vehicle_number,
+                                                        r?.seat_number ? `좌석 ${r.seat_number}` : null,
+                                                        r?.ra_passenger_count != null ? `${r.ra_passenger_count}명`
+                                                            : (r?.passenger_count != null ? `${r.passenger_count}명` : null),
+                                                        r?.car_count ? `차량 ${r.car_count}대` : null,
+                                                        r?.pickup_location ? `승차: ${r.pickup_location}` : null,
+                                                        r?.dropoff_location ? `하차: ${r.dropoff_location}` : null,
+                                                    ].filter(Boolean).join(' · ');
+                                                    return (
+                                                        <label key={key} className={`flex items-center gap-2 px-2 py-1.5 rounded border cursor-pointer text-xs ${checked ? 'bg-white border-orange-400' : 'bg-white/60 border-gray-200'}`}>
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={checked}
+                                                                onChange={() => {
+                                                                    setSelectedRowKeys(prev => {
+                                                                        const next = new Set(prev);
+                                                                        next.has(key) ? next.delete(key) : next.add(key);
+                                                                        return next;
+                                                                    });
+                                                                }}
+                                                                className="rounded border-gray-300 text-orange-500 w-3.5 h-3.5"
+                                                            />
+                                                            <span className="font-medium text-gray-800">{wayLabel}</span>
+                                                            {isChanged && <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 border border-orange-200">변경됨</span>}
+                                                            {!isChanged && <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 border border-gray-200">변경없음</span>}
+                                                            {summary && <span className="text-gray-500 truncate">— {summary}</span>}
+                                                        </label>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
+                                {changedFields.length === 0 ? (
+                                    !tempData ? (
+                                        <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded p-3">임시 저장 데이터가 없습니다.</div>
+                                    ) : (
+                                        <div className="text-sm text-gray-600 bg-gray-50 rounded p-3">변경된 필드가 없습니다.</div>
+                                    )
+                                ) : (
+                                    <div className="border border-gray-200 rounded-lg overflow-hidden">
+                                        <div className="grid grid-cols-[180px_1fr_1fr] bg-gray-50 text-xs font-medium text-gray-700 border-b border-gray-200">
+                                            <div className="px-3 py-2 border-r border-gray-200">필드</div>
+                                            <div className="px-3 py-2 border-r border-gray-200">🔵 기존값</div>
+                                            <div className="px-3 py-2">🟠 수정요청</div>
+                                        </div>
+                                        <div className="divide-y divide-gray-100">
+                                            {changedFields.map(row => (
+                                                <div key={row.field} className="grid grid-cols-[180px_1fr_1fr] text-xs hover:bg-gray-50">
+                                                    <div className="px-3 py-2 border-r border-gray-100 text-gray-700 font-medium">{getFieldLabel(row.field)}</div>
+                                                    <div className="px-3 py-2 border-r border-gray-100 text-gray-600 break-all">{formatDisplayValue(row.before)}</div>
+                                                    <div className="px-3 py-2 text-orange-700 font-medium break-all">{formatDisplayValue(row.after)}</div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {selectedRequest.snapshot_data && (
+                                    <details className="text-xs">
+                                        <summary className="cursor-pointer text-gray-500 hover:text-gray-700">📷 요청 시점 원본 스냅샷 보기</summary>
+                                        <pre className="mt-2 p-3 bg-gray-50 rounded border border-gray-200 overflow-auto max-h-48 text-xs text-gray-600">
+                                            {JSON.stringify(selectedRequest.snapshot_data, null, 2)}
+                                        </pre>
+                                    </details>
+                                )}
+
+                                <div className="space-y-2">
+                                    <label className="text-xs font-medium text-gray-700">📝 매니저 메모</label>
+                                    <textarea value={managerNote} onChange={e => setManagerNote(e.target.value)}
+                                        rows={2} className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md"
+                                        placeholder="승인/반려 사유를 기록하세요"
+                                        disabled={selectedRequest.status !== 'pending'} />
+                                </div>
+
+                                {selectedRequest.status === 'pending' && (
+                                    <div className="flex gap-2">
+                                        <button onClick={() => applyStatus('approved')}
+                                            disabled={processing || !canApproveSelectedRequest}
+                                            className="px-5 py-2 text-sm rounded-md bg-green-600 text-white hover:bg-green-700 disabled:opacity-60 font-medium">
+                                            ✅ 승인
+                                        </button>
+                                        <button onClick={() => applyStatus('rejected')}
+                                            disabled={processing}
+                                            className="px-5 py-2 text-sm rounded-md bg-red-600 text-white hover:bg-red-700 disabled:opacity-60 font-medium">
+                                            ❌ 반려
+                                        </button>
+                                    </div>
+                                )}
+
+                                {selectedRequest.status !== 'pending' && selectedRequest.reviewed_at && (
+                                    <div className="text-xs text-gray-500 pt-2 border-t border-gray-100">
+                                        처리일: {new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })}
+                                        {selectedRequest.manager_note && ` · 사유: ${selectedRequest.manager_note}`}
+                                    </div>
+                                )}
+                            </>
+                        )}
+                    </div>
+                    </div>
+                )}
+            </div>
+        </ManagerLayout>
+    );
+}
