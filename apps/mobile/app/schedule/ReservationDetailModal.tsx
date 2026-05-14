@@ -31,6 +31,27 @@ const fmtDate = (dateStr: string | null | undefined): string => {
   return m ? `${m[1]}. ${m[2]}. ${m[3]}.` : String(dateStr);
 };
 
+const fmtWhenPresent = (dateStr: string | null | undefined) => dateStr ? fmt(dateStr) : null;
+const fmtMoney = (value: number) => `${value.toLocaleString('ko-KR')}동`;
+const KEY_LABELS: Record<string, string> = {
+  reservation_id: '예약ID',
+  reservationId: '예약ID',
+  re_quote_id: '견적ID',
+  quoteId: '견적ID',
+  vehicle_number: '차량번호',
+  seat_number: '좌석번호',
+  ra_flight_number: '항공편',
+  ra_airport_location: '공항',
+  ra_datetime: '공항일시',
+  pickup_datetime: '픽업일시',
+  checkin_date: '체크인',
+  request_note: '요청사항',
+  airport_price_code: '공항코드',
+  room_price_code: '객실코드',
+  car_price_code: '차량코드',
+  rentcar_price_code: '렌터카코드',
+};
+
 const getServiceType = (item: any) => {
   if (item.cruise && item.checkin) return 'cruise';
   if (item.boardingDate && item.vehicleNumber) return 'vehicle';
@@ -69,6 +90,42 @@ function Field({ label, value, highlight }: { label: string; value: React.ReactN
 
 /* ── 서비스별 상세 섹션 ── */
 function ServiceDetails({ item, type, meta }: { item: any; type: string; meta: ServiceMeta }) {
+  const excludedKeys = new Set([
+    'source', 'orderId', 'reservationId', 're_user_id', 're_quote_id', 'quoteId',
+    'customerName', 'customerEnglishName', 'email', 'totalAmount', 'amount',
+    'cruise', 'cruiseName', 'roomType', 'category', 'checkin', 'roomCount', 'room_count',
+    'adult', 'adult_count', 'child', 'child_count', 'toddler', 'infant_count', 'discount',
+    'paymentMethod', 'payment_method', 'room_total_price',
+    'carType', 'carCategory', 'carCount', 'car_count', 'passengerCount', 'passenger_count',
+    'pickupDatetime', 'pickup_datetime', 'pickupLocation', 'pickup_location',
+    'dropoffLocation', 'dropoff_location', 'car_total_price',
+    'boardingDate', 'usageDate', 'usage_date', 'serviceType', 'sht_category', 'vehicleNumber', 'vehicle_number',
+    'seatNumber', 'seat_number', 'name',
+    'tripType', 'wayType', 'way_type', 'ra_way_type', 'route', 'date', 'time',
+    'airportName', 'ra_airport_location', 'flightNumber', 'ra_flight_number',
+    'vehicleType', 'placeName', 'accommodation_info', 'stopover', 'ra_datetime',
+    'ra_passenger_count', 'ra_car_count', 'total_price',
+    'hotelName', 'roomName', 'days', 'nights', 'checkinDate', 'checkin_date', 'guestCount', 'guest_count',
+    'tourName', 'tourType', 'tourDate', 'tourCapacity', 'tour_capacity', 'startDate', 'endDate', 'participants',
+    'pickupDate', 'pickupTime', 'destination', 'usagePeriod', 'rental_days',
+    'luggageCount', 'luggage_count', 'dispatchCode', 'dispatch_code',
+    'viaLocation', 'via_location', 'viaWaiting', 'via_waiting',
+    'returnDatetime', 'return_datetime', 'returnPickupLocation', 'return_pickup_location',
+    'returnDestination', 'return_destination', 'returnViaLocation', 'return_via_location',
+    'returnViaWaiting', 'return_via_waiting', 'unitPrice', 'unit_price', 'totalPrice',
+    'requestNote',
+  ]);
+  const requestNote =
+    item.requestNote || item.request_note || item.special_requests || item.memo || item.notes || '';
+  const unitPrice = Number(item.unitPrice ?? item.unit_price ?? 0);
+  const totalPrice = Number(item.totalPrice ?? item.total_price ?? item.car_total_price ?? item.room_total_price ?? 0);
+  const extraEntries = Object.entries(item || {}).filter(([key, value]) => {
+    if (excludedKeys.has(key)) return false;
+    if (value === undefined || value === null || value === '' || value === '-') return false;
+    if (typeof value === 'object') return false;
+    return true;
+  });
+
   return (
     <div className={`${meta.bg} border ${meta.border} rounded-lg p-4`}>
       <h4 className={`font-semibold ${meta.title} mb-3 flex items-center gap-2 text-sm`}>
@@ -77,81 +134,120 @@ function ServiceDetails({ item, type, meta }: { item: any; type: string; meta: S
       </h4>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-0">
         {type === 'cruise' && <>
-          <Field label="크루즈명"  value={item.cruise} />
+          <Field label="크루즈명"  value={item.cruiseName || item.cruise} />
           <Field label="객실타입"  value={item.roomType ? <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs">{item.roomType}</span> : null} />
-          <Field label="분류"      value={item.category} />
+          <Field label="객실수"    value={(item.room_count || item.roomCount) ? `${item.room_count || item.roomCount}실` : null} />
           <Field label="체크인"    value={fmtDate(item.checkin)} />
-          <Field label="객실수"    value={item.roomCount ? `${item.roomCount}개` : null} />
-          <Field label="인원"      value={(() => { const p=[]; if(item.adult>0)p.push(`성인 ${item.adult}명`); if(item.child>0)p.push(`아동 ${item.child}명`); if(item.toddler>0)p.push(`유아 ${item.toddler}명`); return p.join(' / ') || null; })()} />
-          <Field label="할인"      value={item.discount} />
+          <Field label="결제방식"  value={item.paymentMethod || item.payment_method} />
         </>}
 
         {type === 'car' && <>
-          <Field label="차종"      value={item.carType ? <span className="bg-cyan-100 text-cyan-800 px-2 py-0.5 rounded text-xs">{item.carType}</span> : null} />
-          <Field label="차량수"    value={item.carCount ? `${item.carCount}대` : null} />
-          <Field label="승객수"    value={item.passengerCount ? `${item.passengerCount}명` : null} />
-          <Field label="픽업 일시" value={fmt(item.pickupDatetime)} />
-          <Field label="픽업 장소" value={item.pickupLocation} />
-          <Field label="도착 장소" value={item.dropoffLocation} />
+          <Field label="구분"      value={item.carCategory || item.sht_category || item.category} />
+          <Field label="차량타입"  value={item.carType ? <span className="bg-cyan-100 text-cyan-800 px-2 py-0.5 rounded text-xs">{item.carType}</span> : null} />
+          <Field label="경로"      value={item.route} />
+          <Field label="총인원수"  value={item.passengerCount != null ? `${item.passengerCount}명` : null} />
+          <Field label="픽업일시"  value={fmtWhenPresent(item.pickupDatetime || item.pickup_datetime)} />
+          <Field label="픽업위치"  value={item.pickupLocation || item.pickup_location} />
+          <Field label="드랍위치"  value={item.dropoffLocation || item.dropoff_location || item.destination} />
+          <Field label="차량번호"  value={item.vehicleNumber || item.vehicle_number} />
         </>}
 
         {type === 'vehicle' && <>
-          <Field label="탑승일"    value={fmtDate(item.boardingDate)} />
+          <Field label="사용일"    value={item.usageDate ? fmt(item.usageDate) : (item.boardingDate ? fmtDate(item.boardingDate) : null)} />
+          <Field label="구분"      value={item.category || item.sht_category || item.serviceType} />
           <Field label="차량번호"  value={item.vehicleNumber} />
-          <Field label="좌석번호"  value={item.seatNumber} />
-          <Field label="구분"      value={item.serviceType} />
-          <Field label="분류"      value={item.category} />
-          <Field label="탑승자명"  value={item.name} />
+          <Field label="좌석"      value={item.seatNumber} />
+          <Field label="픽업장소"  value={item.pickupLocation || item.pickup_location} />
+          <Field label="드롭장소"  value={item.dropoffLocation || item.dropoff_location} />
         </>}
 
         {type === 'airport' && <>
-          <Field label="구분"      value={normalizeWayType(item.tripType || item.wayType)} />
-          <Field label="카테고리"  value={item.category} />
+          <Field label="구분"      value={item.category || item.way_type || normalizeWayType(item.tripType || item.wayType)} />
           <Field label="경로"      value={item.route} />
-          <Field label="날짜"      value={fmtDate(item.date)} />
-          <Field label="시간"      value={item.time} />
-          <Field label="공항"      value={item.airportName} />
-          <Field label="항공편"    value={item.flightNumber} />
-          <Field label="차종"      value={item.vehicleType || item.carType} />
-          <Field label="승객수"    value={item.passengerCount ? `${item.passengerCount}명` : null} />
-          <Field label="차량수"    value={item.carCount ? `${item.carCount}대` : null} />
-          <Field label="장소"      value={item.placeName} />
+          <Field label="차량"      value={item.carType || item.vehicleType} />
+          <Field label="일시"      value={item.ra_datetime ? fmt(item.ra_datetime) : (item.date || item.time ? `${fmtDate(item.date)} ${item.time || ''}`.trim() : null)} />
+          <Field label="항공편"    value={item.flightNumber || item.ra_flight_number} />
+          <Field label="공항"      value={item.airportName || item.ra_airport_location} />
+          {(() => {
+            const airportTypeRaw = String(item.category || item.way_type || '').toLowerCase();
+            const isSending = airportTypeRaw.includes('sending') || airportTypeRaw.includes('샌딩');
+            const locationLabel = isSending ? '승차위치' : '하차위치';
+            const locationValue = item.accommodation_info || item.placeName || item.pickupLocation || item.dropoffLocation;
+            return <Field label={locationLabel} value={locationValue} />;
+          })()}
+          <Field label="경유지"    value={item.stopover} />
+          <Field label="인원"      value={item.passengerCount ? `${item.passengerCount}명` : null} />
         </>}
 
         {type === 'hotel' && <>
           <Field label="호텔명"    value={item.hotelName ? <span className="bg-orange-100 text-orange-800 px-2 py-0.5 rounded text-xs font-semibold">{item.hotelName}</span> : null} />
-          <Field label="객실명"    value={item.roomName} />
           <Field label="객실타입"  value={item.roomType} />
-          <Field label="객실수"    value={item.roomCount ? `${item.roomCount}개` : null} />
           <Field label="체크인"    value={fmtDate(item.checkinDate)} />
-          <Field label="숙박일수"  value={item.days ? `${item.days}박` : null} />
-          <Field label="인원"      value={(() => { const p=[]; if(item.adult>0)p.push(`성인 ${item.adult}명`); if(item.child>0)p.push(`아동 ${item.child}명`); if(item.toddler>0)p.push(`유아 ${item.toddler}명`); return p.join(' / ') || null; })()} />
+          {item.checkinDate && (item.nights || item.days) ? (
+            <Field label="체크아웃" value={(() => {
+              const checkin = new Date(item.checkinDate);
+              const checkout = new Date(checkin);
+              checkout.setDate(checkout.getDate() + Number(item.nights || item.days || 0));
+              return isNaN(checkout.getTime()) ? null : checkout.toISOString().split('T')[0];
+            })()} />
+          ) : null}
+          <Field label="숙박일정"  value={(item.nights || item.days) ? `${item.nights || item.days}박 ${Number(item.nights || item.days) + 1}일` : null} />
+          <Field label="인원"      value={item.guestCount != null ? `${item.guestCount}명` : null} />
         </>}
 
         {type === 'tour' && <>
           <Field label="투어명"    value={item.tourName ? <span className="bg-pink-100 text-pink-800 px-2 py-0.5 rounded text-xs font-semibold">{item.tourName}</span> : null} />
-          <Field label="투어타입"  value={item.tourType} />
-          <Field label="시작일"    value={fmtDate(item.startDate)} />
-          <Field label="종료일"    value={fmtDate(item.endDate)} />
-          <Field label="인원"      value={item.participants ? `${item.participants}명` : null} />
+          <Field label="투어일자"  value={fmtDate(item.tourDate || item.startDate)} />
+          <Field label="인원수"    value={(item.tourCapacity || item.participants) ? `${item.tourCapacity || item.participants}명` : null} />
+          <Field label="차량"      value={item.carCount ? `${item.carCount}대` : null} />
           <Field label="픽업장소"  value={item.pickupLocation} />
+          <Field label="드랍장소"  value={item.dropoffLocation || item.dropoff_location} />
         </>}
 
         {type === 'rentcar' && <>
-          <Field label="차종"      value={item.carType ? <span className="bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded text-xs">{item.carType}</span> : null} />
-          <Field label="차량수"    value={item.carCount ? `${item.carCount}대` : null} />
-          <Field label="픽업일"    value={fmtDate(item.pickupDate)} />
-          <Field label="픽업시간"  value={item.pickupTime} />
-          <Field label="픽업장소"  value={item.pickupLocation} />
-          <Field label="목적지"    value={item.destination} />
-          <Field label="이용기간"  value={item.usagePeriod} />
-          <Field label="승객수"    value={item.passengerCount ? `${item.passengerCount}명` : null} />
+          <Field label="차량 타입" value={item.carType ? <span className="bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded text-xs">{item.carType}{item.capacity ? ` (${item.capacity}인승)` : ''}</span> : null} />
+          <Field label="경로"      value={item.route} />
+          <Field label="이용방식"  value={item.category || item.way_type} />
+          <Field label="차량 수"   value={item.carCount != null ? `${item.carCount}대` : null} />
+          <Field label="탑승 인원" value={item.passengerCount != null ? `${item.passengerCount}명` : null} />
+          <Field label="수하물"    value={item.luggageCount != null && Number(item.luggageCount) > 0 ? `${item.luggageCount}개` : null} />
+          <Field label="차량번호"  value={item.dispatchCode || item.dispatch_code} />
+          <Field label="픽업 시간" value={fmtWhenPresent(item.pickupDatetime || item.pickup_datetime)} />
+          <Field label="픽업장소"  value={item.pickupLocation || item.pickup_location} />
+          <Field label="드롭장소"  value={item.destination || item.dropoffLocation || item.dropoff_location} />
+          <Field label="경유지"    value={item.viaLocation || item.via_location} />
+          <Field label="대기"      value={item.viaWaiting || item.via_waiting} />
+          <Field label="리턴 시간" value={fmtWhenPresent(item.returnDatetime || item.return_datetime)} />
+          <Field label="리턴 픽업장소" value={item.returnPickupLocation || item.return_pickup_location} />
+          <Field label="리턴 드롭장소" value={item.returnDestination || item.return_destination} />
+          <Field label="리턴 경유지" value={item.returnViaLocation || item.return_via_location} />
+          <Field label="리턴 대기" value={item.returnViaWaiting || item.return_via_waiting} />
         </>}
       </div>
-      {item.requestNote && (
+      {(unitPrice > 0 || totalPrice > 0) && (
+        <div className="mt-3 pt-3 border-t border-gray-200 space-y-1">
+          {unitPrice > 0 && (
+            <Field label="단가" value={fmtMoney(unitPrice)} />
+          )}
+          {totalPrice > 0 && (
+            <Field label="총 금액" value={<span className="font-bold text-blue-600">{fmtMoney(totalPrice)}</span>} />
+          )}
+        </div>
+      )}
+      {extraEntries.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-gray-300 bg-white rounded p-3">
+          <p className="text-xs font-semibold text-gray-700 mb-2">추가 상세</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-0">
+            {extraEntries.map(([key, value]) => (
+              <Field key={key} label={KEY_LABELS[key] || key} value={String(value)} />
+            ))}
+          </div>
+        </div>
+      )}
+      {requestNote && (
         <div className="mt-3 pt-3 border-t border-yellow-300 bg-yellow-50 rounded p-3">
           <p className="text-xs font-semibold text-yellow-800 mb-1">📝 요청사항</p>
-          <p className="text-sm text-gray-900 whitespace-pre-wrap">{item.requestNote}</p>
+          <p className="text-sm text-gray-900 whitespace-pre-wrap">{requestNote}</p>
         </div>
       )}
     </div>
@@ -178,6 +274,10 @@ export default function ReservationDetailModal({
   const meta = SERVICE_META[type] || DEFAULT_META;
   const Icon = meta.icon;
   const groupedItems = (items && items.length > 0) ? items : [item];
+  const totalAmount = groupedItems.reduce((sum, current) => {
+    const n = Number(current?.totalAmount ?? current?.total_amount ?? current?.amount ?? 0);
+    return sum + (Number.isFinite(n) ? n : 0);
+  }, 0);
   const groupKey = item?.source === 'sh'
     ? `주문번호 ${item?.orderId || '-'}`
     : `견적ID ${item?.quoteId || item?.re_quote_id || item?.quote_id || '-'}`;
@@ -245,6 +345,13 @@ export default function ReservationDetailModal({
                 </div>
               );
             })}
+          </div>
+
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm font-semibold text-green-800">총금액</span>
+              <span className="text-lg font-bold text-green-700">{fmtMoney(totalAmount)}</span>
+            </div>
           </div>
 
         </div>

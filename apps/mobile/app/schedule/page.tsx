@@ -239,10 +239,12 @@ export default function SchedulePage() {
         ...shR.map((r: any) => {
           const u = userMap.get(r.order_id);
           return {
+            ...r,
             orderId: r.order_id,
             customerName: u?.korean_name || '',
             customerEnglishName: u?.english_name || '',
             cruise: r.cruise_name,
+            cruiseName: r.cruise_name,
             category: r.division,
             roomType: r.room_type,
             roomCount: parseInt(r.room_count) || 0,
@@ -258,10 +260,13 @@ export default function SchedulePage() {
         ...shC.map((c: any) => {
           const u = userMap.get(c.order_id);
           return {
+            ...c,
             orderId: c.order_id,
             customerName: u?.korean_name || '',
             customerEnglishName: u?.english_name || '',
             carType: c.vehicle_type,
+            carCategory: c.division || c.category || '',
+            route: [c.boarding_location, c.dropoff_location].filter(Boolean).join(' → '),
             carCount: parseInt(c.vehicle_count) || 0,
             passengerCount: parseInt(c.passenger_count) || 0,
             pickupDatetime: c.boarding_datetime,
@@ -273,10 +278,12 @@ export default function SchedulePage() {
         ...shCC.map((cc: any) => {
           const u = userMap.get(cc.order_id);
           return {
+            ...cc,
             orderId: cc.order_id,
             customerName: u?.korean_name || '',
             customerEnglishName: u?.english_name || '',
             boardingDate: cc.boarding_date,
+            usageDate: cc.boarding_date,
             serviceType: cc.division,
             category: cc.category,
             vehicleNumber: cc.vehicle_number,
@@ -288,12 +295,14 @@ export default function SchedulePage() {
         ...shP.map((p: any) => {
           const u = userMap.get(p.order_id);
           return {
+            ...p,
             orderId: p.order_id,
             customerName: u?.korean_name || '',
             customerEnglishName: u?.english_name || '',
             tripType: p.division,
             category: p.category,
             route: p.route,
+            carType: p.vehicle_type || '',
             date: p.date,
             time: p.time,
             airportName: p.airport_name,
@@ -307,6 +316,7 @@ export default function SchedulePage() {
         ...shH.map((h: any) => {
           const u = userMap.get(h.order_id);
           return {
+            ...h,
             orderId: h.order_id,
             customerName: u?.korean_name || '',
             customerEnglishName: u?.english_name || '',
@@ -315,7 +325,9 @@ export default function SchedulePage() {
             roomType: h.room_type,
             roomCount: parseInt(h.room_count) || 0,
             days: parseInt(h.schedule) || 0,
+            nights: parseInt(h.schedule) || 0,
             checkinDate: h.checkin_date,
+            guestCount: (parseInt(h.adult) || 0) + (parseInt(h.child) || 0) + (parseInt(h.toddler) || 0),
             adult: parseInt(h.adult) || 0,
             child: parseInt(h.child) || 0,
             toddler: parseInt(h.toddler) || 0,
@@ -325,30 +337,37 @@ export default function SchedulePage() {
         ...shT.map((t: any) => {
           const u = userMap.get(t.order_id);
           return {
+            ...t,
             orderId: t.order_id,
             customerName: u?.korean_name || '',
             customerEnglishName: u?.english_name || '',
             tourName: t.tour_name,
             tourType: t.tour_type,
             startDate: t.start_date,
+            tourDate: t.start_date,
             endDate: t.end_date,
             participants: parseInt(t.tour_count) || 0,
+            tourCapacity: parseInt(t.tour_count) || 0,
             pickupLocation: t.pickup_location,
+            dropoffLocation: t.dropoff_location || '',
             email: u?.email || t.email,
           };
         }),
         ...shRC.map((rc: any) => {
           const u = userMap.get(rc.order_id);
           return {
+            ...rc,
             orderId: rc.order_id,
             customerName: u?.korean_name || '',
             customerEnglishName: u?.english_name || '',
             carType: rc.vehicle_type,
+            route: [rc.boarding_location, rc.destination].filter(Boolean).join(' → '),
             carCount: parseInt(rc.vehicle_count) || 0,
             pickupDate: rc.boarding_date,
             pickupTime: rc.boarding_time,
             pickupLocation: rc.boarding_location,
             destination: rc.destination,
+            dropoffLocation: rc.destination,
             usagePeriod: rc.usage_period,
             passengerCount: parseInt(rc.passenger_count) || 0,
             email: u?.email || rc.email,
@@ -390,11 +409,13 @@ export default function SchedulePage() {
       const newMapped = reservations.map((r: any) => {
         const user = usersById.get(r.re_user_id);
         const base = {
+          ...r,
           source: 'new',
           reservationId: r.re_id,
           re_user_id: r.re_user_id,
           re_quote_id: r.re_quote_id,
           quoteId: r.re_quote_id,
+          totalAmount: Number(r.total_amount || 0),
           customerName: user?.name || '',
           customerEnglishName: user?.english_name || '',
           email: user?.email || '',
@@ -404,13 +425,16 @@ export default function SchedulePage() {
           const d = cruiseByRid.get(r.re_id) || {};
           return {
             ...base,
+            ...d,
             cruise: '신규 크루즈',
+            cruiseName: d.cruise_name || '신규 크루즈',
             roomType: d.room_price_code || '',
             roomCount: Number(d.room_count || 0),
             checkin: d.checkin || '',
             adult: Number(d.adult_count || 0),
             child: Number(d.child_count || 0),
             toddler: Number(d.infant_count || 0),
+            totalPrice: Number(d.room_total_price || 0),
             requestNote: d.request_note || '',
           };
         }
@@ -419,12 +443,17 @@ export default function SchedulePage() {
           const d = carByRid.get(r.re_id) || {};
           return {
             ...base,
+            ...d,
             carType: d.car_price_code || '',
+            carCategory: d.sht_category || d.category || '',
+            route: [d.pickup_location, d.dropoff_location].filter(Boolean).join(' → '),
             carCount: Number(d.car_count || 0),
             passengerCount: Number(d.passenger_count || 0),
             pickupDatetime: d.pickup_datetime || '',
             pickupLocation: d.pickup_location || '',
             dropoffLocation: d.dropoff_location || '',
+            unitPrice: Number(d.unit_price || 0),
+            totalPrice: Number(d.car_total_price || 0),
             requestNote: d.request_note || '',
           };
         }
@@ -436,20 +465,29 @@ export default function SchedulePage() {
             || (airportPriceData || []).find((p: any) => p.airport_code === d.airport_price_code)
             || {};
           const dtParts = getPlus8DateTimeParts(d.ra_datetime || '');
+          const isSending = String(d.category || d.way_type || d.ra_way_type || '').toLowerCase().includes('sending') || String(d.category || d.way_type || d.ra_way_type || '').includes('샌딩');
+          const accommodationInfo = d.accommodation_info || '';
           return {
             ...base,
+            ...d,
+            ...priceInfo,
             tripType: wayType,
             wayType,
-            category: d.ra_airport_location || '',
+            category: d.category || d.way_type || d.ra_way_type || '',
             route: [priceInfo.route, d.ra_airport_location, d.accommodation_info].filter(Boolean).join(' ↔ '),
             date: dtParts.date,
             time: dtParts.time,
             airportName: d.ra_airport_location || '',
             flightNumber: d.ra_flight_number || '',
             vehicleType: d.vehicle_type || priceInfo.vehicle_type || '',
+            carType: d.vehicle_type || priceInfo.vehicle_type || '',
             passengerCount: Number(d.ra_passenger_count || 0),
             carCount: Number(d.ra_car_count || 0),
-            placeName: d.accommodation_info || '',
+            unitPrice: Number(d.unit_price || 0),
+            totalPrice: Number(d.total_price || 0),
+            placeName: accommodationInfo,
+            pickupLocation: isSending ? accommodationInfo : '',
+            dropoffLocation: isSending ? '' : accommodationInfo,
             requestNote: d.request_note || '',
           };
         }
@@ -458,15 +496,20 @@ export default function SchedulePage() {
           const d = hotelByRid.get(r.re_id) || {};
           return {
             ...base,
+            ...d,
             hotelName: d.hotel_category || '신규 호텔',
             roomName: d.hotel_price_code || '',
-            roomType: '',
+            roomType: d.hotel_price_code || '',
             roomCount: Number(d.room_count || 0),
             days: Number(d.nights || 0),
+            nights: Number(d.nights || 0),
             checkinDate: d.checkin_date || '',
+            guestCount: Number(d.guest_count || 0),
             adult: Number(d.guest_count || 0),
             child: 0,
             toddler: 0,
+            unitPrice: Number(d.unit_price || 0),
+            totalPrice: Number(d.total_price || 0),
             requestNote: d.request_note || '',
           };
         }
@@ -475,12 +518,18 @@ export default function SchedulePage() {
           const d = tourByRid.get(r.re_id) || {};
           return {
             ...base,
+            ...d,
             tourName: '신규 투어',
             tourType: d.tour_price_code || '',
             startDate: d.usage_date || '',
+            tourDate: d.usage_date || '',
             endDate: '',
             participants: Number(d.tour_capacity || 0),
+            tourCapacity: Number(d.tour_capacity || 0),
             pickupLocation: d.pickup_location || '',
+            dropoffLocation: d.dropoff_location || '',
+            unitPrice: Number(d.unit_price || 0),
+            totalPrice: Number(d.total_price || 0),
             requestNote: d.request_note || '',
           };
         }
@@ -490,14 +539,29 @@ export default function SchedulePage() {
           const pickupParts = getPlus8DateTimeParts(d.pickup_datetime || '');
           return {
             ...base,
+            ...d,
             carType: d.rentcar_price_code || '',
+            route: [d.pickup_location, d.destination || d.dropoff_location].filter(Boolean).join(' → '),
             carCount: Number(d.car_count || 0),
             pickupDate: pickupParts.date,
             pickupTime: pickupParts.time,
+            pickupDatetime: d.pickup_datetime || '',
             pickupLocation: d.pickup_location || '',
             destination: d.destination || '',
+            dropoffLocation: d.destination || d.dropoff_location || '',
             usagePeriod: d.rental_days ? `${d.rental_days}일` : '',
-            passengerCount: Number(d.driver_count || 0),
+            passengerCount: Number(d.passenger_count || d.driver_count || 0),
+            luggageCount: Number(d.luggage_count || 0),
+            dispatchCode: d.dispatch_code || '',
+            returnDatetime: d.return_datetime || '',
+            returnPickupLocation: d.return_pickup_location || '',
+            returnDestination: d.return_destination || '',
+            viaLocation: d.via_location || '',
+            viaWaiting: d.via_waiting || '',
+            returnViaLocation: d.return_via_location || '',
+            returnViaWaiting: d.return_via_waiting || '',
+            unitPrice: Number(d.unit_price || 0),
+            totalPrice: Number(d.total_price || 0),
             requestNote: d.request_note || '',
           };
         }
@@ -505,11 +569,18 @@ export default function SchedulePage() {
         const d = shtByRid.get(r.re_id) || {};
         return {
           ...base,
+          ...d,
           boardingDate: d.usage_date || '',
+          usageDate: d.usage_date || d.pickup_datetime || '',
           serviceType: d.service_type || d.sht_category || '',
-          category: d.category || '',
+          category: d.sht_category || d.category || '',
           vehicleNumber: d.vehicle_number || '',
           seatNumber: d.seat_number || '',
+          pickupLocation: d.pickup_location || '',
+          dropoffLocation: d.dropoff_location || '',
+          passengerCount: Number(d.passenger_count || 0),
+          unitPrice: Number(d.unit_price || 0),
+          totalPrice: Number(d.car_total_price || 0),
           name: d.name || user?.name || '',
           requestNote: d.request_note || '',
         };

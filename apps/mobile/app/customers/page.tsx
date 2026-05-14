@@ -22,6 +22,41 @@ export default function CustomerManagement() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [resettingPasswordId, setResettingPasswordId] = useState<string | null>(null);
 
+  const loadRecentCustomers = async () => {
+    try {
+      setSearchLoading(true);
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      if (error) {
+        console.error('❌ 최근 가입자 조회 실패:', error);
+        setCustomers([]);
+        setCustomerCount(0);
+        setSearched(true);
+        return;
+      }
+
+      const normalized = (data || []).map((c: any) => ({
+        ...c,
+        role: String(c?.role ?? '').trim().toLowerCase()
+      }));
+
+      setCustomers(normalized);
+      setCustomerCount(normalized.length);
+      setSearched(true);
+    } catch (error) {
+      console.error('❌ 최근 가입자 로드 실패:', error);
+      setCustomers([]);
+      setCustomerCount(0);
+      setSearched(true);
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
   useEffect(() => {
     const checkAuth = async () => {
       const { data: { user: authUser }, error } = await supabase.auth.getUser();
@@ -30,6 +65,7 @@ export default function CustomerManagement() {
         return;
       }
       setUser(authUser);
+      await loadRecentCustomers();
       setLoading(false);
     };
     checkAuth();
@@ -377,7 +413,11 @@ export default function CustomerManagement() {
             <div className="py-8 text-center text-gray-500 text-sm">검색 결과가 없습니다.</div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-              {customers.map((customer) => (
+              {customers
+                .slice()
+                .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
+                .slice(0, 5)
+                .map((customer) => (
                   <div key={customer.id} className="bg-gray-50 rounded-xl shadow-sm border border-gray-200 p-4 flex flex-col justify-between h-full">
                     <div className="mb-2">
                       <div className="text-base font-semibold text-gray-900">{customer.name || '이름 없음'}</div>

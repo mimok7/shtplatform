@@ -1179,40 +1179,6 @@ export default function ShtCarPage() {
                             </div>
                         </div>
 
-                        <div className="flex gap-2 items-center">
-                            <span className="text-sm text-gray-600">보기:</span>
-                            <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
-                                <button
-                                    onClick={() => setGroupByBooker((prev) => !prev)}
-                                    className={`px-3 py-1 rounded-md text-sm transition-colors ${groupByBooker
-                                        ? 'bg-blue-600 text-white'
-                                        : 'bg-white text-gray-700 hover:text-gray-900'
-                                        }`}
-                                >
-                                    그룹기준: {groupByBooker ? '예약자' : '일자'}
-                                </button>
-                                <button
-                                    onClick={() => setDisplayMode('card')}
-                                    className={`px-3 py-1 rounded-md text-sm transition-colors flex items-center gap-2 ${displayMode === 'card'
-                                        ? 'bg-white text-blue-600 shadow-sm'
-                                        : 'text-gray-600 hover:text-gray-800'
-                                        }`}
-                                >
-                                    <Grid3X3 className="w-4 h-4" />
-                                    카드
-                                </button>
-                                <button
-                                    onClick={() => setDisplayMode('table')}
-                                    className={`px-3 py-1 rounded-md text-sm transition-colors flex items-center gap-2 ${displayMode === 'table'
-                                        ? 'bg-white text-blue-600 shadow-sm'
-                                        : 'text-gray-600 hover:text-gray-800'
-                                        }`}
-                                >
-                                    <List className="w-4 h-4" />
-                                    테이블
-                                </button>
-                            </div>
-                        </div>
                     </div>
                 </div>
 
