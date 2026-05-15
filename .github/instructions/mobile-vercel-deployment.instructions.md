@@ -37,18 +37,32 @@
 ```
 **이유**: Vercel에서 corepack이 npm과 충돌 → "package manager mismatch" 에러 유발
 
-### 3. vercel.json 설정 확인
+### 3. vercel.json 설정 확인 (2026-05-15 업데이트)
 ```json
 // apps/mobile/vercel.json
 {
-  "installCommand": "cd ../.. && npx --yes pnpm@9.12.0 install --frozen-lockfile",
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "cd ../.. && npx --yes pnpm@10.x install --no-frozen-lockfile",
   "ignoreCommand": "git diff --quiet HEAD^ HEAD -- ./ ../../packages ../../pnpm-lock.yaml",
-  "buildCommand": "cd ../.. && npx --yes pnpm@9.12.0 --filter @sht/mobile build",
+  "buildCommand": "cd ../.. && npx --yes pnpm@10.x --filter @sht/mobile build",
   "outputDirectory": ".next",
   "framework": "nextjs"
 }
 ```
-**핵심**: `npx --yes pnpm@9.12.0`로 Vercel의 hardcoded pnpm6을 우회
+**핵심**:
+- `npx --yes pnpm@10.x`: mobile 프로젝트는 Vercel이 `pnpm@10.x`를 자동 사용 (생성일 기준)
+- `--no-frozen-lockfile`: pnpm@10의 엄격한 overrides 검증으로 인한 `ERR_PNPM_LOCKFILE_CONFIG_MISMATCH` 우회
+- ❌ pnpm@9.12.0 강제 시도는 실패 — Vercel pnpm@10 자동 선택과 충돌
+
+### 3-1. GitHub 자동 배포 연결 (필수)
+```powershell
+cd c:\SHT-DATA\sht-platform\apps\mobile
+vercel git connect https://github.com/mimok7/shtplatform.git --yes
+```
+**이유**: mobile은 별도 프로젝트로 만들어져 GitHub App 자동 연결이 없음.
+- `apps/mobile/.vercel/project.json`에 git 연결 정보 없으면 GitHub push 시 자동 배포 안 됨
+- 다른 6개 앱은 GitHub App을 통해 모노레포 자동 연결되어 있음
+- **확인**: `vercel ls mobile` 결과의 Username이 GitHub 사용자가 아닌 본인이면 수동 트리거만 됨
 
 ### 4. Vercel 프로젝트 설정
 **프로젝트**: stayhalongs-projects → mobile (ID: prj_t0FaaLuI7XDjAVE0A9MqHEwB)
