@@ -125,9 +125,11 @@ const getServiceType = (item: any): string => {
   const hasAirportHint = !!(item.tripType || item.route || item.airportName || item.flightNumber || item.placeName);
   if (hasAirportHint && (item.date || item.time || item.airportName)) return 'airport';
   if (item.hotelName && item.checkinDate) return 'hotel';
-  if (item.tourName && item.startDate) return 'tour';
+  if (item.tourName && (item.startDate || item.tourDate || item.usage_date)) return 'tour';
+  if (item.ticketName && (item.usage_date || item.ticketQuantity)) return 'ticket';
   if (item.pickupDate && item.usagePeriod) return 'rentcar';
   if (item.pickupDatetime && !item.boardingDate && !item.pickupDate) return 'car';
+  if (item.re_type === 'package') return 'package';
   return 'unknown';
 };
 
@@ -138,7 +140,10 @@ const getDateField = (item: any): string | null => {
   if (item.date) return item.date;
   if (item.checkinDate) return item.checkinDate;
   if (item.startDate) return item.startDate;
+  if (item.tourDate) return item.tourDate;
+  if (item.usage_date) return item.usage_date;
   if (item.pickupDate) return item.pickupDate;
+  if (item.re_created_at) return item.re_created_at;
   return null;
 };
 
@@ -149,11 +154,13 @@ const serviceConfig: Record<string, { icon: any; name: string; color: string }> 
   airport: { icon: Plane,    name: '공항',        color: 'green' },
   rentcar: { icon: Car,      name: '렌트카',      color: 'indigo' },
   tour:    { icon: MapPin,   name: '투어',        color: 'red' },
+  ticket:  { icon: MapPin,   name: '티켓',        color: 'teal' },
   hotel:   { icon: Building, name: '호텔',        color: 'orange' },
+  package: { icon: Ship,     name: '패키지',      color: 'indigo' },
 };
 
 /* ── 카드 정렬 순서 ─────────────────────────── */
-const serviceTypeOrder = ['cruise', 'car', 'vehicle', 'airport', 'rentcar', 'tour', 'hotel'];
+const serviceTypeOrder = ['cruise', 'car', 'vehicle', 'airport', 'rentcar', 'tour', 'ticket', 'hotel', 'package'];
 const getServiceTypeOrderIndex = (type: string): number => {
   const idx = serviceTypeOrder.indexOf(type);
   return idx === -1 ? serviceTypeOrder.length : idx;
@@ -530,18 +537,19 @@ export default function SchedulePage() {
         }),
       ];
 
-      const allowedTypes = ['cruise', 'car', 'airport', 'hotel', 'tour', 'rentcar', 'sht', 'car_sht'];
+      const allowedTypes = ['cruise', 'car', 'airport', 'hotel', 'tour', 'ticket', 'rentcar', 'sht', 'car_sht', 'package'];
       const reservations = (reservationsRaw || []).filter((r: any) => allowedTypes.includes(r.re_type));
       const reservationIds = Array.from(new Set(reservations.map((r: any) => r.re_id).filter(Boolean)));
       const userIds = Array.from(new Set(reservations.map((r: any) => r.re_user_id).filter(Boolean)));
 
-      const [usersData, cruiseData, carData, airportData, hotelData, tourData, rentcarData, shtData] = await Promise.all([
+      const [usersData, cruiseData, carData, airportData, hotelData, tourData, ticketData, rentcarData, shtData] = await Promise.all([
         fetchRowsByIds('users', 'id', userIds),
         fetchRowsByIds('reservation_cruise', 'reservation_id', reservationIds),
         fetchRowsByIds('reservation_cruise_car', 'reservation_id', reservationIds),
         fetchRowsByIds('reservation_airport', 'reservation_id', reservationIds),
         fetchRowsByIds('reservation_hotel', 'reservation_id', reservationIds),
         fetchRowsByIds('reservation_tour', 'reservation_id', reservationIds),
+        fetchRowsByIds('reservation_ticket', 'reservation_id', reservationIds),
         fetchRowsByIds('reservation_rentcar', 'reservation_id', reservationIds),
         fetchRowsByIds('reservation_car_sht', 'reservation_id', reservationIds),
       ]);
@@ -565,6 +573,7 @@ export default function SchedulePage() {
       const airportByRid = new Map((airportData || []).map((x: any) => [x.reservation_id, x]));
       const hotelByRid = new Map((hotelData || []).map((x: any) => [x.reservation_id, x]));
       const tourByRid = new Map((tourData || []).map((x: any) => [x.reservation_id, x]));
+      const ticketByRid = new Map((ticketData || []).map((x: any) => [x.reservation_id, x]));
       const rentcarByRid = new Map((rentcarData || []).map((x: any) => [x.reservation_id, x]));
       const shtByRid = new Map((shtData || []).map((x: any) => [x.reservation_id, x]));
 
@@ -703,6 +712,34 @@ export default function SchedulePage() {
           };
         }
 
+        if (r.re_type === 'ticket') {
+          const d = ticketByRid.get(r.re_id) || {};
+          return {
+            ...base,
+            ...d,
+            ticketName: d.ticket_name || d.program_selection || '신규 티켓',
+            ticketType: d.ticket_type || '',
+            usage_date: d.usage_date || '',
+            ticketQuantity: Number(d.ticket_quantity || 0),
+            pickupLocation: d.pickup_location || '',
+            dropoffLocation: d.dropoff_location || '',
+            unitPrice: Number(d.unit_price || 0),
+            totalPrice: Number(d.total_price || 0),
+            requestNote: d.request_note || '',
+          };
+        }
+
+        if (r.re_type === 'package') {
+          return {
+            ...base,
+            re_type: 'package',
+            adult: Number(r.re_adult_count || 0),
+            child: Number(r.re_child_count || 0),
+            toddler: Number(r.re_infant_count || 0),
+            requestNote: r.notes || '',
+          };
+        }
+
         if (r.re_type === 'rentcar') {
           const d = rentcarByRid.get(r.re_id) || {};
           const pickupParts = getKstDateTimeParts(d.pickup_datetime || '');
@@ -837,6 +874,28 @@ export default function SchedulePage() {
     return `${y}. ${m}. ${day} (${weekdays[d.getDay()]})`;
   };
 
+  /* ── UI 헬퍼 컴포넌트 ──────────────────────── */
+  const Row = ({ label, value, bold = false }: { label: string; value: any; bold?: boolean }) => {
+    if (!value) return null;
+    return (
+      <div className="flex gap-2 text-sm">
+        <span className={`font-semibold text-green-700 text-xs min-w-fit`}>{label}</span>
+        <span className={`${bold ? 'font-bold text-gray-800' : 'text-gray-600'} break-words`}>{value}</span>
+      </div>
+    );
+  };
+
+  const DateRow = ({ dateLabel, time }: { dateLabel: string; time?: string }) => {
+    return (
+      <div className="flex items-center gap-2">
+        <Calendar className="w-4 h-4 text-gray-400" />
+        <span className="text-sm font-medium text-gray-700">
+          {dateLabel}{time ? ` ${time}` : ''}
+        </span>
+      </div>
+    );
+  };
+
   /* ── 카드 렌더링 ─── */
   const renderCard = (item: any, idx: number) => {
     const type = getServiceType(item);
@@ -936,8 +995,27 @@ export default function SchedulePage() {
             <>
               <Row label="투어" value={item.tourName} bold />
               <DateRow dateLabel={dateLabel} />
-              <Row label="인원" value={`${item.participants}명`} />
+              <Row label="인원" value={`${item.participants || item.tourCapacity || 0}명`} />
               {item.pickupLocation && <Row label="픽업" value={item.pickupLocation} />}
+              {item.dropoffLocation && <Row label="드롭" value={item.dropoffLocation} />}
+            </>
+          )}
+          {type === 'ticket' && (
+            <>
+              <Row label="티켓" value={item.ticketName || item.program_selection} bold />
+              <DateRow dateLabel={dateLabel} />
+              {item.ticketQuantity && <Row label="수량" value={`${item.ticketQuantity}매`} />}
+              {item.pickupLocation && <Row label="픽업" value={item.pickupLocation} />}
+              {item.dropoffLocation && <Row label="드롭" value={item.dropoffLocation} />}
+            </>
+          )}
+          {type === 'package' && (
+            <>
+              <Row label="패키지" value="예약" bold />
+              <DateRow dateLabel={dateLabel} />
+              {(item.adult || item.child || item.toddler) && (
+                <Row label="인원" value={formatGuests(item)} />
+              )}
             </>
           )}
           {type === 'rentcar' && (
