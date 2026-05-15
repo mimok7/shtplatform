@@ -1,8 +1,8 @@
-// Service Worker for PWA offline support
-const CACHE_NAME = 'sht-customer-cache-v1';
+// Service Worker for PWA offline support - quote
+const CACHE_NAME = 'sht-quote-cache-v1';
 const ASSETS_TO_CACHE = [
   '/',
-  '/sht-customer.png',
+  '/logo.png',
   '/offline.html'
 ];
 
@@ -36,7 +36,6 @@ self.addEventListener('activate', event => {
 
 // Fetch event - serve from cache, fallback to network
 self.addEventListener('fetch', event => {
-  // Skip non-GET requests and external requests
   if (event.request.method !== 'GET' || 
       !event.request.url.startsWith(self.location.origin)) {
     return;
@@ -47,12 +46,10 @@ self.addEventListener('fetch', event => {
       if (response) return response;
       
       return fetch(event.request).then(response => {
-        // Don't cache non-successful responses
         if (!response || response.status !== 200) {
           return response;
         }
         
-        // Cache successful responses
         const responseToCache = response.clone();
         caches.open(CACHE_NAME).then(cache => {
           cache.put(event.request, responseToCache);
@@ -60,7 +57,6 @@ self.addEventListener('fetch', event => {
         
         return response;
       }).catch(() => {
-        // Return offline page or cached response
         return caches.match('/') || new Response('Offline - please check connection');
       });
     })
@@ -78,8 +74,8 @@ self.addEventListener('push', event => {
   event.waitUntil(
     self.registration.showNotification(data.title, {
       body: data.body,
-      icon: data.icon || '/sht-customer.png',
-      badge: data.badge || '/sht-customer.png',
+      icon: data.icon || '/logo.png',
+      badge: data.badge || '/logo.png',
       tag: data.tag || 'sht-notification',
       data: { url: data.url || '/' },
       requireInteraction: data.requireInteraction || false

@@ -6,6 +6,8 @@ import AlertProvider from '../components/AlertProvider';
 import AuthInitializer from '../components/AuthInitializer';
 import TabSessionGuard from '../components/TabSessionGuard';
 import QueryProvider from '../components/QueryProvider';
+import ServiceWorkerRegister from './components/ServiceWorkerRegister';
+import PushNotificationManager from './components/PushNotificationManager';
 import '../styles/globals.css';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -23,6 +25,8 @@ export default function RootLayout({
   return (
     <html lang="ko">
       <body className={`${inter.className} bg-white text-gray-900 antialiased flex flex-col min-h-screen`}>
+        <ServiceWorkerRegister />
+        <PushNotificationManager />
         <QueryProvider>
           <AlertProvider>
             <AuthInitializer />

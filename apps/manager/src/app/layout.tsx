@@ -8,6 +8,7 @@ import TabSessionGuard from '@/components/TabSessionGuard';
 import QueryProvider from '@/components/QueryProvider';
 import ConsoleErrorOnly from '@/components/ConsoleErrorOnly';
 import ServiceWorkerRegister from '@/components/ServiceWorkerRegister';
+import PushNotificationManager from '@/components/PushNotificationManager';
 
 export const metadata = {
   title: '스테이하롱 - 매니저',
@@ -25,6 +26,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="ko" suppressHydrationWarning>
       <body className="bg-background text-foreground">
         <ServiceWorkerRegister />
+        <PushNotificationManager />
         <ConsoleErrorOnly />
         <QueryProvider>
           <AlertProvider siteName="스테이 하롱 트레블">

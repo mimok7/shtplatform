@@ -1,8 +1,8 @@
-// Service Worker for PWA offline support
-const CACHE_NAME = 'sht-customer-cache-v1';
+// Service Worker for PWA offline support - mobile
+const CACHE_NAME = 'sht-mobile-cache-v1';
 const ASSETS_TO_CACHE = [
   '/',
-  '/sht-customer.png',
+  '/logo.png',
   '/offline.html'
 ];
 
@@ -47,12 +47,10 @@ self.addEventListener('fetch', event => {
       if (response) return response;
       
       return fetch(event.request).then(response => {
-        // Don't cache non-successful responses
         if (!response || response.status !== 200) {
           return response;
         }
         
-        // Cache successful responses
         const responseToCache = response.clone();
         caches.open(CACHE_NAME).then(cache => {
           cache.put(event.request, responseToCache);
@@ -60,7 +58,6 @@ self.addEventListener('fetch', event => {
         
         return response;
       }).catch(() => {
-        // Return offline page or cached response
         return caches.match('/') || new Response('Offline - please check connection');
       });
     })
@@ -69,7 +66,7 @@ self.addEventListener('fetch', event => {
 
 // Push event - 백그라운드 푸시 알림 수신
 self.addEventListener('push', event => {
-  let data = { title: '스테이하롱 알림', body: '새 알림이 도착했습니다', url: '/' };
+  let data = { title: '스테이하롱 알림', body: '새 알림이 도착했습니다', url: '/manager/dashboard' };
   try {
     if (event.data) data = { ...data, ...event.data.json() };
   } catch (e) {
@@ -78,10 +75,10 @@ self.addEventListener('push', event => {
   event.waitUntil(
     self.registration.showNotification(data.title, {
       body: data.body,
-      icon: data.icon || '/sht-customer.png',
-      badge: data.badge || '/sht-customer.png',
+      icon: data.icon || '/logo.png',
+      badge: data.badge || '/logo.png',
       tag: data.tag || 'sht-notification',
-      data: { url: data.url || '/' },
+      data: { url: data.url || '/manager/dashboard' },
       requireInteraction: data.requireInteraction || false
     })
   );
@@ -90,7 +87,7 @@ self.addEventListener('push', event => {
 // Notificationclick event - 알림 클릭 시 앱 포커스 또는 열기
 self.addEventListener('notificationclick', event => {
   event.notification.close();
-  const targetUrl = event.notification.data?.url || '/';
+  const targetUrl = event.notification.data?.url || '/manager/dashboard';
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
       const existing = clientList.find(c => c.url.includes(self.location.origin));

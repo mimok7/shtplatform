@@ -3,6 +3,7 @@ import '../styles/globals.css';
 import ConsoleErrorOnly from '@/components/ConsoleErrorOnly';
 import TabSessionGuard from '@/components/TabSessionGuard';
 import ServiceWorkerRegister from '@/components/ServiceWorkerRegister';
+import PushNotificationManager from '@/components/PushNotificationManager';
 
 export const metadata = {
   title: '스테이하롱 - 쿽매니저',
@@ -20,6 +21,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="ko" suppressHydrationWarning>
       <body className="bg-background text-foreground">
         <ServiceWorkerRegister />
+        <PushNotificationManager />
         <ConsoleErrorOnly />
         <TabSessionGuard loginPath="/login" />
         <main className="w-full">{children}</main>

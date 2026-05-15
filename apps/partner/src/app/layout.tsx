@@ -2,6 +2,7 @@ import React from 'react';
 import '../styles/globals.css';
 import TabSessionGuard from '@/components/TabSessionGuard';
 import ServiceWorkerRegister from '@/components/ServiceWorkerRegister';
+import PushNotificationManager from '@/components/PushNotificationManager';
 
 export const metadata = {
     title: '스테이하롱 - 파트너',
@@ -19,6 +20,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <html lang="ko">
             <body className="bg-background text-foreground">
                 <ServiceWorkerRegister />
+                <PushNotificationManager />
                 <TabSessionGuard loginPath="/partner/login" />
                 {children}
             </body>

@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import AuthGate from './_components/AuthGate';
+import ServiceWorkerRegister from '@/components/ServiceWorkerRegister';
+import PushNotificationManager from '@/components/PushNotificationManager';
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -44,6 +46,8 @@ export default function RootLayout({
   return (
     <html lang="ko">
       <body className="mobile-ui bg-gray-50 text-gray-900 antialiased">
+        <ServiceWorkerRegister />
+        <PushNotificationManager />
         <AuthGate>{children}</AuthGate>
       </body>
     </html>

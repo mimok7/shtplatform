@@ -66,3 +66,36 @@ self.addEventListener('fetch', event => {
     })
   );
 });
+
+// Push event - 백그라운드 푸시 알림 수신
+self.addEventListener('push', event => {
+  let data = { title: '스테이하롱 알림', body: '새 알림이 도착했습니다', url: '/manager/dashboard' };
+  try {
+    if (event.data) data = { ...data, ...event.data.json() };
+  } catch (e) {
+    if (event.data) data.body = event.data.text();
+  }
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: data.icon || '/sht-manager.png',
+      badge: data.badge || '/sht-manager.png',
+      tag: data.tag || 'sht-notification',
+      data: { url: data.url || '/manager/dashboard' },
+      requireInteraction: data.requireInteraction || false
+    })
+  );
+});
+
+// Notificationclick event - 알림 클릭 시 앱 포커스 또는 열기
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const targetUrl = event.notification.data?.url || '/manager/dashboard';
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
+      const existing = clientList.find(c => c.url.includes(self.location.origin));
+      if (existing) return existing.focus();
+      return clients.openWindow(targetUrl);
+    })
+  );
+});

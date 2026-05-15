@@ -184,7 +184,35 @@ export default function SendNotificationModal({ isOpen, onClose, onSuccess }: Se
                 });
 
                 if (!emailResponse.ok) {
-                    console.error('이메일 발송 실패');
+                    console.warn('이메일 발송 실패 (알림 저장은 완료됨)');
+                }
+            }
+
+            // 4. 웹 푸시 발송 (urgent/high 우선도인 경우 또는 고객 ID 있을 때)
+            if (selectedCustomer?.id && ['urgent', 'high', 'normal'].includes(formData.priority)) {
+                try {
+                    const { data: { session } } = await supabase.auth.getSession();
+                    const pushRes = await fetch('/api/send-notification', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            Authorization: `Bearer ${session?.access_token || ''}`,
+                        },
+                        body: JSON.stringify({
+                            userId: selectedCustomer.id,
+                            title: formData.title,
+                            body: formData.message,
+                            url: 'https://staycruise.kr/mypage/notifications',
+                            tag: 'manager-notification',
+                            priority: formData.priority,
+                        }),
+                    });
+                    const pushResult = await pushRes.json();
+                    if (pushResult.sentCount > 0) {
+                        console.log(`✅ 푸시 발송 완료: ${pushResult.sentCount}개 기기`);
+                    }
+                } catch (pushErr) {
+                    console.warn('⚠️ 푸시 발송 실패 (알림 저장은 완료됨):', pushErr);
                 }
             }
 

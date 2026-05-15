@@ -152,10 +152,18 @@ export default function GlobalNotificationPopup({ userRole }: GlobalNotification
         }
     }, [userRole, shouldShowNotifications, dismissedIds]);
 
-    // 알림 팝업 닫기
-    const dismissNotification = (notificationId: string) => {
+    // 알림 팝업 닫기 + DB status 'read' 업데이트
+    const dismissNotification = async (notificationId: string) => {
         setDismissedIds(prev => new Set([...prev, notificationId]));
         setNotifications(prev => prev.filter(n => n.id !== notificationId));
+        try {
+            await supabase
+                .from('notifications')
+                .update({ status: 'read' })
+                .eq('id', notificationId);
+        } catch (e) {
+            console.warn('알림 읽음 처리 실패:', e);
+        }
     };
 
     // 알림 상세 페이지로 이동
@@ -168,19 +176,29 @@ export default function GlobalNotificationPopup({ userRole }: GlobalNotification
     };
 
 
-    // 알림 로드 및 주기적 새로고침
+    // 알림 로드 + Realtime 구독
     useEffect(() => {
         if (!shouldShowNotifications) return;
 
         // 초기 로드
         loadNotifications();
 
-        // 30초마다 알림 새로고침 (변경 감지 빠르게)
-        const interval = setInterval(() => {
-            loadNotifications();
-        }, 30000);
+        // Supabase Realtime: notifications 테이블 INSERT/UPDATE 감지
+        const channel = supabase
+            .channel('global-notifications')
+            .on(
+                'postgres_changes',
+                { event: 'INSERT', schema: 'public', table: 'notifications' },
+                () => { loadNotifications(); }
+            )
+            .on(
+                'postgres_changes',
+                { event: 'UPDATE', schema: 'public', table: 'notifications' },
+                () => { loadNotifications(); }
+            )
+            .subscribe();
 
-        return () => clearInterval(interval);
+        return () => { supabase.removeChannel(channel); };
     }, [userRole, shouldShowNotifications]);
 
     // dismissedIds 변경 시 즉시 반영 (새 fetch 없이 현재 목록만 필터)
