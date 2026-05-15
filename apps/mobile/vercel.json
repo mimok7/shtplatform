@@ -4,6 +4,5 @@
   "ignoreCommand": "git diff --quiet HEAD^ HEAD -- ./ ../../packages ../../pnpm-lock.yaml",
   "buildCommand": "cd ../.. && npx --yes pnpm@10.x --filter @sht/mobile build",
   "outputDirectory": ".next",
-  "framework": "nextjs",
-  "_comment": "Fixed 2026-05-15: all apps now use --no-frozen-lockfile for pnpm@10 compat"
+  "framework": "nextjs"
 }
