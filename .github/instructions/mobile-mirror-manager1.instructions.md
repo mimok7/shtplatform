@@ -12,6 +12,13 @@ applyTo: "apps/mobile/**, apps/manager1/**"
 - **목표**: `apps/manager1`(즐겨찾기 빠른패널)의 기능을 **모바일 전용**으로 제공
 - **원본 위치(아카이브)**: `c:\SHT-DATA\mobile` — 더 이상 단독 수정하지 않음. 모든 작업은 `apps/mobile`에서 수행
 
+## 📌 모바일 앱 정체성 원칙 (최우선)
+- **mobile은 manager1을 베이스로 구축된 앱** — 기능 로직은 manager1과 동일해야 함
+- **UI만 모바일 최적화** — 사이드바 제거, 카드 레이아웃, 터치 친화 UI 적용
+- **기능 동등성 원칙**: manager1에서 동작하는 모든 서비스(크루즈, 차량, 공항, 호텔, 투어, 렌터카 등)는 mobile에서도 동일하게 동작해야 함
+- **데이터 조회 로직**: Supabase 쿼리·필터·데이터 매핑은 manager1과 100% 동일하게 유지
+- **Copilot 작업 규칙**: mobile 수정 시 반드시 manager1 동일 파일을 참고하여 기능 누락·불일치 방지
+
 ## ⚖️ manager1 ↔ mobile 동기화 원칙 (필수)
 1. **manager1 변경 시 mobile 동반 수정 검토 필수**
    - `apps/manager1/app/manager/<feature>/page.tsx`가 변경되면

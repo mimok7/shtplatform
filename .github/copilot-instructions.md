@@ -216,6 +216,44 @@ import SectionBox from '@/components/SectionBox';
 </PageWrapper>
 ```
 
+### 모달 데이터 로드 패턴 (중요)
+**원칙**: 모달은 항상 DB에서 fresh 데이터를 **직접 조회**해야 함. 메모리 캐시만 사용하면 누락된 데이터 가능성 높음.
+
+```tsx
+// ❌ 안 됨: 캐시만 사용 → 누락된 서비스 가능
+const openDetail = (item: any) => {
+  const related = allData.filter(d => d.quoteId === item.quoteId);
+  setModalItems(related);  // 일부 누락 가능
+};
+
+// ✅ 올바름: DB 직접 조회 → 모든 서비스 표시
+const openDetail = async (item: any) => {
+  setModalOpen(true);  // 즉시 열기
+  try {
+    const { data: allReservations } = await supabase
+      .from('reservation')
+      .select('re_id, re_type')
+      .eq('re_quote_id', quoteId);
+    
+    // 8개 서비스 테이블 병렬 조회
+    const [cruiseRes, carRes, airportRes, ...] = await Promise.all([
+      supabase.from('reservation_cruise').select('*').in('reservation_id', ids),
+      supabase.from('reservation_cruise_car').select('*').in('reservation_id', ids),
+      supabase.from('reservation_airport').select('*').in('reservation_id', ids),
+      // ... 나머지 테이블
+    ]);
+    
+    // modalItems 구성 후 상태 업데이트
+    setModalItems(aggregated);
+  } catch (err) {
+    console.error('조회 실패:', err);
+    // 에러 시에도 모달은 이미 열림 (초기 item 표시)
+  }
+};
+```
+
+**참고**: 자세한 구현 방법은 [모달 통일 가이드](./instructions/modal-unification-guide.instructions.md) 참조
+
 ### 로딩 상태 표준화
 ```tsx
 if (loading) return (

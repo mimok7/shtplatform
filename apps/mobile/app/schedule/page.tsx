@@ -9,7 +9,7 @@ import {
   Calendar, Clock, Ship, Plane, Building, MapPin, Car,
   ChevronLeft, ChevronRight, Search, ArrowLeft, RefreshCw
 } from 'lucide-react';
-import ReservationDetailModal from './ReservationDetailModal';
+import ReservationDetailModal from '@/components/ReservationDetailModal';
 
 /* ── 타입 정의 ──────────────────────────────── */
 type ViewMode = 'day' | 'week' | 'month';
@@ -155,12 +155,19 @@ const getDateField = (item: any): string | null => {
 
 const serviceConfig: Record<string, { icon: any; name: string; color: string }> = {
   cruise:  { icon: Ship,     name: '크루즈',      color: 'blue' },
-  car:     { icon: Car,      name: '차량',        color: 'cyan' },
+  car:     { icon: Car,      name: '크루즈차량',  color: 'cyan' },
   vehicle: { icon: Car,      name: '스하차량',    color: 'purple' },
   airport: { icon: Plane,    name: '공항',        color: 'green' },
-  hotel:   { icon: Building, name: '호텔',        color: 'orange' },
-  tour:    { icon: MapPin,   name: '투어',        color: 'red' },
   rentcar: { icon: Car,      name: '렌트카',      color: 'indigo' },
+  tour:    { icon: MapPin,   name: '투어',        color: 'red' },
+  hotel:   { icon: Building, name: '호텔',        color: 'orange' },
+};
+
+/* ── 카드 정렬 순서 ─────────────────────────── */
+const serviceTypeOrder = ['cruise', 'car', 'vehicle', 'airport', 'rentcar', 'tour', 'hotel'];
+const getServiceTypeOrderIndex = (type: string): number => {
+  const idx = serviceTypeOrder.indexOf(type);
+  return idx === -1 ? serviceTypeOrder.length : idx;
 };
 
 /* ── 메인 컴포넌트 ─────────────────────────────── */
@@ -179,23 +186,175 @@ export default function SchedulePage() {
   const [selectedItems, setSelectedItems] = useState<any[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
 
-  const openDetail = (item: any) => {
-    let related: any[] = [item];
+  const openDetail = async (item: any) => {
+    // 먼저 모달을 열고 클릭된 아이템 단일 표시 (로딩 중 fallback)
+    setSelectedItem(item);
+    setSelectedItems([item]);
+    setModalOpen(true);
 
     if (item?.source === 'sh') {
+      // 구 sh 소스: allData 캐시에서 같은 orderId 그룹핑
       if (item?.orderId) {
-        related = allData.filter(d => d?.source === 'sh' && d?.orderId === item.orderId);
+        const related = allData.filter(d => d?.source === 'sh' && d?.orderId === item.orderId);
+        if (related.length > 0) setSelectedItems(related);
       }
-    } else {
-      const groupKey = item?.quoteId || item?.re_quote_id || item?.reservationId;
-      if (groupKey) {
-        related = allData.filter(d => d?.source === 'new' && (d?.quoteId || d?.re_quote_id || d?.reservationId) === groupKey);
-      }
+      return;
     }
 
-    setSelectedItem(item);
-    setSelectedItems(related.length > 0 ? related : [item]);
-    setModalOpen(true);
+    // 신 reservation 소스: quoteId 기준 DB 직접 조회 (reservations 페이지와 동일)
+    const quoteId = item?.quoteId || item?.re_quote_id;
+    if (!quoteId) return;
+
+    try {
+      const { data: allReservations } = await supabase
+        .from('reservation')
+        .select('re_id, re_type, re_status, re_user_id, re_created_at, re_quote_id')
+        .eq('re_quote_id', quoteId);
+
+      if (!allReservations || allReservations.length === 0) return;
+
+      const userId = item.re_user_id || allReservations[0]?.re_user_id;
+      let userData: any = null;
+      if (userId) {
+        const { data } = await supabase
+          .from('users')
+          .select('name, english_name, email, phone_number')
+          .eq('id', userId)
+          .single();
+        userData = data;
+      }
+
+      const cruiseIds = allReservations.filter(s => s.re_type === 'cruise').map(s => s.re_id);
+      const carIds = allReservations.filter(s => ['car', 'cruise'].includes(s.re_type)).map(s => s.re_id);
+      const airportIds = allReservations.filter(s => s.re_type === 'airport').map(s => s.re_id);
+      const hotelIds = allReservations.filter(s => s.re_type === 'hotel').map(s => s.re_id);
+      const tourIds = allReservations.filter(s => s.re_type === 'tour').map(s => s.re_id);
+      const ticketIds = allReservations.filter(s => s.re_type === 'ticket').map(s => s.re_id);
+      const rentcarIds = allReservations.filter(s => s.re_type === 'rentcar').map(s => s.re_id);
+      const shtIds = allReservations.filter(s => ['sht', 'car_sht'].includes(s.re_type)).map(s => s.re_id);
+
+      const [cruiseRes, cruiseCarRes, airportRes, hotelRes, tourRes, ticketRes, rentcarRes, shtRes] = await Promise.all([
+        cruiseIds.length > 0 ? supabase.from('reservation_cruise').select('*').in('reservation_id', cruiseIds) : { data: [] },
+        carIds.length > 0 ? supabase.from('reservation_cruise_car').select('*').in('reservation_id', carIds) : { data: [] },
+        airportIds.length > 0 ? supabase.from('reservation_airport').select('*').in('reservation_id', airportIds) : { data: [] },
+        hotelIds.length > 0 ? supabase.from('reservation_hotel').select('*').in('reservation_id', hotelIds) : { data: [] },
+        tourIds.length > 0 ? supabase.from('reservation_tour').select('*').in('reservation_id', tourIds) : { data: [] },
+        ticketIds.length > 0 ? supabase.from('reservation_ticket').select('*').in('reservation_id', ticketIds) : { data: [] },
+        rentcarIds.length > 0 ? supabase.from('reservation_rentcar').select('*').in('reservation_id', rentcarIds) : { data: [] },
+        shtIds.length > 0 ? supabase.from('reservation_car_sht').select('*').in('reservation_id', shtIds) : { data: [] },
+      ]);
+
+      const statusMap = new Map(allReservations.map(s => [s.re_id, s.re_status]));
+      const typeMap = new Map(allReservations.map(s => [s.re_id, s.re_type]));
+
+      const baseHeader = {
+        source: 'new' as const,
+        re_quote_id: quoteId,
+        quoteId: quoteId,
+        customerName: userData?.name || item.customerName || '',
+        customerEnglishName: userData?.english_name || item.customerEnglishName || '',
+        email: userData?.email || item.email || '',
+        phone: userData?.phone_number || item.phone || '',
+        re_created_at: allReservations[0]?.re_created_at || '',
+      };
+
+      const modalItems: any[] = [];
+
+      (cruiseRes.data || []).forEach((r: any) => {
+        modalItems.push({
+          ...baseHeader, ...r,
+          serviceType: 'cruise', re_type: 'cruise',
+          reservation_id: r.reservation_id, reservationId: r.reservation_id, re_id: r.reservation_id,
+          status: statusMap.get(r.reservation_id) || 'pending',
+          note: r.request_note || '',
+        });
+      });
+
+      (cruiseCarRes.data || []).forEach((r: any) => {
+        const reType = typeMap.get(r.reservation_id);
+        const normalizedType = reType === 'car' ? 'car' : 'vehicle';
+        modalItems.push({
+          ...baseHeader, ...r,
+          serviceType: normalizedType, re_type: normalizedType,
+          reservation_id: r.reservation_id, reservationId: r.reservation_id, re_id: r.reservation_id,
+          status: statusMap.get(r.reservation_id) || 'pending',
+          carType: r.vehicle_type || r.car_price_code || '',
+          pickupDatetime: r.pickup_datetime || '',
+          pickupLocation: r.pickup_location || '',
+          dropoffLocation: r.dropoff_location || '',
+          passengerCount: Number(r.passenger_count || 0),
+          totalPrice: Number(r.car_total_price || 0),
+          note: r.request_note || '',
+        });
+      });
+
+      (airportRes.data || []).forEach((r: any) => {
+        modalItems.push({
+          ...baseHeader, ...r,
+          serviceType: 'airport', re_type: 'airport',
+          reservation_id: r.reservation_id, reservationId: r.reservation_id, re_id: r.reservation_id,
+          status: statusMap.get(r.reservation_id) || 'pending',
+          note: r.request_note || '',
+        });
+      });
+
+      (hotelRes.data || []).forEach((r: any) => {
+        modalItems.push({
+          ...baseHeader, ...r,
+          serviceType: 'hotel', re_type: 'hotel',
+          reservation_id: r.reservation_id, reservationId: r.reservation_id, re_id: r.reservation_id,
+          status: statusMap.get(r.reservation_id) || 'pending',
+          note: r.request_note || '',
+        });
+      });
+
+      (tourRes.data || []).forEach((r: any) => {
+        modalItems.push({
+          ...baseHeader, ...r,
+          serviceType: 'tour', re_type: 'tour',
+          reservation_id: r.reservation_id, reservationId: r.reservation_id, re_id: r.reservation_id,
+          status: statusMap.get(r.reservation_id) || 'pending',
+          note: r.request_note || '',
+        });
+      });
+
+      (ticketRes.data || []).forEach((r: any) => {
+        modalItems.push({
+          ...baseHeader, ...r,
+          serviceType: 'ticket', re_type: 'ticket',
+          reservation_id: r.reservation_id, reservationId: r.reservation_id, re_id: r.reservation_id,
+          status: statusMap.get(r.reservation_id) || 'pending',
+          note: r.request_note || '',
+        });
+      });
+
+      (rentcarRes.data || []).forEach((r: any) => {
+        modalItems.push({
+          ...baseHeader, ...r,
+          serviceType: 'rentcar', re_type: 'rentcar',
+          reservation_id: r.reservation_id, reservationId: r.reservation_id, re_id: r.reservation_id,
+          status: statusMap.get(r.reservation_id) || 'pending',
+          note: r.request_note || '',
+        });
+      });
+
+      (shtRes.data || []).forEach((r: any) => {
+        modalItems.push({
+          ...baseHeader, ...r,
+          serviceType: 'sht', re_type: 'sht',
+          reservation_id: r.reservation_id, reservationId: r.reservation_id, re_id: r.reservation_id,
+          status: statusMap.get(r.reservation_id) || 'pending',
+          note: r.request_note || '',
+        });
+      });
+
+      if (modalItems.length > 0) {
+        setSelectedItems(modalItems);
+        setSelectedItem(modalItems[0]);
+      }
+    } catch (err) {
+      console.error('상세 조회 실패:', err);
+    }
   };
 
   const moveToReservationEdit = (target: any) => {
@@ -404,6 +563,13 @@ export default function SchedulePage() {
         : [];
       const airportPriceMap = new Map((airportPriceData || []).map((x: any) => [`${x.airport_code}-${x.service_type || ''}`, x]));
 
+      // 크루즈 객실 코드 -> 객실명 매핑
+      const cruiseRoomCodes = Array.from(new Set((cruiseData || []).map((x: any) => x.room_price_code).filter(Boolean)));
+      const cruiseRateData = cruiseRoomCodes.length > 0
+        ? await fetchRowsByIds('cruise_rate_card', 'id', cruiseRoomCodes)
+        : [];
+      const cruiseRateMap = new Map((cruiseRateData || []).map((x: any) => [String(x.id || '').trim(), x]));
+
       const usersById = new Map((usersData || []).map((u: any) => [u.id, u]));
       const cruiseByRid = new Map((cruiseData || []).map((x: any) => [x.reservation_id, x]));
       const carByRid = new Map((carData || []).map((x: any) => [x.reservation_id, x]));
@@ -415,9 +581,12 @@ export default function SchedulePage() {
 
       const newMapped = reservations.map((r: any) => {
         const user = usersById.get(r.re_user_id);
+        // re_type → serviceType 정규화: car_sht 는 sht 로 통일
+        const normalizedServiceType = r.re_type === 'car_sht' ? 'sht' : (r.re_type || 'unknown');
         const base = {
           ...r,
           source: 'new',
+          serviceType: normalizedServiceType,
           reservationId: r.re_id,
           re_user_id: r.re_user_id,
           re_quote_id: r.re_quote_id,
@@ -433,12 +602,13 @@ export default function SchedulePage() {
 
         if (r.re_type === 'cruise') {
           const d = cruiseByRid.get(r.re_id) || {};
+          const cruiseRate = cruiseRateMap.get(String(d.room_price_code || '').trim());
           return {
             ...base,
             ...d,
-            cruise: '신규 크루즈',
-            cruiseName: d.cruise_name || '신규 크루즈',
-            roomType: d.room_price_code || '',
+            cruise: cruiseRate?.cruise_name || d.cruise_name || '신규 크루즈',
+            cruiseName: cruiseRate?.cruise_name || d.cruise_name || '신규 크루즈',
+            roomType: cruiseRate?.room_type || d.room_price_code || '',
             roomCount: Number(d.room_count || 0),
             checkin: d.checkin || '',
             adult: Number(d.adult_count || 0),
@@ -454,8 +624,8 @@ export default function SchedulePage() {
           return {
             ...base,
             ...d,
-            carType: d.car_price_code || '',
-            carCategory: d.sht_category || d.category || '',
+            carType: d.vehicle_type || d.car_price_code || '',
+            carCategory: d.sht_category || d.category || d.way_type || '',
             route: [d.pickup_location, d.dropoff_location].filter(Boolean).join(' → '),
             carCount: Number(d.car_count || 0),
             passengerCount: Number(d.passenger_count || 0),
@@ -582,7 +752,7 @@ export default function SchedulePage() {
           ...d,
           boardingDate: d.usage_date || '',
           usageDate: d.usage_date || d.pickup_datetime || '',
-          serviceType: d.service_type || d.sht_category || '',
+          serviceType: d.service_type || d.sht_category || normalizedServiceType,
           category: d.sht_category || d.category || '',
           vehicleNumber: d.vehicle_number || '',
           seatNumber: d.seat_number || '',
@@ -705,10 +875,6 @@ export default function SchedulePage() {
               className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 hover:bg-blue-200"
             >New</button>
           )}
-          <button
-            onClick={e => { e.stopPropagation(); openDetail(item); }}
-            className={`text-xs px-2 py-0.5 rounded-full font-medium bg-${conf.color}-500 text-white hover:bg-${conf.color}-600`}
-          >상세</button>
           <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${past ? 'bg-gray-200 text-gray-600' : `bg-${conf.color}-100 text-${conf.color}-700`}`}>
             {past ? '완료' : '예정'}
           </span>
@@ -896,7 +1062,9 @@ export default function SchedulePage() {
             <div className="flex items-center justify-between">
               <p className="text-sm text-gray-500">총 {filtered.length}건</p>
               <div className="flex gap-1 flex-wrap justify-end">
-                {Object.entries(grouped).map(([type, items]) => {
+                {Object.entries(grouped)
+                  .sort(([typeA], [typeB]) => getServiceTypeOrderIndex(typeA) - getServiceTypeOrderIndex(typeB))
+                  .map(([type, items]) => {
                   const conf = serviceConfig[type];
                   if (!conf) return null;
                   return (
@@ -909,7 +1077,9 @@ export default function SchedulePage() {
             </div>
 
             {/* 서비스별 그룹 렌더링 */}
-            {Object.entries(grouped).map(([type, items]) => {
+            {Object.entries(grouped)
+              .sort(([typeA], [typeB]) => getServiceTypeOrderIndex(typeA) - getServiceTypeOrderIndex(typeB))
+              .map(([type, items]) => {
               const conf = serviceConfig[type] || { icon: Clock, name: type, color: 'gray' };
               const Icon = conf.icon;
               return (
@@ -925,6 +1095,7 @@ export default function SchedulePage() {
                 </div>
               );
             })}
+
           </div>
         )}
       </div>

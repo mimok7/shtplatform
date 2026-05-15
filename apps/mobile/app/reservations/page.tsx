@@ -10,7 +10,7 @@ import {
   Clock, AlertTriangle, Users,
   Ship, Plane, Building, MapPin, Car, Bus, Package
 } from 'lucide-react';
-import ReservationDetailModal from '@/app/schedule/ReservationDetailModal';
+import ReservationDetailModal from '@/components/ReservationDetailModal';
 
 /* ── 타입 정의 ─────────────────────────────── */
 interface ServiceReservation {
@@ -367,20 +367,18 @@ export default function ReservationsPage() {
       }
 
       const cruiseIds = reservation.services.filter(s => s.re_type === 'cruise').map(s => s.re_id);
-      const carIds = reservation.services.filter(s => s.re_type === 'car').map(s => s.re_id);
+      const carIds = reservation.services.filter(s => ['car', 'cruise'].includes(s.re_type)).map(s => s.re_id);
       const airportIds = reservation.services.filter(s => s.re_type === 'airport').map(s => s.re_id);
       const hotelIds = reservation.services.filter(s => s.re_type === 'hotel').map(s => s.re_id);
       const tourIds = reservation.services.filter(s => s.re_type === 'tour').map(s => s.re_id);
       const ticketIds = reservation.services.filter(s => s.re_type === 'ticket').map(s => s.re_id);
       const rentcarIds = reservation.services.filter(s => s.re_type === 'rentcar').map(s => s.re_id);
       const shtIds = reservation.services.filter(s => ['sht', 'car_sht'].includes(s.re_type)).map(s => s.re_id);
-      const allCarQueryIds = [...cruiseIds, ...carIds];
 
-      const [
-        cruiseRes, cruiseCarRes, airportRes, hotelRes, tourRes, ticketRes, rentcarRes, shtRes,
-      ] = await Promise.all([
+      // 서비스 상세 데이터만 조회 (가격 테이블은 모달 내부 enrich에서 처리)
+      const [cruiseRes, cruiseCarRes, airportRes, hotelRes, tourRes, ticketRes, rentcarRes, shtRes] = await Promise.all([
         cruiseIds.length > 0 ? supabase.from('reservation_cruise').select('*').in('reservation_id', cruiseIds) : { data: [] },
-        allCarQueryIds.length > 0 ? supabase.from('reservation_cruise_car').select('*').in('reservation_id', allCarQueryIds) : { data: [] },
+        carIds.length > 0 ? supabase.from('reservation_cruise_car').select('*').in('reservation_id', carIds) : { data: [] },
         airportIds.length > 0 ? supabase.from('reservation_airport').select('*').in('reservation_id', airportIds) : { data: [] },
         hotelIds.length > 0 ? supabase.from('reservation_hotel').select('*').in('reservation_id', hotelIds) : { data: [] },
         tourIds.length > 0 ? supabase.from('reservation_tour').select('*').in('reservation_id', tourIds) : { data: [] },
@@ -389,28 +387,8 @@ export default function ReservationsPage() {
         shtIds.length > 0 ? supabase.from('reservation_car_sht').select('*').in('reservation_id', shtIds) : { data: [] },
       ]);
 
-      // 가격 정보 조회
-      const cruiseCodes = (cruiseRes.data || []).map(r => r.room_price_code).filter(Boolean);
-      const cruiseCarPriceCodes = (cruiseCarRes.data || []).map(r => r.car_price_code).filter(Boolean);
-      const [roomPrices, carPrices, rentcarPrices] = await Promise.all([
-        cruiseCodes.length > 0
-          ? supabase
-              .from('cruise_rate_card')
-              .select('id, cruise_name, room_type, schedule_type, price_adult, price_child, price_child_extra_bed, price_infant, price_extra_bed, price_single')
-              .in('id', cruiseCodes)
-          : { data: [] },
-        cruiseCarPriceCodes.length > 0
-          ? supabase.from('car_price').select('car_code, price, car_type, cruise, car_category').in('car_code', cruiseCarPriceCodes)
-          : { data: [] },
-        cruiseCarPriceCodes.length > 0
-          ? supabase.from('rentcar_price').select('rentcar_code, vehicle_type, price').in('rentcar_code', cruiseCarPriceCodes)
-          : { data: [] },
-      ]);
-      const roomPriceMap = new Map((roomPrices.data || []).map(r => [r.id, r]));
-      const carPriceMap = new Map((carPrices.data || []).map(r => [r.car_code, r]));
-      const rentcarPriceMap = new Map((rentcarPrices.data || []).map((r: any) => [r.rentcar_code, r]));
-      const statusMap = new Map(reservation.services.map((s) => [s.re_id, s.re_status]));
-      const typeMap = new Map(reservation.services.map((s) => [s.re_id, s.re_type]));
+      const statusMap = new Map(reservation.services.map(s => [s.re_id, s.re_status]));
+      const typeMap = new Map(reservation.services.map(s => [s.re_id, s.re_type]));
 
       const baseHeader = {
         source: 'new',
@@ -426,149 +404,90 @@ export default function ReservationsPage() {
       const modalItems: any[] = [];
 
       (cruiseRes.data || []).forEach((r: any) => {
-        const info = roomPriceMap.get(r.room_price_code);
         modalItems.push({
-          ...baseHeader,
-          ...r,
-          serviceType: 'cruise',
-          reservation_id: r.reservation_id,
-          reservationId: r.reservation_id,
-          re_id: r.reservation_id,
+          ...baseHeader, ...r,
+          serviceType: 'cruise', re_type: 'cruise',
+          reservation_id: r.reservation_id, reservationId: r.reservation_id, re_id: r.reservation_id,
           status: statusMap.get(r.reservation_id) || 'pending',
-          cruiseName: info?.cruise_name || '크루즈',
-          cruise: info?.cruise_name || '크루즈',
-          roomType: info?.room_type || r.room_price_code || '',
-          paymentMethod: r.payment_method || '',
-          totalPrice: Number(r.room_total_price || 0),
-          totalAmount: Number(r.room_total_price || 0),
+          note: r.request_note || '',
         });
       });
 
       (cruiseCarRes.data || []).forEach((r: any) => {
-        const rentcarInfo = rentcarPriceMap.get(r.car_price_code);
-        const carInfo = carPriceMap.get(r.car_price_code);
-        const baseType = typeMap.get(r.reservation_id);
+        const reType = typeMap.get(r.reservation_id);
+        const normalizedType = reType === 'car' ? 'car' : 'vehicle';
         modalItems.push({
-          ...baseHeader,
-          ...r,
-          serviceType: baseType === 'car' ? 'car' : 'vehicle',
-          reservation_id: r.reservation_id,
-          reservationId: r.reservation_id,
-          re_id: r.reservation_id,
+          ...baseHeader, ...r,
+          serviceType: normalizedType, re_type: normalizedType,
+          reservation_id: r.reservation_id, reservationId: r.reservation_id, re_id: r.reservation_id,
           status: statusMap.get(r.reservation_id) || 'pending',
-          carType: rentcarInfo?.vehicle_type || carInfo?.car_type || '',
-          route: [r.pickup_location, r.dropoff_location].filter(Boolean).join(' → '),
-          passengerCount: Number(r.passenger_count || 0),
+          carType: r.vehicle_type || r.car_price_code || '',
           pickupDatetime: r.pickup_datetime || '',
           pickupLocation: r.pickup_location || '',
           dropoffLocation: r.dropoff_location || '',
+          passengerCount: Number(r.passenger_count || 0),
           totalPrice: Number(r.car_total_price || 0),
-          totalAmount: Number(r.car_total_price || 0),
+          note: r.request_note || '',
         });
       });
 
       (airportRes.data || []).forEach((r: any) => {
         modalItems.push({
-          ...baseHeader,
-          ...r,
-          serviceType: 'airport',
-          reservation_id: r.reservation_id,
-          reservationId: r.reservation_id,
-          re_id: r.reservation_id,
+          ...baseHeader, ...r,
+          serviceType: 'airport', re_type: 'airport',
+          reservation_id: r.reservation_id, reservationId: r.reservation_id, re_id: r.reservation_id,
           status: statusMap.get(r.reservation_id) || 'pending',
-          passengerCount: Number(r.ra_passenger_count || 0),
-          carCount: Number(r.ra_car_count || 0),
-          totalPrice: Number(r.total_price || 0),
-          totalAmount: Number(r.total_price || 0),
-          flightNumber: r.ra_flight_number || '',
-          airportName: r.ra_airport_location || '',
+          note: r.request_note || '',
         });
       });
 
       (hotelRes.data || []).forEach((r: any) => {
         modalItems.push({
-          ...baseHeader,
-          ...r,
-          serviceType: 'hotel',
-          reservation_id: r.reservation_id,
-          reservationId: r.reservation_id,
-          re_id: r.reservation_id,
+          ...baseHeader, ...r,
+          serviceType: 'hotel', re_type: 'hotel',
+          reservation_id: r.reservation_id, reservationId: r.reservation_id, re_id: r.reservation_id,
           status: statusMap.get(r.reservation_id) || 'pending',
-          hotelName: r.hotel_category || '호텔',
-          checkinDate: r.checkin_date || '',
-          guestCount: Number(r.guest_count || 0),
-          roomCount: Number(r.room_count || 0),
-          totalPrice: Number(r.total_price || 0),
-          totalAmount: Number(r.total_price || 0),
+          note: r.request_note || '',
         });
       });
 
       (tourRes.data || []).forEach((r: any) => {
         modalItems.push({
-          ...baseHeader,
-          ...r,
-          serviceType: 'tour',
-          reservation_id: r.reservation_id,
-          reservationId: r.reservation_id,
-          re_id: r.reservation_id,
+          ...baseHeader, ...r,
+          serviceType: 'tour', re_type: 'tour',
+          reservation_id: r.reservation_id, reservationId: r.reservation_id, re_id: r.reservation_id,
           status: statusMap.get(r.reservation_id) || 'pending',
-          tourName: '투어',
-          tourDate: r.usage_date || '',
-          tourCapacity: Number(r.tour_capacity || 0),
-          pickupLocation: r.pickup_location || '',
-          dropoffLocation: r.dropoff_location || '',
-          totalPrice: Number(r.total_price || 0),
-          totalAmount: Number(r.total_price || 0),
+          note: r.request_note || '',
         });
       });
 
       (ticketRes.data || []).forEach((r: any) => {
         modalItems.push({
-          ...baseHeader,
-          ...r,
-          serviceType: 'ticket',
-          reservation_id: r.reservation_id,
-          reservationId: r.reservation_id,
-          re_id: r.reservation_id,
+          ...baseHeader, ...r,
+          serviceType: 'ticket', re_type: 'ticket',
+          reservation_id: r.reservation_id, reservationId: r.reservation_id, re_id: r.reservation_id,
           status: statusMap.get(r.reservation_id) || 'pending',
-          ticketName: r.ticket_name || r.program_selection || '',
-          usageDate: r.usage_date || '',
-          ticketQuantity: Number(r.ticket_quantity || 0),
-          totalPrice: Number(r.total_price || 0),
-          totalAmount: Number(r.total_price || 0),
+          note: r.request_note || '',
         });
       });
 
       (rentcarRes.data || []).forEach((r: any) => {
         modalItems.push({
-          ...baseHeader,
-          ...r,
-          serviceType: 'rentcar',
-          reservation_id: r.reservation_id,
-          reservationId: r.reservation_id,
-          re_id: r.reservation_id,
+          ...baseHeader, ...r,
+          serviceType: 'rentcar', re_type: 'rentcar',
+          reservation_id: r.reservation_id, reservationId: r.reservation_id, re_id: r.reservation_id,
           status: statusMap.get(r.reservation_id) || 'pending',
-          passengerCount: Number(r.passenger_count || 0),
-          carCount: Number(r.car_count || 0),
-          totalPrice: Number(r.total_price || 0),
-          totalAmount: Number(r.total_price || 0),
+          note: r.request_note || '',
         });
       });
 
       (shtRes.data || []).forEach((r: any) => {
         modalItems.push({
-          ...baseHeader,
-          ...r,
-          serviceType: 'sht',
-          reservation_id: r.reservation_id,
-          reservationId: r.reservation_id,
-          re_id: r.reservation_id,
+          ...baseHeader, ...r,
+          serviceType: 'sht', re_type: 'sht',
+          reservation_id: r.reservation_id, reservationId: r.reservation_id, re_id: r.reservation_id,
           status: statusMap.get(r.reservation_id) || 'pending',
-          usageDate: r.usage_date || '',
-          vehicleNumber: r.vehicle_number || '',
-          seatNumber: r.seat_number || '',
-          totalPrice: Number(r.car_total_price || 0),
-          totalAmount: Number(r.car_total_price || 0),
+          note: r.request_note || '',
         });
       });
 
