@@ -3,7 +3,6 @@
   "version": "0.1.0",
   "private": true,
   "description": "Stay Halong Mobile - manager1 기능을 모바일 최적화한 경량 앱",
-  "packageManager": "pnpm@9.12.0",
   "scripts": {
     "dev": "next dev -p 3007",
     "build": "next build",
