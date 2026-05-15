@@ -14,7 +14,7 @@
 | `apps/manager1` | @sht/manager1 | 3005 | `quick.manager.staycruise.kr` | 즐겨찾기 빠른패널 (2섹션 고정) |
 | `apps/admin` | @sht/admin | 3004 | `admin.staycruise.kr` | 관리자 대시보드 |
 | `apps/partner` | @sht/partner | 3003 | `partner.staycruise.kr` | 제휴업체 예약 시스템 |
-| `apps/mobile` | @sht/mobile | 3007 | (예정) `m.staycruise.kr` | manager1 mirror — 모바일 전용 경량 앱 |
+| `apps/mobile` | @sht/mobile | 3007 | `newmobile.stayhalong.com` | manager1 mirror — 모바일 전용 경량 앱 (Vercel 배포) |
 
 ---
 
@@ -136,6 +136,33 @@ NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key  # 서버 전용
 ```
+
+### 모바일 앱 Vercel 배포 (특별 규칙)
+**지침**: `.github/instructions/mobile-vercel-deployment.instructions.md` 참조
+
+**배포 명령어** (모노레포 루트에서):
+```powershell
+cd c:\SHT-DATA\sht-platform
+
+# 1. 변경사항 커밋
+git add apps/mobile/<수정파일>
+git commit -m "fix(mobile): <변경 내용>"
+
+# 2. Vercel 배포
+vercel deploy --prod --archive=tgz --yes
+```
+
+**필수 설정**:
+- ✅ apps/mobile/package.json: `packageManager` 필드 **없음** (corepack 충돌 방지)
+- ✅ apps/mobile/vercel.json: `npx --yes pnpm@9.12.0` 명령어 설정
+- ✅ Vercel 프로젝트: rootDirectory=`apps/mobile`, nodeVersion=`22.x`
+- ✅ Next.js: 반드시 `^15.5.15` (v16은 Turbopack 성능 이슈)
+
+**배포 성공 지표**:
+- Build time: ~50초
+- 생성 페이지: 31개
+- 상태: ● Ready
+- Domain: https://newmobile.stayhalong.com
 
 ---
 
