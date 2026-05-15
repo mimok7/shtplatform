@@ -12,6 +12,13 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
   return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
 }
 
+function toApplicationServerKey(base64String: string): ArrayBuffer {
+  const bytes = urlBase64ToUint8Array(base64String);
+  const buffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(buffer).set(bytes);
+  return buffer;
+}
+
 export default function PushNotificationManager() {
   useEffect(() => {
     if (!VAPID_PUBLIC_KEY || typeof window === 'undefined') return;
@@ -33,7 +40,7 @@ export default function PushNotificationManager() {
 
         const subscription = await registration.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+          applicationServerKey: toApplicationServerKey(VAPID_PUBLIC_KEY),
         });
 
         await saveSubscription(subscription);
