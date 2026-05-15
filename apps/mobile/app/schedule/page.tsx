@@ -10,6 +10,7 @@ import {
   ChevronLeft, ChevronRight, Search, ArrowLeft, RefreshCw
 } from 'lucide-react';
 import ReservationDetailModal from '@/components/ReservationDetailModal';
+import { toKstDateKey, toKstDateLabel, toKstDateTimeParts, toLocalDateKey } from '@/lib/dateKst';
 
 /* ── 타입 정의 ──────────────────────────────── */
 type ViewMode = 'day' | 'week' | 'month';
@@ -68,11 +69,9 @@ const getRange = (base: Date, mode: ViewMode) => {
 };
 
 const isPastDate = (dateStr: string) => {
-  const d = parseDate(dateStr);
-  if (!d) return false;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return d < today;
+  const dateKey = toKstDateKey(dateStr);
+  if (!dateKey) return false;
+  return dateKey < toLocalDateKey(new Date());
 };
 
 const normalizeWayType = (value: string | null | undefined) => {
@@ -82,17 +81,7 @@ const normalizeWayType = (value: string | null | undefined) => {
   return value || '';
 };
 
-const getPlus8DateTimeParts = (value: string | null | undefined) => {
-  if (!value) return { date: '', time: '' };
-  const parsed = new Date(String(value).replace(' ', 'T'));
-  if (isNaN(parsed.getTime())) return { date: String(value), time: '' };
-  const plus8 = new Date(parsed.getTime() + 8 * 60 * 60 * 1000);
-  const yyyy = plus8.getFullYear();
-  const mm = String(plus8.getMonth() + 1).padStart(2, '0');
-  const dd = String(plus8.getDate()).padStart(2, '0');
-  const time = plus8.toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul', hour: 'numeric', minute: '2-digit', hour12: true });
-  return { date: `${yyyy}-${mm}-${dd}`, time };
-};
+const getKstDateTimeParts = (value: string | null | undefined) => toKstDateTimeParts(value);
 
 /* ── DB 조회(전체 행) ─────────────────────────── */
 const fetchAllRows = async (tableName: string) => {
@@ -644,7 +633,7 @@ export default function SchedulePage() {
           const priceInfo = airportPriceMap.get(`${d.airport_price_code || ''}-${wayType}`)
             || (airportPriceData || []).find((p: any) => p.airport_code === d.airport_price_code)
             || {};
-          const dtParts = getPlus8DateTimeParts(d.ra_datetime || '');
+          const dtParts = getKstDateTimeParts(d.ra_datetime || '');
           const isSending = String(d.category || d.way_type || d.ra_way_type || '').toLowerCase().includes('sending') || String(d.category || d.way_type || d.ra_way_type || '').includes('샌딩');
           const accommodationInfo = d.accommodation_info || '';
           return {
@@ -716,7 +705,7 @@ export default function SchedulePage() {
 
         if (r.re_type === 'rentcar') {
           const d = rentcarByRid.get(r.re_id) || {};
-          const pickupParts = getPlus8DateTimeParts(d.pickup_datetime || '');
+          const pickupParts = getKstDateTimeParts(d.pickup_datetime || '');
           return {
             ...base,
             ...d,
@@ -805,9 +794,15 @@ export default function SchedulePage() {
     // 날짜 필터
     filtered = filtered.filter(item => {
       const dateStr = getDateField(item);
+      const itemDateKey = toKstDateKey(dateStr);
+      if (!itemDateKey) return false;
+
+      if (viewMode === 'day') {
+        return itemDateKey === toLocalDateKey(selectedDate);
+      }
+
       const d = parseDate(dateStr);
       if (!d) return false;
-      if (viewMode === 'day') return isSameLocalDate(d, selectedDate);
       const { start, end } = getRange(selectedDate, viewMode);
       return isDateInRange(d, start, end);
     });
@@ -849,7 +844,7 @@ export default function SchedulePage() {
     const Icon = conf.icon;
     const dateStr = getDateField(item);
     const past = dateStr ? isPastDate(dateStr) : false;
-    const dateObj = parseDate(dateStr);
+    const dateLabel = toKstDateLabel(dateStr);
 
     return (
       <div
@@ -896,7 +891,7 @@ export default function SchedulePage() {
             <>
               <Row label="크루즈" value={item.cruise} bold />
               <Row label="객실" value={`${item.roomType || ''} ${item.category ? `(${item.category})` : ''}`} />
-              <DateRow date={dateObj} />
+              <DateRow dateLabel={dateLabel} />
               <Row label="인원" value={formatGuests(item)} />
               <Row label="객실수" value={`${item.roomCount}개`} />
             </>
@@ -904,7 +899,7 @@ export default function SchedulePage() {
           {type === 'car' && (
             <>
               <Row label="차종" value={item.carType} bold />
-              <DateRow date={dateObj} />
+              <DateRow dateLabel={dateLabel} />
               <Row label="인원" value={`${item.passengerCount}명`} />
               {item.pickupLocation && <Row label="픽업" value={item.pickupLocation} />}
               {item.dropoffLocation && <Row label="드랍" value={item.dropoffLocation} />}
@@ -912,7 +907,7 @@ export default function SchedulePage() {
           )}
           {type === 'vehicle' && (
             <>
-              <DateRow date={dateObj} />
+              <DateRow dateLabel={dateLabel} />
               <Row label="차량" value={`${item.vehicleNumber} / 좌석: ${item.seatNumber}`} />
               {item.serviceType && <Row label="구분" value={item.serviceType} />}
               {item.category && <Row label="분류" value={item.category} />}
@@ -922,7 +917,7 @@ export default function SchedulePage() {
             <>
               <Row label="구분" value={`${item.tripType || '-'} - ${item.category || '-'}`} bold />
               <Row label="경로" value={item.route} />
-              <DateRow date={dateObj} time={item.time} />
+              <DateRow dateLabel={dateLabel} time={item.time} />
               <Row label="공항" value={`${item.airportName} / ${item.flightNumber}`} />
               <Row label="차종" value={item.vehicleType || item.carType} />
               <Row label="인원/차량" value={`👥 ${item.passengerCount}명 / 🚗 ${item.carCount}대`} />
@@ -932,7 +927,7 @@ export default function SchedulePage() {
             <>
               <Row label="호텔" value={item.hotelName} bold />
               <Row label="객실" value={`${item.roomName || ''} (${item.roomType || ''})`} />
-              <DateRow date={dateObj} />
+              <DateRow dateLabel={dateLabel} />
               {item.days > 0 && <Row label="숙박" value={`${item.days}박`} />}
               <Row label="인원" value={formatGuests(item)} />
             </>
@@ -940,7 +935,7 @@ export default function SchedulePage() {
           {type === 'tour' && (
             <>
               <Row label="투어" value={item.tourName} bold />
-              <DateRow date={dateObj} />
+              <DateRow dateLabel={dateLabel} />
               <Row label="인원" value={`${item.participants}명`} />
               {item.pickupLocation && <Row label="픽업" value={item.pickupLocation} />}
             </>
@@ -948,7 +943,7 @@ export default function SchedulePage() {
           {type === 'rentcar' && (
             <>
               <Row label="차종" value={item.carType} bold />
-              <DateRow date={dateObj} time={item.pickupTime} />
+              <DateRow dateLabel={dateLabel} time={item.pickupTime} />
               {item.pickupLocation && <Row label="픽업" value={item.pickupLocation} />}
               {item.destination && <Row label="목적지" value={item.destination} />}
               <Row label="인원" value={`${item.passengerCount}명`} />
@@ -998,7 +993,7 @@ export default function SchedulePage() {
           <div className="text-center flex-1">
             <input
               type="date"
-              value={selectedDate.toISOString().split('T')[0]}
+              value={toLocalDateKey(selectedDate)}
               onChange={(e) => {
                 const [year, month, day] = e.target.value.split('-').map(Number);
                 setSelectedDate(new Date(year, month - 1, day));
@@ -1121,12 +1116,12 @@ function Row({ label, value, bold }: { label: string; value: string; bold?: bool
   );
 }
 
-function DateRow({ date, time }: { date: Date | null; time?: string }) {
+function DateRow({ dateLabel, time }: { dateLabel: string; time?: string }) {
   return (
     <div className="flex items-center gap-2">
       <Calendar className="w-3.5 h-3.5 text-gray-400" />
       <span className="text-sm font-medium">
-        {date ? date.toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' }) : '-'}
+        {dateLabel || '-'}
         {time && <span className="text-gray-500 ml-1">{time}</span>}
       </span>
     </div>

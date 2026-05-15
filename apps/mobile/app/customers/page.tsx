@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import supabase from '@/lib/supabase';
 import ManagerLayout from '@/components/ManagerLayout';
+import { toKstDateLabel } from '@/lib/dateKst';
 
 export default function CustomerManagement() {
   const [customerCount, setCustomerCount] = useState<number>(0);
@@ -326,7 +327,7 @@ export default function CustomerManagement() {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('ko-KR');
+    return toKstDateLabel(dateString);
   };
 
   const FIELD_LABELS: Record<string, string> = {
