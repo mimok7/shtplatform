@@ -1,12 +1,21 @@
 {
-  "installCommand": "cd ../.. && pnpm install --frozen-lockfile",
+  "installCommand": "cd ../.. && pnpm install --no-frozen-lockfile",
   "ignoreCommand": "git diff --quiet HEAD^ HEAD -- ./ ../../packages ../../pnpm-lock.yaml",
   "buildCommand": "cd ../.. && pnpm --filter @sht/manager1 build",
   "outputDirectory": ".next",
   "framework": "nextjs",
   "crons": [
-    { "path": "/api/cron/auto-complete", "schedule": "0 18 * * *" },
-    { "path": "/api/cron/daily-stats", "schedule": "0 15 * * *" },
-    { "path": "/api/cron/cleanup-documents", "schedule": "0 19 * * *" }
+    {
+      "path": "/api/cron/auto-complete",
+      "schedule": "0 18 * * *"
+    },
+    {
+      "path": "/api/cron/daily-stats",
+      "schedule": "0 15 * * *"
+    },
+    {
+      "path": "/api/cron/cleanup-documents",
+      "schedule": "0 19 * * *"
+    }
   ]
 }
