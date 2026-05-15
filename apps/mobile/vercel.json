@@ -1,7 +1,7 @@
 {
-  "installCommand": "cd ../.. && npx --yes pnpm@9.12.0 install --frozen-lockfile",
+  "installCommand": "cd ../.. && npx --yes pnpm@10.x install",
   "ignoreCommand": "git diff --quiet HEAD^ HEAD -- ./ ../../packages ../../pnpm-lock.yaml",
-  "buildCommand": "cd ../.. && npx --yes pnpm@9.12.0 --filter @sht/mobile build",
+  "buildCommand": "cd ../.. && npx --yes pnpm@10.x --filter @sht/mobile build",
   "outputDirectory": ".next",
   "framework": "nextjs"
 }
