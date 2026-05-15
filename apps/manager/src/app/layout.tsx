@@ -7,14 +7,16 @@ import AuthInitializer from '@/components/AuthInitializer';
 import TabSessionGuard from '@/components/TabSessionGuard';
 import QueryProvider from '@/components/QueryProvider';
 import ConsoleErrorOnly from '@/components/ConsoleErrorOnly';
+import ServiceWorkerRegister from '@/components/ServiceWorkerRegister';
 
 export const metadata = {
-  title: '스테이하롱 예약',
-  description: '스테이하롱 자유여행 예약 시스템',
+  title: '스테이하롱 - 매니저',
+  description: '스테이하롱 예약 관리 시스템',
+  manifest: '/manifest.json',
   icons: {
-    icon: '/logo.png',
-    shortcut: '/logo.png',
-    apple: '/logo.png',
+    icon: '/sht-manager.png',
+    shortcut: '/sht-manager.png',
+    apple: '/sht-manager.png',
   },
 };
 
@@ -22,6 +24,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ko" suppressHydrationWarning>
       <body className="bg-background text-foreground">
+        <ServiceWorkerRegister />
         <ConsoleErrorOnly />
         <QueryProvider>
           <AlertProvider siteName="스테이 하롱 트레블">
