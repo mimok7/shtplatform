@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "installCommand": "cd ../.. && npx --yes pnpm@10.x install",
+  "installCommand": "cd ../.. && npx --yes pnpm@10.x install --no-frozen-lockfile",
   "ignoreCommand": "git diff --quiet HEAD^ HEAD -- ./ ../../packages ../../pnpm-lock.yaml",
   "buildCommand": "cd ../.. && npx --yes pnpm@10.x --filter @sht/mobile build",
   "outputDirectory": ".next",
