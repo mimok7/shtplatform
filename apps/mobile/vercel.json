@@ -1,7 +1,7 @@
 {
   "installCommand": "cd ../.. && pnpm install --frozen-lockfile",
-  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- ./ ../../pnpm-lock.yaml",
-  "buildCommand": "cd ../.. && pnpm --filter @sht/mobile exec next build --webpack",
+  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- ./ ../../packages ../../pnpm-lock.yaml",
+  "buildCommand": "cd ../.. && pnpm --filter @sht/mobile build",
   "outputDirectory": ".next",
   "framework": "nextjs"
 }
