@@ -448,9 +448,12 @@ export default function ManagerSchedulePage() {
 
       // 5. 데이터 매핑
       const reservationMap = new Map(reservations.map(r => [r.re_id, r]));
+      
+      // ticket이 포함된 예약 ID 세트 생성 (package 필터에서 제외)
+      const ticketReservationIds = new Set((ticketRes.data || []).map(r => r.reservation_id));
 
       const allServices = [
-        ...reservations.filter((r: any) => r.re_type === 'package').map((r: any) => ({
+        ...reservations.filter((r: any) => r.re_type === 'package' && !ticketReservationIds.has(r.re_id)).map((r: any) => ({
           ...r,
           serviceType: 'package',
           reservation_id: r.re_id,
