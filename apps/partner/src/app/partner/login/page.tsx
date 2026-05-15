@@ -32,7 +32,7 @@ function landingFor(role?: string | null): string {
     switch (role) {
         case 'partner':            return '/partner/dashboard';   // 업체 — 카테고리 적응 대시보드
         case 'manager':
-        case 'admin':              return '/partner/admin/partners';
+        case 'admin':              return '/partner/admin/reservations';
         case 'member':
         default:                   return '/partner/browse';
     }

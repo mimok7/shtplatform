@@ -794,17 +794,11 @@ function DirectBookingCruiseContent() {
             const totalPax = priceResult.total_pax;
             const finalTotalAmount = priceResult!.grand_total;
 
-            const roomCompositionLines = priceResult.room_results.map((r, idx) => {
-                const roomTypeLabel = form.schedule === '당일'
-                    ? `[옵션 ${idx + 1}] ${r.rate_card.season_name || r.rate_card.room_type}`
-                    : isCatherineHorizonCruise
-                        ? `[구성 ${idx + 1}] ${r.rate_card.room_type}`
-                        : `[객실 ${idx + 1}] ${r.rate_card.room_type} x${r.selection.room_count}`;
-                return `${roomTypeLabel} | 성인 ${r.selection.adult_count}, 아동 ${r.selection.child_count}, 아동엑베 ${r.selection.child_extra_bed_count}, 유아 ${r.selection.infant_count}, 성인엑베 ${r.selection.extra_bed_count}, 싱글 ${r.selection.single_count}`;
-            });
+            // ⚠️ 객실 구성 정보(roomCompositionLines)는 제거됨
+            // accommodation_info JSON에 이미 모든 객실 정보가 저장되므로, 
+            // request_note에는 사용자 입력 요청사항만 저장
 
             const sharedRequestNote = [
-                ...roomCompositionLines,
                 form.room_request_note || '',
                 ...(form.connecting_room ? ['커넥팅룸 신청'] : []),
                 ...(form.birthday_event && form.birthday_name

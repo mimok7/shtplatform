@@ -1339,19 +1339,11 @@ function CruiseReservationEditContent() {
             }
 
             // 1. 객실 정보 저장 - 업데이트할 필드만 명시적으로 지정
-            // request_note에 선택된 옵션 정보 추가: [OPTIONS:1,2,3] 형식
-            const optionsPrefix = effectiveSelectedOptionIds.length > 0
-                ? `[OPTIONS:${effectiveSelectedOptionIds.join(',')}] `
-                : '';
+            // 사용자 입력한 요청사항만 저장 (시스템 생성 메타데이터 제거)
+            // - 객실 구성, 생년월일, 옵션 정보는 price_breakdown에서 관리
+            // - request_note는 사용자 요청사항만 포함
+            const finalRequestNote = requestNote.trim();
 
-            const childBirthPrefix = childBirthDates.length > 0
-                ? `[CHILD_BIRTH_DATES:${childBirthDates.join(',')}] `
-                : '';
-            const infantBirthPrefix = infantBirthDates.length > 0
-                ? `[INFANT_BIRTH_DATES:${infantBirthDates.join(',')}] `
-                : '';
-            const childOlderPrefix = `[CHILD_OLDER_COUNTS:${roomForms.map((room) => room.child_older_count || 0).join(',')}] `;
-            const finalRequestNote = `${optionsPrefix}${childBirthPrefix}${infantBirthPrefix}${childOlderPrefix}${requestNote}`.trim();
 
             const cruiseInsertData = roomForms.map((room, index) => ({
                 reservation_id: reservationId,

@@ -166,6 +166,16 @@ const getServiceTypeOrderIndex = (type: string): number => {
   return idx === -1 ? serviceTypeOrder.length : idx;
 };
 
+const formatScheduleRequestNote = (value: any) => {
+  const text = String(value || '').trim();
+  if (!text) return '';
+
+  return text
+    .replace(/\[CHILD_OLDER_COUNTS:[^\]]*\]\s*/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+};
+
 /* ── 메인 컴포넌트 ─────────────────────────────── */
 export default function SchedulePage() {
   const router = useRouter();
@@ -560,12 +570,29 @@ export default function SchedulePage() {
         : [];
       const airportPriceMap = new Map((airportPriceData || []).map((x: any) => [`${x.airport_code}-${x.service_type || ''}`, x]));
 
-      // 크루즈 객실 코드 -> 객실명 매핑
+      // 크루즈 객실 코드 -> 객실명 매핑 (UUID 형식만 cruise_rate_card 조회)
+      const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       const cruiseRoomCodes = Array.from(new Set((cruiseData || []).map((x: any) => x.room_price_code).filter(Boolean)));
-      const cruiseRateData = cruiseRoomCodes.length > 0
-        ? await fetchRowsByIds('cruise_rate_card', 'id', cruiseRoomCodes)
+      const validUuidRoomCodes = cruiseRoomCodes.filter((c: string) => UUID_RE.test(c));
+      const cruiseRateData = validUuidRoomCodes.length > 0
+        ? await fetchRowsByIds('cruise_rate_card', 'id', validUuidRoomCodes)
         : [];
       const cruiseRateMap = new Map((cruiseRateData || []).map((x: any) => [String(x.id || '').trim(), x]));
+
+      // 투어명 매핑: tour_price_code → tour_name (tour_pricing JOIN tour)
+      const tourPriceCodes = Array.from(new Set((tourData || []).map((x: any) => x.tour_price_code).filter(Boolean)));
+      let tourNameMap = new Map<string, string>();
+      if (tourPriceCodes.length > 0) {
+        const { data: tourPricingData } = await supabase
+          .from('tour_pricing')
+          .select('pricing_id, tour:tour_id(tour_name)')
+          .in('pricing_id', tourPriceCodes);
+        (tourPricingData || []).forEach((p: any) => {
+          if (p.pricing_id && p.tour?.tour_name) {
+            tourNameMap.set(String(p.pricing_id), p.tour.tour_name);
+          }
+        });
+      }
 
       const usersById = new Map((usersData || []).map((u: any) => [u.id, u]));
       const cruiseByRid = new Map((cruiseData || []).map((x: any) => [x.reservation_id, x]));
@@ -600,7 +627,9 @@ export default function SchedulePage() {
 
         if (r.re_type === 'cruise') {
           const d = cruiseByRid.get(r.re_id) || {};
-          const cruiseRate = cruiseRateMap.get(String(d.room_price_code || '').trim());
+          const roomCode = String(d.room_price_code || '').trim();
+          const isPackageIncluded = roomCode && !UUID_RE.test(roomCode); // R_XX_XX_XXXXX 형식 = 패키지 포함분
+          const cruiseRate = cruiseRateMap.get(roomCode);
           return {
             ...base,
             ...d,
@@ -612,7 +641,8 @@ export default function SchedulePage() {
             adult: Number(d.adult_count || 0),
             child: Number(d.child_count || 0),
             toddler: Number(d.infant_count || 0),
-            totalPrice: Number(d.room_total_price || 0),
+            totalPrice: isPackageIncluded ? 0 : Number(d.room_total_price || 0),
+            isPackageIncluded,
             requestNote: d.request_note || '',
           };
         }
@@ -694,10 +724,11 @@ export default function SchedulePage() {
 
         if (r.re_type === 'tour') {
           const d = tourByRid.get(r.re_id) || {};
+          const resolvedTourName = tourNameMap.get(String(d.tour_price_code || '')) || d.tour_name || '신규 투어';
           return {
             ...base,
             ...d,
-            tourName: '신규 투어',
+            tourName: resolvedTourName,
             tourType: d.tour_price_code || '',
             startDate: d.usage_date || '',
             tourDate: d.usage_date || '',
@@ -1029,11 +1060,11 @@ export default function SchedulePage() {
           )}
         </div>
 
-        {/* 요청사항 */}
-        {item.requestNote && (
+        {/* 요청사항 - 숨길 접두사만 제거하고 나머지 표시 */}
+        {formatScheduleRequestNote(item.requestNote) && (
           <div className="pt-2 border-t text-sm text-gray-700">
             <span className="text-orange-600 font-semibold text-xs">📝 </span>
-            {item.requestNote}
+            {formatScheduleRequestNote(item.requestNote)}
           </div>
         )}
       </div>

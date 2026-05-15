@@ -79,6 +79,53 @@ export default function AdminReservationsPage() {
         else load();
     };
 
+    const ReservationCard = ({ r }: { r: Row }) => (
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm space-y-3">
+            <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                    <div className="text-xs font-semibold text-gray-500">{r.partner?.name || '-'}</div>
+                    <div className="text-sm font-bold text-gray-900 truncate">{r.service?.service_name || '-'}</div>
+                    <div className="text-xs text-gray-500 mt-1">{r.contact_name || '-'} {r.contact_phone ? `· ${r.contact_phone}` : ''}</div>
+                </div>
+                <span className={`shrink-0 px-2.5 py-1 rounded-full text-xs font-medium ${STATUS_COLOR[r.status] || 'bg-gray-50'}`}>
+                    {STATUS_LABEL[r.status] || r.status}
+                </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
+                <div className="rounded-xl bg-gray-50 p-2">
+                    <div className="text-gray-400">예약일</div>
+                    <div className="font-medium text-gray-900 mt-0.5">{r.checkin_date}</div>
+                </div>
+                <div className="rounded-xl bg-gray-50 p-2">
+                    <div className="text-gray-400">시간</div>
+                    <div className="font-medium text-gray-900 mt-0.5">{extractTimeFromNote(r.request_note)}</div>
+                </div>
+                <div className="rounded-xl bg-gray-50 p-2">
+                    <div className="text-gray-400">인원수</div>
+                    <div className="font-medium text-gray-900 mt-0.5">{r.guest_count}명</div>
+                </div>
+                <div className="rounded-xl bg-gray-50 p-2">
+                    <div className="text-gray-400">객실수</div>
+                    <div className="font-medium text-gray-900 mt-0.5">{r.room_count}개</div>
+                </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-2 pt-1">
+                <div className="text-sm font-semibold text-gray-900">
+                    {Number(r.total_price || 0).toLocaleString()}동
+                </div>
+                <select
+                    value={r.status}
+                    onChange={(e) => updateStatus(r.pr_id, e.target.value)}
+                    className="px-2 py-1.5 rounded-lg border border-gray-200 bg-white text-xs"
+                >
+                    {Object.keys(STATUS_LABEL).map(k => <option key={k} value={k}>{STATUS_LABEL[k]}</option>)}
+                </select>
+            </div>
+        </div>
+    );
+
     return (
         <PartnerLayout title="🗂️ 전체 예약 조회" requiredRoles={['manager', 'admin']}>
             <SectionBox title="필터">
@@ -101,7 +148,12 @@ export default function AdminReservationsPage() {
                 {loading ? <Spinner label="불러오는 중..." /> : filtered.length === 0 ? (
                     <div className="text-sm text-gray-500 text-center py-8">예약이 없습니다.</div>
                 ) : (
-                    <div className="overflow-x-auto">
+                    <>
+                    <div className="grid gap-3 lg:hidden">
+                        {filtered.map(r => <ReservationCard key={r.pr_id} r={r} />)}
+                    </div>
+
+                    <div className="hidden lg:block overflow-x-auto">
                         <table className="w-full text-xs">
                             <thead className="bg-gray-50 text-gray-600">
                                 <tr>
@@ -138,6 +190,7 @@ export default function AdminReservationsPage() {
                             </tbody>
                         </table>
                     </div>
+                    </>
                 )}
             </SectionBox>
         </PartnerLayout>
