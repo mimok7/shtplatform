@@ -230,13 +230,11 @@ function HotelReservationEditContent() {
             if (error) throw error;
             alert('호텔 서비스가 삭제되었습니다.');
             setFormData({
-                hotel_price_code: '',
-                hotel_name: '',
-                checkin: '',
-                checkout: '',
+                checkin_date: '',
+                schedule: '',
+                room_count: 1,
                 guest_count: 0,
-                room_count: 0,
-                room_price: 0,
+                unit_price: 0,
                 request_note: ''
             });
         } catch (error) {
