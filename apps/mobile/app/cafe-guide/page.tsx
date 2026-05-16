@@ -1,7 +1,9 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import ManagerLayout from '@/components/ManagerLayout';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { ArrowLeft, Home } from 'lucide-react';
 import supabase from '@/lib/supabase';
 
 interface PendingReservationRow {
@@ -254,6 +256,7 @@ async function resolveCruiseVehicleType(reservationIds: string[]): Promise<strin
 }
 
 export default function CafeGuidePage() {
+    const router = useRouter();
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [groups, setGroups] = useState<PendingGroup[]>([]);
@@ -862,8 +865,19 @@ ${totalAmount > 0 ? `${formatAmount(totalAmount)}동` : '-'}
         ].join(' ');
 
     return (
-        <ManagerLayout title="카페 안내" activeTab="cafe-guide">
-            <div className="w-full space-y-4">
+        <div className="min-h-screen bg-gray-50 pb-20">
+            <div className="bg-white border-b shadow-sm px-2 py-2">
+                <div className="flex items-center gap-2">
+                    <button onClick={() => router.back()} className="p-1.5 rounded-lg hover:bg-gray-100">
+                        <ArrowLeft className="w-5 h-5 text-gray-600" />
+                    </button>
+                    <h1 className="text-base font-bold text-gray-800 flex-1 text-center">카페 안내</h1>
+                    <Link href="/" className="p-1.5 rounded-lg hover:bg-gray-100">
+                        <Home className="w-5 h-5 text-gray-600" />
+                    </Link>
+                </div>
+            </div>
+            <div className="px-2 py-4 w-full space-y-4">
                 <div className="bg-white rounded-lg border p-4">
                     <h2 className="text-lg font-semibold text-gray-800">예약 조회 그룹 안내</h2>
                     <p className="text-sm text-gray-600 mt-1">
@@ -979,6 +993,6 @@ ${totalAmount > 0 ? `${formatAmount(totalAmount)}동` : '-'}
                     </>
                 )}
             </div>
-        </ManagerLayout>
+        </div>
     );
 }

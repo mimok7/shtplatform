@@ -11,13 +11,15 @@ import supabase from '@/lib/supabase';
  * - 기능은 manager1과 동일, UI만 모바일 최적화 (text-xs, max-w-screen-md)
  */
 export function MobileQuoteLayout({ title, children }: { title: string; children: React.ReactNode }) {
+    const router = useRouter();
+
     return (
         <div className="min-h-screen bg-slate-50 pb-20 overflow-x-hidden text-xs">
             <header className="bg-white border-b shadow-sm px-2 py-2">
                 <div className="flex items-center gap-2">
-                    <Link href="/quotes" className="p-1.5 rounded-lg hover:bg-gray-100">
+                    <button type="button" onClick={() => router.back()} className="p-1.5 rounded-lg hover:bg-gray-100">
                         <ArrowLeft className="w-5 h-5 text-gray-600" />
-                    </Link>
+                    </button>
                     <h1 className="text-base font-bold text-gray-800 flex-1 text-center">{title}</h1>
                     <Link href="/" className="p-1.5 rounded-lg hover:bg-gray-100">
                         <Home className="w-5 h-5 text-gray-600" />
