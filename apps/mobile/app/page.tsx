@@ -13,6 +13,7 @@ import {
   Users,
   Handshake,
   MessageSquare,
+  Settings,
   type LucideIcon,
 } from 'lucide-react';
 import supabase from '@/lib/supabase';
@@ -39,6 +40,7 @@ const FAVORITES: MenuItem[] = [
   { href: '/quotes/cruise',         label: '견적 입력',  desc: '크루즈 견적 신규 입력',         icon: FilePenLine,   iconColor: 'text-purple-600', bg: 'bg-purple-100' },
   { href: '/quotes',                label: '견적 목록',  desc: '견적 조회 / 수정',              icon: FileText,      iconColor: 'text-indigo-600', bg: 'bg-indigo-100' },
   { href: 'https://partner.stayhalong.com/partner/admin/reservations', label: '제휴업체', desc: '제휴업체 예약 관리', icon: Handshake, iconColor: 'text-orange-600', bg: 'bg-orange-100', external: true },
+  { href: '/settings',              label: '설정',      desc: '알림 / 내정보 / 비밀번호',       icon: Settings,      iconColor: 'text-slate-700',  bg: 'bg-slate-200' },
 ];
 
 export default function HomePage() {
