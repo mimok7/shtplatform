@@ -1,5 +1,5 @@
 // Service Worker for PWA offline support - mobile
-const CACHE_NAME = 'sht-mobile-cache-v1';
+const CACHE_NAME = 'sht-mobile-cache-v2';
 const ASSETS_TO_CACHE = [
   '/',
   '/icon-192.png',
@@ -60,6 +60,8 @@ self.addEventListener('fetch', event => {
           return networkResponse;
         })
         .catch(async () => {
+          const offlineFallback = await caches.match('/offline.html');
+          if (offlineFallback) return offlineFallback;
           const homeFallback = await caches.match('/');
           if (homeFallback) return homeFallback;
           return new Response('Offline - please check connection', {

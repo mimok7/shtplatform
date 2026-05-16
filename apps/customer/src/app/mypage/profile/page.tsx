@@ -10,6 +10,8 @@ import { useLoadingTimeout } from '@/hooks/useLoadingTimeout';
 import { getAuthUserSafe } from '@/lib/authSafe';
 import { Home, Camera, Trash2, Ticket } from 'lucide-react';
 
+const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || '';
+
 interface UserProfile {
     id: string;
     email: string | null;
@@ -58,6 +60,9 @@ export default function ProfilePage() {
     const [pwForm, setPwForm] = useState({ current: '', next: '', confirm: '' });
     const [pwSaving, setPwSaving] = useState(false);
     const [pwError, setPwError] = useState<string | null>(null);
+    const [notificationLoading, setNotificationLoading] = useState(false);
+    const [notificationEnabled, setNotificationEnabled] = useState<boolean | null>(null);
+    const [notificationMessage, setNotificationMessage] = useState<string>('');
 
     useLoadingTimeout(loading, setLoading, 12000);
 
@@ -72,6 +77,143 @@ export default function ProfilePage() {
     useEffect(() => {
         init();
     }, []);
+
+    const urlBase64ToUint8Array = (base64String: string): Uint8Array => {
+        const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+        const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+        const rawData = window.atob(base64);
+        return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
+    };
+
+    const toApplicationServerKey = (base64String: string): ArrayBuffer => {
+        const bytes = urlBase64ToUint8Array(base64String);
+        const buffer = new ArrayBuffer(bytes.byteLength);
+        new Uint8Array(buffer).set(bytes);
+        return buffer;
+    };
+
+    const ensureServiceWorkerRegistration = async (): Promise<ServiceWorkerRegistration> => {
+        const existing = await navigator.serviceWorker.getRegistration();
+        if (existing) return existing;
+        return navigator.serviceWorker.register('/sw.js');
+    };
+
+    const refreshNotificationState = async () => {
+        if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) {
+            setNotificationEnabled(false);
+            setNotificationMessage('이 브라우저에서는 푸시 알림을 지원하지 않습니다.');
+            return;
+        }
+
+        try {
+            const registration = await ensureServiceWorkerRegistration();
+            const subscription = await registration.pushManager.getSubscription();
+            const granted = typeof Notification !== 'undefined' && Notification.permission === 'granted';
+            const enabled = !!subscription && granted;
+            setNotificationEnabled(enabled);
+            setNotificationMessage(enabled ? '알림이 허용되어 있습니다.' : '알림이 꺼져 있습니다.');
+        } catch (err) {
+            console.error('알림 상태 조회 실패:', err);
+            setNotificationEnabled(false);
+            setNotificationMessage('알림 상태를 확인하지 못했습니다.');
+        }
+    };
+
+    const handleEnableNotification = async () => {
+        if (notificationLoading) return;
+        if (!VAPID_PUBLIC_KEY) {
+            setNotificationMessage('VAPID 공개키가 설정되지 않았습니다.');
+            return;
+        }
+
+        if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) {
+            setNotificationMessage('이 브라우저에서는 푸시 알림을 지원하지 않습니다.');
+            return;
+        }
+
+        setNotificationLoading(true);
+        try {
+            const permission = await Notification.requestPermission();
+            if (permission !== 'granted') {
+                setNotificationEnabled(false);
+                setNotificationMessage('알림 권한이 허용되지 않았습니다.');
+                return;
+            }
+
+            const registration = await ensureServiceWorkerRegistration();
+            let subscription = await registration.pushManager.getSubscription();
+
+            if (!subscription) {
+                subscription = await registration.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: toApplicationServerKey(VAPID_PUBLIC_KEY),
+                });
+            }
+
+            const {
+                data: { session },
+            } = await supabase.auth.getSession();
+            const token = session?.access_token || '';
+
+            const response = await fetch('/api/subscribe-push', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
+                body: JSON.stringify({
+                    subscription: subscription.toJSON(),
+                    appName: 'customer',
+                }),
+            });
+
+            if (!response.ok) {
+                const payload = await response.json().catch(() => ({}));
+                throw new Error(payload?.error || '알림 허용 처리에 실패했습니다.');
+            }
+
+            setNotificationEnabled(true);
+            setNotificationMessage('알림이 허용되었습니다.');
+        } catch (err: any) {
+            console.error('알림 허용 실패:', err);
+            setNotificationEnabled(false);
+            setNotificationMessage(err?.message || '알림 허용 처리 중 오류가 발생했습니다.');
+        } finally {
+            setNotificationLoading(false);
+        }
+    };
+
+    const handleDisableNotification = async () => {
+        if (notificationLoading) return;
+        if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) {
+            setNotificationEnabled(false);
+            setNotificationMessage('이 브라우저에서는 푸시 알림을 지원하지 않습니다.');
+            return;
+        }
+
+        setNotificationLoading(true);
+        try {
+            const registration = await ensureServiceWorkerRegistration();
+            const subscription = await registration.pushManager.getSubscription();
+
+            if (subscription) {
+                await fetch('/api/unsubscribe-push', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ endpoint: subscription.endpoint }),
+                });
+                await subscription.unsubscribe();
+            }
+
+            setNotificationEnabled(false);
+            setNotificationMessage('알림이 해제되었습니다.');
+        } catch (err: any) {
+            console.error('알림 해제 실패:', err);
+            setNotificationMessage(err?.message || '알림 해제 처리 중 오류가 발생했습니다.');
+        } finally {
+            setNotificationLoading(false);
+        }
+    };
 
     const formatPhoneNumber = (value?: string | null) => {
         const digits = (value || '').replace(/\D/g, '').slice(0, 11);
@@ -321,6 +463,7 @@ export default function ProfilePage() {
                 return;
             }
             setAuthUser(user);
+            await refreshNotificationState();
 
             // 여권/승선코드 데이터 동시 로드 (실패해도 프로필 로딩은 진행)
             try {
@@ -620,6 +763,46 @@ export default function ProfilePage() {
                                 />
                             </div>
                         ))}
+                    </div>
+                </SectionBox>
+
+                <SectionBox title="🔔 알림 설정">
+                    <div className="space-y-3">
+                        <p className="text-sm text-gray-600">
+                            예약 상태 변경, 결제 안내 등의 알림을 받으시려면 허용해 주세요.
+                        </p>
+                        <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm">
+                            상태: <span className={notificationEnabled ? 'text-green-600 font-semibold' : 'text-gray-700 font-semibold'}>
+                                {notificationEnabled ? '허용됨' : '꺼짐'}
+                            </span>
+                            {notificationMessage ? <p className="mt-1 text-xs text-gray-600">{notificationMessage}</p> : null}
+                        </div>
+                        <div className="flex gap-2">
+                            <button
+                                type="button"
+                                onClick={handleEnableNotification}
+                                disabled={notificationLoading}
+                                className={`px-4 py-2 rounded text-white text-sm ${notificationLoading ? 'bg-gray-400' : 'bg-blue-500 hover:bg-blue-600'}`}
+                            >
+                                {notificationLoading ? '처리 중...' : '알림 허용'}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleDisableNotification}
+                                disabled={notificationLoading}
+                                className={`px-4 py-2 rounded text-sm border ${notificationLoading ? 'border-gray-300 text-gray-400' : 'border-gray-300 text-gray-700 hover:bg-gray-100'}`}
+                            >
+                                알림 해제
+                            </button>
+                            <button
+                                type="button"
+                                onClick={refreshNotificationState}
+                                disabled={notificationLoading}
+                                className={`px-4 py-2 rounded text-sm border ${notificationLoading ? 'border-gray-300 text-gray-400' : 'border-gray-300 text-gray-700 hover:bg-gray-100'}`}
+                            >
+                                상태 새로고침
+                            </button>
+                        </div>
                     </div>
                 </SectionBox>
 

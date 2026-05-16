@@ -6,6 +6,7 @@ type SubscriptionRow = {
   app_name: string | null;
   user_id: string | null;
   endpoint: string;
+  user_agent: string | null;
   is_active: boolean | null;
   last_used_at: string | null;
   created_at: string | null;
@@ -13,7 +14,7 @@ type SubscriptionRow = {
     id: string;
     name: string | null;
     email: string | null;
-  } | null;
+  }[] | null;
 };
 
 async function authenticateAdmin(req: NextRequest) {
@@ -56,7 +57,7 @@ export async function GET(req: NextRequest) {
 
     let query = serviceSupabase!
       .from('push_subscriptions')
-      .select('id, app_name, user_id, endpoint, is_active, last_used_at, created_at, users:user_id(id, name, email)')
+      .select('id, app_name, user_id, endpoint, user_agent, is_active, last_used_at, created_at, users:user_id(id, name, email)')
       .eq('is_active', true)
       .order('app_name', { ascending: true })
       .order('last_used_at', { ascending: false, nullsFirst: false })
@@ -71,16 +72,20 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    const rows = ((data || []) as SubscriptionRow[]).map((row) => ({
-      id: row.id,
-      app_name: row.app_name || 'unknown',
-      user_id: row.user_id,
-      account_email: row.users?.email || null,
-      user_name: row.users?.name || null,
-      endpoint: row.endpoint,
-      last_used_at: row.last_used_at,
-      created_at: row.created_at,
-    }));
+    const rows = ((data || []) as SubscriptionRow[]).map((row) => {
+      const user = Array.isArray(row.users) ? row.users[0] : null;
+      return {
+        id: row.id,
+        app_name: row.app_name || 'unknown',
+        user_id: row.user_id,
+        account_email: user?.email || null,
+        user_name: user?.name || null,
+        endpoint: row.endpoint,
+        user_agent: row.user_agent,
+        last_used_at: row.last_used_at,
+        created_at: row.created_at,
+      };
+    });
 
     return NextResponse.json({ rows });
   } catch (error: any) {

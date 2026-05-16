@@ -30,6 +30,14 @@ function toApplicationServerKey(base64String: string): ArrayBuffer {
   return buffer;
 }
 
+async function ensureServiceWorkerRegistration(): Promise<ServiceWorkerRegistration> {
+  const matched =
+    (await navigator.serviceWorker.getRegistration('/sw.js')) ||
+    (await navigator.serviceWorker.getRegistration());
+  if (matched) return matched;
+  return navigator.serviceWorker.register('/sw.js');
+}
+
 export default function MobileSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [savingProfile, setSavingProfile] = useState(false);
@@ -89,7 +97,7 @@ export default function MobileSettingsPage() {
     }
 
     try {
-      const registration = await navigator.serviceWorker.ready;
+      const registration = await ensureServiceWorkerRegistration();
       const existing = await registration.pushManager.getSubscription();
       setIsSubscribed(!!existing);
     } catch {
@@ -173,7 +181,7 @@ export default function MobileSettingsPage() {
 
     setNotificationBusy(true);
     try {
-      const registration = await navigator.serviceWorker.ready;
+      const registration = await ensureServiceWorkerRegistration();
       let subscription = await registration.pushManager.getSubscription();
 
       if (!subscription) {
@@ -211,7 +219,7 @@ export default function MobileSettingsPage() {
 
     setNotificationBusy(true);
     try {
-      const registration = await navigator.serviceWorker.ready;
+      const registration = await ensureServiceWorkerRegistration();
       const subscription = await registration.pushManager.getSubscription();
 
       if (!subscription) {

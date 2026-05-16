@@ -18,32 +18,16 @@ export default function HomePage() {
     const checkAdmin = async () => {
       try {
         const {
-          data: { user },
-          error,
-        } = await supabase.auth.getUser();
+          data: { session },
+        } = await supabase.auth.getSession();
+        const user = session?.user || null;
 
         if (cancelled) return;
 
-        if (error || !user) {
+        if (!user) {
           router.replace('/login');
           return;
         }
-
-        const { data: profile, error: profileError } = await supabase
-          .from('users')
-          .select('role')
-          .eq('id', user.id)
-          .single();
-
-        if (cancelled) return;
-
-        if (profileError || profile?.role !== 'admin') {
-          alert('관리자 계정만 접근 가능합니다.');
-          await supabase.auth.signOut();
-          router.replace('/login');
-          return;
-        }
-
         router.replace('/admin');
       } catch (e) {
         console.error('관리자 권한 확인 실패:', e);

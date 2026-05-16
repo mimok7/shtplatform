@@ -25,6 +25,14 @@ function toApplicationServerKey(base64String: string): ArrayBuffer {
   return buffer;
 }
 
+async function ensureServiceWorkerRegistration(): Promise<ServiceWorkerRegistration> {
+  const matched =
+    (await navigator.serviceWorker.getRegistration('/sw.js')) ||
+    (await navigator.serviceWorker.getRegistration());
+  if (matched) return matched;
+  return navigator.serviceWorker.register('/sw.js');
+}
+
 function isDesktopBrowser(): boolean {
   if (typeof window === 'undefined') return false;
   const userAgent = window.navigator.userAgent || '';
@@ -84,7 +92,7 @@ export default function PushNotificationManager() {
       try {
         if (Notification.permission === 'denied') return;
 
-        const registration = await navigator.serviceWorker.ready;
+        const registration = await ensureServiceWorkerRegistration();
         const existingSubscription = await registration.pushManager.getSubscription();
         if (existingSubscription) {
           await saveSubscription(existingSubscription);

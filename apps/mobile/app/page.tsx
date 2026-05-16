@@ -105,7 +105,8 @@ export default function HomePage() {
           alt="스테이하롱 로고"
           width={180}
           height={60}
-          className="mx-auto h-auto w-auto max-w-[180px]"
+          className="mx-auto max-w-[180px]"
+          style={{ width: 'auto', height: 'auto' }}
           priority
         />
         <p className="mt-2 text-xs text-slate-500">매니저 모바일 (manager1 mirror)</p>

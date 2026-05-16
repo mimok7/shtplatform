@@ -58,6 +58,7 @@ type ActiveSubscriberRow = {
   account_email: string | null;
   user_name: string | null;
   endpoint: string;
+  user_agent: string | null;
   last_used_at: string | null;
   created_at: string | null;
 };
@@ -92,6 +93,45 @@ function formatDateTime(value: string | null) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '-';
   return date.toLocaleString('ko-KR');
+}
+
+function formatEndpoint(value: string) {
+  if (!value) return '-';
+  try {
+    const url = new URL(value);
+    return `${url.hostname}${url.pathname.slice(0, 24)}${url.pathname.length > 24 ? '...' : ''}`;
+  } catch {
+    return value.length > 36 ? `${value.slice(0, 36)}...` : value;
+  }
+}
+
+function extractDeviceLabel(userAgent: string | null) {
+  if (!userAgent) return '알 수 없음';
+  const ua = userAgent.toLowerCase();
+
+  const os = ua.includes('android')
+    ? 'Android'
+    : ua.includes('iphone') || ua.includes('ipad') || ua.includes('ios')
+      ? 'iOS'
+      : ua.includes('windows')
+        ? 'Windows'
+        : ua.includes('mac os') || ua.includes('macintosh')
+          ? 'macOS'
+          : ua.includes('linux')
+            ? 'Linux'
+            : '기타 OS';
+
+  const browser = ua.includes('edg/')
+    ? 'Edge'
+    : ua.includes('chrome/')
+      ? 'Chrome'
+      : ua.includes('safari/') && !ua.includes('chrome/')
+        ? 'Safari'
+        : ua.includes('firefox/')
+          ? 'Firefox'
+          : '기타 브라우저';
+
+  return `${os} · ${browser}`;
 }
 
 export default function ReservationSettingsPage() {
@@ -144,11 +184,12 @@ export default function ReservationSettingsPage() {
     const { data: sessionData } = await supabase.auth.getSession();
     setAdminUserId(sessionData.session?.user?.id || null);
 
-    const [appsResult, eventsResult, settingsResult, countsResult] = await Promise.all([
+    const countsPromise = supabase.rpc('admin_get_push_subscription_app_counts');
+
+    const [appsResult, eventsResult, settingsResult] = await Promise.all([
       supabase.from(APPS_TABLE).select('app_name, app_label, description, enabled, sort_order').order('sort_order', { ascending: true }),
       supabase.from(EVENT_TYPES_TABLE).select('event_key, event_label, description, default_title, default_body, default_url, default_priority, is_active, sort_order').order('sort_order', { ascending: true }),
       supabase.from(APP_EVENT_SETTINGS_TABLE).select('app_name, event_key, enabled'),
-      supabase.rpc('admin_get_push_subscription_app_counts'),
     ]);
 
     if (appsResult.error || eventsResult.error || settingsResult.error) {
@@ -164,9 +205,11 @@ export default function ReservationSettingsPage() {
     setEvents((eventsResult.data || []) as NotificationEventType[]);
     setSettings((settingsResult.data || []) as AppEventSetting[]);
 
-    if (!countsResult.error) {
-      setCounts((countsResult.data || []) as SubscriptionCount[]);
-    }
+    void countsPromise.then(({ data, error }) => {
+      if (!error) {
+        setCounts((data || []) as SubscriptionCount[]);
+      }
+    });
   };
 
   useEffect(() => {
@@ -540,9 +583,11 @@ export default function ReservationSettingsPage() {
                   <thead className="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                     <tr>
                       <th className="px-3 py-3">앱</th>
+                      <th className="px-3 py-3">기기</th>
                       <th className="px-3 py-3">이름</th>
                       <th className="px-3 py-3">계정</th>
                       <th className="px-3 py-3">사용자 ID</th>
+                      <th className="px-3 py-3">구독 키</th>
                       <th className="px-3 py-3">최근 활동</th>
                     </tr>
                   </thead>
@@ -550,9 +595,11 @@ export default function ReservationSettingsPage() {
                     {subscriberRows.map((row) => (
                       <tr key={row.id}>
                         <td className="px-3 py-3 text-gray-700">{appLabelMap.get(row.app_name) || row.app_name}</td>
+                        <td className="px-3 py-3 text-xs text-gray-600">{extractDeviceLabel(row.user_agent)}</td>
                         <td className="px-3 py-3 text-gray-900">{row.user_name || '-'}</td>
                         <td className="px-3 py-3 text-gray-700">{row.account_email || '(로그인 정보 없음)'}</td>
                         <td className="px-3 py-3 text-xs text-gray-500">{row.user_id || '-'}</td>
+                        <td className="px-3 py-3 text-xs text-gray-500">{formatEndpoint(row.endpoint)}</td>
                         <td className="px-3 py-3 text-gray-700">{formatDateTime(row.last_used_at || row.created_at)}</td>
                       </tr>
                     ))}

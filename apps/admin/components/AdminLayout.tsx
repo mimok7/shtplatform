@@ -92,13 +92,18 @@ export default function AdminLayout({ children, title, activeTab }: AdminLayoutP
 
     const fullCheck = async () => {
       try {
-        // 서버에서 JWT 유효성 검증 (만료 시 자동 갱신)
-        const { data: { user: sessionUser } } = await supabase.auth.getUser();
+        // localStorage 세션 기반 즉시 확인 (네트워크 호출 최소화)
+        const {
+          data: { session },
+          error: sessionError,
+        } = await supabase.auth.getSession();
+        const sessionUser = session?.user || null;
 
-        if (!sessionUser) {
+        if (sessionError || !sessionUser) {
           if (cancelled) return;
           clearAdminCache();
           alert('로그인이 필요합니다.');
+          setIsLoading(false);
           router.push('/login');
           return;
         }
@@ -115,14 +120,14 @@ export default function AdminLayout({ children, title, activeTab }: AdminLayoutP
           return;
         }
 
-        // ② DB 조회 (2.5초 타임아웃)
+        // ② DB 조회 (최대 2초 타임아웃)
         const rolePromise = supabase
           .from('users')
           .select('role, email')
           .eq('id', sessionUser.id)
           .single();
         const timeoutPromise = new Promise<{ data: any; error: any }>((resolve) => {
-          setTimeout(() => resolve({ data: null, error: { message: 'role_check_timeout' } }), 2500);
+          setTimeout(() => resolve({ data: null, error: { message: 'role_check_timeout' } }), 2000);
         });
         const { data: userData, error: roleError } = await Promise.race([rolePromise, timeoutPromise]);
 
@@ -284,7 +289,7 @@ export default function AdminLayout({ children, title, activeTab }: AdminLayoutP
         <div className="text-center max-w-sm">
           <div className="text-4xl mb-4 animate-pulse">⚙️</div>
           <p className="text-gray-700">관리자 권한 확인 중...</p>
-          <p className="text-xs text-gray-400 mt-2">최대 2.5초 후 자동 진행됩니다</p>
+          <p className="text-xs text-gray-400 mt-2">최대 2초 후 자동 진행됩니다</p>
           <button
             onClick={() => {
               clearAdminCache();
