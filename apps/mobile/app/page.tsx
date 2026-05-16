@@ -14,6 +14,8 @@ import {
   Handshake,
   MessageSquare,
   Settings,
+  ArrowLeft,
+  Home,
   type LucideIcon,
 } from 'lucide-react';
 import supabase from '@/lib/supabase';
@@ -88,34 +90,34 @@ export default function HomePage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex flex-col p-4 pb-10">
-      <div className="w-full flex justify-end pt-2">
-        <button
-          type="button"
-          onClick={handleLogout}
-          className="text-sm font-medium text-slate-600 hover:text-slate-900"
-        >
-          로그아웃
-        </button>
+    <div className="min-h-screen bg-gray-50 pb-10">
+      {/* 표준 헤더 */}
+      <div className="bg-white border-b shadow-sm px-2 py-2">
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={handleLogout} className="p-1.5 rounded-lg hover:bg-gray-100">
+            <ArrowLeft className="w-5 h-5 text-gray-600" />
+          </button>
+          <h1 className="text-base font-bold text-gray-800 flex-1 text-center">스테이하롱 매니저</h1>
+          <Link href="/settings" className="p-1.5 rounded-lg hover:bg-gray-100">
+            <Settings className="w-5 h-5 text-gray-600" />
+          </Link>
+        </div>
       </div>
 
-      <div className="text-center my-6">
+      {/* 로고 */}
+      <div className="text-center py-4">
         <Image
           src="/logo.png"
           alt="스테이하롱 로고"
-          width={180}
-          height={60}
-          className="mx-auto max-w-[180px]"
+          width={160}
+          height={54}
+          className="mx-auto max-w-[160px]"
           style={{ width: 'auto', height: 'auto' }}
           priority
         />
-        <p className="mt-2 text-xs text-slate-500">매니저 모바일 (manager1 mirror)</p>
       </div>
 
-      <section className="w-full">
-        <h2 className="px-1 mb-2 text-xs font-semibold text-slate-500 flex items-center gap-1">
-          <span>⭐</span> 즐겨찾기
-        </h2>
+      <section className="px-4 w-full">
         <div className="grid grid-cols-2 gap-3">
           {FAVORITES.map((item) => {
             const Icon = item.icon;

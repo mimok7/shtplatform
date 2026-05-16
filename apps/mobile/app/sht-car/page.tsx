@@ -1077,14 +1077,25 @@ export default function ShtCarPage() {
 
     if (loading) {
         return (
-            <ManagerLayout title="스하차량 관리" activeTab="sht-car">
+            <div className="min-h-screen bg-gray-50 pb-20">
+                <div className="bg-white border-b shadow-sm px-2 py-2">
+                    <div className="flex items-center gap-2">
+                        <button onClick={() => router.back()} className="p-1.5 rounded-lg hover:bg-gray-100">
+                            <ArrowLeft className="w-5 h-5 text-gray-600" />
+                        </button>
+                        <h1 className="text-base font-bold text-gray-800 flex-1 text-center">스하차량 관리</h1>
+                        <Link href="/" className="p-1.5 rounded-lg hover:bg-gray-100">
+                            <Home className="w-5 h-5 text-gray-600" />
+                        </Link>
+                    </div>
+                </div>
                 <div className="flex justify-center items-center h-64">
                     <div className="text-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
                         <p className="mt-4 text-gray-600">스하차량 정보를 불러오는 중...</p>
                     </div>
                 </div>
-            </ManagerLayout>
+            </div>
         );
     }
 
