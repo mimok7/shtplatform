@@ -44,6 +44,42 @@ const FAVORITES: MenuItem[] = [
 export default function HomePage() {
   const router = useRouter();
 
+  const getPartnerBaseUrl = () => {
+    if (typeof window === 'undefined') return 'https://partner.stayhalong.com';
+    const host = window.location.hostname;
+    if (host === 'localhost' || host === '127.0.0.1') {
+      return 'http://localhost:3003';
+    }
+    return 'https://partner.stayhalong.com';
+  };
+
+  const handlePartnerMove = async () => {
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      const partnerBase = getPartnerBaseUrl();
+      const nextPath = '/partner/admin/reservations';
+
+      if (!session?.access_token || !session?.refresh_token) {
+        window.location.href = `${partnerBase}/partner/login`;
+        return;
+      }
+
+      const hash = new URLSearchParams({
+        at: session.access_token,
+        rt: session.refresh_token,
+        next: nextPath,
+      }).toString();
+
+      window.location.href = `${partnerBase}/auth/bridge#${hash}`;
+    } catch (error) {
+      console.error('제휴업체 이동 실패:', error);
+      window.location.href = `${getPartnerBaseUrl()}/partner/login`;
+    }
+  };
+
   const handleLogout = async () => {
     await supabase.auth.signOut();
     router.replace('/login');
@@ -98,6 +134,14 @@ export default function HomePage() {
                 )}
               </div>
             );
+
+            if (item.external && item.label === '제휴업체') {
+              return (
+                <button key={item.href} type="button" onClick={() => void handlePartnerMove()} className="block text-left">
+                  {card}
+                </button>
+              );
+            }
 
             if (item.external) {
               return (

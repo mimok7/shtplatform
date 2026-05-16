@@ -112,7 +112,7 @@ export default function PushNotificationManager() {
       } = await supabase.auth.getSession();
       const token = session?.access_token || '';
 
-      await fetch('/api/subscribe-push', {
+      const response = await fetch('/api/subscribe-push', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -123,6 +123,11 @@ export default function PushNotificationManager() {
           appName: APP_NAME,
         }),
       });
+
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}));
+        throw new Error(result?.error || `subscribe failed (${response.status})`);
+      }
     };
 
     const timer = setTimeout(registerPush, 3000);
