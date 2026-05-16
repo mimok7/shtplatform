@@ -100,7 +100,6 @@ export default function AdminLayout({ children, title, activeTab }: AdminLayoutP
           clearAdminCache();
           alert('로그인이 필요합니다.');
           router.push('/login');
-          setIsLoading(false);
           return;
         }
 
@@ -112,7 +111,7 @@ export default function AdminLayout({ children, title, activeTab }: AdminLayoutP
         if (metaRole === 'admin') {
           setUserRole('admin');
           writeAdminCache({ userId: sessionUser.id, email: sessionUser.email, role: 'admin' });
-          setIsLoading(false);
+          if (!cancelled) setIsLoading(false);
           return;
         }
 
@@ -135,20 +134,23 @@ export default function AdminLayout({ children, title, activeTab }: AdminLayoutP
             console.warn('관리자 권한 조회 타임아웃');
           }
           alert('관리자 권한이 필요합니다.');
-          router.push(roleError?.message === 'role_check_timeout' ? '/login' : '/');
-          setIsLoading(false);
+          if (!cancelled) router.push(roleError?.message === 'role_check_timeout' ? '/login' : '/');
+          if (!cancelled) setIsLoading(false);
           return;
         }
 
+        if (cancelled) return;
         setUserRole(userData.role);
         writeAdminCache({ userId: sessionUser.id, email: userData.email, role: userData.role });
+        if (!cancelled) setIsLoading(false);
       } catch (err) {
         console.error('관리자 권한 확인 오류:', err);
         if (cancelled) return;
         clearAdminCache();
-        router.push('/login');
-      } finally {
-        if (!cancelled) setIsLoading(false);
+        if (!cancelled) {
+          router.push('/login');
+          setIsLoading(false);
+        }
       }
     };
 

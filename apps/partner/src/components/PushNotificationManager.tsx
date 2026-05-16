@@ -25,6 +25,12 @@ function toApplicationServerKey(base64String: string): ArrayBuffer {
   return buffer;
 }
 
+function isDesktopBrowser(): boolean {
+  if (typeof window === 'undefined') return false;
+  const userAgent = window.navigator.userAgent || '';
+  return !/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+}
+
 export default function PushNotificationManager() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isStandalone, setIsStandalone] = useState(true);
@@ -35,6 +41,12 @@ export default function PushNotificationManager() {
     if (typeof window === 'undefined') return;
 
     const checkStandalone = () => {
+      if (isDesktopBrowser()) {
+        setIsStandalone(true);
+        setDeferredPrompt(null);
+        return;
+      }
+
       const isPwa =
         window.matchMedia('(display-mode: standalone)').matches ||
         (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
@@ -42,6 +54,7 @@ export default function PushNotificationManager() {
     };
 
     const onBeforeInstallPrompt = (event: Event) => {
+      if (isDesktopBrowser()) return;
       event.preventDefault();
       setDeferredPrompt(event as BeforeInstallPromptEvent);
       setIsStandalone(false);
