@@ -292,3 +292,63 @@ git push
   - [apps/mobile/vercel.json](../../apps/mobile/vercel.json) (신규)
 - 관련 문서: [VERCEL-MCP-GUIDE.md](../../docs/VERCEL-MCP-GUIDE.md)
 - Vercel 공식 문서: https://vercel.com/docs/projects/overview#ignored-build-step
+
+## 12. 수동(앱 단위) 배포 — 한 앱만 안전하게 배포하는 방법 (권장)
+
+목표: 모노레포에서 필요한 앱 하나만 수동으로 빌드/배포하여 다른 앱에 영향을 주지 않습니다.
+
+사전조건:
+- 변경 내용을 `git commit` 및 `git push origin main`으로 원격에 올려두세요.
+- Vercel CLI에 로그인되어 있어야 합니다 (`vercel login`).
+- Vercel 일일 배포 한도(무료 플랜 100건)를 확인하세요.
+
+방법 A — 권장: 루트에서 `.vercel/project.json`을 타깃 프로젝트로 임시 변경 후 배포
+
+1. 루트에서 현재 `.vercel/project.json` 백업 (PowerShell):
+```powershell
+Copy-Item .vercel\\project.json .vercel\\project.json.bak -Force
+```
+
+2. 루트 `.vercel/project.json`을 편집하여 타깃 프로젝트로 변경 (예: 관리자 앱):
+```json
+{
+  "orgId": "team_b8XlkN7qvdq7KT7apJgJIIlI",
+  "projectName": "shtplatform-admin",
+  "projectId": "prj_KxLbkvM7S8kGtbJfQ2JJtvUe3qsH"
+}
+```
+
+3. 루트에서 강제 빌드·배포 (최신 코드가 포함됨):
+```bash
+vercel deploy --prod --archive=tgz --force --yes
+```
+
+4. 배포 확인:
+```bash
+vercel inspect https://admin.stayhalong.com
+```
+
+5. 원복 (PowerShell):
+```powershell
+Move-Item .vercel\\project.json.bak .vercel\\project.json -Force
+```
+
+방법 B — 앱 폴더에서 배포 (로컬 .vercel 설정을 사용하는 방법)
+
+1. `apps/<app>/.vercel/project.json`의 `rootDirectory`가 `null`인지 확인하세요. (null이면 중복 경로 오류를 피할 수 있음)
+2. 앱 폴더로 이동하여 배포:
+```bash
+cd apps/admin
+vercel deploy --prod --force --yes
+```
+
+주의사항 및 팁:
+- 자동화된 CI 배포(권장): GitHub Actions 또는 Vercel Deploy Hooks를 사용해 변경된 앱만 배포하도록 설정하세요.
+- 빈 커밋으로 배포를 강제하려면:
+```bash
+git commit --allow-empty -m "chore: trigger deploy <app>"
+git push origin main
+```
+- 배포 중 문제가 발생하면 Vercel 대시보드의 `inspect` URL과 `mcp_com_vercel_ve_get_runtime_logs`를 사용해 로그를 확인하세요.
+
+이 섹션을 `VERCEL 배포 최적화 가이드`의 실전 절차로 보관하세요 — 운영자가 수작업으로 배포해야 할 때 이 절차를 따르면 다른 앱에 영향을 주지 않고 안전하게 배포할 수 있습니다.
