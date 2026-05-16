@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import ManagerLayout from '@/components/ManagerLayout';
 import ShtCarSeatMap from '@/components/ShtCarSeatMap';
 import supabase from '@/lib/supabase';
@@ -20,7 +21,9 @@ import {
     Plus,
     Grid3X3,
     List,
-    X
+    X,
+    ArrowLeft,
+    Home
 } from 'lucide-react';
 
 interface ShtCarReservation {
@@ -1086,7 +1089,22 @@ export default function ShtCarPage() {
     }
 
     return (
-        <ManagerLayout title="스하차량 관리" activeTab="sht-car">
+        <div className="min-h-screen bg-gray-50 pb-20">
+            {/* 헤더 */}
+            <div className="bg-white border-b shadow-sm px-2 py-2">
+                <div className="flex items-center gap-2">
+                    <button onClick={() => router.back()} className="p-1.5 rounded-lg hover:bg-gray-100">
+                        <ArrowLeft className="w-5 h-5 text-gray-600" />
+                    </button>
+                    <h1 className="text-base font-bold text-gray-800 flex-1 text-center">스하차량 관리</h1>
+                    <Link href="/" className="p-1.5 rounded-lg hover:bg-gray-100">
+                        <Home className="w-5 h-5 text-gray-600" />
+                    </Link>
+                </div>
+            </div>
+
+            {/* 본문 */}
+            <div className="px-2 py-4">
             <div className="space-y-4 text-xs [&_h2]:text-xs [&_h3]:text-xs [&_h4]:text-xs [&_p]:text-xs [&_span]:text-xs [&_button]:text-xs [&_th]:text-xs [&_td]:text-xs [&_input]:text-xs [&_select]:text-xs">
                 {/* 컨트롤 패널 */}
                 <div className="bg-white rounded-lg shadow-md p-3">
@@ -1497,6 +1515,7 @@ export default function ShtCarPage() {
                     </div>
                 </div>
             )}
-        </ManagerLayout>
+            </div>
+            </div>
     );
 }

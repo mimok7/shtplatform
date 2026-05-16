@@ -313,7 +313,7 @@ export default function MobileSettingsPage() {
           <button onClick={() => router.back()} className="p-1.5 rounded-lg hover:bg-gray-100">
             <ArrowLeft className="w-5 h-5 text-gray-600" />
           </button>
-          <h1 className="text-base font-bold text-gray-800 flex-1">설정</h1>
+          <h1 className="text-base font-bold text-gray-800 flex-1 text-center">설정</h1>
           <Link href="/" className="p-1.5 rounded-lg hover:bg-gray-100">
             <Home className="w-5 h-5 text-gray-600" />
           </Link>

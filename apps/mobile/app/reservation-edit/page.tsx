@@ -13,6 +13,7 @@ import {
     Calendar,
     User,
     FileText,
+    ArrowLeft,
     ArrowRight,
     CheckCircle,
     XCircle,
@@ -29,7 +30,8 @@ import {
     Building,
     Trash2,
     Plus,
-    Copy
+    Copy,
+    Home
 } from 'lucide-react';
 
 interface ServiceReservation {
@@ -717,19 +719,46 @@ function ReservationEditContent() {
     // 로딩 상태 처리
     if (loading) {
         return (
-            <ManagerLayout title="📝 예약 수정" activeTab="reservation-edit">
+            <div className="min-h-screen bg-gray-50 pb-20">
+                {/* 헤더 */}
+                <div className="bg-white border-b shadow-sm px-2 py-2">
+                    <div className="flex items-center gap-2">
+                        <button onClick={() => router.back()} className="p-1.5 rounded-lg hover:bg-gray-100">
+                            <ArrowLeft className="w-5 h-5 text-gray-600" />
+                        </button>
+                        <h1 className="text-base font-bold text-gray-800 flex-1 text-center">📝 예약 수정</h1>
+                        <Link href="/" className="p-1.5 rounded-lg hover:bg-gray-100">
+                            <Home className="w-5 h-5 text-gray-600" />
+                        </Link>
+                    </div>
+                </div>
                 <div className="flex justify-center items-center h-64">
                     <div className="text-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
                         <p className="mt-4 text-gray-600">데이터 로드 중...</p>
                     </div>
                 </div>
-            </ManagerLayout>
+            </div>
         );
     }
 
     return (
-        <ManagerLayout title="📝 예약 수정" activeTab="reservation-edit">
+        <div className="min-h-screen bg-gray-50 pb-20">
+            {/* 헤더 */}
+            <div className="bg-white border-b shadow-sm px-2 py-2">
+                <div className="flex items-center gap-2">
+                    <button onClick={() => router.back()} className="p-1.5 rounded-lg hover:bg-gray-100">
+                        <ArrowLeft className="w-5 h-5 text-gray-600" />
+                    </button>
+                    <h1 className="text-base font-bold text-gray-800 flex-1 text-center">📝 예약 수정</h1>
+                    <Link href="/" className="p-1.5 rounded-lg hover:bg-gray-100">
+                        <Home className="w-5 h-5 text-gray-600" />
+                    </Link>
+                </div>
+            </div>
+
+            {/* 본문 */}
+            <div className="px-2 py-4">
             <div className="space-y-6">
                 {/* 검색 및 액션 */}
                 <div className="bg-white rounded-lg shadow-sm p-6">
@@ -1119,21 +1148,34 @@ function ReservationEditContent() {
                     </div>
                 )}
             </div>
-        </ManagerLayout>
+            </div>
+            </div>
     );
 }
 
 export default function ReservationEditPage() {
     return (
         <Suspense fallback={
-            <ManagerLayout title="📝 예약 수정" activeTab="reservation-edit">
+            <div className="min-h-screen bg-gray-50 pb-20">
+                {/* 헤더 */}
+                <div className="bg-white border-b shadow-sm px-2 py-2">
+                    <div className="flex items-center gap-2">
+                        <div className="p-1.5 rounded-lg">
+                            <ArrowLeft className="w-5 h-5 text-gray-600" />
+                        </div>
+                        <h1 className="text-base font-bold text-gray-800 flex-1 text-center">📝 예약 수정</h1>
+                        <Link href="/" className="p-1.5 rounded-lg hover:bg-gray-100">
+                            <Home className="w-5 h-5 text-gray-600" />
+                        </Link>
+                    </div>
+                </div>
                 <div className="flex justify-center items-center h-64">
                     <div className="text-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
                         <p className="mt-4 text-gray-600">페이지를 불러오는 중...</p>
                     </div>
                 </div>
-            </ManagerLayout>
+            </div>
         }>
             <ReservationEditContent />
         </Suspense>
