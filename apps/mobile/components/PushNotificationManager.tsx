@@ -135,7 +135,7 @@ export default function PushNotificationManager() {
 
   if (isStandalone || isDismissed) return null;
 
-  const installButtonText = deferredPrompt ? '지금 설치' : '설치 방법 보기';
+  const installButtonText = '설치 이동';
 
   return (
     <div className="fixed bottom-4 left-1/2 z-[120] w-[calc(100%-1.5rem)] max-w-md -translate-x-1/2 rounded-2xl border border-blue-100 bg-white/95 p-4 shadow-xl backdrop-blur">

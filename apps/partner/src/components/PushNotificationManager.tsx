@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import supabase from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 
 const APP_NAME = 'partner';
 const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || '';
@@ -29,6 +29,7 @@ export default function PushNotificationManager() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isStandalone, setIsStandalone] = useState(true);
   const [isDismissed, setIsDismissed] = useState(false);
+  const [showManualGuide, setShowManualGuide] = useState(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -117,7 +118,7 @@ export default function PushNotificationManager() {
 
   const handleInstallClick = async () => {
     if (!deferredPrompt) {
-      alert('브라우저 메뉴에서 "홈 화면에 추가"를 선택해 앱을 설치해주세요.');
+      setShowManualGuide(true);
       return;
     }
 
@@ -134,11 +135,14 @@ export default function PushNotificationManager() {
 
   if (isStandalone || isDismissed) return null;
 
+  const installButtonText = '설치 이동';
+
   return (
     <div className="fixed bottom-4 left-1/2 z-[120] w-[calc(100%-1.5rem)] max-w-md -translate-x-1/2 rounded-2xl border border-blue-100 bg-white/95 p-4 shadow-xl backdrop-blur">
       <p className="text-sm font-semibold text-slate-900">앱 설치를 권장합니다</p>
       <p className="mt-1 text-xs leading-relaxed text-slate-600">
         푸시 알림을 안정적으로 받으려면 앱을 설치해 주세요.
+        {!deferredPrompt ? ' 이 기기에서는 자동 설치 창이 제한될 수 있습니다.' : ''}
       </p>
       <div className="mt-3 flex items-center gap-2">
         <button
@@ -146,7 +150,7 @@ export default function PushNotificationManager() {
           onClick={handleInstallClick}
           className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700"
         >
-          지금 설치
+          {installButtonText}
         </button>
         <button
           type="button"
@@ -156,6 +160,15 @@ export default function PushNotificationManager() {
           나중에
         </button>
       </div>
+      {showManualGuide ? (
+        <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-[11px] leading-relaxed text-slate-600">
+          <p className="font-semibold text-slate-700">수동 설치 안내</p>
+          <p className="mt-1">1. 브라우저 메뉴(⋮ 또는 공유) 열기</p>
+          <p>2. "홈 화면에 추가" 또는 "앱 설치" 선택</p>
+          <p>3. 추가/설치 버튼을 눌러 완료</p>
+        </div>
+      ) : null}
     </div>
   );
 }
+

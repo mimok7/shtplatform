@@ -10,9 +10,9 @@ export const metadata = {
   description: '스테이하롱 즐겨찾기 빠른 운영 패널',
   manifest: '/manifest.json',
   icons: {
-    icon: '/sht-manag.png',
-    shortcut: '/sht-manag.png',
-    apple: '/sht-manag.png',
+    icon: '/icon-192.png',
+    shortcut: '/icon-192.png',
+    apple: '/icon-192.png',
   },
 };
 

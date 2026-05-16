@@ -15,9 +15,9 @@ export const metadata = {
   description: '스테이하롱 예약 관리 시스템',
   manifest: '/manifest.json',
   icons: {
-    icon: '/sht-manager.png',
-    shortcut: '/sht-manager.png',
-    apple: '/sht-manager.png',
+    icon: '/icon-192.png',
+    shortcut: '/icon-192.png',
+    apple: '/icon-192.png',
   },
 };
 

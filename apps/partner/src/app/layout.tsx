@@ -9,9 +9,9 @@ export const metadata = {
     description: '스테이하롱 제휴업체 예약 시스템',
     manifest: '/manifest.json',
     icons: {
-        icon: '/sht-partner.png',
-        shortcut: '/sht-partner.png',
-        apple: '/sht-partner.png',
+        icon: '/icon-192.png',
+        shortcut: '/icon-192.png',
+        apple: '/icon-192.png',
     },
 };
 

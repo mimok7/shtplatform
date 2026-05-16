@@ -89,8 +89,8 @@ export async function POST(req: NextRequest) {
     const payload = JSON.stringify({
       title,
       body,
-      icon: icon || 'https://staycruise.kr/sht-customer.png',
-      badge: 'https://staycruise.kr/sht-customer.png',
+      icon: icon || 'https://staycruise.kr/icon-192.png',
+      badge: 'https://staycruise.kr/icon-192.png',
       tag: tag || 'sht-notification',
       url: url || 'https://staycruise.kr',
       requireInteraction: requireInteraction || (priority === 'urgent'),

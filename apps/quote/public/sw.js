@@ -2,7 +2,7 @@
 const CACHE_NAME = 'sht-quote-cache-v1';
 const ASSETS_TO_CACHE = [
   '/',
-  '/logo.png',
+  '/icon-192.png',
   '/offline.html'
 ];
 
@@ -74,8 +74,8 @@ self.addEventListener('push', event => {
   event.waitUntil(
     self.registration.showNotification(data.title, {
       body: data.body,
-      icon: data.icon || '/logo.png',
-      badge: data.badge || '/logo.png',
+      icon: data.icon || '/icon-192.png',
+      badge: data.badge || '/icon-192.png',
       tag: data.tag || 'sht-notification',
       data: { url: data.url || '/' },
       requireInteraction: data.requireInteraction || false

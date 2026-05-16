@@ -2,7 +2,7 @@
 const CACHE_NAME = 'sht-customer1-cache-v1';
 const ASSETS_TO_CACHE = [
   '/',
-  '/sht-oldcustomer.png',
+  '/icon-192.png',
   '/offline.html'
 ];
 
@@ -78,8 +78,8 @@ self.addEventListener('push', event => {
   event.waitUntil(
     self.registration.showNotification(data.title, {
       body: data.body,
-      icon: data.icon || '/sht-customer1.png',
-      badge: data.badge || '/sht-customer1.png',
+      icon: data.icon || '/icon-192.png',
+      badge: data.badge || '/icon-192.png',
       tag: data.tag || 'sht-notification',
       data: { url: data.url || '/' },
       requireInteraction: data.requireInteraction || false

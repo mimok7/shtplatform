@@ -15,6 +15,11 @@ const inter = Inter({ subsets: ['latin'] });
 export const metadata = {
   title: 'SHT Quote',
   description: '스테이하롱 견적 시스템',
+  manifest: '/manifest.json',
+  icons: {
+    icon: '/icon-192.png',
+    apple: '/icon-192.png',
+  },
 };
 
 export default function RootLayout({
