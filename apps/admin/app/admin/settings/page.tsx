@@ -318,7 +318,7 @@ export default function AdminSettingsPage() {
 
     return (
         <AdminLayout title="시스템 설정" activeTab="settings">
-            <div className="max-w-4xl space-y-8">
+            <div className="w-full space-y-8">
 
                 {/* 자동 로그아웃 상태 표시 */}
                 {settings.sessionTimeoutEnabled && (

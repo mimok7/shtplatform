@@ -151,6 +151,7 @@ export default function ReservationSettingsPage() {
   const [subscriberRows, setSubscriberRows] = useState<ActiveSubscriberRow[]>([]);
   const [subscribersLoading, setSubscribersLoading] = useState(false);
   const [subscriberAppFilter, setSubscriberAppFilter] = useState<string>('all');
+  const [stoppingSubscriptionId, setStoppingSubscriptionId] = useState<string | null>(null);
 
   const countMap = useMemo(() => {
     return new Map(counts.map((count) => [count.app_name, count]));
@@ -432,6 +433,44 @@ export default function ReservationSettingsPage() {
     }
   };
 
+  const stopSubscription = async (subscriptionId: string) => {
+    setStoppingSubscriptionId(subscriptionId);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token || '';
+
+      const response = await fetch('/api/admin/push-subscriptions', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          subscriptionId,
+          isActive: false,
+        }),
+      });
+
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setErrorMessage(result?.error || '구독 중지 처리에 실패했습니다.');
+        return;
+      }
+
+      setSuccessMessage('선택한 구독을 중지했습니다.');
+      await loadActiveSubscribers(subscriberAppFilter);
+      await loadSettings();
+    } catch (error) {
+      console.error('구독 중지 실패:', error);
+      setErrorMessage('구독 중지 처리에 실패했습니다.');
+    } finally {
+      setStoppingSubscriptionId(null);
+    }
+  };
+
   useEffect(() => {
     if (viewTab !== 'subscribers') return;
     void loadActiveSubscribers(subscriberAppFilter);
@@ -450,7 +489,7 @@ export default function ReservationSettingsPage() {
 
   return (
     <AdminLayout title="예약설정" activeTab="reservation-settings">
-      <div className="max-w-7xl space-y-6">
+      <div className="w-full space-y-6">
         <div className="inline-flex rounded-lg border border-gray-200 bg-white p-1">
           <button
             type="button"
@@ -589,6 +628,7 @@ export default function ReservationSettingsPage() {
                       <th className="px-3 py-3">사용자 ID</th>
                       <th className="px-3 py-3">구독 키</th>
                       <th className="px-3 py-3">최근 활동</th>
+                      <th className="px-3 py-3">관리</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
@@ -601,6 +641,19 @@ export default function ReservationSettingsPage() {
                         <td className="px-3 py-3 text-xs text-gray-500">{row.user_id || '-'}</td>
                         <td className="px-3 py-3 text-xs text-gray-500">{formatEndpoint(row.endpoint)}</td>
                         <td className="px-3 py-3 text-gray-700">{formatDateTime(row.last_used_at || row.created_at)}</td>
+                        <td className="px-3 py-3">
+                          <button
+                            type="button"
+                            onClick={() => void stopSubscription(row.id)}
+                            disabled={stoppingSubscriptionId === row.id}
+                            className="inline-flex items-center rounded-md border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:opacity-50"
+                          >
+                            {stoppingSubscriptionId === row.id ? (
+                              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                            ) : null}
+                            중지
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>

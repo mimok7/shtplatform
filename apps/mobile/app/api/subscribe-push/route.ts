@@ -25,6 +25,36 @@ function getAnonClient(accessToken: string) {
   });
 }
 
+async function deactivateDuplicateSubscriptions(options: {
+  userId: string;
+  appName: string;
+  userAgent: string;
+  endpoint: string;
+  anonClient: ReturnType<typeof getAnonClient>;
+}) {
+  const { userId, appName, userAgent, endpoint, anonClient } = options;
+  if (!userAgent) return;
+
+  const duplicateFilterQuery = (client: any) =>
+    client
+      .from('push_subscriptions')
+      .update({ is_active: false })
+      .eq('user_id', userId)
+      .eq('app_name', appName)
+      .eq('user_agent', userAgent)
+      .neq('endpoint', endpoint)
+      .eq('is_active', true);
+
+  if (serviceSupabase) {
+    await duplicateFilterQuery(serviceSupabase);
+    return;
+  }
+
+  if (anonClient) {
+    await duplicateFilterQuery(anonClient);
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const token = getTokenFromRequest(req);
@@ -55,13 +85,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '로그인 세션을 확인할 수 없습니다. 다시 로그인 후 시도해 주세요.' }, { status: 401 });
     }
 
+    const resolvedAppName = appName || 'mobile';
+    const resolvedUserAgent = req.headers.get('user-agent') || '';
+
     const payload = {
       user_id: userId,
       endpoint: subscription.endpoint,
       p256dh: subscription.keys.p256dh,
       auth: subscription.keys.auth,
-      app_name: appName || 'mobile',
-      user_agent: req.headers.get('user-agent') || '',
+      app_name: resolvedAppName,
+      user_agent: resolvedUserAgent,
       is_active: true,
       last_used_at: new Date().toISOString(),
     };
@@ -73,6 +106,13 @@ export async function POST(req: NextRequest) {
         .upsert(payload, { onConflict: 'endpoint' });
 
       if (!error) {
+        await deactivateDuplicateSubscriptions({
+          userId,
+          appName: resolvedAppName,
+          userAgent: resolvedUserAgent,
+          endpoint: payload.endpoint,
+          anonClient,
+        });
         return NextResponse.json({ success: true });
       }
 
@@ -86,6 +126,15 @@ export async function POST(req: NextRequest) {
       if (fallbackError) {
         return NextResponse.json({ error: `DB 저장 실패: ${fallbackError.message}` }, { status: 500 });
       }
+
+      await deactivateDuplicateSubscriptions({
+        userId,
+        appName: resolvedAppName,
+        userAgent: resolvedUserAgent,
+        endpoint: payload.endpoint,
+        anonClient,
+      });
+
       return NextResponse.json({ success: true });
     }
 
@@ -98,6 +147,14 @@ export async function POST(req: NextRequest) {
     if (error) {
       return NextResponse.json({ error: `DB 저장 실패: ${error.message}` }, { status: 500 });
     }
+
+    await deactivateDuplicateSubscriptions({
+      userId,
+      appName: resolvedAppName,
+      userAgent: resolvedUserAgent,
+      endpoint: payload.endpoint,
+      anonClient,
+    });
 
     return NextResponse.json({ success: true });
   } catch (err: any) {

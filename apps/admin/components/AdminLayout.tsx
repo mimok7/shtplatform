@@ -194,7 +194,6 @@ export default function AdminLayout({ children, title, activeTab }: AdminLayoutP
 
   const dashboardTab: TabItem = { id: 'dashboard', label: '대시보드', path: '/admin', icon: '📊' };
   const settingsTab: TabItem = { id: 'settings', label: '설정', path: '/admin/settings', icon: '⚙️' };
-  const notificationControlTab: TabItem = { id: 'notification-control', label: '알림 제어', path: '/admin/notification-control', icon: '🔔' };
 
   const tabGroups: TabGroup[] = [
     {
@@ -215,8 +214,7 @@ export default function AdminLayout({ children, title, activeTab }: AdminLayoutP
     },
     {
       id: 'group-reservation', label: '예약/운영', icon: '📋', items: [
-        { id: 'reservation-settings', label: '예약설정', path: '/admin/reservation-settings', icon: '🧭' },
-        { id: 'notification-control', label: '알림 제어', path: '/admin/notification-control', icon: '🔔' },
+        { id: 'reservation-settings', label: '알림 설정', path: '/admin/reservation-settings', icon: '🧭' },
         { id: 'reservation-total-system', label: '총금액 계산', path: '/admin/reservation-total-system', icon: '💰' },
         { id: 'sht-seat', label: '스하좌석', path: '/admin/sht-seat', icon: '💺' },
       ]
@@ -247,7 +245,7 @@ export default function AdminLayout({ children, title, activeTab }: AdminLayoutP
     },
   ];
 
-  const allTabs: TabItem[] = [dashboardTab, settingsTab, notificationControlTab, ...tabGroups.flatMap(g => g.items)];
+  const allTabs: TabItem[] = [dashboardTab, settingsTab, ...tabGroups.flatMap(g => g.items)];
 
   // 현재 경로로부터 활성 탭을 자동 계산 (가장 긴 경로 매칭 우선)
   const computedActiveTab = activeTab || (pathname

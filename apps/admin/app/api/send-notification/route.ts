@@ -142,7 +142,7 @@ export async function POST(req: NextRequest) {
     // 대상 push_subscriptions 조회
     let query = serviceSupabase
       .from('push_subscriptions')
-      .select('id, endpoint, p256dh, auth, user_id, app_name')
+      .select('id, endpoint, p256dh, auth, user_id, app_name, user_agent, last_used_at, created_at')
       .eq('is_active', true);
 
     if (userId) {
@@ -169,6 +169,26 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    const dedupedMap = new Map<string, (typeof subscriptions)[number]>();
+    for (const sub of subscriptions) {
+      const key = sub.user_id && sub.app_name && sub.user_agent
+        ? `${sub.user_id}::${sub.app_name}::${sub.user_agent}`
+        : `__raw__::${sub.id}`;
+
+      const existing = dedupedMap.get(key);
+      if (!existing) {
+        dedupedMap.set(key, sub);
+        continue;
+      }
+
+      const existingTime = new Date(existing.last_used_at || existing.created_at || 0).getTime();
+      const currentTime = new Date(sub.last_used_at || sub.created_at || 0).getTime();
+      if (currentTime > existingTime) {
+        dedupedMap.set(key, sub);
+      }
+    }
+    const targetSubscriptions = Array.from(dedupedMap.values());
+
     // 알림 payload 구성
     const payload = JSON.stringify({
       title,
@@ -182,7 +202,7 @@ export async function POST(req: NextRequest) {
     });
 
     const results = await Promise.allSettled(
-      subscriptions.map(async (sub) => {
+      targetSubscriptions.map(async (sub) => {
         try {
           await webpush.sendNotification(
             {
@@ -223,6 +243,7 @@ export async function POST(req: NextRequest) {
       sentCount,
       failCount,
       total: results.length,
+      rawTargetCount: subscriptions.length,
       notificationType: resolvedNotificationType,
       allowedAppNames: allowedAppPolicy.appNames,
       warning: allowedAppPolicy.warning,

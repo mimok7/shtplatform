@@ -17,6 +17,11 @@ type SubscriptionRow = {
   }[] | null;
 };
 
+type AuthUserSummary = {
+  email: string | null;
+  name: string | null;
+};
+
 async function authenticateAdmin(req: NextRequest) {
   if (!serviceSupabase) {
     return { ok: false as const, error: '서버 설정 오류', status: 500 };
@@ -72,14 +77,54 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    const rows = ((data || []) as SubscriptionRow[]).map((row) => {
+    const rawRows = (data || []) as SubscriptionRow[];
+
+    const missingUserIds = Array.from(
+      new Set(
+        rawRows
+          .filter((row) => {
+            const user = Array.isArray(row.users) ? row.users[0] : null;
+            return !!row.user_id && !user?.email && !user?.name;
+          })
+          .map((row) => row.user_id)
+          .filter((id): id is string => Boolean(id))
+      )
+    );
+
+    const authFallbackMap = new Map<string, AuthUserSummary>();
+    if (missingUserIds.length > 0) {
+      await Promise.all(
+        missingUserIds.map(async (id) => {
+          try {
+            const { data: authUserData, error: authUserError } = await serviceSupabase!.auth.admin.getUserById(id);
+            if (authUserError || !authUserData?.user) return;
+
+            const meta = authUserData.user.user_metadata as Record<string, unknown> | null;
+            const metaName =
+              (typeof meta?.name === 'string' && meta.name.trim()) ||
+              (typeof meta?.full_name === 'string' && meta.full_name.trim()) ||
+              null;
+
+            authFallbackMap.set(id, {
+              email: authUserData.user.email || null,
+              name: metaName,
+            });
+          } catch {
+            // auth 보강 조회 실패 시 users 조인 결과만 사용
+          }
+        })
+      );
+    }
+
+    const rows = rawRows.map((row) => {
       const user = Array.isArray(row.users) ? row.users[0] : null;
+      const authUser = row.user_id ? authFallbackMap.get(row.user_id) : undefined;
       return {
         id: row.id,
         app_name: row.app_name || 'unknown',
         user_id: row.user_id,
-        account_email: user?.email || null,
-        user_name: user?.name || null,
+        account_email: user?.email || authUser?.email || null,
+        user_name: user?.name || authUser?.name || null,
         endpoint: row.endpoint,
         user_agent: row.user_agent,
         last_used_at: row.last_used_at,
@@ -88,6 +133,39 @@ export async function GET(req: NextRequest) {
     });
 
     return NextResponse.json({ rows });
+  } catch (error: any) {
+    return NextResponse.json({ error: error?.message || '서버 오류' }, { status: 500 });
+  }
+}
+
+export async function PATCH(req: NextRequest) {
+  try {
+    const auth = await authenticateAdmin(req);
+    if (!auth.ok) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
+    }
+
+    const body = await req.json().catch(() => ({}));
+    const subscriptionId = typeof body?.subscriptionId === 'string' ? body.subscriptionId.trim() : '';
+    const isActive = body?.isActive === undefined ? false : Boolean(body.isActive);
+
+    if (!subscriptionId) {
+      return NextResponse.json({ error: 'subscriptionId 필수' }, { status: 400 });
+    }
+
+    const { error } = await serviceSupabase!
+      .from('push_subscriptions')
+      .update({
+        is_active: isActive,
+        last_used_at: new Date().toISOString(),
+      })
+      .eq('id', subscriptionId);
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true, id: subscriptionId, isActive });
   } catch (error: any) {
     return NextResponse.json({ error: error?.message || '서버 오류' }, { status: 500 });
   }

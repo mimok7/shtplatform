@@ -284,7 +284,7 @@ export default function AdminPackagesPage() {
 
     return (
         <AdminLayout title="📦 패키지 상품 관리" activeTab="packages">
-            <div className="max-w-7xl mx-auto space-y-6">
+            <div className="w-full space-y-6">
                 <div className="flex justify-between items-center">
                     <div>
                         <h2 className="text-2xl font-bold text-gray-800">패키지 상품 관리</h2>
