@@ -200,6 +200,8 @@ export default function SendNotificationModal({ isOpen, onClose, onSuccess }: Se
                         },
                         body: JSON.stringify({
                             userId: selectedCustomer.id,
+                            appNames: ['customer'],
+                            notificationType: 'manual_customer',
                             title: formData.title,
                             body: formData.message,
                             url: 'https://staycruise.kr/mypage/notifications',

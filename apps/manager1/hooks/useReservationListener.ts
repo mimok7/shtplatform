@@ -9,6 +9,9 @@ const LEADER_HEARTBEAT_MS = 4000;
 const PRESENCE_HEARTBEAT_MS = 5000;
 const NOTIFICATION_RUNTIME_SETTINGS_TABLE = 'notification_runtime_settings';
 const RESERVATION_RUNTIME_SETTING_KEY = 'reservation_realtime_enabled';
+const NOTIFICATION_APPS_TABLE = 'notification_apps';
+const NOTIFICATION_APP_EVENT_SETTINGS_TABLE = 'notification_app_event_settings';
+const RESERVATION_REALTIME_EVENT_KEY = 'reservation_realtime';
 const NOTIFICATION_SOURCE_APP = 'manager1';
 const UPSERT_NOTIFICATION_PRESENCE_RPC = 'upsert_manager_notification_presence';
 const DELETE_NOTIFICATION_PRESENCE_RPC = 'delete_manager_notification_presence';
@@ -219,30 +222,6 @@ export function useReservationListener(enabled: boolean, leaderScope: string) {
 
   useEffect(() => {
     let cancelled = false;
-    const channel = supabase
-      .channel('manager1-notification-runtime-setting')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: NOTIFICATION_RUNTIME_SETTINGS_TABLE,
-          filter: `setting_key=eq.${RESERVATION_RUNTIME_SETTING_KEY}`,
-        },
-        (payload) => {
-          if (cancelled) return;
-          if (payload.eventType === 'DELETE') {
-            runtimeEnabledRef.current = true;
-            setIsRuntimeEnabled(true);
-            return;
-          }
-
-          const nextValue = (payload.new as { setting_value_bool?: boolean } | null)?.setting_value_bool;
-          runtimeEnabledRef.current = nextValue !== false;
-          setIsRuntimeEnabled(nextValue !== false);
-        }
-      )
-      .subscribe();
 
     const loadRuntimeSetting = async () => {
       try {
@@ -253,11 +232,74 @@ export function useReservationListener(enabled: boolean, leaderScope: string) {
           .maybeSingle();
 
         if (cancelled || error) return;
-        setIsRuntimeEnabled(data?.setting_value_bool !== false);
+        const { data: appPolicy } = await supabase
+          .from(NOTIFICATION_APPS_TABLE)
+          .select('enabled')
+          .eq('app_name', NOTIFICATION_SOURCE_APP)
+          .maybeSingle();
+
+        const { data: eventPolicy } = await supabase
+          .from(NOTIFICATION_APP_EVENT_SETTINGS_TABLE)
+          .select('enabled')
+          .eq('app_name', NOTIFICATION_SOURCE_APP)
+          .eq('event_key', RESERVATION_REALTIME_EVENT_KEY)
+          .maybeSingle();
+
+        const nextEnabled =
+          data?.setting_value_bool !== false
+          && appPolicy?.enabled !== false
+          && eventPolicy?.enabled !== false;
+
+        runtimeEnabledRef.current = nextEnabled;
+        setIsRuntimeEnabled(nextEnabled);
       } catch {
         // 설정 테이블 미적용 시 기본값(true) 유지
       }
     };
+
+    const channel = supabase
+      .channel('manager1-notification-runtime-setting')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: NOTIFICATION_RUNTIME_SETTINGS_TABLE,
+          filter: `setting_key=eq.${RESERVATION_RUNTIME_SETTING_KEY}`,
+        },
+        () => {
+          void loadRuntimeSetting();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: NOTIFICATION_APPS_TABLE,
+          filter: `app_name=eq.${NOTIFICATION_SOURCE_APP}`,
+        },
+        () => {
+          void loadRuntimeSetting();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: NOTIFICATION_APP_EVENT_SETTINGS_TABLE,
+          filter: `app_name=eq.${NOTIFICATION_SOURCE_APP}`,
+        },
+        (payload) => {
+          const eventKey = (payload.new as { event_key?: string } | null)?.event_key
+            || (payload.old as { event_key?: string } | null)?.event_key;
+          if (!eventKey || eventKey === RESERVATION_REALTIME_EVENT_KEY) {
+            void loadRuntimeSetting();
+          }
+        }
+      )
+      .subscribe();
 
     void loadRuntimeSetting();
 

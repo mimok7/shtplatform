@@ -6,9 +6,62 @@ import serviceSupabase from '@/lib/serviceSupabase';
 const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || '';
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || '';
 const VAPID_EMAIL = process.env.VAPID_EMAIL || 'mailto:admin@stayhalong.com';
+const DEFAULT_NOTIFICATION_TYPE = 'manual_customer';
 
 if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
   webpush.setVapidDetails(VAPID_EMAIL, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+}
+
+async function resolveAllowedAppNames(notificationType: string, requestedAppNames: string[]) {
+  if (!serviceSupabase) {
+    return { appNames: requestedAppNames, policyApplied: false, warning: 'service client unavailable' };
+  }
+
+  const [appsResult, eventResult, settingsResult] = await Promise.all([
+    serviceSupabase
+      .from('notification_apps')
+      .select('app_name, enabled'),
+    serviceSupabase
+      .from('notification_event_types')
+      .select('event_key, is_active')
+      .eq('event_key', notificationType)
+      .maybeSingle(),
+    serviceSupabase
+      .from('notification_app_event_settings')
+      .select('app_name, enabled')
+      .eq('event_key', notificationType)
+      .eq('enabled', true),
+  ]);
+
+  if (appsResult.error || eventResult.error || settingsResult.error) {
+    return {
+      appNames: requestedAppNames,
+      policyApplied: false,
+      warning: 'notification_app_settings_unavailable',
+    };
+  }
+
+  if (!eventResult.data || eventResult.data.is_active === false) {
+    return { appNames: [], policyApplied: true, warning: 'notification_type_disabled' };
+  }
+
+  const enabledApps = new Set(
+    (appsResult.data || [])
+      .filter((app) => app.enabled !== false)
+      .map((app) => app.app_name)
+  );
+  const eventAllowedApps = new Set(
+    (settingsResult.data || [])
+      .filter((setting) => setting.enabled !== false)
+      .map((setting) => setting.app_name)
+  );
+
+  const policyAllowedApps = Array.from(enabledApps).filter((appName) => eventAllowedApps.has(appName));
+  const appNames = requestedAppNames.length > 0
+    ? requestedAppNames.filter((appName) => policyAllowedApps.includes(appName))
+    : policyAllowedApps;
+
+  return { appNames, policyApplied: true };
 }
 
 export async function POST(req: NextRequest) {
@@ -55,10 +108,35 @@ export async function POST(req: NextRequest) {
       tag,
       priority,       // 'normal' | 'high' | 'urgent'
       requireInteraction,
+      notificationType,
+      eventKey,
     } = await req.json();
 
     if (!title || !body) {
       return NextResponse.json({ error: 'title, body 필수' }, { status: 400 });
+    }
+
+    const requestedAppNames = Array.isArray(appNames)
+      ? appNames.filter((appName) => typeof appName === 'string' && appName.trim()).map((appName) => appName.trim())
+      : [];
+    const resolvedNotificationType = typeof eventKey === 'string' && eventKey.trim()
+      ? eventKey.trim()
+      : typeof notificationType === 'string' && notificationType.trim()
+        ? notificationType.trim()
+        : DEFAULT_NOTIFICATION_TYPE;
+    const allowedAppPolicy = await resolveAllowedAppNames(resolvedNotificationType, requestedAppNames);
+
+    if (allowedAppPolicy.policyApplied && allowedAppPolicy.appNames.length === 0) {
+      return NextResponse.json({
+        success: true,
+        sentCount: 0,
+        failCount: 0,
+        total: 0,
+        notificationType: resolvedNotificationType,
+        message: allowedAppPolicy.warning === 'notification_type_disabled'
+          ? '알림 유형이 비활성화되어 발송하지 않았습니다.'
+          : '허용된 대상 앱이 없어 발송하지 않았습니다.',
+      });
     }
 
     // 대상 push_subscriptions 조회
@@ -70,8 +148,8 @@ export async function POST(req: NextRequest) {
     if (userId) {
       query = query.eq('user_id', userId);
     }
-    if (appNames && Array.isArray(appNames) && appNames.length > 0) {
-      query = query.in('app_name', appNames);
+    if (allowedAppPolicy.appNames.length > 0) {
+      query = query.in('app_name', allowedAppPolicy.appNames);
     }
 
     const { data: subscriptions, error: fetchError } = await query;
@@ -82,7 +160,13 @@ export async function POST(req: NextRequest) {
     }
 
     if (!subscriptions || subscriptions.length === 0) {
-      return NextResponse.json({ success: true, sentCount: 0, message: '활성 구독 없음' });
+      return NextResponse.json({
+        success: true,
+        sentCount: 0,
+        notificationType: resolvedNotificationType,
+        allowedAppNames: allowedAppPolicy.appNames,
+        message: '활성 구독 없음',
+      });
     }
 
     // 알림 payload 구성
@@ -94,6 +178,7 @@ export async function POST(req: NextRequest) {
       tag: tag || 'sht-notification',
       url: url || 'https://staycruise.kr',
       requireInteraction: requireInteraction || (priority === 'urgent'),
+      notificationType: resolvedNotificationType,
     });
 
     const results = await Promise.allSettled(
@@ -133,7 +218,15 @@ export async function POST(req: NextRequest) {
     const failCount = results.length - sentCount;
 
     console.log(`[send-notification] 발송 완료: ${sentCount}/${results.length}`);
-    return NextResponse.json({ success: true, sentCount, failCount, total: results.length });
+    return NextResponse.json({
+      success: true,
+      sentCount,
+      failCount,
+      total: results.length,
+      notificationType: resolvedNotificationType,
+      allowedAppNames: allowedAppPolicy.appNames,
+      warning: allowedAppPolicy.warning,
+    });
 
   } catch (err: any) {
     console.error('[send-notification] 오류:', err);
