@@ -434,7 +434,7 @@ export default function CustomerManagement() {
           </button>
         </div>
 
-        <div className="bg-white shadow overflow-hidden sm:rounded-md">
+        <div className="shadow overflow-hidden sm:rounded-md p-3 bg-transparent">
           {!searched ? (
             <div className="py-8 text-center text-gray-500 text-sm">검색어를 입력 후 검색 버튼을 눌러주세요.</div>
           ) : customers.length === 0 ? (
