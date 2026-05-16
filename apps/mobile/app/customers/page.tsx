@@ -446,7 +446,7 @@ export default function CustomerManagement() {
                 .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
                 .slice(0, 5)
                 .map((customer) => (
-                  <div key={customer.id} className="bg-gray-50 rounded-xl shadow-sm border border-gray-200 p-4 flex flex-col justify-between h-full">
+                  <div key={customer.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex flex-col justify-between h-full">
                     <div className="mb-2">
                       <div className="text-base font-semibold text-gray-900">{customer.name || '이름 없음'}</div>
                       <div className="text-sm text-gray-500">{customer.email}</div>
