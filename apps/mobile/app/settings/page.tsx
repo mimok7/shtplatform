@@ -2,7 +2,8 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Bell, Lock, UserRound } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Bell, Lock, UserRound, ArrowLeft, Home } from 'lucide-react';
 import supabase from '@/lib/supabase';
 
 const APP_NAME = 'mobile';
@@ -39,6 +40,7 @@ async function ensureServiceWorkerRegistration(): Promise<ServiceWorkerRegistrat
 }
 
 export default function MobileSettingsPage() {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
@@ -304,16 +306,22 @@ export default function MobileSettingsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 px-2 py-4">
-      <div className="mx-auto w-full max-w-md space-y-3">
-        <header className="rounded-2xl bg-white p-3 shadow-sm">
-          <Link href="/" className="text-xs font-medium text-slate-500 hover:text-slate-800">
-            ← 홈으로
+    <div className="min-h-screen bg-slate-50 pb-20">
+      {/* 헤더 */}
+      <div className="bg-white border-b shadow-sm px-2 py-2">
+        <div className="flex items-center gap-2 mb-2">
+          <button onClick={() => router.back()} className="p-1.5 rounded-lg hover:bg-gray-100">
+            <ArrowLeft className="w-5 h-5 text-gray-600" />
+          </button>
+          <h1 className="text-base font-bold text-gray-800 flex-1">설정</h1>
+          <Link href="/" className="p-1.5 rounded-lg hover:bg-gray-100">
+            <Home className="w-5 h-5 text-gray-600" />
           </Link>
-          <h1 className="mt-2 text-base font-semibold text-slate-900">설정</h1>
-          <p className="mt-1 text-xs text-slate-500">알림 허용, 내정보, 비밀번호 변경</p>
-        </header>
+        </div>
+      </div>
 
+      {/* 본문 */}
+      <div className="mx-auto w-full max-w-md space-y-3 px-2 py-4">
         <section className="rounded-2xl bg-white p-3 shadow-sm">
           <div className="mb-2 flex items-center gap-2">
             <Bell className="h-4 w-4 text-blue-600" />
