@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import supabase from '@/lib/supabase';
 import {
   Calendar, Clock, Ship, Plane, Building, MapPin, Car,
-  ChevronLeft, ChevronRight, Search, ArrowLeft, RefreshCw
+  ChevronLeft, ChevronRight, Search, ArrowLeft, Home
 } from 'lucide-react';
 import ReservationDetailModal from '@/components/ReservationDetailModal';
 import { toKstDateKey, toKstDateLabel, toKstDateTimeParts, toLocalDateKey } from '@/lib/dateKst';
@@ -1083,19 +1083,19 @@ export default function SchedulePage() {
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
       {/* 헤더 */}
-      <div className="bg-white border-b shadow-sm px-4 py-3">
-        <div className="flex items-center gap-3 mb-3">
-          <Link href="/" className="p-1.5 rounded-lg hover:bg-gray-100">
+      <div className="bg-white border-b shadow-sm px-2 py-2">
+        <div className="flex items-center gap-2">
+          <button onClick={() => router.back()} className="p-1.5 rounded-lg hover:bg-gray-100">
             <ArrowLeft className="w-5 h-5 text-gray-600" />
-          </Link>
-          <h1 className="text-lg font-bold text-gray-800 flex-1">🆕 신/구 구분</h1>
-          <button onClick={loadData} className="p-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600">
-            <RefreshCw className="w-4 h-4" />
           </button>
+          <h1 className="text-base font-bold text-gray-800 flex-1 text-center">🆕 신/구 구분</h1>
+          <Link href="/" className="p-1.5 rounded-lg hover:bg-gray-100">
+            <Home className="w-5 h-5 text-gray-600" />
+          </Link>
         </div>
 
         {/* 날짜 네비게이션 */}
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between mt-2">
           <button onClick={() => navigateDate('prev')} className="p-2 rounded-lg hover:bg-gray-100">
             <ChevronLeft className="w-5 h-5" />
           </button>

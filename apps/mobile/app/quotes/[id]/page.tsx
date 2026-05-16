@@ -12,7 +12,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter, useParams } from 'next/navigation';
 import {
-  ArrowLeft, Loader2, RefreshCw, CheckCircle, XCircle,
+  ArrowLeft, Loader2, CheckCircle, XCircle, Home,
   Calculator, Edit3, Ship, Plane, Building, Car as CarIcon,
   Bus, MapPin,
 } from 'lucide-react';
@@ -237,21 +237,15 @@ export default function MobileQuoteDetailPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 pb-24">
       {/* Header */}
-      <header className="sticky top-0 z-20 bg-white/95 backdrop-blur border-b border-slate-200">
-        <div className="flex items-center justify-between px-2 py-2">
-          <Link href="/quotes" className="flex items-center gap-1 text-slate-600 active:text-slate-900">
-            <ArrowLeft className="w-5 h-5" />
-            <span className="text-sm">목록</span>
-          </Link>
-          <h1 className="text-base font-bold text-slate-800">견적 상세</h1>
-          <button
-            type="button"
-            onClick={loadAll}
-            className="text-slate-600 active:text-slate-900"
-            aria-label="새로 고침"
-          >
-            <RefreshCw className="w-5 h-5" />
+      <header className="bg-white border-b shadow-sm px-2 py-2">
+        <div className="flex items-center gap-2">
+          <button onClick={() => router.back()} className="p-1.5 rounded-lg hover:bg-gray-100">
+            <ArrowLeft className="w-5 h-5 text-gray-600" />
           </button>
+          <h1 className="text-base font-bold text-slate-800 flex-1 text-center">견적 상세</h1>
+          <Link href="/" className="p-1.5 rounded-lg hover:bg-gray-100">
+            <Home className="w-5 h-5 text-gray-600" />
+          </Link>
         </div>
       </header>
 

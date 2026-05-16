@@ -12,7 +12,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, Search, X, RefreshCw, FileText, CheckCircle,
-  Clock, FileEdit, XCircle, Filter, Trash2, Eye, Loader2,
+  Clock, FileEdit, XCircle, Filter, Trash2, Eye, Loader2, Home
 } from 'lucide-react';
 import supabase from '@/lib/supabase';
 
@@ -257,14 +257,15 @@ export default function MobileQuotesPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 pb-20">
       {/* 상단 헤더 */}
-      <header className="sticky top-0 z-20 bg-white/95 backdrop-blur border-b border-slate-200">
-        <div className="flex items-center justify-between px-3 py-2.5">
-          <Link href="/" className="flex items-center gap-1 text-slate-600 active:text-slate-900">
-            <ArrowLeft className="w-5 h-5" />
-            <span className="text-sm">이전</span>
+      <header className="bg-white border-b shadow-sm px-2 py-2">
+        <div className="flex items-center gap-2">
+          <button onClick={() => router.back()} className="p-1.5 rounded-lg hover:bg-gray-100">
+            <ArrowLeft className="w-5 h-5 text-gray-600" />
+          </button>
+          <h1 className="text-base font-bold text-gray-800 flex-1 text-center">견적 목록</h1>
+          <Link href="/" className="p-1.5 rounded-lg hover:bg-gray-100">
+            <Home className="w-5 h-5 text-gray-600" />
           </Link>
-          <h1 className="text-sm font-semibold text-slate-800">견적 목록</h1>
-          <Link href="/" className="text-sm text-blue-600 active:text-blue-800 font-medium">홈</Link>
         </div>
       </header>
 
