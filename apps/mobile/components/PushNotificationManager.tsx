@@ -112,6 +112,9 @@ export default function PushNotificationManager() {
       } = await supabase.auth.getSession();
       const token = session?.access_token || '';
 
+      // 로그인 세션이 없는 상태에서는 자동 구독 저장을 시도하지 않는다.
+      if (!token) return;
+
       const response = await fetch('/api/subscribe-push', {
         method: 'POST',
         headers: {

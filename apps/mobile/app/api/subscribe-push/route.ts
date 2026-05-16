@@ -28,17 +28,20 @@ function getAnonClient(accessToken: string) {
 export async function POST(req: NextRequest) {
   try {
     const token = getTokenFromRequest(req);
+    const anonClient = getAnonClient(token);
 
     let userId: string | null = null;
-    if (serviceSupabase && token) {
-      const { data } = await serviceSupabase.auth.getUser(token);
-      userId = data.user?.id || null;
+    if (token && serviceSupabase) {
+      const { data, error } = await serviceSupabase.auth.getUser(token);
+      // Service key가 잘못된 환경에서는 anon client로 fallback한다.
+      if (!error) {
+        userId = data.user?.id || null;
+      }
     }
 
-    if (!userId && token) {
-      const anonClient = getAnonClient(token);
-      if (anonClient) {
-        const { data } = await anonClient.auth.getUser(token);
+    if (!userId && token && anonClient) {
+      const { data, error } = await anonClient.auth.getUser(token);
+      if (!error) {
         userId = data.user?.id || null;
       }
     }
@@ -69,21 +72,31 @@ export async function POST(req: NextRequest) {
         .from('push_subscriptions')
         .upsert(payload, { onConflict: 'endpoint' });
 
-      if (error) {
-        return NextResponse.json({ error: `DB 저장 실패: ${error.message}` }, { status: 500 });
+      if (!error) {
+        return NextResponse.json({ success: true });
       }
-    } else {
-      const anonClient = getAnonClient(token);
+
+      // 서비스키가 비정상일 때 anon fallback 경로로 재시도한다.
       if (!anonClient) {
-        return NextResponse.json({ error: '서버 설정 오류(anon/client 구성 실패)' }, { status: 500 });
+        return NextResponse.json({ error: `DB 저장 실패: ${error.message}` }, { status: 500 });
       }
 
       await anonClient.from('push_subscriptions').delete().eq('endpoint', payload.endpoint);
-      const { error } = await anonClient.from('push_subscriptions').insert(payload);
-
-      if (error) {
-        return NextResponse.json({ error: `DB 저장 실패: ${error.message}` }, { status: 500 });
+      const { error: fallbackError } = await anonClient.from('push_subscriptions').insert(payload);
+      if (fallbackError) {
+        return NextResponse.json({ error: `DB 저장 실패: ${fallbackError.message}` }, { status: 500 });
       }
+      return NextResponse.json({ success: true });
+    }
+
+    if (!anonClient) {
+      return NextResponse.json({ error: '서버 설정 오류(anon/client 구성 실패)' }, { status: 500 });
+    }
+
+    await anonClient.from('push_subscriptions').delete().eq('endpoint', payload.endpoint);
+    const { error } = await anonClient.from('push_subscriptions').insert(payload);
+    if (error) {
+      return NextResponse.json({ error: `DB 저장 실패: ${error.message}` }, { status: 500 });
     }
 
     return NextResponse.json({ success: true });

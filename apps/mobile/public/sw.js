@@ -43,23 +43,30 @@ self.addEventListener('fetch', event => {
   }
 
   event.respondWith(
-    caches.match(event.request).then(response => {
-      if (response) return response;
-      
-      return fetch(event.request).then(response => {
-        if (!response || response.status !== 200) {
-          return response;
-        }
-        
-        const responseToCache = response.clone();
-        caches.open(CACHE_NAME).then(cache => {
-          cache.put(event.request, responseToCache);
+    caches.match(event.request).then((cachedResponse) => {
+      if (cachedResponse) return cachedResponse;
+
+      return fetch(event.request)
+        .then((networkResponse) => {
+          if (!networkResponse || networkResponse.status !== 200) {
+            return networkResponse;
+          }
+
+          const responseToCache = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, responseToCache);
+          });
+
+          return networkResponse;
+        })
+        .catch(async () => {
+          const homeFallback = await caches.match('/');
+          if (homeFallback) return homeFallback;
+          return new Response('Offline - please check connection', {
+            status: 503,
+            headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+          });
         });
-        
-        return response;
-      }).catch(() => {
-        return caches.match('/') || new Response('Offline - please check connection');
-      });
     })
   );
 });

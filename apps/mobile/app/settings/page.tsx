@@ -111,6 +111,9 @@ export default function MobileSettingsPage() {
 
   const saveSubscription = async (subscription: PushSubscription) => {
     const token = await getSessionToken();
+    if (!token) {
+      throw new Error('로그인 세션이 만료되었습니다. 다시 로그인 후 시도해 주세요.');
+    }
 
     const response = await fetch('/api/subscribe-push', {
       method: 'POST',
@@ -132,6 +135,9 @@ export default function MobileSettingsPage() {
 
   const unsubscribeOnServer = async (endpoint: string) => {
     const token = await getSessionToken();
+    if (!token) {
+      throw new Error('로그인 세션이 만료되었습니다. 다시 로그인 후 시도해 주세요.');
+    }
     const response = await fetch('/api/unsubscribe-push', {
       method: 'POST',
       headers: {
