@@ -1046,7 +1046,7 @@ function PackageReservationEditContent() {
         <ManagerLayout title="📦 패키지 예약 수정" activeTab="reservation-edit">
             <div className="max-w-4xl mx-auto space-y-6 pb-20">
                 {/* 패키지 정보 */}
-                <div className="bg-purple-50 rounded-lg p-6 border border-purple-200">
+                <div className="bg-white rounded-lg p-6 border border-gray-100 shadow-sm">
                     <div className="flex items-center gap-3 mb-4">
                         <Package className="w-8 h-8 text-purple-600" />
                         <div>

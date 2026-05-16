@@ -1798,7 +1798,7 @@ function CruiseReservationEditContent() {
                                     )] as string[];
 
                                     return (
-                                        <div key={roomIndex} className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+                                        <div key={roomIndex} className="bg-white p-4 rounded-lg border border-gray-100 shadow-sm">
                                             <div className="flex items-center justify-between mb-4">
                                                 <div>
                                                     <div className="text-sm font-semibold text-gray-900">객실 {roomIndex + 1}</div>
@@ -2018,7 +2018,7 @@ function CruiseReservationEditContent() {
                                                         min="0"
                                                         value={room.room_total_price}
                                                         onChange={(e) => updateRoomAt(roomIndex, (r) => ({ ...r, room_total_price: parseInt(e.target.value) || 0 }))}
-                                                        className="w-full px-3 py-2 text-lg font-bold text-gray-900 bg-blue-50 rounded border-2 border-blue-200 focus:outline-none focus:border-blue-400"
+                                                        className="w-full px-3 py-2 text-lg font-bold text-gray-900 bg-white rounded border border-gray-100 shadow-sm focus:outline-none focus:border-blue-400"
                                                     />
                                                     <p className="text-xs text-gray-500 mt-1">
                                                         💡 {formatRoomPriceFormula(room, roomDetail)}
@@ -2041,7 +2041,7 @@ function CruiseReservationEditContent() {
                             </h3>
                             <div className="space-y-4">
                                 {carData.map((car, idx) => (
-                                    <div key={idx} className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                                    <div key={idx} className="bg-white p-4 rounded-lg border border-gray-100 shadow-sm">
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             {/* 1. 크루즈명 */}
                                             <div>
@@ -2283,7 +2283,7 @@ function CruiseReservationEditContent() {
                                             {/* 11. 차량 가격 */}
                                             <div className="md:col-span-2">
                                                 <label className="block text-xs font-medium text-gray-700 mb-1">차량 가격 (동) *</label>
-                                                <div className="text-lg text-gray-900 font-bold bg-green-50 px-3 py-2 rounded border-2 border-green-200">
+                                                <div className="text-lg text-gray-900 font-bold bg-white px-3 py-2 rounded border-2 border-green-200">
                                                     {(() => {
                                                         const carCount = car.car_count || 0;
                                                         const passengerCount = car.passenger_count || 0;

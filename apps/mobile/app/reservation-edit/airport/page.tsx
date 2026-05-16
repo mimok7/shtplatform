@@ -731,48 +731,34 @@ function AirportReservationEditContent() {
                                 <Plane className="w-5 h-5" />
                                 공항 서비스 세부사항 수정
                             </h3>
-                            <div className="mb-4 flex gap-2 flex-wrap items-center">
-                                <button
-                                    type="button"
-                                    onClick={() => setActiveWay('pickup')}
-                                    className={`px-3 py-1.5 rounded-lg border text-sm ${activeWay === 'pickup'
-                                        ? 'bg-blue-50 border-blue-400 text-blue-700'
-                                        : 'bg-white border-gray-200 text-gray-600'
-                                        }`}
-                                >
-                                    픽업 수정
-                                </button>
-                                {airportRowIds.pickup && (
-                                    <button
-                                        type="button"
-                                        onClick={() => handleDeleteWay('pickup')}
-                                        className="px-3 py-1.5 rounded-lg border border-red-200 bg-red-50 text-red-600 text-sm hover:bg-red-100 transition-colors"
-                                    >
-                                        픽업 삭제
-                                    </button>
-                                )}
-                                <button
-                                    type="button"
-                                    onClick={() => setActiveWay('sending')}
-                                    className={`px-3 py-1.5 rounded-lg border text-sm ${activeWay === 'sending'
-                                        ? 'bg-blue-50 border-blue-400 text-blue-700'
-                                        : 'bg-white border-gray-200 text-gray-600'
-                                        }`}
-                                >
-                                    샌딩 수정
-                                </button>
-                                {airportRowIds.sending && (
-                                    <button
-                                        type="button"
-                                        onClick={() => handleDeleteWay('sending')}
-                                        className="px-3 py-1.5 rounded-lg border border-red-200 bg-red-50 text-red-600 text-sm hover:bg-red-100 transition-colors"
-                                    >
-                                        샌딩 삭제
-                                    </button>
-                                )}
-                                <span className="text-xs text-gray-500 self-center ml-auto">
-                                    현재 수정: {activeWay === 'pickup' ? '픽업' : '샌딩'}
-                                </span>
+                            <div className="mb-4">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <span className="text-xs text-gray-500 whitespace-nowrap">
+                                        현재 수정: {activeWay === 'pickup' ? '픽업' : '샌딩'}
+                                    </span>
+                                    <div className="flex flex-wrap items-center justify-end gap-2 ml-auto">
+                                        <button
+                                            type="button"
+                                            onClick={() => setActiveWay('pickup')}
+                                            className={`px-3 py-1.5 rounded-lg border text-sm ${activeWay === 'pickup'
+                                                ? 'bg-blue-50 border-blue-400 text-blue-700'
+                                                : 'bg-white border-gray-200 text-gray-600'
+                                                }`}
+                                        >
+                                            픽업 수정
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setActiveWay('sending')}
+                                            className={`px-3 py-1.5 rounded-lg border text-sm ${activeWay === 'sending'
+                                                ? 'bg-blue-50 border-blue-400 text-blue-700'
+                                                : 'bg-white border-gray-200 text-gray-600'
+                                                }`}
+                                        >
+                                            샌딩 수정
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                             <div className="space-y-4">
                                 <div>
@@ -1103,23 +1089,33 @@ function AirportReservationEditContent() {
 
                         {/* 저장 버튼 */}
                         <div className="bg-white rounded-lg shadow-sm p-4">
-                            <button
-                                onClick={handleSave}
-                                disabled={saving}
-                                className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                {saving ? (
-                                    <>
-                                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                        저장 중...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Save className="w-4 h-4" />
-                                        수정사항 저장
-                                    </>
-                                )}
-                            </button>
+                            <div className="flex items-center justify-between gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => handleDeleteWay(activeWay)}
+                                    disabled={!airportRowIds[activeWay] || saving}
+                                    className="inline-flex h-9 w-24 items-center justify-center gap-1.5 px-2 py-1.5 rounded-md border border-red-200 bg-red-50 text-red-600 text-xs hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {activeWay === 'pickup' ? '픽업 삭제' : '샌딩 삭제'}
+                                </button>
+                                <button
+                                    onClick={handleSave}
+                                    disabled={saving}
+                                    className="inline-flex h-9 w-24 items-center justify-center gap-1.5 px-2 py-1.5 bg-blue-600 text-white text-xs rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {saving ? (
+                                        <>
+                                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                            저장 중...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Save className="w-4 h-4" />
+                                            수정저장
+                                        </>
+                                    )}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

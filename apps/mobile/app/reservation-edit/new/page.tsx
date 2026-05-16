@@ -200,7 +200,7 @@ function AirportForm({ userId, quoteId, onComplete }: { userId: string; quoteId?
         const vt = num === 1 ? form.vehicleType1 : form.vehicleType2;
 
         return (
-            <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+            <div className="bg-white rounded-lg p-4 space-y-3 shadow-sm">
                 <h4 className="font-medium text-gray-700">{prefix} ({cat || '-'})</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
@@ -243,7 +243,7 @@ function AirportForm({ userId, quoteId, onComplete }: { userId: string; quoteId?
             {form.serviceType === 'both' && renderServiceSelect(2)}
 
             {(form.serviceType === 'pickup' || form.serviceType === 'both') && (
-                <div className="space-y-3 bg-blue-50 rounded-lg p-4">
+                <div className="space-y-3 bg-white rounded-lg p-4 shadow-sm">
                     <h4 className="font-medium text-blue-800">픽업 정보</h4>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                         <div>
@@ -266,7 +266,7 @@ function AirportForm({ userId, quoteId, onComplete }: { userId: string; quoteId?
             )}
 
             {(form.serviceType === 'sending' || form.serviceType === 'both') && (
-                <div className="space-y-3 bg-green-50 rounded-lg p-4">
+                <div className="space-y-3 bg-white rounded-lg p-4 shadow-sm">
                     <h4 className="font-medium text-green-800">샌딩 정보</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div>
@@ -297,7 +297,7 @@ function AirportForm({ userId, quoteId, onComplete }: { userId: string; quoteId?
             </div>
 
             {(price1 !== null || price2 !== null) && (
-                <div className="bg-yellow-50 rounded-lg p-4">
+                <div className="bg-white rounded-lg p-4 shadow-sm">
                     <div className="text-lg font-bold text-red-600">
                         예상 총 금액: {((price1 || 0) + (price2 || 0)).toLocaleString()}동
                     </div>
@@ -436,7 +436,7 @@ function HotelForm({ userId, quoteId, onComplete }: { userId: string; quoteId?: 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
                         {hotelCardsData.map((hotel: any) => (
                             <div key={hotel.hotel_code} onClick={() => { setSelectedHotelName(hotel.hotel_name); setSelectedHotel(null); }}
-                                className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${selectedHotelName === hotel.hotel_name ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-blue-300'}`}>
+                                className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${selectedHotelName === hotel.hotel_name ? 'border-blue-500 bg-white' : 'border-gray-200 hover:border-blue-300'}`}>
                                 <div className="font-medium">{hotel.hotel_name}</div>
                                 {hotel.location && <div className="text-xs text-gray-500 mt-1">{hotel.location}</div>}
                             </div>
@@ -451,7 +451,7 @@ function HotelForm({ userId, quoteId, onComplete }: { userId: string; quoteId?: 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
                         {roomCardsData.map((room: any) => (
                             <div key={room.hotel_price_code} onClick={() => setSelectedHotel(room)}
-                                className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${selectedHotel?.hotel_price_code === room.hotel_price_code ? 'border-purple-500 bg-purple-50' : 'border-gray-200 hover:border-purple-300'}`}>
+                                className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${selectedHotel?.hotel_price_code === room.hotel_price_code ? 'border-purple-500 bg-white' : 'border-gray-200 hover:border-purple-300'}`}>
                                 <div className="flex justify-between items-start">
                                     <div>
                                         <div className="font-medium">{room.room_name || room.room_type}</div>
@@ -493,7 +493,7 @@ function HotelForm({ userId, quoteId, onComplete }: { userId: string; quoteId?: 
             </div>
 
             {selectedHotel && nights > 0 && (
-                <div className="bg-yellow-50 rounded-lg p-4">
+                <div className="bg-white rounded-lg p-4 shadow-sm">
                     <div className="text-lg font-bold text-red-600">
                         예상 총 금액: {(Number(selectedHotel.base_price || 0) * Number(formData.room_count) * nights).toLocaleString()}동
                     </div>
@@ -596,7 +596,7 @@ function TourForm({ userId, quoteId, onComplete }: { userId: string; quoteId?: s
                 <div className="grid grid-cols-1 gap-3 mt-2">
                     {tours.map(tour => (
                         <div key={tour.tour_id} onClick={() => setSelectedTourId(tour.tour_id)}
-                            className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${selectedTourId === tour.tour_id ? 'border-orange-500 bg-orange-50' : 'border-gray-200 hover:border-orange-300'}`}>
+                            className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${selectedTourId === tour.tour_id ? 'border-orange-500 bg-white' : 'border-gray-200 hover:border-orange-300'}`}>
                             <div className="font-medium">{tour.tour_name}</div>
                             <div className="text-xs text-gray-500 mt-1">{tour.category} · {tour.duration} · {tour.location}</div>
                             {tour.description && <div className="text-xs text-gray-400 mt-1 line-clamp-2">{tour.description}</div>}
@@ -615,9 +615,9 @@ function TourForm({ userId, quoteId, onComplete }: { userId: string; quoteId?: s
                                 key={p.pricing_id}
                                 onClick={() => setSelectedPricingId(p.pricing_id)}
                                 className={`p-3 rounded-lg border text-center text-sm transition-colors ${selectedPricingId === p.pricing_id
-                                    ? 'bg-orange-50 border-orange-400'
+                                    ? 'bg-white border-orange-400'
                                     : guestCount >= p.min_guests && guestCount <= p.max_guests
-                                        ? 'bg-orange-50/60 border-orange-200 hover:border-orange-300'
+                                        ? 'bg-white/60 border-orange-200 hover:border-orange-300'
                                         : 'border-gray-200 hover:border-orange-300'
                                     }`}
                             >
@@ -662,7 +662,7 @@ function TourForm({ userId, quoteId, onComplete }: { userId: string; quoteId?: s
             </div>
 
             {selectedTourId && (
-                <div className="bg-yellow-50 rounded-lg p-4">
+                <div className="bg-white rounded-lg p-4 shadow-sm">
                     <div className="text-lg font-bold text-red-600">
                         예상 총 금액: {(getPrice() * guestCount).toLocaleString()}동 ({guestCount}명 × {getPrice().toLocaleString()}동)
                     </div>
@@ -796,7 +796,7 @@ function RentcarForm({ userId, quoteId, onComplete }: { userId: string; quoteId?
 
             {price !== null && <div className="text-sm text-red-600 font-medium">차량 가격: {price.toLocaleString()}동</div>}
 
-            <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+            <div className="bg-white rounded-lg p-4 space-y-3 shadow-sm">
                 <h4 className="font-medium text-gray-700">가는편 (픽업)</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
@@ -823,7 +823,7 @@ function RentcarForm({ userId, quoteId, onComplete }: { userId: string; quoteId?
             </div>
 
             {isRoundTrip && (
-                <div className="bg-green-50 rounded-lg p-4 space-y-3">
+                <div className="bg-white rounded-lg p-4 space-y-3 shadow-sm">
                     <h4 className="font-medium text-green-700">오는편 (샌딩)</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div>
@@ -875,7 +875,7 @@ function RentcarForm({ userId, quoteId, onComplete }: { userId: string; quoteId?
             </div>
 
             {price !== null && (
-                <div className="bg-yellow-50 rounded-lg p-4">
+                <div className="bg-white rounded-lg p-4 shadow-sm">
                     <div className="text-lg font-bold text-red-600">
                         예상 총 금액: {((price || 0) * form.car_count).toLocaleString()}동 ({form.car_count}대)
                     </div>
@@ -1285,7 +1285,7 @@ function CruiseForm({ userId, quoteId, onComplete }: { userId: string; quoteId?:
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mt-2">
                         {roomTypeCards.map(card => (
                             <div key={card.id} onClick={() => { setSelectedRateCardId(card.id); setSelectedCard(card); }}
-                                className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${selectedRateCardId === card.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-blue-300'}`}>
+                                className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${selectedRateCardId === card.id ? 'border-blue-500 bg-white' : 'border-gray-200 hover:border-blue-300'}`}>
                                 <div className="font-medium text-sm">{card.room_type}</div>
                                 {card.room_type_en && <div className="text-xs text-gray-400">{card.room_type_en}</div>}
                                 <div className="mt-2 space-y-1 text-xs">
@@ -1300,7 +1300,7 @@ function CruiseForm({ userId, quoteId, onComplete }: { userId: string; quoteId?:
                 </div>
             )}
 
-            <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+            <div className="bg-white rounded-lg p-4 space-y-3 shadow-sm">
                 <h4 className="font-medium text-gray-700">인원 구성</h4>
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                     {[
@@ -1323,7 +1323,7 @@ function CruiseForm({ userId, quoteId, onComplete }: { userId: string; quoteId?:
             </div>
 
             {/* 차량 선택 섹션 */}
-            <div className="bg-blue-50 rounded-lg p-4 space-y-3">
+            <div className="bg-white rounded-lg p-4 space-y-3 shadow-sm">
                 <h4 className="font-medium text-blue-800">🚗 차량 서비스 (선택)</h4>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                     <div>
@@ -1379,7 +1379,7 @@ function CruiseForm({ userId, quoteId, onComplete }: { userId: string; quoteId?:
                 )}
 
                 {vehicleForm.car_type.includes('스테이하롱 셔틀 리무진') && (
-                    <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 space-y-2">
+                    <div className="bg-white border border-indigo-200 rounded-lg p-3 space-y-2 shadow-sm">
                         <div className="text-sm font-semibold text-indigo-700">🚌 스하차량 좌석 선택</div>
                         <button
                             type="button"
@@ -1417,7 +1417,7 @@ function CruiseForm({ userId, quoteId, onComplete }: { userId: string; quoteId?:
             </div>
 
             {selectedCard && (
-                <div className="bg-yellow-50 rounded-lg p-4 space-y-2">
+                <div className="bg-white rounded-lg p-4 space-y-2 shadow-sm border border-gray-100">
                     <div className="text-sm">
                         <span className="text-gray-600">객실 금액:</span>
                         <span className="ml-2 font-bold">{calculateRoomPrice().toLocaleString()}동</span>
@@ -1806,7 +1806,7 @@ function NewReservationContent() {
 
                         {/* 신고객 추가 탭 */}
                         {searchMode === 'newCustomer' && (
-                            <div className="bg-green-50 rounded-lg p-6 space-y-4">
+                            <div className="bg-white rounded-lg p-6 space-y-4 shadow-sm">
                                 <h3 className="text-lg font-bold text-gray-900">신고객 추가</h3>
                                 <div className="space-y-3">
                                     <div>
@@ -1902,7 +1902,7 @@ function NewReservationContent() {
                 {step === 2 && selectedCustomer && (
                     <div className="space-y-4">
                         {/* 선택된 고객 정보 */}
-                        <div className="bg-blue-50 rounded-lg p-4 flex items-center justify-between">
+                        <div className="bg-white rounded-lg p-4 flex items-center justify-between shadow-sm">
                             <div className="flex items-center gap-3">
                                 <User className="w-5 h-5 text-blue-600" />
                                 <div>
@@ -1943,7 +1943,7 @@ function NewReservationContent() {
                 {step === 3 && selectedCustomer && selectedService && (
                     <div className="space-y-4">
                         {/* 선택된 고객 정보 */}
-                        <div className="bg-blue-50 rounded-lg p-4 flex items-center justify-between">
+                        <div className="bg-white rounded-lg p-4 flex items-center justify-between shadow-sm">
                             <div className="flex items-center gap-3">
                                 <User className="w-5 h-5 text-blue-600" />
                                 <div>

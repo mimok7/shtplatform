@@ -848,7 +848,7 @@ function ReservationEditContent() {
                                                     {[...reservation.services]
                                                         .sort((a, b) => getServiceSortOrder(a.re_type) - getServiceSortOrder(b.re_type))
                                                         .map((service, idx) => (
-                                                            <div key={idx} className="flex items-center gap-1 bg-gray-50 px-2 py-1 rounded text-sm font-medium">
+                                                            <div key={idx} className="flex items-center gap-1 bg-white px-2 py-1 rounded text-sm font-medium border border-gray-100 shadow-sm">
                                                                 {getTypeIcon(service.re_type)}
                                                             </div>
                                                         ))}
@@ -1048,7 +1048,7 @@ function ReservationEditContent() {
                                         </div>
 
                                         {service.vehicleData && (
-                                            <div className="bg-blue-50 p-4 rounded-lg space-y-2 text-sm">
+                                            <div className="bg-white p-4 rounded-lg space-y-2 text-sm border border-gray-100 shadow-sm">
                                                 <div className="font-semibold text-blue-900">차량/이동 정보</div>
                                                 {service.vehicleData.car_price_code && (
                                                     <div><span className="text-gray-700">차량 코드:</span> <strong>{service.vehicleData.car_price_code}</strong></div>

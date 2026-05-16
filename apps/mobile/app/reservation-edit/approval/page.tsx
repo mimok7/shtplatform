@@ -1774,7 +1774,7 @@ export default function ReservationEditApprovalPage() {
 
                                                             {/* 변경 내역 (단일 필드) */}
                                                             {field ? (
-                                                                <div className="bg-gray-50 rounded p-2 text-[12px]">
+                                                                <div className="bg-white rounded p-2 text-[12px] border border-gray-100 shadow-sm">
                                                                     <div className="text-gray-700 font-medium mb-1">{getFieldLabel(field)}</div>
                                                                     <div className="flex items-start gap-2 text-gray-600">
                                                                         <span className="line-through flex-1 break-words whitespace-pre-wrap">{formatDisplayValue(before) || '-'}</span>
@@ -2052,7 +2052,7 @@ export default function ReservationEditApprovalPage() {
                         </div>
 
                         {selectedRequest.customer_note && (
-                            <div className="text-xs text-blue-700 bg-blue-50 border border-blue-100 rounded p-2">
+                            <div className="text-xs text-blue-700 bg-white border border-blue-100 rounded p-2 shadow-sm">
                                 고객 메모: {selectedRequest.customer_note}
                             </div>
                         )}
@@ -2097,7 +2097,7 @@ export default function ReservationEditApprovalPage() {
                                             .map((r: any, i: number) => rowKeyOf(r, i))
                                     );
                                     return (
-                                        <div className="border border-orange-200 bg-orange-50/50 rounded-lg p-3 space-y-2">
+                                        <div className="border border-orange-200 bg-white rounded-lg p-3 space-y-2 shadow-sm">
                                             <div className="text-xs font-semibold text-orange-700">
                                                 ✅ 처리할 행을 선택하세요 (체크된 행만 승인됩니다)
                                             </div>
@@ -2150,9 +2150,9 @@ export default function ReservationEditApprovalPage() {
                                 })()}
                                 {changedFields.length === 0 ? (
                                     !tempData ? (
-                                        <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded p-3">임시 저장 데이터가 없습니다.</div>
+                                        <div className="text-sm text-red-600 bg-white border border-red-100 rounded p-3 shadow-sm">임시 저장 데이터가 없습니다.</div>
                                     ) : (
-                                        <div className="text-sm text-gray-600 bg-gray-50 rounded p-3">변경된 필드가 없습니다.</div>
+                                        <div className="text-sm text-gray-600 bg-white rounded p-3 shadow-sm">변경된 필드가 없습니다.</div>
                                     )
                                 ) : (
                                     <div className="border border-gray-200 rounded-lg overflow-hidden">

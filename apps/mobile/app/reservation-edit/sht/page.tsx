@@ -590,6 +590,31 @@ function SHTReservationEditContent() {
         setActiveCategory('Drop-off');
     };
 
+    const handleDeleteCategory = async (category: 'Pickup' | 'Drop-off') => {
+        if (!reservation) return;
+        const label = category === 'Pickup' ? '픽업' : '드롭';
+        if (!window.confirm(`${label} 서비스를 삭제하시겠습니까?`)) return;
+        try {
+            setLoading(true);
+            const { error } = await supabase
+                .from('reservation_car_sht')
+                .delete()
+                .eq('reservation_id', reservation.reservation.re_id)
+                .eq('sht_category', category);
+            if (error) throw error;
+            alert(`${label} 서비스가 삭제되었습니다.`);
+            setShtForms(prev => ({
+                ...prev,
+                [category]: category === 'Pickup' ? { ...EMPTY_SHT_FORM_PICKUP } : { ...EMPTY_SHT_FORM_DROPOFF },
+            }));
+        } catch (error) {
+            console.error('❌ 삭제 오류:', error);
+            alert('삭제 중 오류가 발생했습니다.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleSave = async () => {
         if (!reservation) return;
 
@@ -995,7 +1020,7 @@ function SHTReservationEditContent() {
 
                                 {/* 좌석별 단가 내역 표시 */}
                                 {formData.seat_number && (
-                                    <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                                    <div className="bg-white rounded-lg p-4 border border-gray-100 shadow-sm">
                                         <h4 className="text-sm font-medium text-blue-800 mb-3 flex items-center gap-2">
                                             <DollarSign className="w-4 h-4" />
                                             좌석별 단가 내역
@@ -1136,9 +1161,9 @@ function SHTReservationEditContent() {
                                 </div>
 
                                 {(pickupBaseTotal > 0 || pickupAdditionalFee > 0 || dropoffAdditionalFee > 0) && (
-                                    <div className="mt-4 pt-4 border-t border-gray-100 space-y-2">
+                                        <div className="mt-4 pt-4 border-t border-gray-100 space-y-2">
                                         {/* 픽업 */}
-                                        <div className="bg-blue-50 rounded p-3">
+                                        <div className="bg-white rounded p-3 border border-gray-100 shadow-sm">
                                             <div className="text-xs font-semibold text-blue-700 mb-1">🚗 픽업</div>
                                             <div className="flex justify-between text-sm text-gray-700">
                                                 <span>차량 금액 (왕복 포함)</span>
@@ -1155,7 +1180,7 @@ function SHTReservationEditContent() {
                                             )}
                                         </div>
                                         {/* 드롭 */}
-                                        <div className="bg-purple-50 rounded p-3">
+                                        <div className="bg-white rounded p-3 border border-gray-100 shadow-sm">
                                             <div className="text-xs font-semibold text-purple-700 mb-1">🏁 드롭</div>
                                             <div className="flex justify-between text-sm text-gray-700">
                                                 <span>차량 금액</span>
@@ -1191,15 +1216,36 @@ function SHTReservationEditContent() {
                             </div>
                         </div>
 
-                        {/* 저장 버튼 */}
-                        <button
-                            onClick={handleSave}
-                            disabled={saving}
-                            className="w-full inline-flex items-center justify-center gap-1 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors text-sm"
-                        >
-                            <Save className="w-4 h-4" />
-                            {saving ? '저장 중...' : '저장'}
-                        </button>
+                        {/* 저장/삭제 버튼 */}
+                        <div className="bg-white rounded-lg shadow-sm p-4">
+                            <div className="flex items-center justify-between gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => handleDeleteCategory(activeCategory)}
+                                    disabled={saving}
+                                    className="inline-flex h-9 w-24 items-center justify-center gap-1.5 px-2 py-1.5 rounded-md border border-red-200 bg-red-50 text-red-600 text-xs hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {activeCategory === 'Pickup' ? '픽업 삭제' : '드롭 삭제'}
+                                </button>
+                                <button
+                                    onClick={handleSave}
+                                    disabled={saving}
+                                    className="inline-flex h-9 w-24 items-center justify-center gap-1.5 px-2 py-1.5 bg-blue-600 text-white text-xs rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {saving ? (
+                                        <>
+                                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                            저장 중...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Save className="w-4 h-4" />
+                                            수정저장
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

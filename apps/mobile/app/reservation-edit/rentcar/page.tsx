@@ -645,46 +645,23 @@ function RentcarReservationEditContent() {
                                 <Car className="w-5 h-5" />
                                 차량 정보
                             </h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">차량명</label>
-                                    <div className="text-gray-900">
-                                        {reservation.rentcar_price?.vehicle_type || reservation.rentcar_price_code}
-                                    </div>
-                                    {reservation.rentcar_price?.description && (
-                                        <div className="text-sm text-gray-600 mt-1">
-                                            {reservation.rentcar_price.description}
-                                        </div>
-                                    )}
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">차량 유형</label>
-                                    <div className="text-gray-900">
-                                        {reservation.rentcar_price?.vehicle_type || '정보 없음'}
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">승차 정원</label>
-                                    <div className="text-gray-900 flex items-center gap-2">
-                                        <Users className="w-4 h-4 text-gray-400" />
-                                        {reservation.rentcar_price?.capacity || 0}명
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">1일 가격</label>
-                                    <div className="text-gray-900">
-                                        {reservation.rentcar_price?.price?.toLocaleString()}동
-                                    </div>
-                                </div>
-                                {reservation.rentcar_price?.route && (
-                                    <div className="md:col-span-2">
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">경로</label>
-                                        <div className="text-sm text-gray-600">
-                                            {reservation.rentcar_price.route}
-                                        </div>
-                                    </div>
-                                )}
+                            <div className="rounded-lg bg-white px-3 py-2 space-y-1 text-sm text-gray-700 border border-gray-100 shadow-sm">
+                                <p>
+                                    <span className="font-semibold text-blue-600">차량명:</span> {reservation.rentcar_price?.vehicle_type || reservation.rentcar_price_code}
+                                </p>
+                                <p>
+                                    <span className="font-semibold text-blue-600">승차 정원:</span> {reservation.rentcar_price?.capacity || 0}명
+                                </p>
+                                <p>
+                                    <span className="font-semibold text-blue-600">1일 가격:</span> {reservation.rentcar_price?.price?.toLocaleString() || '0'}동
+                                </p>
+                                <p>
+                                    <span className="font-semibold text-blue-600">경로:</span> {reservation.rentcar_price?.route || '정보 없음'}
+                                </p>
                             </div>
+                            {reservation.rentcar_price?.description && (
+                                <p className="mt-2 text-sm text-gray-600 line-clamp-2">{reservation.rentcar_price.description}</p>
+                            )}
                         </div>
 
                         {/* 수정 가능한 필드들 */}
@@ -806,7 +783,7 @@ function RentcarReservationEditContent() {
                                         🔄 오는 편 (샌딩)
                                         <span className="text-xs text-gray-500 font-normal ml-1">- 왕복인 경우 입력</span>
                                     </h4>
-                                    <div className="space-y-3 bg-orange-50 p-3 rounded-lg">
+                                    <div className="space-y-3 bg-white p-3 rounded-lg border border-gray-100 shadow-sm">
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700 mb-1">
                                                 <Clock className="inline w-4 h-4 mr-1" />
@@ -1047,32 +1024,35 @@ function RentcarReservationEditContent() {
                             </div>
                         </div>
 
-                        {/* 저장 버튼 */}
-                        <div className="bg-white rounded-lg shadow-sm p-6 space-y-3">
-                            <button
-                                onClick={handleSave}
-                                disabled={saving}
-                                className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                {saving ? (
-                                    <>
-                                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                        저장 중...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Save className="w-4 h-4" />
-                                        수정사항 저장
-                                    </>
-                                )}
-                            </button>
-                            <button
-                                onClick={handleDeleteReservation}
-                                disabled={saving}
-                                className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                전체 예약 삭제
-                            </button>
+                        {/* 저장/삭제 버튼 */}
+                        <div className="bg-white rounded-lg shadow-sm p-4">
+                            <div className="flex items-center justify-between gap-2">
+                                <button
+                                    type="button"
+                                    onClick={handleDeleteReservation}
+                                    disabled={saving}
+                                    className="inline-flex h-9 w-24 items-center justify-center gap-1.5 px-2 py-1.5 rounded-md border border-red-200 bg-red-50 text-red-600 text-xs hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    예약 삭제
+                                </button>
+                                <button
+                                    onClick={handleSave}
+                                    disabled={saving}
+                                    className="inline-flex h-9 w-24 items-center justify-center gap-1.5 px-2 py-1.5 bg-blue-600 text-white text-xs rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {saving ? (
+                                        <>
+                                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                            저장 중...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Save className="w-4 h-4" />
+                                            수정저장
+                                        </>
+                                    )}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

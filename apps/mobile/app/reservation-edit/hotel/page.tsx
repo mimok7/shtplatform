@@ -218,6 +218,35 @@ function HotelReservationEditContent() {
         }
     };
 
+    const handleDeleteHotel = async () => {
+        if (!reservation) return;
+        if (!window.confirm('호텔 서비스를 삭제하시겠습니까?')) return;
+        try {
+            setLoading(true);
+            const { error } = await supabase
+                .from('reservation_hotel')
+                .delete()
+                .eq('reservation_id', reservationId);
+            if (error) throw error;
+            alert('호텔 서비스가 삭제되었습니다.');
+            setFormData({
+                hotel_price_code: '',
+                hotel_name: '',
+                checkin: '',
+                checkout: '',
+                guest_count: 0,
+                room_count: 0,
+                room_price: 0,
+                request_note: ''
+            });
+        } catch (error) {
+            console.error('❌ 삭제 오류:', error);
+            alert('삭제 중 오류가 발생했습니다.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleSave = async () => {
         if (!reservation) return;
 
@@ -400,47 +429,26 @@ function HotelReservationEditContent() {
                                 <Hotel className="w-5 h-5" />
                                 호텔 정보
                             </h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">호텔코드</label>
-                                    <div className="text-sm text-gray-500 font-mono">
-                                        {reservation.hotel_price_code}
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">호텔명</label>
-                                    <div className="text-gray-900 font-medium">
-                                        {reservation.hotel_price?.hotel_name || '호텔명 정보 없음'}
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">객실명</label>
-                                    <div className="text-gray-900">
-                                        {reservation.hotel_price?.room_name || '객실명 정보 없음'}
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">객실타입</label>
-                                    <div className="text-gray-900">
-                                        {reservation.hotel_price?.room_type || reservation.hotel_price?.room_category || '객실타입 정보 없음'}
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">기본 1박 가격</label>
-                                    <div className="text-gray-900 font-medium text-blue-600">
-                                        {reservation.hotel_price?.base_price ?
-                                            `${reservation.hotel_price.base_price.toLocaleString()}동` :
-                                            '가격 정보 없음'
-                                        }
-                                    </div>
-                                </div>
+                            <div className="rounded-lg bg-white px-3 py-2 space-y-1 text-sm text-gray-700 border border-gray-100 shadow-sm">
+                                <p>
+                                    <span className="font-semibold text-blue-600">호텔코드:</span> {reservation.hotel_price_code}
+                                </p>
+                                <p>
+                                    <span className="font-semibold text-blue-600">호텔명:</span> {reservation.hotel_price?.hotel_name || '호텔명 정보 없음'}
+                                </p>
+                                <p>
+                                    <span className="font-semibold text-blue-600">객실명:</span> {reservation.hotel_price?.room_name || '객실명 정보 없음'}
+                                </p>
+                                <p>
+                                    <span className="font-semibold text-blue-600">객실타입:</span> {reservation.hotel_price?.room_type || reservation.hotel_price?.room_category || '객실타입 정보 없음'}
+                                </p>
+                                <p>
+                                    <span className="font-semibold text-blue-600">기본 1박 가격:</span> {reservation.hotel_price?.base_price ? `${reservation.hotel_price.base_price.toLocaleString()}동` : '가격 정보 없음'}
+                                </p>
                                 {(reservation.hotel_price?.conditions || reservation.hotel_price?.notes) && (
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">조건</label>
-                                        <div className="text-sm text-gray-600">
-                                            {reservation.hotel_price.conditions || reservation.hotel_price?.notes}
-                                        </div>
-                                    </div>
+                                    <p>
+                                        <span className="font-semibold text-blue-600">조건:</span> {reservation.hotel_price.conditions || reservation.hotel_price?.notes}
+                                    </p>
                                 )}
                             </div>
                         </div>
@@ -503,7 +511,7 @@ function HotelReservationEditContent() {
                                         <label className="block text-sm font-medium text-gray-700 mb-1">
                                             체크아웃 날짜 (자동 계산)
                                         </label>
-                                        <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-700">
+                                        <div className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-gray-700 shadow-sm">
                                             {getCheckoutDate()}
                                         </div>
                                     </div>
@@ -649,25 +657,35 @@ function HotelReservationEditContent() {
                             </div>
                         </div>
 
-                        {/* 저장 버튼 */}
+                        {/* 저장/삭제 버튼 */}
                         <div className="bg-white rounded-lg shadow-sm p-4">
-                            <button
-                                onClick={handleSave}
-                                disabled={saving}
-                                className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                {saving ? (
-                                    <>
-                                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                        저장 중...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Save className="w-4 h-4" />
-                                        수정사항 저장
-                                    </>
-                                )}
-                            </button>
+                            <div className="flex items-center justify-between gap-2">
+                                <button
+                                    type="button"
+                                    onClick={handleDeleteHotel}
+                                    disabled={saving}
+                                    className="inline-flex h-9 w-24 items-center justify-center gap-1.5 px-2 py-1.5 rounded-md border border-red-200 bg-red-50 text-red-600 text-xs hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    호텔 삭제
+                                </button>
+                                <button
+                                    onClick={handleSave}
+                                    disabled={saving}
+                                    className="inline-flex h-9 w-24 items-center justify-center gap-1.5 px-2 py-1.5 bg-blue-600 text-white text-xs rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {saving ? (
+                                        <>
+                                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                            저장 중...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Save className="w-4 h-4" />
+                                            수정저장
+                                        </>
+                                    )}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

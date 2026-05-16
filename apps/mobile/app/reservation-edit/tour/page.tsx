@@ -225,6 +225,26 @@ function TourReservationEditContent() {
         }
     };
 
+    const handleDeleteTour = async () => {
+        if (!reservation) return;
+        if (!window.confirm('투어 서비스를 삭제하시겠습니까?')) return;
+        try {
+            setLoading(true);
+            const { error } = await supabase
+                .from('reservation_tour')
+                .delete()
+                .eq('reservation_id', reservationId);
+            if (error) throw error;
+            alert('투어 서비스가 삭제되었습니다.');
+            setFormData({ tour_date: '', tour_capacity: 0, pickup_location: '', dropoff_location: '', unit_price: 0, total_price: 0, request_note: '' });
+        } catch (error) {
+            console.error('❌ 삭제 오류:', error);
+            alert('삭제 중 오류가 발생했습니다.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleSave = async () => {
         if (!reservation) return;
 
@@ -395,44 +415,22 @@ function TourReservationEditContent() {
                                 <Target className="w-5 h-5" />
                                 투어 정보
                             </h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">투어명</label>
-                                    <div className="text-gray-900">
-                                        {reservation.tour_pricing?.tour?.tour_name || reservation.tour_price_code}
-                                    </div>
-                                    {reservation.tour_pricing?.tour?.description && (
-                                        <div className="text-sm text-gray-600 mt-1">
-                                            {reservation.tour_pricing.tour.description}
-                                        </div>
-                                    )}
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">위치</label>
-                                    <div className="text-gray-900 flex items-center gap-2">
-                                        <MapPin className="w-4 h-4 text-gray-400" />
-                                        {reservation.tour_pricing?.tour?.location || '위치 정보 없음'}
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">소요시간</label>
-                                    <div className="text-gray-900 flex items-center gap-2">
-                                        <Clock className="w-4 h-4 text-gray-400" />
-                                        {reservation.tour_pricing?.tour?.duration || '정보 없음'}
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">1인 가격</label>
-                                    <div className="text-gray-900">
-                                        {reservation.tour_pricing?.price_per_person?.toLocaleString()}동
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">차량 타입</label>
-                                    <div className="text-sm text-gray-600">
-                                        {reservation.tour_pricing?.vehicle_type || '정보 없음'}
-                                    </div>
-                                </div>
+                            <div className="rounded-lg bg-white px-3 py-2 space-y-1 text-sm text-gray-700 border border-gray-100 shadow-sm">
+                                <p>
+                                    <span className="font-semibold text-blue-600">투어명:</span> {reservation.tour_pricing?.tour?.tour_name || reservation.tour_price_code}
+                                </p>
+                                <p>
+                                    <span className="font-semibold text-blue-600">위치:</span> {reservation.tour_pricing?.tour?.location || '위치 정보 없음'}
+                                </p>
+                                <p>
+                                    <span className="font-semibold text-blue-600">소요시간:</span> {reservation.tour_pricing?.tour?.duration || '정보 없음'}
+                                </p>
+                                <p>
+                                    <span className="font-semibold text-blue-600">1인 가격:</span> {reservation.tour_pricing?.price_per_person?.toLocaleString() || '0'}동
+                                </p>
+                                <p>
+                                    <span className="font-semibold text-blue-600">차량:</span> {reservation.tour_pricing?.vehicle_type || '정보 없음'}
+                                </p>
                             </div>
                         </div>
 
@@ -651,25 +649,35 @@ function TourReservationEditContent() {
                             </div>
                         </div>
 
-                        {/* 저장 버튼 */}
+                        {/* 저장/삭제 버튼 */}
                         <div className="bg-white rounded-lg shadow-sm p-4">
-                            <button
-                                onClick={handleSave}
-                                disabled={saving}
-                                className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                {saving ? (
-                                    <>
-                                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                        저장 중...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Save className="w-4 h-4" />
-                                        수정사항 저장
-                                    </>
-                                )}
-                            </button>
+                            <div className="flex items-center justify-between gap-2">
+                                <button
+                                    type="button"
+                                    onClick={handleDeleteTour}
+                                    disabled={saving}
+                                    className="inline-flex h-9 w-24 items-center justify-center gap-1.5 px-2 py-1.5 rounded-md border border-red-200 bg-red-50 text-red-600 text-xs hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    투어 삭제
+                                </button>
+                                <button
+                                    onClick={handleSave}
+                                    disabled={saving}
+                                    className="inline-flex h-9 w-24 items-center justify-center gap-1.5 px-2 py-1.5 bg-blue-600 text-white text-xs rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {saving ? (
+                                        <>
+                                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                            저장 중...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Save className="w-4 h-4" />
+                                            수정저장
+                                        </>
+                                    )}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
