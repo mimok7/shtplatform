@@ -1,7 +1,7 @@
 {
-  "name": "스테이하롱 모바일",
-  "short_name": "스테이하롱",
-  "description": "스테이하롱 예약 관리 모바일",
+  "name": "스하모바일",
+  "short_name": "스하모바일",
+  "description": "스하모바일 예약 관리 모바일",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

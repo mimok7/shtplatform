@@ -11,13 +11,13 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "스테이하롱 모바일",
-  description: "스테이하롱 예약 관리 모바일",
+  title: "스하모바일",
+  description: "스하모바일 예약 관리 모바일",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "스테이하롱",
+    title: "스하모바일",
   },
   formatDetection: {
     telephone: false,
