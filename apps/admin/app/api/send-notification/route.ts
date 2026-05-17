@@ -12,6 +12,40 @@ if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
   webpush.setVapidDetails(VAPID_EMAIL, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
 }
 
+// CORS — manager/manager1/mobile/customer 등 다른 앱에서 직접 호출할 수 있도록 허용
+const ALLOWED_ORIGINS = [
+  'https://staycruise.kr',
+  'https://manager.staycruise.kr',
+  'https://quick.manager.staycruise.kr',
+  'https://newmobile.stayhalong.com',
+  'https://quote.stayhalong.com',
+  'https://partner.staycruise.kr',
+  'https://legacy.staycruise.kr',
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'http://localhost:3002',
+  'http://localhost:3003',
+  'http://localhost:3004',
+  'http://localhost:3005',
+  'http://localhost:3006',
+  'http://localhost:3007',
+];
+
+function corsHeaders(origin: string | null) {
+  const allowedOrigin = origin && ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  return {
+    'Access-Control-Allow-Origin': allowedOrigin,
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Max-Age': '86400',
+    'Vary': 'Origin',
+  };
+}
+
+export async function OPTIONS(req: NextRequest) {
+  return new NextResponse(null, { status: 204, headers: corsHeaders(req.headers.get('origin')) });
+}
+
 async function resolveAllowedAppNames(notificationType: string, requestedAppNames: string[]) {
   if (!serviceSupabase) {
     return { appNames: requestedAppNames, policyApplied: false, warning: 'service client unavailable' };
@@ -65,13 +99,19 @@ async function resolveAllowedAppNames(notificationType: string, requestedAppName
 }
 
 export async function POST(req: NextRequest) {
+  const cors = corsHeaders(req.headers.get('origin'));
+  const jsonResponse = (body: unknown, init?: ResponseInit) => {
+    const res = NextResponse.json(body, init);
+    Object.entries(cors).forEach(([k, v]) => res.headers.set(k, v));
+    return res;
+  };
   try {
     if (!serviceSupabase) {
-      return NextResponse.json({ error: '서버 설정 오류' }, { status: 500 });
+      return jsonResponse({ error: '서버 설정 오류' }, { status: 500 });
     }
 
     if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
-      return NextResponse.json({ error: 'VAPID 키 미설정 — .env.local에 VAPID 키를 추가하세요' }, { status: 503 });
+      return jsonResponse({ error: 'VAPID 키 미설정 — .env.local에 VAPID 키를 추가하세요' }, { status: 503 });
     }
 
     // 발신자 인증 (admin/manager만 가능)
@@ -79,12 +119,12 @@ export async function POST(req: NextRequest) {
     const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
 
     if (!token) {
-      return NextResponse.json({ error: '인증 필요' }, { status: 401 });
+      return jsonResponse({ error: '인증 필요' }, { status: 401 });
     }
 
     const { data: authData, error: authError } = await serviceSupabase.auth.getUser(token);
     if (authError || !authData?.user) {
-      return NextResponse.json({ error: '인증 실패' }, { status: 401 });
+      return jsonResponse({ error: '인증 실패' }, { status: 401 });
     }
 
     const { data: senderProfile } = await serviceSupabase
@@ -94,7 +134,7 @@ export async function POST(req: NextRequest) {
       .maybeSingle();
 
     if (!senderProfile || !['admin', 'manager'].includes(senderProfile.role)) {
-      return NextResponse.json({ error: '권한 없음 (admin/manager만 발송 가능)' }, { status: 403 });
+      return jsonResponse({ error: '권한 없음 (admin/manager만 발송 가능)' }, { status: 403 });
     }
 
     // 요청 파라미터
@@ -113,7 +153,7 @@ export async function POST(req: NextRequest) {
     } = await req.json();
 
     if (!title || !body) {
-      return NextResponse.json({ error: 'title, body 필수' }, { status: 400 });
+      return jsonResponse({ error: 'title, body 필수' }, { status: 400 });
     }
 
     const requestedAppNames = Array.isArray(appNames)
@@ -127,7 +167,7 @@ export async function POST(req: NextRequest) {
     const allowedAppPolicy = await resolveAllowedAppNames(resolvedNotificationType, requestedAppNames);
 
     if (allowedAppPolicy.policyApplied && allowedAppPolicy.appNames.length === 0) {
-      return NextResponse.json({
+      return jsonResponse({
         success: true,
         sentCount: 0,
         failCount: 0,
@@ -156,11 +196,11 @@ export async function POST(req: NextRequest) {
 
     if (fetchError) {
       console.error('[send-notification] 구독 조회 실패:', fetchError);
-      return NextResponse.json({ error: '구독 조회 실패' }, { status: 500 });
+      return jsonResponse({ error: '구독 조회 실패' }, { status: 500 });
     }
 
     if (!subscriptions || subscriptions.length === 0) {
-      return NextResponse.json({
+      return jsonResponse({
         success: true,
         sentCount: 0,
         notificationType: resolvedNotificationType,
@@ -238,7 +278,7 @@ export async function POST(req: NextRequest) {
     const failCount = results.length - sentCount;
 
     console.log(`[send-notification] 발송 완료: ${sentCount}/${results.length}`);
-    return NextResponse.json({
+    return jsonResponse({
       success: true,
       sentCount,
       failCount,
@@ -251,6 +291,6 @@ export async function POST(req: NextRequest) {
 
   } catch (err: any) {
     console.error('[send-notification] 오류:', err);
-    return NextResponse.json({ error: '서버 오류' }, { status: 500 });
+    return jsonResponse({ error: '서버 오류' }, { status: 500 });
   }
 }

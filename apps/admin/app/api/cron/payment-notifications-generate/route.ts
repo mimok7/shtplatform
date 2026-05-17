@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import serviceSupabase from '@/lib/serviceSupabase';
+import { dispatchPushNotification } from '@/lib/notificationDispatcher';
+
+const EVENT_KEY = 'payment_due';
 
 // 매일 KST 09:00 (UTC 00:00) 실행: 결제 미완료 예약을 검사하여 payment_notifications에 자동 생성
 // vercel.json crons에 등록: { "path": "/api/cron/payment-notifications-generate", "schedule": "0 0 * * *" }
@@ -103,12 +106,41 @@ async function runCron() {
     return NextResponse.json({ error: 'insert failed', details: insErr.message }, { status: 500 });
   }
 
+  // 어드민 예약설정의 payment_due 정책을 따라 푸시 발송
+  let pushSent = 0;
+  let pushFailed = 0;
+  const pushWarnings: string[] = [];
+  for (const r of toInsert) {
+    const total = Number(r.total_amount || 0);
+    const paid = Number(r.paid_amount || 0);
+    const remain = total - paid;
+    try {
+      const result = await dispatchPushNotification({
+        eventKey: EVENT_KEY,
+        title: '결제 예정 알림',
+        body: `[${r.re_type || '예약'}] 미결제 잔액 ${remain.toLocaleString()}원 확인이 필요합니다.`,
+        userId: r.re_user_id || null,
+        url: 'https://staycruise.kr/mypage/payment',
+        priority: 'high',
+      });
+      pushSent += result.sentCount;
+      pushFailed += result.failCount;
+      if (result.warning) pushWarnings.push(result.warning);
+    } catch (err) {
+      console.warn('[payment-notifications-generate] push 발송 실패(저장은 계속):', err);
+      pushFailed += 1;
+    }
+  }
+
   return NextResponse.json({
     ok: true,
     today,
     candidates: candidates.length,
     inserted: count ?? rows.length,
-    message: '결제 알림 자동 생성 완료',
+    pushSent,
+    pushFailed,
+    pushWarnings: Array.from(new Set(pushWarnings)),
+    message: '결제 알림 자동 생성 + 푸시 발송 완료',
   });
 }
 

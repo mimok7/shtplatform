@@ -1112,6 +1112,21 @@ export default function ShtCarPage() {
                         <Home className="w-5 h-5 text-gray-600" />
                     </Link>
                 </div>
+
+                <div className="mt-2 flex items-center gap-2">
+                    <Link
+                        href="/sht-car"
+                        className="px-3 py-1.5 rounded-full text-xs font-semibold bg-blue-600 text-white whitespace-nowrap"
+                    >
+                        예약현황
+                    </Link>
+                    <Link
+                        href="/sht-car/reservation-status"
+                        className="px-3 py-1.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-200 whitespace-nowrap"
+                    >
+                        취소안내
+                    </Link>
+                </div>
             </div>
 
             {/* 본문 */}

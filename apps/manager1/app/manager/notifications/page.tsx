@@ -117,6 +117,26 @@ const getStatusColor = (status: string): string => {
   }
 };
 
+const isShtCarNotification = (n: NotificationItem): boolean => {
+  const eventKey = String(n.metadata?.eventKey || '').toLowerCase();
+  if (eventKey === 'sht_car_low_seat_warning' || eventKey === 'sht_car_cancel') {
+    return true;
+  }
+
+  const haystack = [n.category, n.subcategory, n.title, n.message]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  return (
+    haystack.includes('스하차량') ||
+    haystack.includes('스차') ||
+    haystack.includes('sht car') ||
+    haystack.includes('sht-car') ||
+    haystack.includes('sht_car')
+  );
+};
+
 export default function NotificationManagement() {
   const router = useRouter();
 
@@ -128,7 +148,7 @@ export default function NotificationManagement() {
   const [customerNotifications, setCustomerNotifications] = useState<any[]>([]);
 
   // 필터 상태
-  const [activeTab, setActiveTab] = useState<'business' | 'customer' | 'request' | 'all'>('all');
+  const [activeTab, setActiveTab] = useState<'business' | 'customer' | 'request' | 'sht-car' | 'all'>('all');
   const [statusFilter, setStatusFilter] = useState<string>('unread');
   const [hideOldNotifications, setHideOldNotifications] = useState<boolean>(true); // 오늘 이전 알림 숨기기
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
@@ -346,7 +366,7 @@ export default function NotificationManagement() {
       let allNotifications: NotificationItem[] = [];
 
       // 탭별 필터링
-      if (activeTab === 'business' || activeTab === 'all' || activeTab === 'request') {
+      if (activeTab === 'business' || activeTab === 'all' || activeTab === 'request' || activeTab === 'sht-car') {
         const businessItems = businessNotifications.map(n => ({
           ...n,
           type: 'business' as const,
@@ -431,6 +451,10 @@ export default function NotificationManagement() {
           n.metadata?.request_id !== undefined ||
           n.category?.includes('요청')
         );
+      }
+
+      if (activeTab === 'sht-car') {
+        allNotifications = allNotifications.filter((n) => isShtCarNotification(n));
       }
 
       // 안전망: 최종 카테고리 클라이언트 필터 (DB/병합 단계에서 누락된 항목 차단)
@@ -840,6 +864,19 @@ export default function NotificationManagement() {
           >
             <span className="text-xs font-bold text-teal-500">고객요청:</span>
             <span className="text-sm font-bold text-teal-700">{stats.request}</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setActiveTab('sht-car');
+              setCategoryFilter('all');
+              setStatusFilter('all');
+            }}
+            className={`bg-white rounded pl-3 pr-2 py-1.5 shadow-sm border transition-all flex items-center gap-2 hover:border-indigo-400 ${activeTab === 'sht-car' ? 'border-indigo-500 bg-indigo-50 ring-1 ring-indigo-500' : 'border-gray-200'
+              }`}
+          >
+            <span className="text-xs font-bold text-indigo-500">스차:</span>
+            <span className="text-sm font-bold text-indigo-700">필터</span>
           </button>
 
           <div className="bg-white rounded pl-3 pr-2 py-1.5 shadow-sm border border-gray-200 flex items-center gap-2 select-none">

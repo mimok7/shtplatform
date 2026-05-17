@@ -2,10 +2,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import ManagerLayout from '@/components/ManagerLayout';
 import ShtCarSeatMap from '../../../components/ShtCarSeatMap';
 import supabase from '@/lib/supabase';
 import { fetchTableInBatches } from '@/lib/fetchInBatches';
+import { dispatchPushNotification } from '@/lib/dispatchPushNotification';
 import {
     Calendar,
     Car,
@@ -737,6 +739,22 @@ export default function ShtCarPage() {
             return;
         }
 
+        // 스하차량 취소 푸시 알림 (어드미 설정 정책에 따라 발송)
+        try {
+            const categoryInfoBody = getCategoryInfo(reservation.sht_category);
+            const usageDateLabel = formatUsageDate(reservation.pickup_datetime);
+            await dispatchPushNotification({
+                eventKey: 'sht_car_cancel',
+                title: '스하차량 취소 알림',
+                body: `[${categoryInfoBody.label}] ${usageDateLabel} · ${reservation.vehicle_number || '-'} · 좌석 ${reservation.seat_number || '-'} 예약이 취소되었습니다.`,
+                url: 'https://manager.staycruise.kr/manager/sht-car',
+                tag: `sht-car-cancel-${reservation.id}`,
+                priority: 'high',
+            });
+        } catch (notifyErr) {
+            console.warn('[sht-car] 취소 알림 발송 실패(무시):', notifyErr);
+        }
+
         await loadReservations();
     };
 
@@ -1088,6 +1106,23 @@ export default function ShtCarPage() {
     return (
         <ManagerLayout title="스하차량 관리" activeTab="sht-car">
             <div className="space-y-6">
+                <div className="bg-white rounded-lg shadow-md p-4">
+                    <div className="flex items-center gap-2">
+                        <Link
+                            href="/manager/sht-car"
+                            className="px-3 py-1.5 rounded-full text-xs font-semibold bg-blue-600 text-white whitespace-nowrap"
+                        >
+                            예약현황
+                        </Link>
+                        <Link
+                            href="/manager/notifications"
+                            className="px-3 py-1.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-200 whitespace-nowrap"
+                        >
+                            취소안내
+                        </Link>
+                    </div>
+                </div>
+
                 {/* 컨트롤 패널 */}
                 <div className="bg-white rounded-lg shadow-md p-6">
                     <div className="flex items-center justify-between mb-4">

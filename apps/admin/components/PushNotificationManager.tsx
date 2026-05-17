@@ -1,0 +1,76 @@
+'use client';
+
+import { useEffect } from 'react';
+import supabase from '@/lib/supabase';
+
+const APP_NAME = 'admin';
+const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || '';
+
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
+}
+
+function toApplicationServerKey(base64String: string): ArrayBuffer {
+  const bytes = urlBase64ToUint8Array(base64String);
+  const buffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(buffer).set(bytes);
+  return buffer;
+}
+
+export default function PushNotificationManager() {
+  useEffect(() => {
+    if (!VAPID_PUBLIC_KEY || typeof window === 'undefined') return;
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+
+    const saveSubscription = async (subscription: PushSubscription) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token || '';
+
+      await fetch('/api/subscribe-push', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          subscription: subscription.toJSON(),
+          appName: APP_NAME,
+        }),
+      });
+    };
+
+    const registerPush = async () => {
+      try {
+        if (Notification.permission === 'denied') return;
+
+        const registration = await navigator.serviceWorker.ready;
+        const existingSubscription = await registration.pushManager.getSubscription();
+        if (existingSubscription) {
+          await saveSubscription(existingSubscription);
+          return;
+        }
+
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') return;
+
+        const subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: toApplicationServerKey(VAPID_PUBLIC_KEY),
+        });
+
+        await saveSubscription(subscription);
+        console.log(`✅ Push subscription saved (${APP_NAME})`);
+      } catch (err) {
+        console.warn('⚠️ Push subscription failed (admin):', err);
+      }
+    };
+
+    const timer = setTimeout(registerPush, 3000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  return null;
+}

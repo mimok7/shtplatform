@@ -11,6 +11,7 @@ type NotificationItem = {
   id: string;
   type: string;
   category: string;
+  subcategory?: string;
   title: string;
   message: string;
   priority: string;
@@ -64,11 +65,37 @@ const formatRelativeTime = (dateStr: string) => {
   return d.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
 };
 
+const isShtCarRelated = (item: NotificationItem) => {
+  const eventKey = String(item.metadata?.eventKey || '').toLowerCase();
+  if (eventKey === 'sht_car_low_seat_warning' || eventKey === 'sht_car_cancel') {
+    return true;
+  }
+
+  const searchText = [
+    item.category,
+    item.subcategory,
+    item.title,
+    item.message,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  return (
+    searchText.includes('스하차량') ||
+    searchText.includes('스차') ||
+    searchText.includes('sht car') ||
+    searchText.includes('sht-car') ||
+    searchText.includes('sht_car')
+  );
+};
+
 export default function MobileNotificationsPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [activeTab, setActiveTab] = useState<'all' | 'sht-car'>('all');
   const [markingId, setMarkingId] = useState<string | null>(null);
   const [markingAll, setMarkingAll] = useState(false);
   const [hideOld, setHideOld] = useState(true); // 오늘 이전 알림 숨기기
@@ -78,7 +105,7 @@ export default function MobileNotificationsPage() {
       // 1. notifications 테이블 (unread)
       const { data: notiData } = await supabase
         .from('notifications')
-        .select('id, type, category, title, message, priority, status, target_table, target_id, metadata, created_at')
+        .select('id, type, category, subcategory, title, message, priority, status, target_table, target_id, metadata, created_at')
         .eq('status', 'unread')
         .order('created_at', { ascending: false })
         .limit(200);
@@ -95,6 +122,7 @@ export default function MobileNotificationsPage() {
         id: n.id,
         type: n.type || 'business',
         category: n.category || '',
+        subcategory: n.subcategory || '',
         title: n.title || '(제목 없음)',
         message: n.message || '',
         priority: n.priority || 'normal',
@@ -110,6 +138,7 @@ export default function MobileNotificationsPage() {
         id: p.id,
         type: 'business',
         category: '결제',
+        subcategory: '',
         title: p.notification_type === 'payment_due'
           ? '결제 예정 알림'
           : p.notification_type === 'payment_overdue'
@@ -267,11 +296,36 @@ export default function MobileNotificationsPage() {
         </div>
 
         {/* 오늘 이전 숨기기 필터 버튼 */}
-        <div className="px-1">
+        <div className="px-1 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setActiveTab('all')}
+              className={`text-[12px] px-3 py-1.5 rounded-full font-medium transition-colors whitespace-nowrap ${
+                activeTab === 'all'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 text-gray-700 border border-gray-200'
+              }`}
+            >
+              전체
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('sht-car')}
+              className={`text-[12px] px-3 py-1.5 rounded-full font-medium transition-colors whitespace-nowrap ${
+                activeTab === 'sht-car'
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-gray-100 text-gray-700 border border-gray-200'
+              }`}
+            >
+              스차
+            </button>
+          </div>
+
           <button
             type="button"
             onClick={() => setHideOld(prev => !prev)}
-            className={`text-[12px] px-3 py-1.5 rounded-full font-medium transition-colors ${
+            className={`text-[12px] px-3 py-1.5 rounded-full font-medium transition-colors whitespace-nowrap ${
               hideOld
                 ? 'bg-amber-500 text-white'
                 : 'bg-gray-100 text-gray-600 border border-gray-200'
@@ -285,9 +339,13 @@ export default function MobileNotificationsPage() {
         {(() => {
           const todayStart = new Date();
           todayStart.setHours(0, 0, 0, 0);
-          const displayList = hideOld
+          const dateFiltered = hideOld
             ? notifications.filter(n => new Date(n.created_at) >= todayStart)
             : notifications;
+
+          const displayList = activeTab === 'sht-car'
+            ? dateFiltered.filter((item) => isShtCarRelated(item))
+            : dateFiltered;
 
           return (
             <>

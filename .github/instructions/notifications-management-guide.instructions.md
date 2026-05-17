@@ -1,19 +1,20 @@
 ---
 name: notifications-management-guide
-description: "알림 시스템 일원화 및 운영 가이드 (2026.05.17) — 테이블 구조, 영문 정규화 규칙, 개발/운영 방법, Cron 자동화"
-applyTo: "apps/**/components/*Notification*.tsx, apps/**/app/**notifications/page.tsx, sql/08*-notifications*.sql, apps/admin/app/api/cron/payment-notifications-generate/route.ts"
+description: "알림 시스템 일원화 및 운영 가이드 (2026.05.17 확대) — 테이블 구조, 영문 정규화 규칙, 개발/운영 방법, Cron 자동화, 웹푸시 정책 기반 발송, 신규 이벤트 자동 확장성"
+applyTo: "apps/**/components/*Notification*.tsx, apps/**/app/**notifications/page.tsx, sql/08*-notifications*.sql, apps/admin/app/api/cron/payment-notifications-generate/route.ts, apps/admin/app/api/send-notification/route.ts, apps/admin/app/api/subscribe-push/route.ts, apps/admin/public/sw.js, apps/admin/components/PushNotificationManager.tsx, apps/manager*/src/lib/dispatchPushNotification.ts, apps/manager/src/app/manager/sht-car/page.tsx, apps/manager1/app/manager/sht-car/page.tsx"
 ---
 
 # 알림 시스템 관리 지침 (Notifications Management)
 
 ## 📋 개요
 
-스테이하롱 예약 시스템의 알림 시스템은 **4가지 알림 채널** + **자동 Cron** + **리스트 기반 관리 화면**으로 구성됨.
+스테이하롱 예약 시스템의 알림 시스템은 **4가지 알림 채널** + **자동 Cron** + **리스트 기반 관리 화면** + **정책 기반 웹푸시**로 구성됨.
 - **Notifications**: 중앙 알림 테이블 (manager UI + admin UI 관리)
 - **Business Notifications**: 비즈니스 이벤트 알림 (고객센터/예약팀 대상)
 - **Customer Notifications**: 고객 알림 (예약자 이메일/SMS)
 - **Payment Notifications**: 미결제 알림 (자동 Cron 생성, 매일 09:00 KST)
 - **Push Subscriptions**: 웹푸시 구독자 관리
+- **Web Push (New)**: 정책 기반 브라우저 푸시 + 신규 이벤트 자동 확장성
 
 ---
 
@@ -124,22 +125,76 @@ idx_notifications_active_recent (partial: status <> 'completed')
 
 #### `push_subscriptions` (웹푸시 구독)
 **용도**: 웹푸시 구독자 정보 저장  
-**생성**: 고객/매니저가 브라우저 알림 수락 시
+**생성**: 고객/매니저가 브라우저 알림 수락 시 (`/api/subscribe-push`에서 자동 저장)
 
 | 컬럼 | 타입 | 설명 |
 |------|------|------|
 | `ps_id` | BIGSERIAL | PK |
 | `user_id` | UUID | `users.id` FK (또는 NULL = 게스트) |
 | `app_name` | TEXT | `'customer'`, `'manager'`, `'admin'` |
-| `subscription_json` | JSONB | VAPID public key 형식 |
-| `is_active` | BOOLEAN | 활성 여부 |
+| `endpoint` | TEXT | 웹푸시 엔드포인트 (구독 고유 ID) |
+| `p256dh` | TEXT | VAPID 키 (암호화용) |
+| `auth` | TEXT | VAPIR 인증 토큰 |
+| `user_agent` | TEXT | 브라우저/디바이스 정보 |
+| `is_active` | BOOLEAN | 활성 여부 (410/404 오류 시 false) |
+| `last_used_at` | TIMESTAMPTZ | 마지막 발송 시간 |
 | `created_at` | TIMESTAMPTZ | 등록 시간 |
 
 **인덱스** (A 마이그레이션):
 ```sql
 idx_push_subscriptions_app_user
-idx_push_subscriptions_reservation_id
+idx_push_subscriptions_user_id_active
 ```
+
+---
+
+#### `notification_apps` (발송 대상 앱 — 정책용)
+**용도**: 웹푸시 발송 가능한 앱 목록 (Admin이 유지)  
+**특징**: dispatcher가 이를 기준으로 발송 대상 결정
+
+| 컬럼 | 타입 | 설명 |
+|------|------|------|
+| `app_name` | TEXT | PK (`'admin'`, `'customer'`, `'manager'`, `'manager1'`, `'partner'`, `'mobile'`, `'quote'`) |
+| `app_label` | TEXT | 앱명 (한글) |
+| `sort_order` | INT | 정렬 순서 |
+| `created_at` | TIMESTAMPTZ | 생성 시간 |
+
+---
+
+#### `notification_event_types` (이벤트 유형 정의 — 정책용)
+**용도**: 발송 가능한 이벤트 종류 정의 (Admin이 추가)  
+**특징**: 새 이벤트 추가 시 여기만 INSERT (코드 변경 불필요 → 확장성!)
+
+| 컬럼 | 타입 | 설명 |
+|------|------|------|
+| `event_key` | TEXT | PK (`'sht_car_cancel'`, `'payment_due'`, `'sht_car_low_seat_warning'`...) |
+| `event_label` | TEXT | 이벤트명 (한글) |
+| `default_title` | TEXT | 기본 제목 |
+| `default_body` | TEXT | 기본 본문 |
+| `default_priority` | TEXT | 기본 우선순위 (`'low'`, `'normal'`, `'high'`, `'urgent'`) |
+| `default_url` | TEXT | 클릭 시 기본 이동 URL |
+| `sort_order` | INT | 정렬 순서 |
+| `created_at` | TIMESTAMPTZ | 생성 시간 |
+
+---
+
+#### `notification_app_event_settings` (발송 정책 — 핵심!)
+**용도**: 각 앱×이벤트 조합의 활성화 여부 설정 (Admin이 관리)  
+**특징**: dispatcher가 이 테이블을 조회해서 발송 대상 결정 → **신규 이벤트도 자동 지원**
+
+| 컬럼 | 타입 | 설명 |
+|------|------|------|
+| `app_name` | TEXT | PK (notification_apps FK) |
+| `event_key` | TEXT | PK (notification_event_types FK) |
+| `enabled` | BOOLEAN | 활성화 여부 (true=발송, false=스킵) |
+| `updated_at` | TIMESTAMPTZ | 마지막 수정 시간 |
+
+**예시** (이벤트 × 앱 격자):
+| event_key | admin | customer | manager | manager1 | mobile |
+|-----------|-------|----------|---------|----------|--------|
+| sht_car_cancel | ✓ | ✗ | ✓ | ✓ | ✓ |
+| payment_due | ✓ | ✓ | ✗ | ✗ | ✗ |
+| sht_car_low_seat_warning | ✗ | ✓ | ✓ | ✓ | ✓ |
 
 ---
 
@@ -776,3 +831,489 @@ Copy-Item apps\manager\src\components\SendNotificationModal.tsx apps\manager1\co
 - **60초 폴링** → **5분 폴링** (300,000ms)
 - **완료 알림 누적** → **status != 'completed' 필터** + **오늘 필터**
 - **한글/영문 혼재** → **영문 표준** + **CHECK 제약**
+
+---
+
+## 🔔 웹푸시 알림 (Web Push Notifications)
+
+### 개요
+- **채널**: 웹 브라우저 네이티브 푸시 (OS 레벨 알림)
+- **구독 저장**: `push_subscriptions` 테이블
+- **정책 관리**: `notification_apps` × `notification_event_types` × `notification_app_event_settings` (Admin 설정)
+- **발송**: 어드민의 중앙 dispatcher → 각 앱 구독자에게 broadcast
+- **특징**: 오프라인도 수신 가능, 선택적 발송 (admin 설정 정책 기반)
+
+### 구성 요소
+
+#### 1️⃣ 서비스 워커 (apps/admin/public/sw.js)
+**역할**: 브라우저 푸시 이벤트 수신 + 알림 표시
+
+```javascript
+// sw.js (Admin 앱만 필수)
+// - 푸시 이벤트 수신 → notificationclick 처리
+// - 타임아웃 없음 (Vercel은 워커 오래 실행 지원)
+self.addEventListener('push', event => {
+  const data = event.data.json();
+  self.registration.showNotification(data.title, data);
+});
+
+self.addEventListener('notificationclick', event => {
+  const url = event.notification.data.url || '/admin';
+  event.notification.close();
+  event.waitUntil(clients.matchAll({type: 'window'}).then(clientList => {
+    for (const client of clientList) {
+      if (client.url === url && 'focus' in client) return client.focus();
+    }
+    return clients.openWindow(url);
+  }));
+});
+```
+
+**배포**:
+- `apps/admin/public/sw.js` 자동으로 `/sw.js`에서 제공됨 (Next.js)
+- 다른 앱은 푸시 수신 불필요 (Admin이 모든 구독자 관리)
+
+#### 2️⃣ 구독 등록 (PushNotificationManager.tsx + subscribe-push API)
+**역할**: 브라우저 푸시 권한 요청 + 엔드포인트 저장
+
+```typescript
+// apps/admin/components/PushNotificationManager.tsx
+'use client';
+import { useEffect } from 'react';
+
+export function PushNotificationManager() {
+  useEffect(() => {
+    const registerServiceWorker = async () => {
+      if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+      
+      try {
+        const reg = await navigator.serviceWorker.register('/sw.js');
+        const sub = await reg.pushManager.getSubscription();
+        
+        if (!sub) {
+          // 새로운 구독 생성
+          const newSub = await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
+          });
+          
+          // 서버에 저장
+          await fetch('/api/subscribe-push', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              subscription: newSub,
+              appName: 'admin'
+            })
+          });
+        }
+      } catch (err) {
+        console.warn('[PushNotificationManager] 구독 실패(무시):', err);
+      }
+    };
+    
+    registerServiceWorker();
+  }, []);
+
+  return null;
+}
+```
+
+**배포**: `apps/admin/app/layout.tsx`에 추가됨
+```typescript
+import { PushNotificationManager } from '@/components/PushNotificationManager';
+
+export default function RootLayout({ children }) {
+  return (
+    <html>
+      <body>
+        <PushNotificationManager />
+        {children}
+      </body>
+    </html>
+  );
+}
+```
+
+#### 3️⃣ 구독 저장 (apps/admin/app/api/subscribe-push/route.ts)
+**역할**: 푸시 구독 정보를 `push_subscriptions` 테이블에 저장
+
+```typescript
+export async function POST(req: NextRequest) {
+  const { subscription, appName = 'admin' } = await req.json();
+  
+  const { data: { session } } = await supabase.auth.getSession();
+  
+  // subscription.endpoint 기준으로 upsert (같은 브라우저면 덮어쓰기)
+  await serviceSupabase.from('push_subscriptions').upsert({
+    user_id: session?.user.id || null,
+    app_name: appName,
+    endpoint: subscription.endpoint,
+    p256dh: subscription.keys.p256dh,
+    auth: subscription.keys.auth,
+    user_agent: req.headers.get('user-agent'),
+    is_active: true
+  }, {
+    onConflict: 'endpoint'
+  });
+  
+  return NextResponse.json({ success: true });
+}
+```
+
+### 정책 기반 발송 (Dispatcher Pattern)
+
+#### 설정 테이블 (`sql/081-notification-app-settings.sql`)
+
+**테이블 1: notification_apps** (발송 대상 앱)
+| app_name | app_label | sort_order |
+|----------|-----------|-----------|
+| admin | 어드민 앱 | 5 |
+| customer | 고객 앱 | 1 |
+| manager | 매니저 | 2 |
+| manager1 | 빠른패널 | 3 |
+| partner | 제휴업체 | 4 |
+| mobile | 모바일 | 6 |
+| quote | 견적 | 7 |
+
+**테이블 2: notification_event_types** (이벤트 종류)
+| event_key | event_label | default_title | default_body | default_priority |
+|-----------|-------------|---------------|--------------|------------------|
+| sht_car_cancel | 스하차량 취소 | 스하차량 취소 알림 | 스하차량 예약이 취소되었습니다. | high |
+| payment_due | 결제예정 | 결제 예정 알림 | 미결제 잔액 확인이 필요합니다. | high |
+| sht_car_low_seat_warning | 스하차량 좌석부족 | 스하차량 좌석 부족 경고 | 5일 후 예약의 좌석 수 1-4석 주의 | normal |
+
+**테이블 3: notification_app_event_settings** (발송 정책)
+| app_name | event_key | enabled |
+|----------|-----------|---------|
+| admin | sht_car_cancel | true |
+| manager | sht_car_cancel | true |
+| manager1 | sht_car_cancel | true |
+| admin | payment_due | true |
+| manager | payment_due | false |
+| customer | payment_due | true |
+| ... | ... | ... |
+
+#### ✨ 중앙 Dispatcher (`apps/manager/src/lib/dispatchPushNotification.ts`)
+
+```typescript
+import supabase from '@/lib/supabase';
+
+export type DispatchPushOptions = {
+  eventKey: string;                          // 이벤트 종류 (sht_car_cancel, payment_due...)
+  title: string;                             // 알림 제목
+  body: string;                              // 알림 본문
+  userId?: string;                           // 특정 사용자만 발송 (선택)
+  appNames?: string[];                       // 특정 앱만 발송 (선택, 미지정=정책 기반)
+  url?: string;                              // 클릭 시 이동 URL
+  icon?: string;                             // 아이콘 URL
+  tag?: string;                              // 알림 그룹 ID (중복 방지)
+  priority?: 'normal' | 'high' | 'urgent';   // 우선순위
+  requireInteraction?: boolean;               // 상호작용 필요 여부
+};
+
+export async function dispatchPushNotification(opts: DispatchPushOptions): Promise<void> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      console.warn('[dispatchPushNotification] 세션 없음 - 발송 건너뜀');
+      return;
+    }
+
+    // 어드민의 중앙 /api/send-notification 엔드포인트 호출
+    const adminApiBase = process.env.NEXT_PUBLIC_ADMIN_API_BASE 
+      || (typeof window !== 'undefined' && window.location.hostname === 'localhost'
+        ? 'http://localhost:3004'
+        : 'https://admin.staycruise.kr');
+
+    const res = await fetch(`${adminApiBase}/api/send-notification`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
+        eventKey: opts.eventKey,
+        title: opts.title,
+        body: opts.body,
+        userId: opts.userId,
+        appNames: opts.appNames,
+        url: opts.url,
+        icon: opts.icon,
+        tag: opts.tag || opts.eventKey,
+        priority: opts.priority || 'normal',
+        requireInteraction: opts.requireInteraction || false,
+      }),
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      console.warn('[dispatchPushNotification] 발송 실패', res.status, text);
+    }
+  } catch (err) {
+    console.warn('[dispatchPushNotification] 호출 오류(무시됨):', err);
+  }
+}
+```
+
+#### 발송 로직 (apps/admin/app/api/send-notification/route.ts)
+
+**CORS 지원** (크로스 오리진 허용):
+```typescript
+const ALLOWED_ORIGINS = [
+  'https://staycruise.kr',
+  'https://manager.staycruise.kr',
+  'https://admin.staycruise.kr',
+  'https://partner.staycruise.kr',
+  'https://quote.stayhalong.com',
+  'https://newmobile.stayhalong.com',
+  'http://localhost:3000',  // 고객
+  'http://localhost:3001',  // 매니저
+  'http://localhost:3004',  // 어드민
+  'http://localhost:3005',  // manager1
+  // ... 기타 앱 포트
+];
+
+// OPTIONS preflight + 모든 응답에 CORS 헤더 추가
+export async function OPTIONS(req: NextRequest) {
+  const origin = req.headers.get('origin');
+  if (ALLOWED_ORIGINS.includes(origin || '')) {
+    return new NextResponse(null, {
+      status: 204,
+      headers: {
+        'Access-Control-Allow-Origin': origin,
+        'Access-Control-Allow-Methods': 'GET, POST',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        'Access-Control-Max-Age': '86400',
+        'Vary': 'Origin',
+      },
+    });
+  }
+  return new NextResponse(null, { status: 403 });
+}
+```
+
+**정책 기반 발송 로직**:
+```typescript
+export async function POST(req: NextRequest) {
+  // ... 인증 + 권한 확인
+  
+  const { eventKey, title, body, userId, appNames, ... } = await req.json();
+  
+  // 1. notification_app_event_settings에서 활성화된 앱 조회
+  const allowedAppPolicy = await resolveAllowedAppNames(eventKey, appNames);
+  
+  // 2. push_subscriptions에서 대상 구독자 조회 (deduplicate)
+  const { data: subscriptions } = await supabase
+    .from('push_subscriptions')
+    .select('*')
+    .eq('is_active', true)
+    .in('app_name', allowedAppPolicy.appNames);
+  
+  // 3. webpush 라이브러리로 각 구독자에게 발송
+  const results = await Promise.allSettled(
+    subscriptions.map(sub =>
+      webpush.sendNotification(
+        { endpoint: sub.endpoint, keys: {...} },
+        JSON.stringify({ title, body, url, ... }),
+        { urgency: priority, TTL: 86400 }
+      )
+    )
+  );
+  
+  // 4. 응답 (발송 통계)
+  return NextResponse.json({
+    success: true,
+    sentCount: 성공건수,
+    failCount: 실패건수,
+    eventKey,
+    allowedAppNames: allowedAppPolicy.appNames,
+  });
+}
+```
+
+### 신규 이벤트 추가 절차 (확장성)
+
+#### Step 1: 이벤트 유형 생성 (Admin 설정)
+**위치**: Supabase Dashboard → SQL Editor
+
+```sql
+-- notification_event_types에 추가
+INSERT INTO notification_event_types 
+  (event_key, event_label, default_title, default_body, default_priority, sort_order)
+VALUES 
+  ('my_new_event', '새 이벤트', '새 이벤트 알림', '새 이벤트가 발생했습니다.', 'normal', 99)
+ON CONFLICT (event_key) DO UPDATE
+SET event_label = EXCLUDED.event_label;
+```
+
+#### Step 2: 앱별 정책 설정 (Admin 설정)
+```sql
+-- 각 앱에 대해 활성화 여부 설정
+INSERT INTO notification_app_event_settings 
+  (app_name, event_key, enabled)
+SELECT DISTINCT app_name, 'my_new_event', true
+FROM notification_apps
+ON CONFLICT (app_name, event_key) DO UPDATE
+SET enabled = true;
+```
+
+#### Step 3: 코드에서 dispatcher 호출
+```typescript
+// 이제 코드만 추가 (테이블 설정은 끝)
+import { dispatchPushNotification } from '@/lib/dispatchPushNotification';
+
+// 예: 차량 취소 시
+const handleCancelCar = async () => {
+  // ... 취소 로직
+  
+  try {
+    await dispatchPushNotification({
+      eventKey: 'my_new_event',
+      title: '새 이벤트 알림',
+      body: '새 이벤트가 발생했습니다.',
+      url: 'https://manager.staycruise.kr/manager/events'
+    });
+  } catch (err) {
+    console.warn('푸시 발송 실패(무시):', err);
+  }
+};
+```
+
+**장점**:
+- ✅ 테이블 설정만 변경 (코드 수정 불필요)
+- ✅ Admin UI에서 언제든 enable/disable 가능
+- ✅ 새 이벤트 추가 시에도 코드 구조 변경 없음
+
+### 실제 사용 예: 스하차량 취소 알림
+
+**SQL (초기화)**: `sql/083-sht-car-cancel-notification.sql`
+```sql
+-- 1. admin 앱 추가 (없으면)
+INSERT INTO notification_apps (app_name, app_label, sort_order)
+VALUES ('admin', '어드민 앱', 5)
+ON CONFLICT (app_name) DO UPDATE SET app_label = EXCLUDED.app_label;
+
+-- 2. sht_car_cancel 이벤트 정의
+INSERT INTO notification_event_types 
+  (event_key, event_label, default_title, default_body, default_priority, sort_order)
+VALUES ('sht_car_cancel', '스하차량 취소', '스하차량 취소 알림', '스하차량 예약이 취소되었습니다.', 'high', 61)
+ON CONFLICT (event_key) DO UPDATE SET event_label = EXCLUDED.event_label;
+
+-- 3. admin/manager/manager1/mobile에 대해 활성화
+INSERT INTO notification_app_event_settings (app_name, event_key, enabled)
+SELECT DISTINCT app_name, 'sht_car_cancel', true
+FROM notification_apps
+WHERE app_name IN ('admin', 'manager', 'manager1', 'mobile')
+ON CONFLICT (app_name, event_key) DO UPDATE SET enabled = true;
+```
+
+**코드** (`apps/manager/src/app/manager/sht-car/page.tsx`):
+```typescript
+import { dispatchPushNotification } from '@/lib/dispatchPushNotification';
+
+const handleDeleteReservation = async (reservation: ShtCarReservation) => {
+  // ... 삭제 로직
+  const { error } = await supabase
+    .from('reservation_car_sht')
+    .delete()
+    .eq('id', reservation.id);
+
+  if (error) {
+    alert(`삭제 실패: ${error.message}`);
+    return;
+  }
+
+  // ✨ 푸시 알림 발송 (fire-and-forget)
+  try {
+    const categoryInfo = getCategoryInfo(reservation.sht_category);
+    const usageDate = formatUsageDate(reservation.pickup_datetime);
+    
+    await dispatchPushNotification({
+      eventKey: 'sht_car_cancel',
+      title: '스하차량 취소 알림',
+      body: `[${categoryInfo.label}] ${usageDate} · ${reservation.vehicle_number || '-'} · 좌석 ${reservation.seat_number || '-'} 예약이 취소되었습니다.`,
+      url: 'https://manager.staycruise.kr/manager/sht-car',
+      tag: `sht-car-cancel-${reservation.id}`,
+      priority: 'high'
+    });
+  } catch (err) {
+    console.warn('[sht-car] 취소 알림 발송 실패(무시):', err);
+  }
+
+  await loadReservations();
+};
+```
+
+**mirror to manager1** (`apps/manager1/app/manager/sht-car/page.tsx`):
+- 동일한 코드 적용 (REQUIRED)
+
+### VAPID 키 환경변수 설정
+
+**필수**: 웹푸시 발송 시 VAPID 서명 필요
+
+```powershell
+# Admin 앱 (프로덕션)
+cd apps/admin
+vercel env add NEXT_PUBLIC_VAPID_PUBLIC_KEY --prod --value "your_public_key"
+vercel env add VAPID_PRIVATE_KEY --prod --value "your_private_key"
+vercel env add VAPID_EMAIL --prod --value "mailto:admin@stayhalong.com"
+
+# Admin 앱 (preview)
+vercel env add NEXT_PUBLIC_VAPID_PUBLIC_KEY preview --value "your_public_key"
+vercel env add VAPID_PRIVATE_KEY preview --value "your_private_key"
+vercel env add VAPID_EMAIL preview --value "mailto:admin@stayhalong.com"
+
+# 로컬 (.env.local)
+# apps/admin/.env.local
+NEXT_PUBLIC_VAPID_PUBLIC_KEY=your_public_key
+VAPID_PRIVATE_KEY=your_private_key
+VAPID_EMAIL=mailto:admin@stayhalong.com
+```
+
+**키 생성** (필요 시):
+```bash
+npm install -g web-push
+web-push generate-vapid-keys
+```
+
+---
+
+## 📋 최종 체크리스트 (완전 배포)
+
+### 문제 해결
+- [ ] VAPID 키 생성 및 환경변수 등록 (Admin app)
+- [ ] SQL 083 실행 (notification_apps + sht_car_cancel 시드)
+- [ ] Admin 앱 재배포 (`vercel deploy --prod`)
+- [ ] Manager/Manager1 푸시 헬퍼 추가 + sht-car hook 적용
+- [ ] CORS 설정 확인 (OPTIONS + 모든 응답에 헤더)
+
+### 신규 이벤트 추가 (향후 운영)
+```sql
+-- 1. 이벤트 유형 추가
+INSERT INTO notification_event_types 
+  (event_key, event_label, default_title, default_body, default_priority)
+VALUES ('new_event', '이벤트명', '제목', '내용', 'normal')
+ON CONFLICT DO UPDATE ...;
+
+-- 2. 앱별 정책 추가
+INSERT INTO notification_app_event_settings (app_name, event_key, enabled)
+SELECT DISTINCT app_name, 'new_event', true
+FROM notification_apps
+WHERE app_name IN ('admin', 'manager', ...)
+ON CONFLICT DO UPDATE ...;
+```
+
+```typescript
+// 3. 코드에서 dispatcher 호출 (테이블 설정은 끝 - 코드 추가만)
+await dispatchPushNotification({
+  eventKey: 'new_event',
+  title: '알림 제목',
+  body: '알림 본문'
+});
+```
+
+**원칙**:
+- DB 설정 변경 → 자동으로 dispatcher에서 정책 적용
+- 코드 수정 최소화 (각 이벤트 발생 시점에 dispatcher 호출만 추가)
+- 미래 이벤트도 테이블 추가 후 코드만 추가 → dispatcher가 정책 기반 발송
