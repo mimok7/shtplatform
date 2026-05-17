@@ -11,6 +11,7 @@ import {
   Package,
   Plane,
   Ship,
+  Trash2,
   User,
   Users,
   Wallet,
@@ -18,6 +19,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import supabase from '@/lib/supabase';
+import { getReservationStoredAmount } from '@sht/domain/reservation';
 
 type SortMode = 'date' | 'type';
 
@@ -73,18 +75,41 @@ const formatLinePrice = (label: string, unitPrice: number, count: number, unitLa
   return `${label} ${formatMoney(unitPrice)} × ${count}${unitLabel}`;
 };
 
+const getCruiseDisplayTotal = (service: any): number => {
+  const roomTotal = Number(service?.room_total_price || 0);
+  if (roomTotal > 0) return roomTotal;
+
+  const rawPb = service?.priceBreakdown
+    || service?.price_breakdown
+    || service?.reservation_price_breakdown
+    || service?.reservation?.price_breakdown
+    || null;
+
+  const pbGrandTotal = Number(rawPb?.grand_total);
+  if (Number.isFinite(pbGrandTotal) && pbGrandTotal > 0) return pbGrandTotal;
+
+  return Number(service?.totalPrice || service?.total_amount || 0);
+};
+
 const getAmountSummaryLines = (service: any, type: string): string[] => {
   if (type === 'cruise') {
+    const adultUnit = Number(service.priceAdult || service.price_adult || service.unit_price || 0);
+    const childUnit = Number(service.priceChild || service.price_child || 0);
+    const infantUnit = Number(service.priceInfant || service.price_infant || 0);
+    const childExtraBedUnit = Number(service.priceChildExtraBed || service.price_child_extra_bed || 0);
+    const extraBedUnit = Number(service.priceExtraBed || service.price_extra_bed || 0);
+    const singleUnit = Number(service.priceSingle || service.price_single || 0);
     const lines = [
-      formatLinePrice('성인', Number(service.priceAdult || service.unit_price || 0), Number(service.adult_count || service.adult || 0), '명'),
-      formatLinePrice('아동', Number(service.priceChild || 0), Number(service.child_count || service.child || 0), '명'),
-      formatLinePrice('유아', Number(service.priceInfant || 0), Number(service.infant_count || service.toddler || 0), '명'),
-      formatLinePrice('아동 엑스트라', Number(service.priceChildExtraBed || 0), Number(service.child_extra_bed_count || 0), '명'),
-      formatLinePrice('엑스트라', Number(service.priceExtraBed || 0), Number(service.extra_bed_count || 0), '개'),
-      formatLinePrice('싱글', Number(service.priceSingle || 0), Number(service.single_count || 0), '명'),
+      formatLinePrice('성인', adultUnit, Number(service.adult_count || service.adult || 0), '명'),
+      formatLinePrice('아동', childUnit, Number(service.child_count || service.child || 0), '명'),
+      formatLinePrice('유아', infantUnit, Number(service.infant_count || service.toddler || 0), '명'),
+      formatLinePrice('아동 엑스트라', childExtraBedUnit, Number(service.child_extra_bed_count || 0), '명'),
+      formatLinePrice('엑스트라', extraBedUnit, Number(service.extra_bed_count || 0), '개'),
+      formatLinePrice('싱글', singleUnit, Number(service.single_count || 0), '명'),
     ].filter(Boolean) as string[];
-    if (lines.length === 0 && Number(service.room_total_price || service.totalPrice || 0) > 0) {
-      return [`총액 ${formatMoney(Number(service.room_total_price || service.totalPrice || 0))}`];
+    const cruiseDisplayTotal = getCruiseDisplayTotal(service);
+    if (lines.length === 0 && cruiseDisplayTotal > 0) {
+      return [`총액 ${formatMoney(cruiseDisplayTotal)}`];
     }
     return lines;
   }
@@ -257,15 +282,15 @@ const getManualAdditionalFeeDetail = (service: any): string => {
 };
 
 const getReservationTotalAmount = (service: any): number | null => {
-  const raw = service?.reservation_total_amount
-    ?? service?.reservationTotalAmount
-    ?? service?.reservation?.total_amount
-    ?? service?.reservation_price_breakdown?.grand_total
-    ?? service?.reservation?.price_breakdown?.grand_total
-    ?? null;
-  if (raw === null || raw === undefined || raw === '') return null;
-  const parsed = Number(raw);
-  return Number.isFinite(parsed) ? parsed : null;
+  const amount = getReservationStoredAmount({
+    total_amount: service?.reservation_total_amount
+      ?? service?.reservationTotalAmount
+      ?? service?.reservation?.total_amount,
+    price_breakdown: service?.reservation_price_breakdown
+      ?? service?.reservation?.price_breakdown
+      ?? null,
+  });
+  return amount > 0 ? amount : null;
 };
 
 const hasReservationPricingOverride = (service: any, manualAdditionalFee: number, manualAdditionalFeeDetail: string): boolean => {
@@ -392,18 +417,24 @@ function DetailLine({ label, value }: { label: string; value: React.ReactNode })
   );
 }
 
-function ServiceCard({ service }: { service: any }) {
+function ServiceCard({
+  service,
+  onDeleteService,
+  deletingReservationId,
+}: {
+  service: any;
+  onDeleteService?: (service: any) => void | Promise<void>;
+  deletingReservationId?: string | null;
+}) {
   const type = String(service?.serviceType || '').toLowerCase();
+  const reservationId = String(service?.reservation_id || service?.reservationId || service?.re_id || '').trim();
+  const canDelete = !!onDeleteService && !!reservationId;
+  const isDeleting = !!deletingReservationId && deletingReservationId === reservationId;
   const amountSummaryLines = getAmountSummaryLines(service, type);
   const manualAdditionalFee = getManualAdditionalFee(service);
   const manualAdditionalFeeDetail = getManualAdditionalFeeDetail(service);
-  const reservationTotalAmount = getReservationTotalAmount(service);
   const isPackageService = !!service?.isPackageService;
   const isShtDropoff = type === 'sht' && String(service?.category || '').toLowerCase().includes('drop');
-  const showReservationPricing = !isPackageService
-    && !isShtDropoff
-    && reservationTotalAmount !== null
-    && hasReservationPricingOverride(service, manualAdditionalFee, manualAdditionalFeeDetail);
 
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-3">
@@ -412,7 +443,20 @@ function ServiceCard({ service }: { service: any }) {
           {getServiceIcon(type)}
           <span className="truncate whitespace-nowrap text-sm font-semibold text-gray-800">{getServiceLabel(type)}</span>
         </div>
-        {getStatusBadge(String(service?.status || ''))}
+        <div className="flex items-center gap-1.5">
+          {getStatusBadge(String(service?.status || ''))}
+          {canDelete && (
+            <button
+              type="button"
+              onClick={() => onDeleteService?.(service)}
+              disabled={isDeleting}
+              className="inline-flex items-center gap-1 rounded-md border border-red-200 bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Trash2 className="h-3 w-3" />
+              {isDeleting ? '삭제중' : '삭제'}
+            </button>
+          )}
+        </div>
       </div>
 
       {service?._hasChange && (
@@ -431,7 +475,7 @@ function ServiceCard({ service }: { service: any }) {
           <DetailLine label="성인" value={`${Number(service.adult ?? service.adult_count ?? 0)}명`} />
           <DetailLine label="아동" value={`${Number(service.child ?? service.child_count ?? 0)}명`} />
           <DetailLine label="유아" value={`${Number(service.infant ?? service.infant_count ?? service.toddler ?? 0)}명`} />
-          <DetailLine label="총 금액" value={<span className="font-bold text-blue-700">{formatMoney(Number(service.room_total_price || service.totalPrice || service.total_amount || 0))}</span>} />
+          <DetailLine label="총 금액" value={<span className="font-bold text-blue-700">{formatMoney(getCruiseDisplayTotal(service))}</span>} />
         </div>
       )}
 
@@ -542,7 +586,7 @@ function ServiceCard({ service }: { service: any }) {
           <DetailLine label="패키지" value={service.package_name || service.package_code || '-'} />
           <DetailLine label="인원" value={`성인 ${Number(service.re_adult_count || 0)} / 아동 ${Number(service.re_child_count || 0)}`} />
           <DetailLine label="등록일" value={service.re_created_at ? formatDateOnlyKst(service.re_created_at) : '-'} />
-          <DetailLine label="패키지 총액" value={<span className="font-bold text-indigo-700">{formatMoney(Number(service.total_amount || 0))}</span>} />
+          <DetailLine label="패키지 총액" value={<span className="font-bold text-indigo-700">{formatMoney(getReservationStoredAmount(service))}</span>} />
         </div>
       )}
 
@@ -557,7 +601,7 @@ function ServiceCard({ service }: { service: any }) {
         </div>
       )}
 
-      {(manualAdditionalFee !== 0 || manualAdditionalFeeDetail || showReservationPricing) && (
+      {!isPackageService && !isShtDropoff && (manualAdditionalFee !== 0 || manualAdditionalFeeDetail) && (
         <div className="mt-2 rounded bg-rose-50/70 p-2 text-[11px]">
           {manualAdditionalFee !== 0 && (
             <div className="flex items-center justify-between">
@@ -567,12 +611,6 @@ function ServiceCard({ service }: { service: any }) {
           )}
           {manualAdditionalFeeDetail && (
             <div className="mt-1 whitespace-pre-line text-rose-700"><span className="font-semibold text-blue-700">내역: </span>{manualAdditionalFeeDetail}</div>
-          )}
-          {showReservationPricing && (
-            <div className="mt-1 flex items-center justify-between border-t border-rose-100 pt-1">
-              <span className="whitespace-nowrap font-semibold text-blue-700">예약 최종 금액</span>
-              <span className="font-semibold text-blue-700">{formatMoney(Number(reservationTotalAmount || 0))}</span>
-            </div>
           )}
         </div>
       )}
@@ -591,6 +629,7 @@ export default function ReservationDetailModal({
   onClose,
   onEdit,
   onProcess,
+  onDeleteService,
   processLabel,
   processDisabled,
   processLoading,
@@ -601,6 +640,7 @@ export default function ReservationDetailModal({
   onClose: () => void;
   onEdit?: (item: any) => void;
   onProcess?: () => void;
+  onDeleteService?: (service: any) => Promise<void> | void;
   processLabel?: string;
   processDisabled?: boolean;
   processLoading?: boolean;
@@ -610,6 +650,7 @@ export default function ReservationDetailModal({
   const [sortMode, setSortMode] = useState<SortMode>('type');
   const [enrichedServices, setEnrichedServices] = useState<any[]>([]);
   const [isEnriching, setIsEnriching] = useState(false);
+  const [deletingReservationId, setDeletingReservationId] = useState<string | null>(null);
 
   const groupedItems = useMemo(() => {
     if (!item) return [];
@@ -644,7 +685,12 @@ export default function ReservationDetailModal({
           .filter(Boolean)));
 
         const [cruiseRates, airportPrices, hotelPrices, rentPrices, tourPrices, reservationRows, changeRequests] = await Promise.all([
-          cruiseCodes.length > 0 ? supabase.from('cruise_rate_card').select('id, cruise_name, room_type').in('id', cruiseCodes) : Promise.resolve({ data: [] }),
+          cruiseCodes.length > 0
+            ? supabase
+              .from('cruise_rate_card')
+              .select('id, cruise_name, room_type, price_adult, price_child, price_child_older, price_child_extra_bed, price_infant, price_extra_bed, price_single')
+              .in('id', cruiseCodes)
+            : Promise.resolve({ data: [] }),
           airportCodes.length > 0 ? supabase.from('airport_price').select('airport_code, service_type, route, vehicle_type').in('airport_code', airportCodes) : Promise.resolve({ data: [] }),
           hotelCodes.length > 0 ? supabase.from('hotel_price').select('hotel_price_code, hotel_name, room_type, room_name').in('hotel_price_code', hotelCodes) : Promise.resolve({ data: [] }),
           rentCodes.length > 0 ? supabase.from('rentcar_price').select('rent_code, vehicle_type, way_type, route, price, capacity').in('rent_code', rentCodes) : Promise.resolve({ data: [] }),
@@ -786,6 +832,13 @@ export default function ReservationDetailModal({
               cruise: roomInfo?.cruise_name || baseService.cruise || '-',
               roomType: roomInfo?.room_type || baseService.roomType || baseService.room_price_code || '-',
               paymentMethod: baseService.paymentMethod || baseService.payment_method || baseService.reservation?.payment_method || '-',
+              priceAdult: Number(baseService.priceAdult ?? baseService.price_adult ?? roomInfo?.price_adult ?? 0),
+              priceChild: Number(baseService.priceChild ?? baseService.price_child ?? roomInfo?.price_child ?? 0),
+              priceChildOlder: Number(baseService.priceChildOlder ?? baseService.price_child_older ?? roomInfo?.price_child_older ?? roomInfo?.price_child ?? 0),
+              priceChildExtraBed: Number(baseService.priceChildExtraBed ?? baseService.price_child_extra_bed ?? roomInfo?.price_child_extra_bed ?? 0),
+              priceInfant: Number(baseService.priceInfant ?? baseService.price_infant ?? roomInfo?.price_infant ?? 0),
+              priceExtraBed: Number(baseService.priceExtraBed ?? baseService.price_extra_bed ?? roomInfo?.price_extra_bed ?? 0),
+              priceSingle: Number(baseService.priceSingle ?? baseService.price_single ?? roomInfo?.price_single ?? 0),
             };
           }
 
@@ -937,10 +990,45 @@ export default function ReservationDetailModal({
     }));
   })();
 
-  const totalAmount = (enrichedServices || []).reduce((sum, current) => {
-    const n = Number(current?.reservation_total_amount ?? current?.totalAmount ?? current?.total_amount ?? current?.amount ?? 0);
-    return sum + (Number.isFinite(n) ? n : 0);
-  }, 0);
+  const totalAmount = (() => {
+    const reservationTotals = new Map<string, number>();
+    let rowFallbackTotal = 0;
+
+    for (const current of enrichedServices || []) {
+      const reservationId = String(current?.reservation_id || current?.reservationId || '').trim();
+      const reservationTotal = getReservationTotalAmount(current);
+
+      if (reservationId && reservationTotal !== null && reservationTotal > 0) {
+        if (!reservationTotals.has(reservationId)) {
+          reservationTotals.set(reservationId, reservationTotal);
+        }
+        continue;
+      }
+
+      const serviceType = String(current?.serviceType || '').toLowerCase();
+      const rowTotal = serviceType === 'cruise'
+        ? getCruiseDisplayTotal(current)
+        : Number(current?.totalAmount ?? current?.total_amount ?? current?.amount ?? current?.totalPrice ?? current?.total_price ?? current?.room_total_price ?? current?.car_total_price ?? 0);
+      if (Number.isFinite(rowTotal)) {
+        rowFallbackTotal += rowTotal;
+      }
+    }
+
+    const reservationTotalSum = Array.from(reservationTotals.values()).reduce((sum, value) => sum + value, 0);
+    return reservationTotalSum + rowFallbackTotal;
+  })();
+
+  const handleDeleteService = async (service: any) => {
+    if (!onDeleteService) return;
+    const reservationId = String(service?.reservation_id || service?.reservationId || service?.re_id || '').trim();
+    if (!reservationId) return;
+    setDeletingReservationId(reservationId);
+    try {
+      await onDeleteService(service);
+    } finally {
+      setDeletingReservationId(null);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center pt-0 sm:items-start sm:pt-2">
@@ -1031,7 +1119,12 @@ export default function ReservationDetailModal({
                   </div>
                   <div className="space-y-2">
                     {group.items.map((service, idx) => (
-                      <ServiceCard key={`${service?.reservation_id || service?.reservationId || 'service'}-${idx}`} service={service} />
+                      <ServiceCard
+                        key={`${service?.reservation_id || service?.reservationId || 'service'}-${idx}`}
+                        service={service}
+                        onDeleteService={onDeleteService ? handleDeleteService : undefined}
+                        deletingReservationId={deletingReservationId}
+                      />
                     ))}
                   </div>
                 </div>

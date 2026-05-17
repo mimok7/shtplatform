@@ -4,6 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import ManagerLayout from '@/components/ManagerLayout';
 import supabase from '@/lib/supabase';
 import UnifiedConfirmation, { UnifiedQuoteData } from '@/components/UnifiedConfirmation';
+import { getReservationStoredAmount } from '@sht/domain/reservation';
 
 interface ReservationDetail {
   reservation_id: string;
@@ -182,7 +183,7 @@ export default function ManagerConfirmationGeneratePage() {
 
         const resList = reservationList || [];
         const reservationMetaMap = new Map((resList || []).map((r: any) => [r.re_id, {
-          total_amount: Number(r.total_amount || r.price_breakdown?.grand_total || 0),
+          total_amount: getReservationStoredAmount(r),
           manual_additional_fee: Number(r.manual_additional_fee || 0),
           manual_additional_fee_detail: String(r.manual_additional_fee_detail || '').trim(),
           price_breakdown: r.price_breakdown || null,
@@ -557,7 +558,7 @@ export default function ManagerConfirmationGeneratePage() {
         .order('created_at', { ascending: false })
         .limit(1)
         .single();
-      const reservationStoredTotal = Number(reservation.total_amount || reservation.price_breakdown?.grand_total || 0);
+      const reservationStoredTotal = getReservationStoredAmount(reservation);
       if (reservationStoredTotal > 0) {
         paymentStatus = payment?.payment_status || reservation.payment_status || '';
         totalPrice = reservationStoredTotal;

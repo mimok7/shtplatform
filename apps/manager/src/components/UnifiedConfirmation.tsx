@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { getReservationStoredAmount } from '@sht/domain/reservation';
 
 export interface UnifiedReservationDetail {
     reservation_id: string;
@@ -86,10 +87,17 @@ export default function UnifiedConfirmation({ data, isPackage }: UnifiedConfirma
 
     const getReservationAmount = (reservation: UnifiedReservationDetail): number => {
         const details = reservation.service_details || {};
+        const storedAmount = getReservationStoredAmount({
+            total_amount: reservation.reservation_total_amount,
+            price_breakdown: reservation.price_breakdown,
+        });
+        const detailStoredAmount = getReservationStoredAmount({
+            total_amount: details.reservation_total_amount,
+            price_breakdown: details.price_breakdown,
+        });
         return toDisplayAmount(reservation.reservation_total_amount)
-            ?? toDisplayAmount(reservation.price_breakdown?.grand_total)
-            ?? toDisplayAmount(details.reservation_total_amount)
-            ?? toDisplayAmount(details.price_breakdown?.grand_total)
+            ?? (storedAmount > 0 ? storedAmount : null)
+            ?? (detailStoredAmount > 0 ? detailStoredAmount : null)
             ?? toDisplayAmount(reservation.amount)
             ?? 0;
     };

@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import supabase from '@/lib/supabase';
 import ManagerLayout from '@/components/ManagerLayout';
+import { getReservationStoredAmount } from '@sht/domain/reservation';
 import {
     Download,
     ArrowLeft,
@@ -75,8 +76,7 @@ export default function ReservationExportPage() {
     ];
 
     const getReservationTotal = (reservation: any): number => {
-        const parsed = Number(reservation?.total_amount ?? reservation?.price_breakdown?.grand_total ?? 0);
-        return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+        return getReservationStoredAmount(reservation);
     };
 
     useEffect(() => {

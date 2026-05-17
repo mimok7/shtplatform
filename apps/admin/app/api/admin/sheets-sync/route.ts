@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { google, sheets_v4 } from 'googleapis';
 import serviceSupabase from '@/lib/serviceSupabase';
 import { checkAdmin, fetchAll } from '@/lib/exportAuth';
+import { getReservationStoredAmount } from '@sht/domain/reservation';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -163,8 +164,7 @@ function userLabel(user: any) {
 }
 
 function reservationDisplayTotal(reservation: any) {
-  const parsed = Number(reservation?.total_amount ?? reservation?.price_breakdown?.grand_total ?? 0);
-  return Number.isFinite(parsed) ? parsed : 0;
+  return getReservationStoredAmount(reservation);
 }
 
 async function safeFetch(table: string, filterFn?: (q: any) => any) {

@@ -210,15 +210,34 @@ const ServiceDetailSection = ({ payment }: { payment: any }) => {
                                     (!room.checkin || room.checkin === detail.checkin) &&
                                     Number(room.total || 0) === Number(detail.room_total_price || 0)
                                 ) || rooms[index] || null;
+                                const pickUnit = (entry: any, count: number, fallback: number) => {
+                                    const unit = Number(entry?.unit_price || 0);
+                                    if (unit > 0) return unit;
+                                    const total = Number(entry?.total || 0);
+                                    if (count > 0 && total > 0) return Math.round(total / count);
+                                    return Number(fallback || 0);
+                                };
                                 const categoryRows = [
-                                    ['성인', storedRoom?.adult],
-                                    ['아동', storedRoom?.child],
-                                    ['아동(8~11)', storedRoom?.child_older],
-                                    ['아동 엑스트라', storedRoom?.child_extra_bed],
-                                    ['유아', storedRoom?.infant],
-                                    ['엑스트라', storedRoom?.extra_bed],
-                                    ['싱글', storedRoom?.single],
-                                ].filter(([, row]: any) => Number(row?.count || 0) > 0);
+                                    ['성인', storedRoom?.adult, Number(detail.price_info?.price_adult || 0)],
+                                    ['아동', storedRoom?.child, Number(detail.price_info?.price_child || 0)],
+                                    ['아동(8~11)', storedRoom?.child_older, Number(detail.price_info?.price_child_older || detail.price_info?.price_child || 0)],
+                                    ['아동 엑스트라', storedRoom?.child_extra_bed, Number(detail.price_info?.price_child_extra_bed || 0)],
+                                    ['유아', storedRoom?.infant, Number(detail.price_info?.price_infant || 0)],
+                                    ['엑스트라', storedRoom?.extra_bed, Number(detail.price_info?.price_extra_bed || 0)],
+                                    ['싱글', storedRoom?.single, Number(detail.price_info?.price_single || 0)],
+                                ]
+                                    .map(([label, row, fallbackUnit]: any) => {
+                                        const count = Number(row?.count || 0);
+                                        const unitPrice = pickUnit(row, count, fallbackUnit);
+                                        const total = Number(row?.total || 0);
+                                        return {
+                                            label,
+                                            count,
+                                            unitPrice,
+                                            total: total > 0 ? total : unitPrice * count,
+                                        };
+                                    })
+                                    .filter((row: any) => row.count > 0);
                                 const adjustmentTotal = Number(priceBreakdown?.adjustment_total ?? priceBreakdown?.additional_fee ?? detail.reservation?.manual_additional_fee ?? 0);
                                 return (
                                     <div key={index} className={`bg-white p-4 rounded border ${c.borderItem}`}>
@@ -233,9 +252,9 @@ const ServiceDetailSection = ({ payment }: { payment: any }) => {
                                             <div><strong>객실 총액:</strong> <span className="text-lg font-bold text-green-600">{Number(detail.room_total_price || storedRoom?.total || 0).toLocaleString()}동</span></div>
                                             {categoryRows.length > 0 && (
                                                 <div className="md:col-span-2 border-t border-blue-100 pt-3 space-y-1">
-                                                    {categoryRows.map(([label, row]: any) => (
-                                                        <div key={label} className="flex justify-between">
-                                                            <span>{label} {Number(row.unit_price || 0).toLocaleString()}동 × {Number(row.count || 0)}명</span>
+                                                    {categoryRows.map((row: any) => (
+                                                        <div key={row.label} className="flex justify-between">
+                                                            <span>{row.label} {Number(row.unitPrice || 0).toLocaleString()}동 × {Number(row.count || 0)}명</span>
                                                             <span className="font-medium">{Number(row.total || 0).toLocaleString()}동</span>
                                                         </div>
                                                     ))}

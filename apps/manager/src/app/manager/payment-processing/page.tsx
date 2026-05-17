@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import ManagerLayout from '@/components/ManagerLayout';
 import PaymentDetailModal from '../../../components/PaymentDetailModal';
 import supabase from '@/lib/supabase';
+import { getPreferredPaymentAmount } from '@sht/domain/reservation';
 import {
   CreditCard,
   DollarSign,
@@ -103,18 +104,11 @@ export default function ManagerPaymentsPage() {
   const [selectedReservation, setSelectedReservation] = useState<any>(null);
 
   const getPreferredAmount = (payment: any, serviceTotal?: number) => {
-    const rawPaymentAmount = payment?.amount;
-    const hasPaymentAmount = rawPaymentAmount !== null && rawPaymentAmount !== undefined && rawPaymentAmount !== '';
-    const serviceAmount = Number(serviceTotal ?? payment?.serviceData?.total ?? 0);
-    const paymentAmount = Number(rawPaymentAmount || 0);
-    const rawReservationAmount = payment?.reservation?.total_amount ?? payment?.reservation?.price_breakdown?.grand_total;
-    const hasReservationAmount = rawReservationAmount !== null && rawReservationAmount !== undefined && rawReservationAmount !== '';
-    const reservationAmount = Number(rawReservationAmount || 0);
-
-    // 예약 수정 화면에서 저장한 최종 금액을 모든 결제 처리 화면에서 우선 표시
-    if (hasReservationAmount && Number.isFinite(reservationAmount) && reservationAmount > 0) return reservationAmount;
-    if (hasPaymentAmount && Number.isFinite(paymentAmount)) return paymentAmount;
-    return serviceAmount;
+    return getPreferredPaymentAmount({
+      reservation: payment?.reservation,
+      paymentAmount: payment?.amount,
+      serviceAmount: serviceTotal ?? payment?.serviceData?.total ?? 0,
+    });
   };
 
   // 상세보기 모달 열기

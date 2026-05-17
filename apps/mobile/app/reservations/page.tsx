@@ -307,6 +307,45 @@ export default function ReservationsPage() {
     }
   };
 
+  const handleDeleteDetailService = async (service: any) => {
+    const reservationId = String(service?.reservation_id || service?.reservationId || service?.re_id || '').trim();
+    if (!reservationId) {
+      alert('삭제할 예약 ID를 찾을 수 없습니다.');
+      return;
+    }
+
+    if (!confirm('이 예약 건을 삭제하시겠습니까?\n삭제 후 복구할 수 없습니다.')) return;
+
+    try {
+      const { error } = await supabase.from('reservation').delete().eq('re_id', reservationId);
+      if (error) throw new Error(error.message);
+
+      const nextModalItems = detailModalItems.filter((item) => {
+        const id = String(item?.reservation_id || item?.reservationId || item?.re_id || '').trim();
+        return id !== reservationId;
+      });
+
+      setDetailModalItems(nextModalItems);
+      setDetailModalItem(nextModalItems[0] || null);
+      setDetailItem((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          services: prev.services.filter((svc) => svc.re_id !== reservationId),
+        };
+      });
+
+      if (nextModalItems.length === 0) {
+        setDetailOpen(false);
+      }
+
+      await loadReservations();
+      alert('선택한 예약 건이 삭제되었습니다.');
+    } catch (err: any) {
+      alert(`삭제 실패: ${err?.message || '알 수 없는 오류'}`);
+    }
+  };
+
   /* ── 결제 레코드 생성 ─────────────────── */
   const createPaymentRecords = async (reservationIds: string[]) => {
     try {
@@ -753,6 +792,7 @@ export default function ReservationsPage() {
         isOpen={detailOpen}
         onClose={() => setDetailOpen(false)}
         onEdit={detailItem ? (() => moveToReservationEdit()) : undefined}
+        onDeleteService={handleDeleteDetailService}
         onProcess={detailItem ? handleDetailProcess : undefined}
         processLoading={detailProcessing}
         processDisabled={detailLoading || detailProcessing || detailProcessInfo.count === 0}

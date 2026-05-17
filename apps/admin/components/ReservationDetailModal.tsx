@@ -2,6 +2,7 @@
 
 import React from 'react';
 import supabase from '@/lib/supabase';
+import { getReservationStoredAmount } from '@sht/domain/reservation';
 import {
     Calendar,
     Clock,
@@ -56,6 +57,50 @@ const getServiceTypeBadgeClass = (value: string | null | undefined): string => {
     if (value.includes('샌딩')) return 'bg-orange-100 text-orange-800';
     if (value.includes('왕복')) return 'bg-green-100 text-green-800';
     return 'bg-purple-100 text-purple-800';
+};
+
+const getReservationDisplayTotal = (reservation: any): number => {
+    const reservationTotal = getReservationStoredAmount(reservation);
+
+    if (Number.isFinite(reservationTotal) && reservationTotal > 0) {
+        return reservationTotal;
+    }
+
+    const rawDetails = reservation?.serviceDetails ?? reservation?.service_details;
+    const rows = Array.isArray(rawDetails) ? rawDetails : rawDetails ? [rawDetails] : [];
+
+    let rowFallbackTotal = 0;
+    rows.forEach((row: any) => {
+        const rowType = String(reservation?.re_type || row?.serviceType || '').toLowerCase();
+
+        let rowTotal = Number(
+            row?.room_total_price
+            || row?.total_price
+            || row?.car_total_price
+            || row?.totalPrice
+            || row?.total_amount
+            || 0
+        );
+
+        if (rowType === 'cruise' && rowTotal <= 0) {
+            const cruiseGrandTotal = Number(
+                row?.priceBreakdown?.grand_total
+                ?? row?.price_breakdown?.grand_total
+                ?? row?.reservation_price_breakdown?.grand_total
+                ?? row?.reservation?.price_breakdown?.grand_total
+                ?? 0
+            );
+            if (Number.isFinite(cruiseGrandTotal) && cruiseGrandTotal > 0) {
+                rowTotal = cruiseGrandTotal;
+            }
+        }
+
+        if (Number.isFinite(rowTotal)) {
+            rowFallbackTotal += rowTotal;
+        }
+    });
+
+    return rowFallbackTotal;
 };
 
 // 크루즈 상세 정보 컴포넌트
@@ -2236,7 +2281,7 @@ export default function ReservationDetailModal({
                                             <div className="grid grid-cols-1 gap-3 sm:gap-4 text-xs sm:text-sm bg-gray-50 p-3 sm:p-4 rounded-lg">
                                                 <div><strong>예약 ID:</strong> <span className="font-mono text-xxs sm:text-xs bg-white px-2 py-1 rounded break-all">{res.re_id}</span></div>
                                                 <div><strong>견적 ID:</strong> <span className="break-all">{res.re_quote_id || '정보 없음'}</span></div>
-                                                <div><strong>예약 최종 금액:</strong> <span className="font-bold text-green-700">{Number(res.total_amount || res.price_breakdown?.grand_total || 0).toLocaleString()}동</span></div>
+                                                <div><strong>예상 총 금액:</strong> <span className="font-bold text-green-700">{getReservationDisplayTotal(res).toLocaleString()}동</span></div>
                                                 {(Number(res.manual_additional_fee || 0) > 0 || res.manual_additional_fee_detail) && (
                                                     <div className="rounded border border-rose-200 bg-rose-50 p-2 text-rose-800">
                                                         <div><strong>추가요금:</strong> {Number(res.manual_additional_fee || 0).toLocaleString()}동</div>

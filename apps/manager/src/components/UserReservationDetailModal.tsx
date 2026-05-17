@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Ship, Plane, Building, MapPin, Car, Users, Wallet, Calendar, Clock, CheckCircle, AlertCircle, XCircle, Package, FileText } from 'lucide-react';
 import supabase from '@/lib/supabase';
 import ShtCarSeatMap from '@/components/ShtCarSeatMap';
+import { getReservationStoredAmount } from '@sht/domain/reservation';
 
 interface UserReservationDetailModalProps {
     isOpen: boolean;
@@ -155,16 +156,15 @@ const getManualAdditionalFeeDetail = (service: any): string => {
 };
 
 const getReservationTotalAmount = (service: any): number | null => {
-    const raw = service?.reservation_total_amount
-        ?? service?.reservationTotalAmount
-        ?? service?.reservation?.total_amount
-        ?? service?.reservation_price_breakdown?.grand_total
-        ?? service?.reservation?.price_breakdown?.grand_total
-        ?? null;
-
-    if (raw === null || raw === undefined || raw === '') return null;
-    const parsed = Number(raw);
-    return Number.isFinite(parsed) ? parsed : null;
+    const amount = getReservationStoredAmount({
+        total_amount: service?.reservation_total_amount
+            ?? service?.reservationTotalAmount
+            ?? service?.reservation?.total_amount,
+        price_breakdown: service?.reservation_price_breakdown
+            ?? service?.reservation?.price_breakdown
+            ?? null,
+    });
+    return amount > 0 ? amount : null;
 };
 
 const hasReservationPricingOverride = (service: any, manualAdditionalFee: number, manualAdditionalFeeDetail: string): boolean => {
@@ -305,7 +305,7 @@ export default function UserReservationDetailModal({
                 // 2. 가격 테이블 조회
                 const [cruiseRates, airportPrices, hotelPrices, rentPrices, tourPrices, reservationRows, changeRequests] = await Promise.all([
                     cruiseCodes.length > 0
-                        ? supabase.from('cruise_rate_card').select('id, cruise_name, room_type').in('id', cruiseCodes)
+                        ? supabase.from('cruise_rate_card').select('id, cruise_name, room_type, price_adult, price_child, price_child_older, price_child_extra_bed, price_infant, price_extra_bed, price_single').in('id', cruiseCodes)
                         : Promise.resolve({ data: [] }),
                     airportCodes.length > 0
                         ? supabase.from('airport_price').select('airport_code, service_type, route, vehicle_type').in('airport_code', airportCodes)
@@ -473,6 +473,13 @@ export default function UserReservationDetailModal({
                             cruise: roomInfo?.cruise_name || baseService.cruise || '-',
                             roomType: roomInfo?.room_type || baseService.roomType || baseService.room_price_code || '-',
                             paymentMethod: baseService.paymentMethod || baseService.payment_method || baseService.reservation?.payment_method || '-',
+                            priceAdult: Number(baseService.priceAdult ?? roomInfo?.price_adult ?? 0),
+                            priceChild: Number(baseService.priceChild ?? roomInfo?.price_child ?? 0),
+                            priceChildOlder: Number(baseService.priceChildOlder ?? roomInfo?.price_child_older ?? roomInfo?.price_child ?? 0),
+                            priceChildExtraBed: Number(baseService.priceChildExtraBed ?? roomInfo?.price_child_extra_bed ?? 0),
+                            priceInfant: Number(baseService.priceInfant ?? roomInfo?.price_infant ?? 0),
+                            priceExtraBed: Number(baseService.priceExtraBed ?? roomInfo?.price_extra_bed ?? 0),
+                            priceSingle: Number(baseService.priceSingle ?? roomInfo?.price_single ?? 0),
                         };
                     }
                     if (baseService.serviceType === 'vehicle' || baseService.serviceType === 'car') {
@@ -725,11 +732,6 @@ export default function UserReservationDetailModal({
         const isPackageService = service.isPackageService;
         const manualAdditionalFee = getManualAdditionalFee(service);
         const manualAdditionalFeeDetail = getManualAdditionalFeeDetail(service);
-        const reservationTotalAmount = getReservationTotalAmount(service);
-        const showReservationPricing = !isPackageService
-            && !(type === 'sht' && String(service.category || '').toLowerCase().includes('drop'))
-            && reservationTotalAmount !== null
-            && hasReservationPricingOverride(service, manualAdditionalFee, manualAdditionalFeeDetail);
 
         return (
             <div className="flex flex-col gap-1 text-sm text-gray-700 mt-2">
@@ -796,11 +798,22 @@ export default function UserReservationDetailModal({
                                         {cruiseLines.length > 0 ? (
                                             cruiseLines.map((line, idx) => {
                                                 const lineCount = Number(line.value?.count || 0);
-                                                const lineTotal = Number(line.value?.total || 0);
+                                                const rawTotal = Number(line.value?.total || 0);
                                                 const rawUnit = Number(line.value?.unit_price);
+                                                const fallbackUnitByLabel: Record<string, number> = {
+                                                    성인: Number(service.unitPrice || service.priceAdult || 0),
+                                                    아동: Number(service.priceChild || 0),
+                                                    아동엑베: Number(service.priceChildExtraBed || 0),
+                                                    유아: Number(service.priceInfant || 0),
+                                                    엑스트라베드: Number(service.priceExtraBed || 0),
+                                                    싱글차액: Number(service.priceSingle || 0),
+                                                };
                                                 const lineUnit = Number.isFinite(rawUnit) && rawUnit > 0
                                                     ? rawUnit
-                                                    : (lineCount > 0 ? Math.round(lineTotal / lineCount) : 0);
+                                                    : (lineCount > 0 && rawTotal > 0
+                                                        ? Math.round(rawTotal / lineCount)
+                                                        : Number(fallbackUnitByLabel[line.label] || 0));
+                                                const lineTotal = rawTotal > 0 ? rawTotal : lineUnit * lineCount;
                                                 return (
                                                     <div key={`${line.label}-${idx}`} className="flex justify-between text-sm">
                                                         <span className="text-gray-600">{line.label} {lineUnit.toLocaleString()}동 × {lineCount}명</span>
@@ -1171,24 +1184,7 @@ export default function UserReservationDetailModal({
                         </div>
                     </>
                 )}
-                {showReservationPricing && (
-                    <div className="border-t border-blue-100 pt-2 mt-2 space-y-1 text-xs bg-blue-50/70 rounded p-2">
-                        {manualAdditionalFee !== 0 && (
-                            <div className="flex justify-between items-center">
-                                <span className="text-rose-700 font-medium">추가/차감 내역</span>
-                                <span className="font-bold text-rose-700">{formatSignedAmount(manualAdditionalFee)}</span>
-                            </div>
-                        )}
-                        {manualAdditionalFeeDetail && (
-                            <div className="text-rose-800 whitespace-pre-line">추가내역: {manualAdditionalFeeDetail}</div>
-                        )}
-                        <div className="flex justify-between items-center border-t border-blue-100 pt-1">
-                            <span className="text-blue-700 font-medium">예약 최종 금액</span>
-                            <span className="font-bold text-blue-700">{reservationTotalAmount.toLocaleString()}동</span>
-                        </div>
-                    </div>
-                )}
-                {!showReservationPricing && !isPackageService && !(type === 'sht' && String(service.category || '').toLowerCase().includes('drop')) && (manualAdditionalFee !== 0 || manualAdditionalFeeDetail) && (
+                {!isPackageService && !(type === 'sht' && String(service.category || '').toLowerCase().includes('drop')) && (manualAdditionalFee !== 0 || manualAdditionalFeeDetail) && (
                     <div className="border-t border-rose-100 pt-2 mt-2 space-y-1 text-xs bg-rose-50/70 rounded p-2">
                         <div className="flex justify-between items-center">
                             <span className="text-rose-700 font-medium">추가/차감 내역</span>
@@ -1389,28 +1385,13 @@ export default function UserReservationDetailModal({
                                 </h4>
                                 {(() => {
                                     // 총 금액 집계
-                                    const typeStats: Record<string, { count: number; unitPrice: number; total: number }> = {};
                                     const additionalFeeByReservation = new Map<string, number>();
                                     const reservationTotalByReservation = new Map<string, number>();
+                                    let rowFallbackTotal = 0;
                                     (enrichedServices || []).forEach((s: any) => {
                                         const t = s.serviceType;
                                         // SHT Drop-off 행은 집계 제외 (왕복요금은 픽업에만 포함)
                                         if (t === 'sht' && String(s.category || '').toLowerCase().includes('drop')) return;
-                                        let total = Number(s.room_total_price || s.totalPrice || s.total_amount || 0);
-
-                                        // 크루즈는 카드 본문과 동일하게 보정된 price_breakdown 기준으로 집계
-                                        if (t === 'cruise') {
-                                            const rawPb = s.priceBreakdown || s.price_breakdown || s.reservation_price_breakdown || s.reservation?.price_breakdown || null;
-                                            const normalizedPb = normalizeCruisePriceBreakdown(rawPb, Number(s.infant || 0));
-                                            const roomTotalPrice = Number(s.room_total_price || 0);
-                                            total = roomTotalPrice > 0
-                                                ? roomTotalPrice
-                                                : Number(normalizedPb?.grand_total ?? total);
-                                        }
-
-                                        if (!typeStats[t]) typeStats[t] = { count: 0, unitPrice: 0, total: 0 };
-                                        typeStats[t].count += 1;
-                                        typeStats[t].total += total;
 
                                         const reservationId = String(s.reservation_id || s.reservationId || '').trim();
                                         if (reservationId && !additionalFeeByReservation.has(reservationId)) {
@@ -1419,13 +1400,28 @@ export default function UserReservationDetailModal({
                                         const reservationTotalAmount = getReservationTotalAmount(s);
                                         if (reservationId && reservationTotalAmount !== null && !reservationTotalByReservation.has(reservationId)) {
                                             reservationTotalByReservation.set(reservationId, reservationTotalAmount);
+                                            return;
+                                        }
+
+                                        let rowTotal = Number(s.room_total_price || s.totalPrice || s.total_amount || 0);
+
+                                        // 크루즈는 카드 본문과 동일하게 보정된 price_breakdown 기준으로 fallback 집계
+                                        if (t === 'cruise') {
+                                            const rawPb = s.priceBreakdown || s.price_breakdown || s.reservation_price_breakdown || s.reservation?.price_breakdown || null;
+                                            const normalizedPb = normalizeCruisePriceBreakdown(rawPb, Number(s.infant || 0));
+                                            const roomTotalPrice = Number(s.room_total_price || 0);
+                                            rowTotal = roomTotalPrice > 0
+                                                ? roomTotalPrice
+                                                : Number(normalizedPb?.grand_total ?? rowTotal);
+                                        }
+
+                                        if (Number.isFinite(rowTotal)) {
+                                            rowFallbackTotal += rowTotal;
                                         }
                                     });
-                                    const grandTotal = Object.values(typeStats).reduce((a, b) => a + b.total, 0);
                                     const additionalFeeTotal = Array.from(additionalFeeByReservation.values()).reduce((sum, fee) => sum + Number(fee || 0), 0);
                                     const reservationGrandTotal = Array.from(reservationTotalByReservation.values()).reduce((sum, total) => sum + Number(total || 0), 0);
-                                    const hasReservationGrandTotal = reservationTotalByReservation.size > 0;
-                                    const displayGrandTotal = hasReservationGrandTotal ? reservationGrandTotal : grandTotal;
+                                    const displayGrandTotal = reservationGrandTotal + rowFallbackTotal;
 
                                     return (
                                         <div className="space-y-1">

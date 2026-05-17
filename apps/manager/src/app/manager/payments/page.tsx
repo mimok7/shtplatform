@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import ManagerLayout from '@/components/ManagerLayout';
 import supabase from '@/lib/supabase';
 import { NOTIFICATIONS_DISABLED_MESSAGE, NOTIFICATIONS_ENABLED } from '@/lib/notificationFeature';
+import { getReservationStoredAmount } from '@sht/domain/reservation';
 import {
   CreditCard,
   DollarSign,
@@ -103,11 +104,7 @@ const getPaymentMethodText = (method: string) => {
   return methodMap[method] || method || '신용카드';
 };
 
-const getStoredReservationTotal = (reservation: any): number => {
-  const raw = reservation?.total_amount ?? reservation?.price_breakdown?.grand_total ?? 0;
-  const parsed = Number(raw);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
-};
+const getStoredReservationTotal = (reservation: any): number => getReservationStoredAmount(reservation);
 
 export default function ManagerPaymentsPage() {
   const router = useRouter();

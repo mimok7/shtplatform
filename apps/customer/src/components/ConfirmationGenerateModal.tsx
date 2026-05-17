@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import supabase from '@/lib/supabase';
+import { getReservationStoredAmount } from '@sht/domain/reservation';
 
 interface ReservationDetail {
     reservation_id: string;
@@ -375,7 +376,7 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                 if (!reservationId) return;
                 resStatusMap.set(reservationId, r.re_status || 'pending');
                 reservationMetaMap.set(reservationId, {
-                    total_amount: Number(r.total_amount || r.price_breakdown?.grand_total || 0),
+                    total_amount: getReservationStoredAmount(r),
                     manual_additional_fee: Number(r.manual_additional_fee || 0),
                     manual_additional_fee_detail: String(r.manual_additional_fee_detail || '').trim(),
                     price_breakdown: r.price_breakdown || null,

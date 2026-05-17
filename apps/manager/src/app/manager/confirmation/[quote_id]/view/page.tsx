@@ -5,6 +5,7 @@ import supabase from '@/lib/supabase';
 import ManagerLayout from '@/components/ManagerLayout';
 import UnifiedConfirmation, { UnifiedQuoteData } from '@/components/UnifiedConfirmation';
 import SectionBox from '@/components/SectionBox';
+import { getReservationStoredAmount } from '@sht/domain/reservation';
 
 function ManagerConfirmationViewClient() {
   const router = useRouter();
@@ -87,7 +88,7 @@ function ManagerConfirmationViewClient() {
 
         const resList = reservationList || [];
         const reservationMetaMap = new Map((resList || []).map((r: any) => [r.re_id, {
-          total_amount: Number(r.total_amount || r.price_breakdown?.grand_total || 0),
+          total_amount: getReservationStoredAmount(r),
           manual_additional_fee: Number(r.manual_additional_fee || 0),
           manual_additional_fee_detail: String(r.manual_additional_fee_detail || '').trim(),
           price_breakdown: r.price_breakdown || null,
@@ -244,7 +245,7 @@ function ManagerConfirmationViewClient() {
       }
 
       const unit = money(detail?.price_info?.price);
-      const reservationStoredTotal = money(reservation.total_amount || reservation.price_breakdown?.grand_total);
+      const reservationStoredTotal = getReservationStoredAmount(reservation);
       const amount = reservationStoredTotal > 0 ? reservationStoredTotal : detail?.room_total_price ? money(detail.room_total_price)
         : detail?.car_total_price ? money(detail.car_total_price)
           : type === 'airport' ? unit * (money(detail?.ra_passenger_count) || 1)

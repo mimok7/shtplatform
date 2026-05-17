@@ -485,6 +485,37 @@ export default function SchedulePage() {
     router.push('/reservation-edit');
   };
 
+  const handleDeleteModalService = async (service: any) => {
+    const reservationId = String(service?.reservation_id || service?.reservationId || service?.re_id || '').trim();
+    if (!reservationId) {
+      alert('삭제할 예약 ID를 찾을 수 없습니다.');
+      return;
+    }
+
+    if (!confirm('이 예약 건을 삭제하시겠습니까?\n삭제 후 복구할 수 없습니다.')) return;
+
+    try {
+      const { error } = await supabase.from('reservation').delete().eq('re_id', reservationId);
+      if (error) throw new Error(error.message);
+
+      const nextItems = selectedItems.filter((item: any) => {
+        const id = String(item?.reservation_id || item?.reservationId || item?.re_id || '').trim();
+        return id !== reservationId;
+      });
+
+      setSelectedItems(nextItems);
+      setSelectedItem(nextItems[0] || null);
+      if (nextItems.length === 0) {
+        setModalOpen(false);
+      }
+
+      await loadData();
+      alert('선택한 예약 건이 삭제되었습니다.');
+    } catch (err: any) {
+      alert(`삭제 실패: ${err?.message || '알 수 없는 오류'}`);
+    }
+  };
+
   /* ── 데이터 로드: sh_* + reservation_* 통합 로드 ─── */
   const loadData = async () => {
     setLoading(true);
@@ -1369,6 +1400,7 @@ export default function SchedulePage() {
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
         onEdit={selectedItem ? moveToReservationEdit : undefined}
+        onDeleteService={handleDeleteModalService}
         item={selectedItem}
         items={selectedItems}
       />

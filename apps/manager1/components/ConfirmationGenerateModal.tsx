@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import supabase from '@/lib/supabase';
 import { fetchLatestActiveChangeRequests, applyChangeOverlay } from '@/lib/reservationChangeOverlay';
+import { getReservationStoredAmount } from '@sht/domain/reservation';
 
 // 변경 추적 맵
 const CHANGE_TABLE_BY_TYPE: Record<string, string> = {
@@ -434,7 +435,7 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                 if (!reservationId) return;
                 resStatusMap.set(reservationId, r.re_status || 'pending');
                 reservationMetaMap.set(reservationId, {
-                    total_amount: Number(r.total_amount || 0),
+                    total_amount: getReservationStoredAmount(r),
                     manual_additional_fee: Number(r.manual_additional_fee || 0),
                     manual_additional_fee_detail: String(r.manual_additional_fee_detail || '').trim(),
                     price_breakdown: r.price_breakdown || null,
