@@ -341,6 +341,7 @@ sht-platform/
 - **타입 체크**: 빌드 시 무시 설정됨 (`typescript.ignoreBuildErrors: true`), 개발 중엔 `pnpm --filter @sht/<앱> typecheck` 사용
 - **빌드 명령 실행 금지**: `npm/pnpm run build` 실행 금지 (사용자 요청 시에만)
 - **자동 git push 금지**: 커밋·푸시는 사용자가 명시적으로 요청할 때만 수행
+- **임의 커밋/푸시/배포 금지**: 커밋·푸시·배포(특히 `vercel deploy --prod`)는 사용자의 명시적 요청이나 PR/승인 절차가 있을 때만 실행하세요. 로컬에서 임의로 프로덕션 배포를 실행하지 마세요.
 
 ---
 
