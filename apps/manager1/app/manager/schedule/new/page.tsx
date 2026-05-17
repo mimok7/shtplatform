@@ -3596,8 +3596,18 @@ export default function ManagerSchedulePage() {
             )}
             {reservation.requestNote && (() => {
               const filtered = reservation.requestNote
+                .replace(/\[CHILD_BIRTH_DATES:([^\]]*)\]/gi, (_match: string, rawDates: string) => {
+                  const dates = String(rawDates || '').trim().replace(/\s*,\s*/g, ', ');
+                  return dates ? `아동생년월일: ${dates}` : '아동생년월일';
+                })
+                .replace(/\[INFANT_BIRTH_DATES:([^\]]*)\]/gi, (_match: string, rawDates: string) => {
+                  const dates = String(rawDates || '').trim().replace(/\s*,\s*/g, ', ');
+                  return dates ? `유아생년월일: ${dates}` : '유아생년월일';
+                })
                 .replace(/\[CHILD_OLDER_COUNTS:[^\]]*\]\s*/gi, '')
-                .replace(/\[옵션\s*\d+\][\s\S]*?(?=\n|$)/g, '')
+                .replace(/\[객실\s*\d+\]\s*[^|\[]+\|\s*성인\s*\d+\s*,\s*아동\s*\d+\s*,\s*아동엑베\s*\d+\s*,\s*유아\s*\d+\s*,\s*성인엑베\s*\d+\s*,\s*싱글\s*\d+/gi, ' ')
+                .replace(/\[옵션\s*\d+\]\s*[^|\[]+\|\s*성인\s*\d+\s*,\s*아동\s*\d+\s*,\s*아동엑베\s*\d+\s*,\s*유아\s*\d+\s*,\s*성인엑베\s*\d+\s*,\s*싱글\s*\d+/gi, ' ')
+                .replace(/\s{2,}/g, ' ')
                 .trim();
               return filtered ? (
                 <div className="flex items-start gap-2 mt-2 pt-2 border-t border-gray-200">
@@ -4111,7 +4121,20 @@ export default function ManagerSchedulePage() {
 
     const filterRequestNote = (note: any): string => {
       if (note === undefined || note === null) return '';
-      const s = String(note).trim();
+      const s = String(note)
+        .replace(/\[CHILD_BIRTH_DATES:([^\]]*)\]/gi, (_match: string, rawDates: string) => {
+          const dates = String(rawDates || '').trim().replace(/\s*,\s*/g, ', ');
+          return dates ? `아동생년월일: ${dates}` : '아동생년월일';
+        })
+        .replace(/\[INFANT_BIRTH_DATES:([^\]]*)\]/gi, (_match: string, rawDates: string) => {
+          const dates = String(rawDates || '').trim().replace(/\s*,\s*/g, ', ');
+          return dates ? `유아생년월일: ${dates}` : '유아생년월일';
+        })
+        .replace(/\[CHILD_OLDER_COUNTS:[^\]]*\]\s*/gi, '')
+        .replace(/\[객실\s*\d+\]\s*[^|\[]+\|\s*성인\s*\d+\s*,\s*아동\s*\d+\s*,\s*아동엑베\s*\d+\s*,\s*유아\s*\d+\s*,\s*성인엑베\s*\d+\s*,\s*싱글\s*\d+/gi, ' ')
+        .replace(/\[옵션\s*\d+\]\s*[^|\[]+\|\s*성인\s*\d+\s*,\s*아동\s*\d+\s*,\s*아동엑베\s*\d+\s*,\s*유아\s*\d+\s*,\s*성인엑베\s*\d+\s*,\s*싱글\s*\d+/gi, ' ')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
       if (!s || s === '0' || s === '-' || s.toLowerCase() === 'updating') return '';
       return s;
     };

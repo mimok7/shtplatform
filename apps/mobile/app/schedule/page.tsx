@@ -127,40 +127,69 @@ const fetchRowsByIds = async (tableName: string, column: string, ids: string[]) 
 };
 
 /* ── 서비스 판별 ──────────────────────────────── */
+const KNOWN_TYPES = new Set(['cruise','car','vehicle','airport','rentcar','tour','ticket','hotel','package','sht','car_sht']);
+
 const getServiceType = (item: any): string => {
-  if (item.cruise && item.checkin) return 'cruise';
-  if (item.boardingDate && item.vehicleNumber) return 'vehicle';
-  const hasAirportHint = !!(item.tripType || item.route || item.airportName || item.flightNumber || item.placeName);
-  if (hasAirportHint && (item.date || item.time || item.airportName)) return 'airport';
-  if (item.hotelName && item.checkinDate) return 'hotel';
-  if (item.tourName && (item.startDate || item.tourDate || item.usage_date)) return 'tour';
-  if (item.ticketName && (item.usage_date || item.ticketQuantity)) return 'ticket';
-  if (item.pickupDate && item.usagePeriod) return 'rentcar';
-  if (item.pickupDatetime && !item.boardingDate && !item.pickupDate) return 'car';
-  if (item.re_type === 'package') return 'package';
+  // 1순위: 이미 매핑된 serviceType 사용
+  if (item.serviceType && KNOWN_TYPES.has(item.serviceType)) {
+    // sht/car_sht → vehicle (카드 렌더는 vehicle로 통일)
+    if (item.serviceType === 'sht' || item.serviceType === 'car_sht') return 'vehicle';
+    return item.serviceType;
+  }
+  // 2순위: re_type
+  if (item.re_type && KNOWN_TYPES.has(item.re_type)) {
+    if (item.re_type === 'sht' || item.re_type === 'car_sht') return 'vehicle';
+    return item.re_type;
+  }
+  // 3순위: 구 sh_ 데이터는 필드 추론
+  if (item.source === 'sh') {
+    if (item.cruise && item.checkin) return 'cruise';
+    if (item.boardingDate && item.vehicleNumber) return 'vehicle';
+    const hasAirportHint = !!(item.tripType || item.airportName || item.flightNumber);
+    if (hasAirportHint) return 'airport';
+    if (item.hotelName && item.checkinDate) return 'hotel';
+    if (item.tourName && (item.startDate || item.tourDate)) return 'tour';
+    if (item.pickupDate && item.usagePeriod) return 'rentcar';
+    if (item.pickupDatetime) return 'car';
+  }
   return 'unknown';
 };
 
 const getDateField = (item: any): string | null => {
-  if (item.checkin) return item.checkin;
-  if (item.pickupDatetime) return item.pickupDatetime;
-  if (item.pickup_datetime) return item.pickup_datetime;
-  if (item.boardingDate) return item.boardingDate;
-  if (item.usageDate) return item.usageDate;
-  if (item.date) return item.date;
-  if (item.checkinDate) return item.checkinDate;
-  if (item.startDate) return item.startDate;
-  if (item.tourDate) return item.tourDate;
-  if (item.usage_date) return item.usage_date;
-  if (item.pickupDate) return item.pickupDate;
-  if (item.re_created_at) return item.re_created_at;
-  return null;
+  const type = item.serviceType || item.re_type || '';
+  // 타입별 우선 날짜 필드
+  if (type === 'cruise') return item.checkin || null;
+  if (type === 'airport') return item.ra_datetime || item.date || null;
+  if (type === 'hotel') return item.checkinDate || item.checkin_date || null;
+  if (type === 'tour') return item.tourDate || item.startDate || item.usage_date || item.usageDate || null;
+  if (type === 'ticket') return item.usage_date || item.usageDate || null;
+  if (type === 'rentcar') return item.pickupDatetime || item.pickup_datetime || item.pickupDate || null;
+  if (type === 'car') return item.pickupDatetime || item.pickup_datetime || null;
+  if (type === 'vehicle' || type === 'sht' || type === 'car_sht') {
+    return item.pickupDatetime || item.pickup_datetime || item.usageDate || item.usage_date || item.boardingDate || null;
+  }
+  // 범용 fallback
+  return (
+    item.checkin ||
+    item.pickupDatetime || item.pickup_datetime ||
+    item.boardingDate ||
+    item.usageDate || item.usage_date ||
+    item.ra_datetime ||
+    item.date ||
+    item.checkinDate || item.checkin_date ||
+    item.startDate ||
+    item.tourDate ||
+    item.pickupDate ||
+    item.re_created_at ||
+    null
+  );
 };
 
 const serviceConfig: Record<string, { icon: any; name: string; color: string }> = {
   cruise:  { icon: Ship,     name: '크루즈',      color: 'blue' },
   car:     { icon: Car,      name: '크루즈차량',  color: 'cyan' },
   vehicle: { icon: Car,      name: '스하차량',    color: 'purple' },
+  sht:     { icon: Car,      name: '스하차량',    color: 'purple' },
   airport: { icon: Plane,    name: '공항',        color: 'green' },
   rentcar: { icon: Car,      name: '렌트카',      color: 'indigo' },
   tour:    { icon: MapPin,   name: '투어',        color: 'red' },
@@ -176,12 +205,75 @@ const getServiceTypeOrderIndex = (type: string): number => {
   return idx === -1 ? serviceTypeOrder.length : idx;
 };
 
-const formatScheduleRequestNote = (value: any) => {
+const isTruthyFlag = (value: any): boolean => {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value === 1;
+  const text = String(value ?? '').trim().toLowerCase();
+  return text === '1' || text === 'true' || text === 'y' || text === 'yes' || text === 'on';
+};
+
+const removeCruiseSummaryDumpSegments = (input: string) =>
+  input
+    // 객실 요약 블록 제거
+    .replace(/\[객실\s*\d+\]\s*[^|\[]+\|\s*성인\s*\d+\s*,\s*아동\s*\d+\s*,\s*아동엑베\s*\d+\s*,\s*유아\s*\d+\s*,\s*성인엑베\s*\d+\s*,\s*싱글\s*\d+/gi, ' ')
+    // 옵션 요약 블록 제거 ([옵션 1] 신용카드 | 성인 ..., 싱글 ...)
+    .replace(/\[옵션\s*\d+\]\s*[^|\[]+\|\s*성인\s*\d+\s*,\s*아동\s*\d+\s*,\s*아동엑베\s*\d+\s*,\s*유아\s*\d+\s*,\s*성인엑베\s*\d+\s*,\s*싱글\s*\d+/gi, ' ');
+
+const normalizeChildBirthDatesTag = (input: string) =>
+  input
+    .replace(/\[CHILD_BIRTH_DATES:([^\]]*)\]/gi, (_match: string, rawDates: string) => {
+      const dates = String(rawDates || '').trim().replace(/\s*,\s*/g, ', ');
+      return dates ? `아동생년월일: ${dates}` : '아동생년월일';
+    })
+    .replace(/\[INFANT_BIRTH_DATES:([^\]]*)\]/gi, (_match: string, rawDates: string) => {
+      const dates = String(rawDates || '').trim().replace(/\s*,\s*/g, ', ');
+      return dates ? `유아생년월일: ${dates}` : '유아생년월일';
+    });
+
+const buildCruiseRequestNote = (
+  rawNote: any,
+  options?: { connectingRoom?: any; birthdayEvent?: any; birthdayName?: any }
+) => {
+  const notes: string[] = [];
+
+  const base = normalizeChildBirthDatesTag(String(rawNote || ''))
+    // 객실 요약 덤프 문자열은 제거하고 고객 메모는 유지
+    .replace(/\s+/g, ' ');
+
+  const cleanedBase = removeCruiseSummaryDumpSegments(base)
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+
+  // boolean 문자열이 노출되지 않도록 필터
+  if (cleanedBase && !['true', 'false', '1', '0'].includes(cleanedBase.toLowerCase())) {
+    notes.push(cleanedBase);
+  }
+  if (isTruthyFlag(options?.connectingRoom)) {
+    notes.push('커넥팅룸 신청');
+  }
+  if (isTruthyFlag(options?.birthdayEvent)) {
+    const name = String(options?.birthdayName || '').trim();
+    notes.push(name ? `생일이벤트 신청 (${name})` : '생일이벤트 신청');
+  }
+  return Array.from(new Set(notes)).join('\n').trim();
+};
+
+const formatScheduleRequestNote = (value: any, type?: string) => {
   const text = String(value || '').trim();
   if (!text) return '';
 
-  return text
-    .replace(/\[CHILD_OLDER_COUNTS:[^\]]*\]\s*/gi, '')
+  const normalized = normalizeChildBirthDatesTag(
+    text.replace(/\[CHILD_OLDER_COUNTS:[^\]]*\]\s*/gi, '')
+  );
+
+  // 크루즈는 객실 요약 덤프 "부분만" 제거 (다른 고객 요청 메모는 유지)
+  if (type === 'cruise') {
+    return removeCruiseSummaryDumpSegments(normalized)
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+  }
+
+  return normalized
     .replace(/\s{2,}/g, ' ')
     .trim();
 };
@@ -282,7 +374,11 @@ export default function SchedulePage() {
           serviceType: 'cruise', re_type: 'cruise',
           reservation_id: r.reservation_id, reservationId: r.reservation_id, re_id: r.reservation_id,
           status: statusMap.get(r.reservation_id) || 'pending',
-          note: r.request_note || '',
+          note: buildCruiseRequestNote(r.request_note, {
+            connectingRoom: r.connecting_room,
+            birthdayEvent: r.birthday_event,
+            birthdayName: r.birthday_name,
+          }),
         });
       });
 
@@ -435,7 +531,11 @@ export default function SchedulePage() {
             child: parseInt(r.child) || 0,
             toddler: parseInt(r.toddler) || 0,
             discount: r.room_discount,
-            requestNote: r.connecting_room,
+            requestNote: buildCruiseRequestNote(r.room_note || r.request_note || '', {
+              connectingRoom: r.connecting_room,
+              birthdayEvent: r.birthday_event,
+              birthdayName: r.birthday_name,
+            }),
             email: u?.email || r.email,
           };
         }),
@@ -604,6 +704,21 @@ export default function SchedulePage() {
         });
       }
 
+      // 렌트카 가격 코드 → 차량명/구분 매핑 (rentcar_price 테이블)
+      const rentcarCodes = Array.from(new Set((rentcarData || []).map((x: any) => x.rentcar_price_code).filter(Boolean))) as string[];
+      const rentPriceMap = new Map<string, any>();
+      if (rentcarCodes.length > 0) {
+        const rentPriceData = await fetchRowsByIds('rentcar_price', 'rent_code', rentcarCodes);
+        for (const row of (rentPriceData || [])) {
+          const code = String(row.rent_code || '').trim();
+          if (code) {
+            [code, code.toUpperCase(), code.toLowerCase()].forEach(k => {
+              if (!rentPriceMap.has(k)) rentPriceMap.set(k, row);
+            });
+          }
+        }
+      }
+
       const usersById = new Map((usersData || []).map((u: any) => [u.id, u]));
       const reservationById = new Map((reservationsRaw || []).map((row: any) => [row.re_id, row]));
       const cruiseByRid = new Map((cruiseData || []).map((x: any) => [x.reservation_id, x]));
@@ -652,7 +767,11 @@ export default function SchedulePage() {
             toddler: Number(d.infant_count || 0),
             totalPrice: isPackageIncluded ? 0 : Number(d.room_total_price || 0),
             isPackageIncluded,
-            requestNote: d.request_note || '',
+            requestNote: buildCruiseRequestNote(d.request_note, {
+              connectingRoom: d.connecting_room,
+              birthdayEvent: d.birthday_event,
+              birthdayName: d.birthday_name,
+            }),
           };
         }
 
@@ -783,10 +902,13 @@ export default function SchedulePage() {
         if (r.re_type === 'rentcar') {
           const d = rentcarByRid.get(r.re_id) || {};
           const pickupParts = getKstDateTimeParts(d.pickup_datetime || '');
+          const rentCode = String(d.rentcar_price_code || '').trim();
+          const rentInfo = rentPriceMap.get(rentCode) || rentPriceMap.get(rentCode.toUpperCase()) || rentPriceMap.get(rentCode.toLowerCase());
           return {
             ...base,
             ...d,
-            carType: d.rentcar_price_code || '',
+            carType: rentInfo?.vehicle_type || d.vehicle_type || d.rentcar_price_code || '',
+            wayType: rentInfo?.way_type || d.way_type || '',
             route: [d.pickup_location, d.destination || d.dropoff_location].filter(Boolean).join(' → '),
             carCount: Number(d.car_count || 0),
             pickupDate: pickupParts.date,
@@ -1085,20 +1207,21 @@ export default function SchedulePage() {
           )}
           {type === 'rentcar' && (
             <>
-              <Row label="차종" value={item.carType} bold />
+              {item.wayType && <Row label="구분" value={item.wayType} bold />}
+              <Row label="차종" value={item.carType || '-'} bold={!item.wayType} />
               <DateRow dateLabel={dateLabel} time={item.pickupTime} />
               {item.pickupLocation && <Row label="픽업" value={item.pickupLocation} />}
-              {item.destination && <Row label="목적지" value={item.destination} />}
+              {(item.destination || item.dropoffLocation) && <Row label="목적지" value={item.destination || item.dropoffLocation} />}
               <Row label="인원" value={`${item.passengerCount}명`} />
             </>
           )}
         </div>
 
         {/* 요청사항 - 숨길 접두사만 제거하고 나머지 표시 */}
-        {formatScheduleRequestNote(item.requestNote) && (
+        {formatScheduleRequestNote(item.requestNote, type) && (
           <div className="pt-2 border-t text-sm text-gray-700">
             <span className="text-orange-600 font-semibold text-xs">📝 </span>
-            {formatScheduleRequestNote(item.requestNote)}
+            {formatScheduleRequestNote(item.requestNote, type)}
           </div>
         )}
       </div>
@@ -1117,73 +1240,78 @@ export default function SchedulePage() {
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
       {/* 헤더 */}
-      <div className="bg-white border-b border-black shadow-sm px-2 py-3">
+      <div className="bg-white border-b shadow-sm px-2 py-2">
         <div className="flex items-center gap-2">
           <button onClick={() => router.back()} className="p-1.5 rounded-lg hover:bg-gray-100">
             <ArrowLeft className="w-5 h-5 text-gray-600" />
           </button>
-          <h1 className="text-base font-bold text-gray-800 flex-1 text-center">🆕 신/구 구분</h1>
+          <h1 className="text-base font-bold text-gray-800 flex-1 text-center">예약 일정 (신/구 구분)</h1>
           <Link href="/" className="p-1.5 rounded-lg hover:bg-gray-100">
             <Home className="w-5 h-5 text-gray-600" />
           </Link>
         </div>
+      </div>
 
-        {/* 날짜 네비게이션 */}
-        <div className="flex items-center justify-between mt-2">
-          <button onClick={() => navigateDate('prev')} className="p-2 rounded-lg hover:bg-gray-100">
-            <ChevronLeft className="w-5 h-5" />
-          </button>
-          <div className="text-center flex-1">
-            <input
-              type="date"
-              value={toLocalDateKey(selectedDate)}
-              onChange={(e) => {
-                const [year, month, day] = e.target.value.split('-').map(Number);
-                setSelectedDate(new Date(year, month - 1, day));
-              }}
-              className="w-32 px-2 py-1.5 text-sm border border-blue-300 rounded-lg bg-white text-center font-semibold"
-            />
-            <button
-              onClick={() => setSelectedDate(new Date())}
-              className="text-xs text-blue-500 hover:underline mt-0.5 block w-full"
-            >
-              오늘
+      {/* 본문 */}
+      <div className="px-2 py-4">
+        <div className="bg-white rounded-lg shadow-md p-3 mb-3 space-y-2">
+          {/* 날짜 네비게이션 */}
+          <div className="flex items-center justify-between">
+            <button onClick={() => navigateDate('prev')} className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200">
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <div className="text-center flex-1">
+              <input
+                type="date"
+                value={toLocalDateKey(selectedDate)}
+                onChange={(e) => {
+                  const [year, month, day] = e.target.value.split('-').map(Number);
+                  setSelectedDate(new Date(year, month - 1, day));
+                }}
+                className="w-32 px-2 py-1.5 text-sm border border-blue-300 rounded-lg bg-white text-center font-semibold"
+              />
+              <button
+                onClick={() => setSelectedDate(new Date())}
+                className="text-xs text-blue-500 hover:underline mt-0.5 block w-full"
+              >
+                오늘
+              </button>
+            </div>
+            <button onClick={() => navigateDate('next')} className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200">
+              <ChevronRight className="w-5 h-5" />
             </button>
           </div>
-          <button onClick={() => navigateDate('next')} className="p-2 rounded-lg hover:bg-gray-100">
-            <ChevronRight className="w-5 h-5" />
-          </button>
-        </div>
 
-        {/* 검색 */}
-        <div className="flex gap-2 mb-3">
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && setActiveSearch(searchQuery)}
-            placeholder="이름, 주문번호, 예약ID 검색..."
-            className="flex-1 px-3 py-2 text-sm border rounded-lg bg-gray-50"
-          />
-          <button
-            onClick={() => setActiveSearch(searchQuery)}
-            className="px-3 py-2 bg-blue-500 text-white rounded-lg"
-          >
-            <Search className="w-4 h-4" />
-          </button>
-          {activeSearch && (
+          {/* 검색 */}
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && setActiveSearch(searchQuery)}
+              placeholder="이름, 주문번호, 예약ID 검색..."
+              className="flex-1 px-3 py-2 text-sm border rounded-lg bg-white"
+            />
             <button
-              onClick={() => { setSearchQuery(''); setActiveSearch(''); }}
-              className="px-3 py-2 bg-gray-200 text-gray-700 rounded-lg text-xs"
+              onClick={() => setActiveSearch(searchQuery)}
+              className="px-3 py-2 bg-blue-500 text-white rounded-lg"
             >
-              초기화
+              <Search className="w-4 h-4" />
             </button>
-          )}
+            {activeSearch && (
+              <button
+                onClick={() => { setSearchQuery(''); setActiveSearch(''); }}
+                className="px-3 py-2 bg-gray-200 text-gray-700 rounded-lg text-xs"
+              >
+                초기화
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
       {/* 콘텐츠 */}
-      <div className="px-4 py-4">
+      <div className="px-2 pb-4">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20">
             <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-500 rounded-full animate-spin" />

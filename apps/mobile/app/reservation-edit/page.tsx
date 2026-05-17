@@ -761,7 +761,7 @@ function ReservationEditContent() {
             <div className="px-2 py-4">
             <div className="space-y-6">
                 {/* 검색 및 액션 */}
-                <div className="bg-white rounded-lg shadow-sm p-6">
+                <div className="bg-white rounded-lg shadow-md p-3">
                     <div className="flex flex-wrap gap-4 items-center mb-4">
                         {/* 새 예약 추가 */}
                         <button
@@ -831,7 +831,11 @@ function ReservationEditContent() {
                         )}
                     </div>
 
-                    {/* 예약 목록 카드 그리드 */}
+                </div>
+
+                {/* 검색 결과 카드 */}
+                <div className="bg-white rounded-lg shadow-md p-3">
+                    <div className="mb-3 text-sm text-gray-600">검색 결과 {filteredReservations.length}건</div>
                     <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6">
                         {filteredReservations.length === 0 ? (
                             <div className="col-span-full text-center py-12">

@@ -401,7 +401,7 @@ export default function CustomerManagement() {
         </div>
       </div>
       <div className="px-2 py-4 space-y-4">
-        <div className="bg-white rounded-lg border border-gray-200 px-3 py-2">
+        <div className="bg-white rounded-lg shadow-md p-3">
           <div className="flex flex-wrap items-center gap-2 text-xs text-gray-700">
             <span className="font-semibold">총 {customerCount}명</span>
             <span>활성 {activeCustomerCount}명</span>
@@ -410,28 +410,30 @@ export default function CustomerManagement() {
           </div>
         </div>
 
-        <div className="mb-2 flex flex-row items-center gap-2">
-          <div className="flex-1 min-w-0">
-            <input
-              type="text"
-              placeholder="고객 이름 또는 이메일로 검색..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  void searchCustomers();
-                }
-              }}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
+        <div className="bg-white rounded-lg shadow-md p-3">
+          <div className="flex flex-row items-center gap-2">
+            <div className="flex-1 min-w-0">
+              <input
+                type="text"
+                placeholder="고객 이름 또는 이메일로 검색..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    void searchCustomers();
+                  }
+                }}
+                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            <button
+              onClick={() => void searchCustomers()}
+              disabled={searchLoading}
+              className="shrink-0 px-4 py-2 rounded-md bg-blue-600 text-white text-sm hover:bg-blue-700 disabled:opacity-60 whitespace-nowrap"
+            >
+              {searchLoading ? '검색 중...' : '검색'}
+            </button>
           </div>
-          <button
-            onClick={() => void searchCustomers()}
-            disabled={searchLoading}
-            className="shrink-0 px-4 py-2 rounded-md bg-blue-600 text-white text-sm hover:bg-blue-700 disabled:opacity-60 whitespace-nowrap"
-          >
-            {searchLoading ? '검색 중...' : '검색'}
-          </button>
         </div>
 
         <div className="shadow overflow-hidden sm:rounded-md p-3 bg-transparent">

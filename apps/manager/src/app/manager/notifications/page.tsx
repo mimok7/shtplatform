@@ -133,7 +133,8 @@ export default function NotificationManagement() {
 
   // 필터 상태
   const [activeTab, setActiveTab] = useState<'business' | 'customer' | 'request' | 'all'>('all');
-  const [statusFilter, setStatusFilter] = useState<string>('all'); // 🔧 기본값을 'all'로 변경하여 모든 알림 표시
+  const [statusFilter, setStatusFilter] = useState<string>('unread');
+  const [hideOldNotifications, setHideOldNotifications] = useState<boolean>(true); // 오늘 이전 알림 숨기기
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all'); // 카테고리 필터 추가
 
@@ -245,6 +246,7 @@ export default function NotificationManagement() {
         .from('notifications')
         .select('*, processing_note')
         .eq('type', 'business')
+        .neq('status', 'completed')
         .order('created_at', { ascending: false });
 
       // 2. 고객 알림 조회 (notifications와 customer_notifications 조인)
@@ -267,6 +269,7 @@ export default function NotificationManagement() {
                     )
                 `)
         .eq('type', 'customer')
+        .neq('status', 'completed')
         .order('created_at', { ascending: false });
 
       // 3. 고객 요청 전용 조회 (target_table=customer_requests)
@@ -287,6 +290,7 @@ export default function NotificationManagement() {
                     )
                 `)
         .eq('target_table', 'customer_requests')
+        .neq('status', 'completed')
         .order('created_at', { ascending: false });
 
       if (categoryFilter !== 'all') {
@@ -446,6 +450,9 @@ export default function NotificationManagement() {
           return n.category === categoryFilter;
         });
       }
+
+      // 클라이언트 필터: completed 상태 최종 제거
+      allNotifications = allNotifications.filter(n => n.status !== 'completed');
 
       setNotifications(allNotifications);
       setCustomerNotifications(customerNotifications);
@@ -901,13 +908,14 @@ export default function NotificationManagement() {
                   읽지 않음
                 </button>
                 <button
-                  onClick={() => setStatusFilter('completed')}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${statusFilter === 'completed'
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
+                  onClick={() => setHideOldNotifications(prev => !prev)}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1 ${
+                    hideOldNotifications
+                      ? 'bg-amber-500 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
                 >
-                  완료
+                  {hideOldNotifications ? '📅 오늘 이전 숨김' : '📅 오늘 이전 표시'}
                 </button>
 
                 {/* 전체 선택 체크박스 (이동됨) */}
@@ -1025,8 +1033,15 @@ export default function NotificationManagement() {
         )}
 
         {/* 알림 목록 - 외부 3열 카드 레이아웃 */}
+        {(() => {
+          const todayStart = new Date();
+          todayStart.setHours(0, 0, 0, 0);
+          const displayNotifications = hideOldNotifications
+            ? notifications.filter(n => new Date(n.created_at) >= todayStart)
+            : notifications;
+          return (
         <div>
-          {notifications.length === 0 ? (
+          {displayNotifications.length === 0 ? (
             <div className="bg-white rounded-lg shadow-sm p-12 text-center">
               <span className="text-4xl mb-4 block">📭</span>
               <h3 className="text-lg font-medium text-gray-900 mb-2">알림이 없습니다</h3>
@@ -1034,7 +1049,7 @@ export default function NotificationManagement() {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-              {notifications.map((notification) => (
+              {displayNotifications.map((notification) => (
                 <div
                   key={notification.id}
                   className={`bg-white rounded-lg shadow-sm p-5 cursor-pointer transition transform hover:-translate-y-0.5 hover:shadow-md relative overflow-hidden ${notification.status === 'unread' ? 'ring-2 ring-blue-100' : ''
@@ -1131,6 +1146,8 @@ export default function NotificationManagement() {
             </div>
           )}
         </div>
+          );
+        })()}
 
         {/* 알림 상세 모달 */}
         {showModal && selectedNotification && (

@@ -36,7 +36,7 @@ interface ReservationItem {
 type BulkAction = 'approve' | 'confirm' | 'cancel' | 'delete' | 'status_update';
 type SortType = 'date' | 'name';
 
-/* ── 메인 컴포넌트 ──────────────────────────── */
+/* ── 메인 컴포넌트 ─────────────────────────── */
 export default function ReservationsPage() {
   const router = useRouter();
   const [reservations, setReservations] = useState<ReservationItem[]>([]);
@@ -572,7 +572,7 @@ export default function ReservationsPage() {
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
       {/* 헤더 */}
-      <div className="bg-white border-b border-black shadow-sm px-2 py-3">
+      <div className="bg-white border-b shadow-sm px-2 py-2">
         <div className="flex items-center gap-2">
           <button onClick={() => router.back()} className="p-1.5 rounded-lg hover:bg-gray-100">
             <ArrowLeft className="w-5 h-5 text-gray-600" />
@@ -582,50 +582,55 @@ export default function ReservationsPage() {
             <Home className="w-5 h-5 text-gray-600" />
           </Link>
         </div>
+      </div>
 
-        {/* 필터 */}
-        <div className="space-y-1">
-          <div className="flex gap-1">
-            <Select value={sortType} onChange={e => setSortType(e.target.value as SortType)} label="정렬"
-              options={[['date', '예약일순'], ['name', '고객명순']]} />
-            <Select value={filter} onChange={e => setFilter(e.target.value as any)} label="상태"
-              options={[[ 'all', '전체'], ['pending', '대기중'], ['approved', '승인'], ['confirmed', '확정'], ['cancelled', '취소']]} />
-            <Select value={serviceFilter} onChange={e => setServiceFilter(e.target.value)} label="서비스"
-              options={[['all', '전체'], ['cruise', '크루즈'], ['airport', '공항'], ['hotel', '호텔'],
-                ['tour', '투어'], ['rentcar', '렌터카'], ['vehicle', '차량'], ['sht', '스하차량'], ['package', '패키지']]} />
-          </div>
+      {/* 본문 */}
+      <div className="px-2 py-4">
+        {/* 컨트롤 카드 */}
+        <div className="bg-white rounded-lg shadow-md p-3">
+          <div className="space-y-2">
+            <div className="flex gap-1">
+              <Select value={sortType} onChange={e => setSortType(e.target.value as SortType)} label="정렬"
+                options={[['date', '예약일순'], ['name', '고객명순']]} />
+              <Select value={filter} onChange={e => setFilter(e.target.value as any)} label="상태"
+                options={[[ 'all', '전체'], ['pending', '대기중'], ['approved', '승인'], ['confirmed', '확정'], ['cancelled', '취소']]} />
+              <Select value={serviceFilter} onChange={e => setServiceFilter(e.target.value)} label="서비스"
+                options={[['all', '전체'], ['cruise', '크루즈'], ['airport', '공항'], ['hotel', '호텔'],
+                  ['tour', '투어'], ['rentcar', '렌터카'], ['vehicle', '차량'], ['sht', '스하차량'], ['package', '패키지']]} />
+            </div>
 
-          {/* 검색 & 일괄 처리 (1행) */}
-          <div className="flex gap-1 items-end">
-            <form onSubmit={e => { e.preventDefault(); setSearchTrigger(v => v + 1); }} className="flex gap-1 flex-1">
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                placeholder="이름검색..."
-                className="flex-1 px-2 py-1.5 text-xs border rounded-lg bg-gray-50"
-              />
-              <button type="submit" className="px-3 py-1.5 bg-blue-500 text-white rounded-lg text-xs font-medium">검색</button>
-            </form>
+            {/* 검색 & 일괄 처리 (1행) */}
+            <div className="flex gap-1 items-end">
+              <form onSubmit={e => { e.preventDefault(); setSearchTrigger(v => v + 1); }} className="flex gap-1 flex-1">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="이름검색..."
+                  className="flex-1 px-2 py-1.5 text-xs border rounded-lg bg-white"
+                />
+                <button type="submit" className="px-3 py-1.5 bg-blue-500 text-white rounded-lg text-xs font-medium">검색</button>
+              </form>
 
-            {/* 일괄 처리 */}
-            <div className="flex gap-1 items-center">
-              <Select value={bulkAction} onChange={e => setBulkAction(e.target.value as BulkAction)} label=""
-                options={[[ 'approve', '승인'], ['confirm', '확정'], ['cancel', '취소'], ['status_update', '상태변경'], ['delete', '삭제']]} />
-              {bulkAction === 'status_update' && (
-                <Select value={newStatus} onChange={e => setNewStatus(e.target.value)} label=""
-                  options={[[ 'pending', '대기중'], ['approved', '승인'], ['confirmed', '확정'], ['cancelled', '취소']]} />
-              )}
-              <button
-                onClick={handleBulkAction}
-                disabled={selectedItems.size === 0 || processing}
-                className={`px-2 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap ${
-                  selectedItems.size === 0 ? 'bg-gray-300 text-gray-500' :
-                  bulkAction === 'delete' ? 'bg-red-500 text-white' : 'bg-green-500 text-white'
-                }`}
-              >
-                {processing ? '처리중...' : `${selectedItems.size}건 처리`}
-              </button>
+              {/* 일괄 처리 */}
+              <div className="flex gap-1 items-center">
+                <Select value={bulkAction} onChange={e => setBulkAction(e.target.value as BulkAction)} label=""
+                  options={[[ 'approve', '승인'], ['confirm', '확정'], ['cancel', '취소'], ['status_update', '상태변경'], ['delete', '삭제']]} />
+                {bulkAction === 'status_update' && (
+                  <Select value={newStatus} onChange={e => setNewStatus(e.target.value)} label=""
+                    options={[[ 'pending', '대기중'], ['approved', '승인'], ['confirmed', '확정'], ['cancelled', '취소']]} />
+                )}
+                <button
+                  onClick={handleBulkAction}
+                  disabled={selectedItems.size === 0 || processing}
+                  className={`px-2 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap ${
+                    selectedItems.size === 0 ? 'bg-gray-300 text-gray-500' :
+                    bulkAction === 'delete' ? 'bg-red-500 text-white' : 'bg-green-500 text-white'
+                  }`}
+                >
+                  {processing ? '처리중...' : `${selectedItems.size}건 처리`}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -647,7 +652,7 @@ export default function ReservationsPage() {
       )}
 
       {/* 콘텐츠 */}
-      <div className="px-2 py-2">
+      <div className="px-2 pb-2">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20">
             <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-500 rounded-full animate-spin" />

@@ -878,7 +878,7 @@ ${totalAmount > 0 ? `${formatAmount(totalAmount)}동` : '-'}
                 </div>
             </div>
             <div className="px-2 py-4 w-full space-y-4">
-                <div className="bg-white rounded-lg border p-4">
+                <div className="bg-white rounded-lg shadow-md p-3">
                     <h2 className="text-lg font-semibold text-gray-800">예약 조회 그룹 안내</h2>
                     <p className="text-sm text-gray-600 mt-1">
                         예약 상태(대기/승인/확정)별로 그룹을 선택하고, 서비스별 안내문을 생성해 제목과 내용을 각각 복사할 수 있습니다.
@@ -895,7 +895,7 @@ ${totalAmount > 0 ? `${formatAmount(totalAmount)}동` : '-'}
 
                 {!loading && !error && (
                     <>
-                        <div className="bg-white rounded-lg border p-4 space-y-3">
+                        <div className="bg-white rounded-lg shadow-md p-3 space-y-3">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">예약 상태 필터</label>
@@ -952,7 +952,7 @@ ${totalAmount > 0 ? `${formatAmount(totalAmount)}동` : '-'}
                             </div>
                         </div>
 
-                        <div className="bg-white rounded-lg border p-4 space-y-3">
+                        <div className="bg-white rounded-lg shadow-md p-3 space-y-3">
                             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                                 <h3 className="text-sm font-medium text-gray-700">생성 결과 {generatedService ? `(${generatedService})` : ''}</h3>
                                 <div className="grid grid-cols-2 gap-2 w-full sm:w-auto">
