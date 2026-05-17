@@ -5,7 +5,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import supabase from '@/lib/supabase';
 import ManagerLayout from '@/components/ManagerLayout';
-import { Bell, RefreshCw, CheckCheck, AlertTriangle } from 'lucide-react';
+import { Bell, RefreshCw, CheckCheck, AlertTriangle, Car, CalendarDays } from 'lucide-react';
 
 type NotificationItem = {
   id: string;
@@ -295,29 +295,33 @@ export default function MobileNotificationsPage() {
           </div>
         </div>
 
-        {/* 오늘 이전 숨기기 필터 버튼 */}
+        {/* 상단 아이콘 필터 */}
         <div className="px-1 flex items-center justify-between gap-2">
           <div className="flex items-center gap-1.5">
             <button
               type="button"
               onClick={() => setActiveTab('all')}
-              className={`text-[12px] px-3 py-1.5 rounded-full font-medium transition-colors whitespace-nowrap ${
+              className={`inline-flex items-center gap-1.5 text-[12px] px-2.5 py-1.5 rounded-full font-medium transition-colors whitespace-nowrap ${
                 activeTab === 'all'
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-100 text-gray-700 border border-gray-200'
               }`}
+              aria-label="전체 알림"
             >
+              <Bell className="w-3.5 h-3.5" />
               전체
             </button>
             <button
               type="button"
               onClick={() => setActiveTab('sht-car')}
-              className={`text-[12px] px-3 py-1.5 rounded-full font-medium transition-colors whitespace-nowrap ${
+              className={`inline-flex items-center gap-1.5 text-[12px] px-2.5 py-1.5 rounded-full font-medium transition-colors whitespace-nowrap ${
                 activeTab === 'sht-car'
                   ? 'bg-indigo-600 text-white'
                   : 'bg-gray-100 text-gray-700 border border-gray-200'
               }`}
+              aria-label="스차 알림"
             >
+              <Car className="w-3.5 h-3.5" />
               스차
             </button>
           </div>
@@ -325,13 +329,15 @@ export default function MobileNotificationsPage() {
           <button
             type="button"
             onClick={() => setHideOld(prev => !prev)}
-            className={`text-[12px] px-3 py-1.5 rounded-full font-medium transition-colors whitespace-nowrap ${
+            className={`inline-flex items-center gap-1.5 text-[12px] px-2.5 py-1.5 rounded-full font-medium transition-colors whitespace-nowrap ${
               hideOld
                 ? 'bg-amber-500 text-white'
                 : 'bg-gray-100 text-gray-600 border border-gray-200'
             }`}
+            aria-label={hideOld ? '오늘 이전 숨김' : '오늘 이전 표시'}
           >
-            📅 {hideOld ? '오늘 이전 숨김' : '오늘 이전 표시'}
+            <CalendarDays className="w-3.5 h-3.5" />
+            {hideOld ? '오늘 이전 숨김' : '오늘 이전 표시'}
           </button>
         </div>
 
