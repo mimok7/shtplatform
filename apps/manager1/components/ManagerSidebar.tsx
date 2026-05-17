@@ -52,6 +52,7 @@ export default function ManagerSidebar({ activeTab, userEmail, onLogout, userRol
     if (pathname.startsWith('/manager/confirmation')) return 'confirmation';
     if (pathname.startsWith('/manager/passport-management')) return 'passport-management';
     if (pathname.startsWith('/manager/sht-car')) return 'sht-car';
+    if (pathname.startsWith('/manager/notifications')) return 'notifications';
     if (pathname === '/manager/analytics') return 'analytics';
     if (pathname === '/manager/payment-processing') return 'payment-processing';
     if (pathname.startsWith('/manager/quotes/cruise')) return 'quotes-cruise';
@@ -161,6 +162,13 @@ export default function ManagerSidebar({ activeTab, userEmail, onLogout, userRol
               path="/manager/reservations/requests"
               isActive={isActiveTab('reservation-requests')}
               onClick={() => handleNavigation('/manager/reservations/requests')}
+            />
+            <NavItem
+              icon="🔔"
+              label="알림 관리"
+              path="/manager/notifications"
+              isActive={isActiveTab('notifications')}
+              onClick={() => handleNavigation('/manager/notifications')}
             />
             </div>
           </div>

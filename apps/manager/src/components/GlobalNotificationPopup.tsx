@@ -75,6 +75,11 @@ export default function GlobalNotificationPopup({ userRole }: GlobalNotification
     const loadNotifications = useCallback(async () => {
         if (!shouldShowNotifications) return;
 
+        // 오늘 00:00 이후 알림만 (manager/mobile 알림 페이지와 일관성 유지)
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        const todayStartIso = todayStart.toISOString();
+
         try {
             if (userRole === 'manager' || userRole === 'admin') {
                 // 매니저/관리자: 모든 업무 및 고객 알림 조회
@@ -91,7 +96,9 @@ export default function GlobalNotificationPopup({ userRole }: GlobalNotification
                     `)
                     .eq('type', 'business')
                     .in('status', ['unread', 'processing'])
-                    .order('created_at', { ascending: false });
+                    .gte('created_at', todayStartIso)
+                    .order('created_at', { ascending: false })
+                    .limit(50);
 
                 const { data: customerData } = await supabase
                     .from('notifications')
@@ -107,16 +114,18 @@ export default function GlobalNotificationPopup({ userRole }: GlobalNotification
                     `)
                     .eq('type', 'customer')
                     .in('status', ['unread', 'processing'])
-                    .order('created_at', { ascending: false });
+                    .gte('created_at', todayStartIso)
+                    .order('created_at', { ascending: false })
+                    .limit(50);
 
                 const allNotifications = [
                     ...(businessData || []),
                     ...(customerData || [])
                 ];
 
-                // 긴급/높은 우선순위만 팝업으로 표시
+                // 긴급/높은 우선순위만 팝업으로 표시 (한/영 모두 허용)
                 const urgentNotifications = allNotifications.filter(n =>
-                    ['urgent', 'high'].includes(n.priority) &&
+                    ['urgent', 'high', '긴급', '높음'].includes(n.priority) &&
                     !dismissedIds.has(n.id)
                 );
 
@@ -138,7 +147,9 @@ export default function GlobalNotificationPopup({ userRole }: GlobalNotification
                     .eq('type', 'customer')
                     .eq('target_id', user.id)
                     .in('status', ['unread', 'processing'])
-                    .order('created_at', { ascending: false });
+                    .gte('created_at', todayStartIso)
+                    .order('created_at', { ascending: false })
+                    .limit(50);
 
                 if (myNotifications) {
                     // 예약자는 모든 알림을 확인해야 하므로 우선순위 무관하게 미확인 알림 표시
