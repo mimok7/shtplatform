@@ -209,7 +209,7 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
         return () => window.removeEventListener('keydown', onKey);
     }, [isOpen]);
 
-    // 모바일에서만 가로보기 자동 전환 시도(브라우저 지원 범위 내)
+    // 모바일에서 가능하면 가로보기로 자동 전환(브라우저 지원 범위 내)
     useEffect(() => {
         if (!isOpen) return;
 
@@ -221,6 +221,7 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
             const containerEl = modalContainerRef.current as any;
             const screenOrientation = (window.screen as any)?.orientation;
 
+            // 일부 브라우저는 fullscreen 상태에서만 orientation lock 허용
             try {
                 if (!document.fullscreenElement) {
                     if (containerEl?.requestFullscreen) {
@@ -232,7 +233,7 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                     }
                 }
             } catch {
-                // fullscreen 미지원/거부 시에도 orientation lock 시도
+                // fullscreen 미지원/거부 시에도 lock만 시도
             }
 
             try {
@@ -240,7 +241,7 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                     await screenOrientation.lock('landscape');
                 }
             } catch {
-                // 브라우저 정책에 따라 실패 가능
+                // 브라우저 정책상 실패 가능 (무시)
             }
         };
 
@@ -621,6 +622,7 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
             }
             const calculatedTotal = processedReservations.reduce((sum, reservation) => {
                 if (reservation.service_type === 'sht') {
+                    // 선택된 SHT 행만 합산 (중복 제거)
                     if (shtPickedMap.get(reservation.reservation_id) !== reservation) return sum;
                     const sd = reservation.service_details as any;
                     const shtSummary = getShtSeatPriceSummary(sd, Number(sd?.car_total_price || reservation.amount || 0));
@@ -999,7 +1001,7 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
             alert(`✅ ${quoteData.user_email}로 예약확인서가 성공적으로 발송되었습니다.`);
 
             if (autoSend) {
-                handleClose();
+                onClose();
             }
         } catch (error: any) {
             console.error('이메일 발송 실패:', error);
@@ -1292,11 +1294,11 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                                                                                             <div><span className="text-gray-500">인원:</span> <span className="font-bold text-gray-900">{d?.ra_passenger_count || 0}명</span></div>
                                                                                             <div><span className="text-gray-500">장소:</span> <span className="font-bold text-gray-900">{
                                                                                                 (() => {
-                                                                                                    const loc = d?.ra_airport_location || '';
                                                                                                     const accom = d?.accommodation_info || '';
-                                                                                                    if (isPickup) return loc && accom ? `${loc} → ${accom}` : loc || accom || '-';
+                                                                                                    const loc = d?.ra_airport_location || '';
+                                                                                                    if (isPickup) return accom && loc ? `${loc} → ${accom}` : accom || loc || '-';
                                                                                                     if (isSending) return accom && loc ? `${accom} → ${loc}` : accom || loc || '-';
-                                                                                                    return loc || accom || '-';
+                                                                                                    return accom || loc || '-';
                                                                                                 })()
                                                                                             }</span></div>
                                                                                             <div><span className="text-gray-500">차량수:</span> <span className="font-bold text-gray-900">{d?.ra_car_count || 1}대</span></div>
@@ -1450,6 +1452,7 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                                                                         </div>
                                                                     )}
                                                                     {(() => {
+                                                                        // SHT Drop-off 행에선 추가요금 표시 안 함 (Pickup 행에만 표시)
                                                                         const shtCat = String((reservation.service_details as any)?.sht_category || '').toLowerCase();
                                                                         const isShtDropoff = reservation.service_type === 'sht' &&
                                                                             (shtCat.includes('drop') || shtCat.includes('sending') || shtCat.includes('샌딩'));

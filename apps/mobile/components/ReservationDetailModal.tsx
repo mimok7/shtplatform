@@ -629,6 +629,7 @@ export default function ReservationDetailModal({
   onClose,
   onEdit,
   onProcess,
+  onGenerateConfirmation,
   onDeleteService,
   processLabel,
   processDisabled,
@@ -640,6 +641,7 @@ export default function ReservationDetailModal({
   onClose: () => void;
   onEdit?: (item: any) => void;
   onProcess?: () => void;
+  onGenerateConfirmation?: () => void;
   onDeleteService?: (service: any) => Promise<void> | void;
   processLabel?: string;
   processDisabled?: boolean;
@@ -1145,7 +1147,7 @@ export default function ReservationDetailModal({
         </div>
 
         <div className="border-t bg-white px-3 py-2.5">
-          <div className={`grid gap-2 ${onProcess ? 'grid-cols-2' : 'grid-cols-1'}`}>
+          <div className={`grid gap-2 ${onProcess && onGenerateConfirmation ? 'grid-cols-3' : onProcess || onGenerateConfirmation ? 'grid-cols-2' : 'grid-cols-1'}`}>
             <button
               type="button"
               onClick={() => onEdit?.(item)}
@@ -1162,6 +1164,15 @@ export default function ReservationDetailModal({
                 className="h-12 w-full rounded-lg bg-green-600 text-sm font-semibold text-white transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-300 whitespace-nowrap"
               >
                 {processLoading ? '처리중...' : (processLabel || '처리')}
+              </button>
+            )}
+            {onGenerateConfirmation && (
+              <button
+                type="button"
+                onClick={onGenerateConfirmation}
+                className="h-12 w-full rounded-lg bg-violet-600 text-sm font-semibold text-white transition-colors hover:bg-violet-700 whitespace-nowrap"
+              >
+                확인서 생성
               </button>
             )}
           </div>

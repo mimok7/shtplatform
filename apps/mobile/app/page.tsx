@@ -36,6 +36,7 @@ type MenuItem = {
 const FAVORITES: MenuItem[] = [
   { href: '/schedule',              label: '신/구 구분', desc: '날짜별 예약 조회 (신규/기존)', icon: Calendar,      iconColor: 'text-blue-600',   bg: 'bg-blue-100' },
   { href: '/reservations',          label: '예약 처리',  desc: '예약 변경 및 일괄 처리',       icon: ClipboardList, iconColor: 'text-green-600',  bg: 'bg-green-100' },
+  { href: '/confirmation',          label: '예약확인서', desc: '예약확인서 생성/미리보기',      icon: FileText,      iconColor: 'text-violet-600', bg: 'bg-violet-100' },
   { href: '/reservation-edit',      label: '예약 수정',  desc: '서비스별 상태 수정',            icon: ListChecks,    iconColor: 'text-amber-600',  bg: 'bg-amber-100' },
   { href: '/customers',             label: '고객관리',   desc: '고객 조회 / 수정 / 초기화',     icon: Users,         iconColor: 'text-cyan-600',   bg: 'bg-cyan-100' },
   { href: '/sht-car',               label: '스하 차량',  desc: '스하 차량 배정 관리',           icon: Bus,           iconColor: 'text-teal-600',   bg: 'bg-teal-100' },

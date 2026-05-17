@@ -11,6 +11,7 @@ import {
   Ship, Plane, Building, MapPin, Car, Bus, Package, Home
 } from 'lucide-react';
 import ReservationDetailModal from '@/components/ReservationDetailModal';
+import ConfirmationGenerateModal from '@/components/ConfirmationGenerateModal';
 
 /* ── 타입 정의 ─────────────────────────────── */
 interface ServiceReservation {
@@ -59,6 +60,8 @@ export default function ReservationsPage() {
   const [detailModalItems, setDetailModalItems] = useState<any[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailProcessing, setDetailProcessing] = useState(false);
+  const [confirmationOpen, setConfirmationOpen] = useState(false);
+  const [confirmationQuoteId, setConfirmationQuoteId] = useState('');
 
   useEffect(() => { loadReservations(); }, [filter, serviceFilter, searchTrigger, sortType]);
 
@@ -300,6 +303,13 @@ export default function ReservationsPage() {
 
       alert(`${updates.length}건 처리 완료`);
       await loadReservations();
+
+      const hasConfirmed = updates.some((u) => u.nextStatus === 'confirmed');
+      const nextConfirmationId = String(detailItem.re_quote_id || updates[0]?.id || '').trim();
+      if (hasConfirmed && nextConfirmationId && confirm('예약 처리가 완료되었습니다. 예약확인서를 생성하시겠습니까?')) {
+        setConfirmationQuoteId(nextConfirmationId);
+        setConfirmationOpen(true);
+      }
     } catch (err: any) {
       alert(`오류: ${err.message || '상세 처리에 실패했습니다.'}`);
     } finally {
@@ -607,6 +617,17 @@ export default function ReservationsPage() {
     router.push('/reservation-edit');
   };
 
+  const openConfirmationFromDetail = () => {
+    if (!detailItem) return;
+    const targetId = String(detailItem.re_quote_id || detailItem.services?.[0]?.re_id || '').trim();
+    if (!targetId) {
+      alert('확인서 생성 대상 예약을 찾을 수 없습니다.');
+      return;
+    }
+    setConfirmationQuoteId(targetId);
+    setConfirmationOpen(true);
+  };
+
   /* ── UI ──────────────────────────────────── */
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
@@ -794,11 +815,18 @@ export default function ReservationsPage() {
         onEdit={detailItem ? (() => moveToReservationEdit()) : undefined}
         onDeleteService={handleDeleteDetailService}
         onProcess={detailItem ? handleDetailProcess : undefined}
+        onGenerateConfirmation={detailItem?.services?.some((s) => s.re_status === 'confirmed') ? openConfirmationFromDetail : undefined}
         processLoading={detailProcessing}
         processDisabled={detailLoading || detailProcessing || detailProcessInfo.count === 0}
         processLabel={`${detailProcessInfo.label} (${detailProcessInfo.count})`}
         item={detailModalItem}
         items={detailModalItems}
+      />
+
+      <ConfirmationGenerateModal
+        isOpen={confirmationOpen}
+        onClose={() => setConfirmationOpen(false)}
+        quoteId={confirmationQuoteId}
       />
     </div>
   );

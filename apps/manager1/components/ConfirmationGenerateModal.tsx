@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import supabase from '@/lib/supabase';
 import { fetchLatestActiveChangeRequests, applyChangeOverlay } from '@/lib/reservationChangeOverlay';
 import { getReservationStoredAmount } from '@sht/domain/reservation';
@@ -170,16 +170,85 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [emailSending, setEmailSending] = useState(false);
+    const modalContainerRef = useRef<HTMLDivElement | null>(null);
+    const enteredFullscreenRef = useRef(false);
+
+    const restoreViewportState = async () => {
+        const screenOrientation = (typeof window !== 'undefined' ? (window.screen as any)?.orientation : null) as any;
+        try {
+            if (screenOrientation?.unlock) {
+                screenOrientation.unlock();
+            }
+        } catch {
+            // noop
+        }
+
+        try {
+            if (enteredFullscreenRef.current && document.fullscreenElement) {
+                await document.exitFullscreen();
+            }
+        } catch {
+            // noop
+        } finally {
+            enteredFullscreenRef.current = false;
+        }
+    };
+
+    const handleClose = () => {
+        void restoreViewportState();
+        onClose();
+    };
 
     // ESC 키로 모달 닫기 지원
     useEffect(() => {
         if (!isOpen) return;
         const onKey = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') onClose();
+            if (e.key === 'Escape') handleClose();
         };
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
-    }, [isOpen, onClose]);
+    }, [isOpen]);
+
+    // 모바일에서만 가로보기 자동 전환 시도(브라우저 지원 범위 내)
+    useEffect(() => {
+        if (!isOpen) return;
+
+        const tryLandscapeMode = async () => {
+            if (typeof window === 'undefined') return;
+            const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+            if (!isMobile) return;
+
+            const containerEl = modalContainerRef.current as any;
+            const screenOrientation = (window.screen as any)?.orientation;
+
+            try {
+                if (!document.fullscreenElement) {
+                    if (containerEl?.requestFullscreen) {
+                        await containerEl.requestFullscreen();
+                        enteredFullscreenRef.current = true;
+                    } else if (containerEl?.webkitRequestFullscreen) {
+                        containerEl.webkitRequestFullscreen();
+                        enteredFullscreenRef.current = true;
+                    }
+                }
+            } catch {
+                // fullscreen 미지원/거부 시에도 orientation lock 시도
+            }
+
+            try {
+                if (screenOrientation?.lock) {
+                    await screenOrientation.lock('landscape');
+                }
+            } catch {
+                // 브라우저 정책에 따라 실패 가능
+            }
+        };
+
+        void tryLandscapeMode();
+        return () => {
+            void restoreViewportState();
+        };
+    }, [isOpen]);
 
     useEffect(() => {
         // 모달이 처음 열릴 때만 데이터 로드 (isOpen이 true로 변경될 때 1회)
@@ -931,7 +1000,7 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
             alert(`✅ ${quoteData.user_email}로 예약확인서가 성공적으로 발송되었습니다.`);
 
             if (autoSend) {
-                onClose();
+                handleClose();
             }
         } catch (error: any) {
             console.error('이메일 발송 실패:', error);
@@ -951,12 +1020,13 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                 onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    onClose();
+                    handleClose();
                 }}
             />
 
             {/* 모달 컨텐츠 래퍼 */}
             <div
+                ref={modalContainerRef}
                 className="relative bg-white w-[92vw] sm:w-[88vw] md:w-[80vw] lg:w-[62vw] xl:w-[56vw] max-w-4xl max-h-[90vh] rounded-lg shadow-xl overflow-hidden flex flex-col z-50"
                 onClick={e => e.stopPropagation()}
             >
@@ -1000,7 +1070,7 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                                 onClick={(e) => {
                                     e.preventDefault();
                                     e.stopPropagation();
-                                    onClose();
+                                    handleClose();
                                 }}
                                 className="px-3 py-2 border border-gray-300 text-blue-600 rounded hover:bg-blue-600 hover:text-white hover:border-blue-600 transition-all duration-200 text-sm"
                                 aria-label="닫기"
@@ -1027,7 +1097,7 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                                 onClick={(e) => {
                                     e.preventDefault();
                                     e.stopPropagation();
-                                    onClose();
+                                    handleClose();
                                 }}
                                 className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 hover:shadow-md transition-all duration-200"
                             >
