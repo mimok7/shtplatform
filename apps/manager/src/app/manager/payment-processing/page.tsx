@@ -135,6 +135,28 @@ export default function ManagerPaymentsPage() {
             if (cruise.room_total_price && Number(cruise.room_total_price) > 0) {
               total += Number(cruise.room_total_price);
             } else if (cruise.room_price_code) {
+              const adultCount = Number(cruise.adult_count) || Number(cruise.guest_count) || 1;
+              const manualAdultPriceFromRow = Number(cruise.unit_price) > 0 ? Number(cruise.unit_price) : 0;
+              if (manualAdultPriceFromRow > 0 && adultCount > 0) {
+                total += manualAdultPriceFromRow * adultCount;
+                continue;
+              }
+              // reservation.price_breakdown에서 수정된 단가 우선 사용
+              const { data: resPb } = await supabase
+                .from('reservation')
+                .select('price_breakdown')
+                .eq('re_id', reservationId)
+                .maybeSingle();
+              const pbRooms = resPb?.price_breakdown?.rooms || [];
+              let pbRoom = (pbRooms || []).find((r: any) => {
+                const code = r?.room_price_code ?? r?.roomPriceCode ?? r?.room_code ?? r?.code;
+                return code && String(code) === String(cruise.room_price_code);
+              });
+              if (pbRoom && Number(pbRoom.unit_price) > 0) {
+                const adultUnit = Number(pbRoom.unit_price) || 0;
+                total += adultUnit * adultCount;
+                continue;
+              }
               const { data: roomPrice } = await supabase
                 .from('cruise_rate_card')
                 .select('price_adult, price_child, price_child_extra_bed, price_infant, price_extra_bed, price_single')
@@ -418,7 +440,7 @@ export default function ManagerPaymentsPage() {
           quote_id: reservation.re_quote_id || null,
           user_id: reservation.re_user_id,
           amount: Number(reservation.total_amount) || 0,
-          payment_method: 'BANK',
+          payment_method: reservation.re_type === 'cruise' ? 'CARD' : 'BANK',
           payment_status: 'pending',
           memo: `자동 생성 - ${reservation.re_type} | ${isQuote ? `견적 ${reservation.re_quote_id}` : `개별예약 ${String(reservation.re_id).slice(0, 8)}`} (${new Date().toLocaleDateString()})`,
           created_at: new Date().toISOString(),
@@ -485,6 +507,75 @@ export default function ManagerPaymentsPage() {
       }
     } catch (e) {
       console.error('전역 통계 로드 실패:', e);
+    }
+  };
+
+  // 새로고침 시 예약처리 대기(pending) 건이 결제대기 목록에 즉시 보이도록 보강
+  const syncPendingReservationsToPayments = async () => {
+    try {
+      const { data: pendingReservations, error: pendingError } = await supabase
+        .from('reservation')
+        .select('re_id, re_user_id, re_quote_id, re_type, total_amount')
+        .eq('re_status', 'pending');
+
+      if (pendingError) throw pendingError;
+      if (!pendingReservations || pendingReservations.length === 0) return 0;
+
+      const reservationIds = pendingReservations.map((r: any) => r.re_id).filter(Boolean);
+      if (reservationIds.length === 0) return 0;
+
+      const existingSet = new Set<string>();
+      const chunkSize = 100;
+      for (let i = 0; i < reservationIds.length; i += chunkSize) {
+        const chunk = reservationIds.slice(i, i + chunkSize);
+        const { data: existingRows, error: existingError } = await supabase
+          .from('reservation_payment')
+          .select('reservation_id')
+          .in('reservation_id', chunk);
+        if (existingError) throw existingError;
+        (existingRows || []).forEach((row: any) => existingSet.add(String(row.reservation_id)));
+      }
+
+      const targets = pendingReservations.filter((r: any) => !existingSet.has(String(r.re_id)));
+      if (targets.length === 0) return 0;
+
+      for (const reservation of targets) {
+        if (!reservation.total_amount || Number(reservation.total_amount) <= 0) {
+          const calculatedAmount = await calculateServiceAmount(reservation.re_id, reservation.re_type);
+          if (calculatedAmount > 0) {
+            await supabase
+              .from('reservation')
+              .update({ total_amount: calculatedAmount })
+              .eq('re_id', reservation.re_id);
+            reservation.total_amount = calculatedAmount;
+          }
+        }
+      }
+
+      const nowIso = new Date().toISOString();
+      const records = targets.map((reservation: any) => ({
+        id: crypto.randomUUID(),
+        reservation_id: reservation.re_id,
+        quote_id: reservation.re_quote_id || null,
+        user_id: reservation.re_user_id,
+        amount: Number(reservation.total_amount) || 0,
+        payment_method: reservation.re_type === 'cruise' ? 'CARD' : 'BANK',
+        payment_status: 'pending',
+        memo: `새로고침 동기화 - ${reservation.re_type} | ${reservation.re_quote_id ? `견적 ${reservation.re_quote_id}` : `개별예약 ${String(reservation.re_id).slice(0, 8)}`}`,
+        created_at: nowIso,
+        updated_at: nowIso,
+      }));
+
+      for (let i = 0; i < records.length; i += chunkSize) {
+        const chunk = records.slice(i, i + chunkSize);
+        const { error: insertError } = await supabase.from('reservation_payment').insert(chunk);
+        if (insertError) throw insertError;
+      }
+
+      return records.length;
+    } catch (error) {
+      console.error('대기 예약 결제 동기화 실패:', error);
+      return 0;
     }
   };
 
@@ -847,6 +938,14 @@ export default function ManagerPaymentsPage() {
       const services: any[] = [];
       let total = 0;
 
+      // reservation의 price_breakdown 조회 (수정된 단가 반영용)
+      const { data: resPbData } = await supabase
+        .from('reservation')
+        .select('re_id, price_breakdown')
+        .in('re_id', reservationIds);
+      const pbMap = new Map((resPbData || []).map((r: any) => [r.re_id, r.price_breakdown]));
+      const pbUsedIndex = new Map<string, Set<number>>();
+
       // 1. 크루즈 객실 서비스 조회 (카테고리별 분리)
       const { data: cruiseData, error: cruiseError } = await supabase
         .from('reservation_cruise')
@@ -879,10 +978,28 @@ export default function ManagerPaymentsPage() {
 
               const roomTypeName = roomPrice?.room_type || roomLabel;
               if (roomPrice) {
-                if (adultCount > 0 && Number(roomPrice.price_adult) > 0) {
-                  const amt = Number(roomPrice.price_adult) * adultCount;
-                  services.push({ type: `크루즈 ${roomTypeName} (성인)`, unitPrice: Number(roomPrice.price_adult), quantity: adultCount, quantityUnit: '명', amount: amt });
-                  total += amt;
+                // price_breakdown에서 수정된 성인 단가 우선 사용
+                const pbRooms = pbMap.get(cruise.reservation_id)?.rooms || [];
+                const usedSet = pbUsedIndex.get(cruise.reservation_id) || new Set<number>();
+                let pbRoom = (pbRooms || []).find((r: any) => {
+                  const code = r?.room_price_code ?? r?.roomPriceCode ?? r?.room_code ?? r?.code;
+                  return code && String(code) === String(cruise.room_price_code);
+                });
+                if (!pbRoom && pbRooms.length > 0) {
+                  for (let i = 0; i < pbRooms.length; i++) {
+                    if (!usedSet.has(i)) { pbRoom = pbRooms[i]; usedSet.add(i); break; }
+                  }
+                }
+                pbUsedIndex.set(cruise.reservation_id, usedSet);
+                const manualAdultPriceFromRow = Number(cruise.unit_price) > 0 ? Number(cruise.unit_price) : 0;
+                const manualAdultPrice = Number(pbRoom?.unit_price) > 0 ? Number(pbRoom.unit_price) : 0;
+                if (adultCount > 0) {
+                  const adultUnitPrice = manualAdultPriceFromRow || manualAdultPrice || Number(roomPrice.price_adult) || 0;
+                  if (adultUnitPrice > 0) {
+                    const amt = adultUnitPrice * adultCount;
+                    services.push({ type: `크루즈 ${roomTypeName} (성인)`, unitPrice: adultUnitPrice, quantity: adultCount, quantityUnit: '명', amount: amt });
+                    total += amt;
+                  }
                 }
                 if (childCount > 0 && Number(roomPrice.price_child) > 0) {
                   const amt = Number(roomPrice.price_child) * childCount;
@@ -943,10 +1060,28 @@ export default function ManagerPaymentsPage() {
               const extraBedCount = Number(cruise.extra_bed_count) || 0;
               const singleCount = Number(cruise.single_count) || 0;
 
-              if (adultCount > 0 && Number(roomPrice.price_adult) > 0) {
-                const amt = Number(roomPrice.price_adult) * adultCount;
-                services.push({ type: `크루즈 ${roomTypeName} (성인)`, unitPrice: Number(roomPrice.price_adult), quantity: adultCount, quantityUnit: '명', amount: amt });
-                total += amt;
+              // price_breakdown 우선 매칭 (매칭 실패 시 rate_card 사용)
+              const pbRooms2 = pbMap.get(cruise.reservation_id)?.rooms || [];
+              const usedSet2 = pbUsedIndex.get(cruise.reservation_id) || new Set<number>();
+              let pbRoom2 = (pbRooms2 || []).find((r: any) => {
+                const code = r?.room_price_code ?? r?.roomPriceCode ?? r?.room_code ?? r?.code;
+                return code && String(code) === String(cruise.room_price_code);
+              });
+              if (!pbRoom2 && pbRooms2.length > 0) {
+                for (let i = 0; i < pbRooms2.length; i++) {
+                  if (!usedSet2.has(i)) { pbRoom2 = pbRooms2[i]; usedSet2.add(i); break; }
+                }
+              }
+              pbUsedIndex.set(cruise.reservation_id, usedSet2);
+              const manualAdultPriceFromRow2 = Number(cruise.unit_price) > 0 ? Number(cruise.unit_price) : 0;
+              const manualAdultPrice2 = Number(pbRoom2?.unit_price) > 0 ? Number(pbRoom2.unit_price) : 0;
+              if (adultCount > 0) {
+                const adultUnitPrice2 = manualAdultPriceFromRow2 || manualAdultPrice2 || Number(roomPrice.price_adult) || 0;
+                if (adultUnitPrice2 > 0) {
+                  const amt = adultUnitPrice2 * adultCount;
+                  services.push({ type: `크루즈 ${roomTypeName} (성인)`, unitPrice: adultUnitPrice2, quantity: adultCount, quantityUnit: '명', amount: amt });
+                  total += amt;
+                }
               }
               if (childCount > 0 && Number(roomPrice.price_child) > 0) {
                 const amt = Number(roomPrice.price_child) * childCount;
@@ -1186,7 +1321,7 @@ export default function ManagerPaymentsPage() {
               const quantity = Number(tour.tour_capacity) || 1;
               const tourAmount = unitPrice * quantity;
               services.push({
-                type: `투어 (${tourPrice.tour?.tour_name || tour.tour_price_code})`,
+                type: `투어 (${(tourPrice as any).tour?.tour_name || (tourPrice as any).tour?.[0]?.tour_name || tour.tour_price_code})`,
                 unitPrice: unitPrice,
                 quantity: quantity,
                 quantityUnit: '명',
@@ -1302,27 +1437,6 @@ export default function ManagerPaymentsPage() {
     loadPayments();
   }, [filter, searchTerm]);
 
-  // 예약 수정 후 결제처리 화면으로 복귀할 때 최신 데이터 재조회
-  useEffect(() => {
-    const handleFocus = () => {
-      loadPayments();
-    };
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        loadPayments();
-      }
-    };
-
-    window.addEventListener('focus', handleFocus);
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    return () => {
-      window.removeEventListener('focus', handleFocus);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [filter, searchTerm]);
-
   const handleSearchClick = () => {
     setSearchTerm(searchInput);
   };
@@ -1334,6 +1448,7 @@ export default function ManagerPaymentsPage() {
   };
 
   const handleManualRefresh = async () => {
+    await syncPendingReservationsToPayments();
     await loadPayments();
   };
 
@@ -1958,7 +2073,7 @@ export default function ManagerPaymentsPage() {
                             </td>
                             <td className="px-6 py-4">
                               <select
-                                value={payment.payment_method || 'BANK'}
+                                value={payment.payment_method || ((payment.reservation?.re_type || payment.re_type) === 'cruise' ? 'CARD' : 'BANK')}
                                 onChange={(e) => updatePaymentMethod(payment.id, e.target.value)}
                                 className="text-xs px-2 py-1 rounded border border-gray-200 bg-white text-gray-700 cursor-pointer hover:border-blue-300 focus:outline-none focus:ring-1 focus:ring-blue-400 transition-colors"
                               >

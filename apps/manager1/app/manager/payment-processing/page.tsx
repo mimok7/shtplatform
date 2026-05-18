@@ -61,10 +61,8 @@ export default function ManagerPaymentsPage() {
   const [generating, setGenerating] = useState(false);
   const [bulkCompleting, setBulkCompleting] = useState(false);
   const [creatingGroupLinkId, setCreatingGroupLinkId] = useState<string | null>(null);
-  // 페이지네이션 상태 (결제대기는 전체, 결제완료는 20건)
-  const PAGE_SIZE_COMPLETED = 20;
-  const PAGE_SIZE_DEFAULT = 1000; // 결제대기 등은 전체 표시
-  const getPageSize = (f: string) => f === 'completed' ? PAGE_SIZE_COMPLETED : PAGE_SIZE_DEFAULT;
+  // 페이지네이션 상태
+  const PAGE_SIZE = 50;
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [globalStats, setGlobalStats] = useState({
@@ -137,17 +135,34 @@ export default function ManagerPaymentsPage() {
             if (cruise.room_total_price && Number(cruise.room_total_price) > 0) {
               total += Number(cruise.room_total_price);
             } else if (cruise.room_price_code) {
-              const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cruise.room_price_code);
-              if (!isValidUUID) {
-                console.warn('⚠️ room_price_code가 UUID가 아닙니다:', cruise.room_price_code);
+              const adultCount = Number(cruise.adult_count) || Number(cruise.guest_count) || 1;
+              const manualAdultPriceFromRow = Number(cruise.unit_price) > 0 ? Number(cruise.unit_price) : 0;
+              if (manualAdultPriceFromRow > 0 && adultCount > 0) {
+                total += manualAdultPriceFromRow * adultCount;
+                continue;
               }
-              if (isValidUUID) {
-                const { data: roomPrice } = await supabase
-                  .from('cruise_rate_card')
-                  .select('price_adult, price_child, price_child_extra_bed, price_infant, price_extra_bed, price_single')
-                  .eq('id', cruise.room_price_code)
-                  .maybeSingle();
-                if (roomPrice) {
+              // reservation.price_breakdown에서 수정된 단가 우선 사용
+              const { data: resPb } = await supabase
+                .from('reservation')
+                .select('price_breakdown')
+                .eq('re_id', reservationId)
+                .maybeSingle();
+              const pbRooms = resPb?.price_breakdown?.rooms || [];
+              let pbRoom = (pbRooms || []).find((r: any) => {
+                const code = r?.room_price_code ?? r?.roomPriceCode ?? r?.room_code ?? r?.code;
+                return code && String(code) === String(cruise.room_price_code);
+              });
+              if (pbRoom && Number(pbRoom.unit_price) > 0) {
+                const adultUnit = Number(pbRoom.unit_price) || 0;
+                total += adultUnit * adultCount;
+                continue;
+              }
+              const { data: roomPrice } = await supabase
+                .from('cruise_rate_card')
+                .select('price_adult, price_child, price_child_extra_bed, price_infant, price_extra_bed, price_single')
+                .eq('id', cruise.room_price_code)
+                .maybeSingle();
+              if (roomPrice) {
                 const adultCount = Number(cruise.adult_count) || Number(cruise.guest_count) || 1;
                 const childCount = Number(cruise.child_count) || 0;
                 const childExtraBedCount = Number(cruise.child_extra_bed_count) || 0;
@@ -162,8 +177,7 @@ export default function ManagerPaymentsPage() {
                 roomTotal += (Number(roomPrice.price_infant) || 0) * infantCount;
                 roomTotal += (Number(roomPrice.price_extra_bed) || 0) * extraBedCount;
                 roomTotal += (Number(roomPrice.price_single) || 0) * singleCount;
-                  total += roomTotal;
-                }
+                total += roomTotal;
               }
             }
           }
@@ -210,12 +224,12 @@ export default function ManagerPaymentsPage() {
             // car_total_price가 있으면 사용
             if (sht.car_total_price && Number(sht.car_total_price) > 0) {
               total += Number(sht.car_total_price);
-              debugLog(`SHT car_total_price 사용: ${sht.car_total_price}`);
+              console.log(`SHT car_total_price 사용: ${sht.car_total_price}`);
             } else if (sht.unit_price && Number(sht.unit_price) > 0) {
               // unit_price * car_count 계산
               const carCount = Number(sht.car_count) || 1;
               total += Number(sht.unit_price) * carCount;
-              debugLog(`SHT unit_price*car_count 계산: ${sht.unit_price} * ${carCount}`);
+              console.log(`SHT unit_price*car_count 계산: ${sht.unit_price} * ${carCount}`);
             } else if (sht.car_price_code) {
               // rentcar_price 테이블에서 가격 조회
               const { data: carPrice } = await supabase
@@ -226,7 +240,7 @@ export default function ManagerPaymentsPage() {
               if (carPrice?.price) {
                 const quantity = Number(sht.car_count) || 1;
                 total += Number(carPrice.price) * quantity;
-                debugLog(`SHT rentcar_price 테이블 조회: ${carPrice.price} * ${quantity}`);
+                console.log(`SHT rentcar_price 테이블 조회: ${carPrice.price} * ${quantity}`);
               }
             }
           }
@@ -358,14 +372,14 @@ export default function ManagerPaymentsPage() {
       // 1. 예약 조회 (total_amount 포함)
       const { data: reservations } = await supabase
         .from('reservation')
-        .select('re_id, re_user_id, re_quote_id, re_type, total_amount');
+        .select('re_id, re_user_id, re_quote_id, re_type, total_amount, price_breakdown');
 
       if (!reservations || reservations.length === 0) {
         alert('예약이 없습니다.');
         return;
       }
 
-      debugLog('🔍 예약 조회:', reservations.length, '건');
+      console.log('🔍 예약 조회:', reservations.length, '건');
 
       // 2. total_amount가 0인 예약들의 금액을 자동 계산하고 업데이트
       let updatedCount = 0;
@@ -384,14 +398,14 @@ export default function ManagerPaymentsPage() {
             } else {
               reservation.total_amount = calculatedAmount;
               updatedCount++;
-              debugLog(`💵 예약 ${reservation.re_id} (${reservation.re_type}): ${calculatedAmount.toLocaleString()}동으로 업데이트`);
+              console.log(`💵 예약 ${reservation.re_id} (${reservation.re_type}): ${calculatedAmount.toLocaleString()}동으로 업데이트`);
             }
           }
         }
       }
 
       if (updatedCount > 0) {
-        debugLog(`📊 ${updatedCount}개 예약의 금액이 업데이트되었습니다.`);
+        console.log(`📊 ${updatedCount}개 예약의 금액이 업데이트되었습니다.`);
       }
 
       // 3. 이미 결제 레코드가 있는 예약 제외 (reservation_id 단위)
@@ -415,7 +429,7 @@ export default function ManagerPaymentsPage() {
         return;
       }
 
-      debugLog('🆕 신규 결제 생성 대상:', newReservations.length, '건');
+      console.log('🆕 신규 결제 생성 대상:', newReservations.length, '건');
 
       // 4. 각 예약마다 개별 결제 레코드 생성 (같은 견적 그룹이면 quote_id 공유)
       const paymentRecords = newReservations.map(reservation => {
@@ -426,7 +440,7 @@ export default function ManagerPaymentsPage() {
           quote_id: reservation.re_quote_id || null,
           user_id: reservation.re_user_id,
           amount: Number(reservation.total_amount) || 0,
-          payment_method: 'BANK',
+          payment_method: reservation.re_type === 'cruise' ? 'CARD' : 'BANK',
           payment_status: 'pending',
           memo: `자동 생성 - ${reservation.re_type} | ${isQuote ? `견적 ${reservation.re_quote_id}` : `개별예약 ${String(reservation.re_id).slice(0, 8)}`} (${new Date().toLocaleDateString()})`,
           created_at: new Date().toISOString(),
@@ -434,12 +448,12 @@ export default function ManagerPaymentsPage() {
         };
       });
 
-      debugLog('📋 생성할 결제 레코드:', paymentRecords.length, '건');
-      paymentRecords.forEach(p => debugLog(`  ${p.memo} | ${p.amount.toLocaleString()}동`));
+      console.log('📋 생성할 결제 레코드:', paymentRecords.length, '건');
+      paymentRecords.forEach(p => console.log(`  ${p.memo} | ${p.amount.toLocaleString()}동`));
 
       // 5. 결제 레코드 일괄 삽입
       if (paymentRecords.length > 0) {
-        debugLog('🚀 결제 레코드 서버 전송 시작...', paymentRecords.length, '건');
+        console.log('🚀 결제 레코드 서버 전송 시작...', paymentRecords.length, '건');
         const { error } = await supabase
           .from('reservation_payment')
           .insert(paymentRecords);
@@ -496,6 +510,75 @@ export default function ManagerPaymentsPage() {
     }
   };
 
+  // 새로고침 시 예약처리 대기(pending) 건이 결제대기 목록에 즉시 보이도록 보강
+  const syncPendingReservationsToPayments = async () => {
+    try {
+      const { data: pendingReservations, error: pendingError } = await supabase
+        .from('reservation')
+        .select('re_id, re_user_id, re_quote_id, re_type, total_amount')
+        .eq('re_status', 'pending');
+
+      if (pendingError) throw pendingError;
+      if (!pendingReservations || pendingReservations.length === 0) return 0;
+
+      const reservationIds = pendingReservations.map((r: any) => r.re_id).filter(Boolean);
+      if (reservationIds.length === 0) return 0;
+
+      const existingSet = new Set<string>();
+      const chunkSize = 100;
+      for (let i = 0; i < reservationIds.length; i += chunkSize) {
+        const chunk = reservationIds.slice(i, i + chunkSize);
+        const { data: existingRows, error: existingError } = await supabase
+          .from('reservation_payment')
+          .select('reservation_id')
+          .in('reservation_id', chunk);
+        if (existingError) throw existingError;
+        (existingRows || []).forEach((row: any) => existingSet.add(String(row.reservation_id)));
+      }
+
+      const targets = pendingReservations.filter((r: any) => !existingSet.has(String(r.re_id)));
+      if (targets.length === 0) return 0;
+
+      for (const reservation of targets) {
+        if (!reservation.total_amount || Number(reservation.total_amount) <= 0) {
+          const calculatedAmount = await calculateServiceAmount(reservation.re_id, reservation.re_type);
+          if (calculatedAmount > 0) {
+            await supabase
+              .from('reservation')
+              .update({ total_amount: calculatedAmount })
+              .eq('re_id', reservation.re_id);
+            reservation.total_amount = calculatedAmount;
+          }
+        }
+      }
+
+      const nowIso = new Date().toISOString();
+      const records = targets.map((reservation: any) => ({
+        id: crypto.randomUUID(),
+        reservation_id: reservation.re_id,
+        quote_id: reservation.re_quote_id || null,
+        user_id: reservation.re_user_id,
+        amount: Number(reservation.total_amount) || 0,
+        payment_method: reservation.re_type === 'cruise' ? 'CARD' : 'BANK',
+        payment_status: 'pending',
+        memo: `새로고침 동기화 - ${reservation.re_type} | ${reservation.re_quote_id ? `견적 ${reservation.re_quote_id}` : `개별예약 ${String(reservation.re_id).slice(0, 8)}`}`,
+        created_at: nowIso,
+        updated_at: nowIso,
+      }));
+
+      for (let i = 0; i < records.length; i += chunkSize) {
+        const chunk = records.slice(i, i + chunkSize);
+        const { error: insertError } = await supabase.from('reservation_payment').insert(chunk);
+        if (insertError) throw insertError;
+      }
+
+      return records.length;
+    } catch (error) {
+      console.error('대기 예약 결제 동기화 실패:', error);
+      return 0;
+    }
+  };
+
   // 결제 목록 로드 (상세 정보 포함)
   const loadPayments = async () => {
     setLoading(true);
@@ -511,7 +594,10 @@ export default function ManagerPaymentsPage() {
             re_status,
             re_type,
             re_quote_id,
-            total_amount
+            total_amount,
+            manual_additional_fee,
+            manual_additional_fee_detail,
+            price_breakdown
           )
         `)
         .order('created_at', { ascending: false });
@@ -585,9 +671,8 @@ export default function ManagerPaymentsPage() {
         }
       }
 
-      // 초기 페이지 범위 (검색시 전체, 결제완료는 20건, 그 외는 전체)
-      const currentPageSize = searchTerm ? PAGE_SIZE_DEFAULT : getPageSize(filter);
-      const { data: paymentRows } = await (query as any).range(0, currentPageSize - 1);
+      // 초기 페이지 범위
+      const { data: paymentRows } = await (query as any).range(0, PAGE_SIZE - 1);
 
       const rows: any[] = (paymentRows as any[]) || [];
 
@@ -680,13 +765,11 @@ export default function ManagerPaymentsPage() {
       });
 
       setPayments(enrichedWithQuote);
-      setSelectedPayments(new Set(enrichedWithQuote.map((p: any) => p.id)));
-      setHasMore((enrichedWithQuote?.length || 0) === currentPageSize);
-      debugLog('💾 결제 목록 로드 완료:', enrichedWithQuote.length, '건');
+      setHasMore((enrichedWithQuote?.length || 0) === PAGE_SIZE);
+      console.log('💾 결제 목록 로드 완료:', enrichedWithQuote.length, '건');
     } catch (e) {
       console.error('결제 목록 로드 실패:', e);
       setPayments([]);
-      setSelectedPayments(new Set());
       setHasMore(false);
     } finally {
       setLoading(false);
@@ -768,9 +851,8 @@ export default function ManagerPaymentsPage() {
 
         if (orParts.length > 0) query = query.or(orParts.join(','));
       }
-      const currentPageSize = searchTerm ? PAGE_SIZE_DEFAULT : getPageSize(filter);
       const offset = payments.length;
-      const { data: paymentRows } = await (query as any).range(offset, offset + currentPageSize - 1);
+      const { data: paymentRows } = await (query as any).range(offset, offset + PAGE_SIZE - 1);
       const rows: any[] = (paymentRows as any[]) || [];
 
       const userIds = Array.from(new Set(rows.map((r: any) => r.user_id).filter(Boolean)));
@@ -833,21 +915,8 @@ export default function ManagerPaymentsPage() {
         return { ...r, quoteTitle: qId ? ((quotesMapNext.get(qId) as any)?.title || null) : null };
       });
 
-      const currentPaymentIds = new Set(payments.map((p: any) => p.id));
       setPayments(prev => prev.concat(enrichedNextWithQuote));
-      setSelectedPayments(prevSelected => {
-        const wasAllSelected =
-          currentPaymentIds.size > 0 &&
-          prevSelected.size === currentPaymentIds.size &&
-          Array.from(currentPaymentIds).every((id) => prevSelected.has(id));
-
-        if (!wasAllSelected) return prevSelected;
-
-        const next = new Set(prevSelected);
-        enrichedNextWithQuote.forEach((p: any) => next.add(p.id));
-        return next;
-      });
-      if ((enrichedNextWithQuote?.length || 0) < currentPageSize) setHasMore(false);
+      if ((enrichedNextWithQuote?.length || 0) < PAGE_SIZE) setHasMore(false);
     } catch (e) {
       console.error('다음 페이지 로드 실패:', e);
       setHasMore(false);
@@ -868,6 +937,14 @@ export default function ManagerPaymentsPage() {
     try {
       const services: any[] = [];
       let total = 0;
+
+      // reservation의 price_breakdown 조회 (수정된 단가 반영용)
+      const { data: resPbData } = await supabase
+        .from('reservation')
+        .select('re_id, price_breakdown')
+        .in('re_id', reservationIds);
+      const pbMap = new Map((resPbData || []).map((r: any) => [r.re_id, r.price_breakdown]));
+      const pbUsedIndex = new Map<string, Set<number>>();
 
       // 1. 크루즈 객실 서비스 조회 (카테고리별 분리)
       const { data: cruiseData, error: cruiseError } = await supabase
@@ -893,77 +970,79 @@ export default function ManagerPaymentsPage() {
 
             // rate_card에서 단가 조회하여 카테고리별 표시
             if (cruise.room_price_code) {
-              const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cruise.room_price_code);
-              if (!isValidUUID) {
-                // UUID가 아닌 레거시 코드는 조회 건너뛰고 room_total_price 사용
-                services.push({ type: `크루즈 객실`, unitPrice: Number(cruise.room_total_price), quantity: 1, quantityUnit: '식', amount: Number(cruise.room_total_price) });
-                debugLog('⚠️ room_price_code UUID 아님, room_total_price 사용:', cruise.room_price_code);
-              } else {
-              try {
-                const { data: roomPrice } = await supabase
-                  .from('cruise_rate_card')
-                  .select('price_adult, price_child, price_child_extra_bed, price_infant, price_extra_bed, price_single, room_type, cruise_name')
-                  .eq('id', cruise.room_price_code)
-                  .maybeSingle();
+              const { data: roomPrice } = await supabase
+                .from('cruise_rate_card')
+                .select('price_adult, price_child, price_child_extra_bed, price_infant, price_extra_bed, price_single, room_type, cruise_name')
+                .eq('id', cruise.room_price_code)
+                .maybeSingle();
 
-                const roomTypeName = roomPrice?.room_type || roomLabel;
-                if (roomPrice) {
-                  if (adultCount > 0 && Number(roomPrice.price_adult) > 0) {
-                    const amt = Number(roomPrice.price_adult) * adultCount;
-                    services.push({ type: `크루즈 ${roomTypeName} (성인)`, unitPrice: Number(roomPrice.price_adult), quantity: adultCount, quantityUnit: '명', amount: amt });
+              const roomTypeName = roomPrice?.room_type || roomLabel;
+              if (roomPrice) {
+                // price_breakdown에서 수정된 성인 단가 우선 사용
+                const pbRooms = pbMap.get(cruise.reservation_id)?.rooms || [];
+                const usedSet = pbUsedIndex.get(cruise.reservation_id) || new Set<number>();
+                let pbRoom = (pbRooms || []).find((r: any) => {
+                  const code = r?.room_price_code ?? r?.roomPriceCode ?? r?.room_code ?? r?.code;
+                  return code && String(code) === String(cruise.room_price_code);
+                });
+                if (!pbRoom && pbRooms.length > 0) {
+                  for (let i = 0; i < pbRooms.length; i++) {
+                    if (!usedSet.has(i)) { pbRoom = pbRooms[i]; usedSet.add(i); break; }
+                  }
+                }
+                pbUsedIndex.set(cruise.reservation_id, usedSet);
+                const manualAdultPriceFromRow = Number(cruise.unit_price) > 0 ? Number(cruise.unit_price) : 0;
+                const manualAdultPrice = Number(pbRoom?.unit_price) > 0 ? Number(pbRoom.unit_price) : 0;
+                if (adultCount > 0) {
+                  const adultUnitPrice = manualAdultPriceFromRow || manualAdultPrice || Number(roomPrice.price_adult) || 0;
+                  if (adultUnitPrice > 0) {
+                    const amt = adultUnitPrice * adultCount;
+                    services.push({ type: `크루즈 ${roomTypeName} (성인)`, unitPrice: adultUnitPrice, quantity: adultCount, quantityUnit: '명', amount: amt });
                     total += amt;
                   }
-                  if (childCount > 0 && Number(roomPrice.price_child) > 0) {
-                    const amt = Number(roomPrice.price_child) * childCount;
-                    services.push({ type: `크루즈 ${roomTypeName} (아동)`, unitPrice: Number(roomPrice.price_child), quantity: childCount, quantityUnit: '명', amount: amt });
-                    total += amt;
-                  }
-                  if (childExtraBedCount > 0 && Number(roomPrice.price_child_extra_bed) > 0) {
-                    const amt = Number(roomPrice.price_child_extra_bed) * childExtraBedCount;
-                    services.push({ type: `크루즈 ${roomTypeName} (아동 엑스트라베드)`, unitPrice: Number(roomPrice.price_child_extra_bed), quantity: childExtraBedCount, quantityUnit: '명', amount: amt });
-                    total += amt;
-                  }
-                  if (infantCount > 0 && Number(roomPrice.price_infant) > 0) {
-                    const amt = Number(roomPrice.price_infant) * infantCount;
-                    services.push({ type: `크루즈 ${roomTypeName} (유아)`, unitPrice: Number(roomPrice.price_infant), quantity: infantCount, quantityUnit: '명', amount: amt });
-                    total += amt;
-                  }
-                  if (extraBedCount > 0 && Number(roomPrice.price_extra_bed) > 0) {
-                    const amt = Number(roomPrice.price_extra_bed) * extraBedCount;
-                    services.push({ type: `크루즈 ${roomTypeName} (엑스트라베드)`, unitPrice: Number(roomPrice.price_extra_bed), quantity: extraBedCount, quantityUnit: '명', amount: amt });
-                    total += amt;
-                  }
-                  if (singleCount > 0 && Number(roomPrice.price_single) > 0) {
-                    const amt = Number(roomPrice.price_single) * singleCount;
-                    services.push({ type: `크루즈 ${roomTypeName} (싱글)`, unitPrice: Number(roomPrice.price_single), quantity: singleCount, quantityUnit: '명', amount: amt });
-                    total += amt;
-                  }
-                  const catTotal = services.reduce((s, sv) => s + (sv.amount || 0), 0);
-                  if (catTotal === 0) {
-                    services.push({ type: `크루즈 ${roomTypeName}`, unitPrice: Number(cruise.room_total_price), quantity: 1, quantityUnit: '식', amount: Number(cruise.room_total_price) });
-                    total += Number(cruise.room_total_price);
-                  }
-                } else {
-                  services.push({ type: `크루즈 객실`, unitPrice: Number(cruise.room_total_price), quantity: 1, quantityUnit: '식', amount: Number(cruise.room_total_price) });
+                }
+                if (childCount > 0 && Number(roomPrice.price_child) > 0) {
+                  const amt = Number(roomPrice.price_child) * childCount;
+                  services.push({ type: `크루즈 ${roomTypeName} (아동)`, unitPrice: Number(roomPrice.price_child), quantity: childCount, quantityUnit: '명', amount: amt });
+                  total += amt;
+                }
+                if (childExtraBedCount > 0 && Number(roomPrice.price_child_extra_bed) > 0) {
+                  const amt = Number(roomPrice.price_child_extra_bed) * childExtraBedCount;
+                  services.push({ type: `크루즈 ${roomTypeName} (아동 엑스트라베드)`, unitPrice: Number(roomPrice.price_child_extra_bed), quantity: childExtraBedCount, quantityUnit: '명', amount: amt });
+                  total += amt;
+                }
+                if (infantCount > 0 && Number(roomPrice.price_infant) > 0) {
+                  const amt = Number(roomPrice.price_infant) * infantCount;
+                  services.push({ type: `크루즈 ${roomTypeName} (유아)`, unitPrice: Number(roomPrice.price_infant), quantity: infantCount, quantityUnit: '명', amount: amt });
+                  total += amt;
+                }
+                if (extraBedCount > 0 && Number(roomPrice.price_extra_bed) > 0) {
+                  const amt = Number(roomPrice.price_extra_bed) * extraBedCount;
+                  services.push({ type: `크루즈 ${roomTypeName} (엑스트라베드)`, unitPrice: Number(roomPrice.price_extra_bed), quantity: extraBedCount, quantityUnit: '명', amount: amt });
+                  total += amt;
+                }
+                if (singleCount > 0 && Number(roomPrice.price_single) > 0) {
+                  const amt = Number(roomPrice.price_single) * singleCount;
+                  services.push({ type: `크루즈 ${roomTypeName} (싱글)`, unitPrice: Number(roomPrice.price_single), quantity: singleCount, quantityUnit: '명', amount: amt });
+                  total += amt;
+                }
+                // 카테고리별 합계와 room_total_price 차이가 있으면 room_total_price 사용
+                const catTotal = services.reduce((s, sv) => s + (sv.amount || 0), 0);
+                if (catTotal === 0) {
+                  services.push({ type: `크루즈 ${roomTypeName}`, unitPrice: Number(cruise.room_total_price), quantity: 1, quantityUnit: '식', amount: Number(cruise.room_total_price) });
                   total += Number(cruise.room_total_price);
                 }
-              } catch (e) {
-                console.warn('⚠️ 크루즈 요금 조회 실패:', cruise.room_price_code, e);
+              } else {
                 services.push({ type: `크루즈 객실`, unitPrice: Number(cruise.room_total_price), quantity: 1, quantityUnit: '식', amount: Number(cruise.room_total_price) });
                 total += Number(cruise.room_total_price);
               }
-              } // isValidUUID else 닫기
             } else {
               services.push({ type: `크루즈 객실`, unitPrice: Number(cruise.room_total_price), quantity: 1, quantityUnit: '식', amount: Number(cruise.room_total_price) });
               total += Number(cruise.room_total_price);
             }
-            debugLog('✅ 크루즈 객실 (room_total_price):', cruise.room_total_price, '동');
+            console.log('✅ 크루즈 객실 (room_total_price):', cruise.room_total_price, '동');
           } else if (cruise.room_price_code) {
             // room_total_price 없는 경우: rate_card에서 카테고리별 계산
-            const isValidUUID2 = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cruise.room_price_code);
-            if (!isValidUUID2) {
-              console.warn('⚠️ room_price_code가 UUID가 아닙니다 (getServiceDetails):', cruise.room_price_code);
-            } else {
             const { data: roomPrice, error: roomPriceError } = await supabase
               .from('cruise_rate_card')
               .select('price_adult, price_child, price_child_extra_bed, price_infant, price_extra_bed, price_single, room_type, cruise_name')
@@ -981,10 +1060,28 @@ export default function ManagerPaymentsPage() {
               const extraBedCount = Number(cruise.extra_bed_count) || 0;
               const singleCount = Number(cruise.single_count) || 0;
 
-              if (adultCount > 0 && Number(roomPrice.price_adult) > 0) {
-                const amt = Number(roomPrice.price_adult) * adultCount;
-                services.push({ type: `크루즈 ${roomTypeName} (성인)`, unitPrice: Number(roomPrice.price_adult), quantity: adultCount, quantityUnit: '명', amount: amt });
-                total += amt;
+              // price_breakdown 우선 매칭 (매칭 실패 시 rate_card 사용)
+              const pbRooms2 = pbMap.get(cruise.reservation_id)?.rooms || [];
+              const usedSet2 = pbUsedIndex.get(cruise.reservation_id) || new Set<number>();
+              let pbRoom2 = (pbRooms2 || []).find((r: any) => {
+                const code = r?.room_price_code ?? r?.roomPriceCode ?? r?.room_code ?? r?.code;
+                return code && String(code) === String(cruise.room_price_code);
+              });
+              if (!pbRoom2 && pbRooms2.length > 0) {
+                for (let i = 0; i < pbRooms2.length; i++) {
+                  if (!usedSet2.has(i)) { pbRoom2 = pbRooms2[i]; usedSet2.add(i); break; }
+                }
+              }
+              pbUsedIndex.set(cruise.reservation_id, usedSet2);
+              const manualAdultPriceFromRow2 = Number(cruise.unit_price) > 0 ? Number(cruise.unit_price) : 0;
+              const manualAdultPrice2 = Number(pbRoom2?.unit_price) > 0 ? Number(pbRoom2.unit_price) : 0;
+              if (adultCount > 0) {
+                const adultUnitPrice2 = manualAdultPriceFromRow2 || manualAdultPrice2 || Number(roomPrice.price_adult) || 0;
+                if (adultUnitPrice2 > 0) {
+                  const amt = adultUnitPrice2 * adultCount;
+                  services.push({ type: `크루즈 ${roomTypeName} (성인)`, unitPrice: adultUnitPrice2, quantity: adultCount, quantityUnit: '명', amount: amt });
+                  total += amt;
+                }
               }
               if (childCount > 0 && Number(roomPrice.price_child) > 0) {
                 const amt = Number(roomPrice.price_child) * childCount;
@@ -1011,9 +1108,8 @@ export default function ManagerPaymentsPage() {
                 services.push({ type: `크루즈 ${roomTypeName} (싱글)`, unitPrice: Number(roomPrice.price_single), quantity: singleCount, quantityUnit: '명', amount: amt });
                 total += amt;
               }
-              debugLog('✅ 크루즈 객실 카테고리별 합계:', total, '동');
+              console.log('✅ 크루즈 객실 카테고리별 합계:', total, '동');
             }
-            } // isValidUUID2 else 닫기
           }
         }
       }
@@ -1027,7 +1123,7 @@ export default function ManagerPaymentsPage() {
       if (cruiseCarError) {
         console.error('크루즈 차량 예약 조회 오류:', cruiseCarError);
       } else if (cruiseCarData && cruiseCarData.length > 0) {
-        debugLog('🚗 크루즈 차량 데이터:', cruiseCarData);
+        console.log('🚗 크루즈 차량 데이터:', cruiseCarData);
         for (const car of cruiseCarData) {
           const priceCode = car.rentcar_price_code || car.car_price_code;
           if (priceCode) {
@@ -1051,7 +1147,7 @@ export default function ManagerPaymentsPage() {
                 amount: carAmount
               });
               total += carAmount;
-              debugLog('✅ 크루즈 차량:', carAmount, '동');
+              console.log('✅ 크루즈 차량:', carAmount, '동');
             }
           }
         }
@@ -1066,7 +1162,7 @@ export default function ManagerPaymentsPage() {
       if (airportError) {
         console.error('공항 예약 조회 오류:', airportError);
       } else if (airportData && airportData.length > 0) {
-        debugLog('✈️ 공항 데이터:', airportData);
+        console.log('✈️ 공항 데이터:', airportData);
         for (const airport of airportData) {
           if (airport.airport_price_code) {
             const { data: airportPrice, error: airportPriceError } = await supabase
@@ -1089,7 +1185,7 @@ export default function ManagerPaymentsPage() {
                 amount: airportAmount
               });
               total += airportAmount;
-              debugLog('✅ 공항 서비스:', airportAmount, '동');
+              console.log('✅ 공항 서비스:', airportAmount, '동');
             }
           }
         }
@@ -1104,7 +1200,7 @@ export default function ManagerPaymentsPage() {
       if (hotelError) {
         console.error('호텔 예약 조회 오류:', hotelError);
       } else if (hotelData && hotelData.length > 0) {
-        debugLog('🏨 호텔 데이터:', hotelData);
+        console.log('🏨 호텔 데이터:', hotelData);
         for (const hotel of hotelData) {
           if (hotel.hotel_price_code) {
             const { data: hotelPrice, error: hotelPriceError } = await supabase
@@ -1129,7 +1225,7 @@ export default function ManagerPaymentsPage() {
                 amount: hotelAmount
               });
               total += hotelAmount;
-              debugLog('✅ 호텔 서비스:', hotelAmount, '동');
+              console.log('✅ 호텔 서비스:', hotelAmount, '동');
             }
           } else if (hotel.total_price && Number(hotel.total_price) > 0) {
             // 가격 코드가 없고 total_price가 있는 경우
@@ -1143,7 +1239,7 @@ export default function ManagerPaymentsPage() {
               amount: hotelAmount
             });
             total += hotelAmount;
-            debugLog('✅ 호텔 서비스 (총액):', hotelAmount, '동');
+            console.log('✅ 호텔 서비스 (총액):', hotelAmount, '동');
           }
         }
       }
@@ -1157,7 +1253,7 @@ export default function ManagerPaymentsPage() {
       if (rentcarError) {
         console.error('렌터카 예약 조회 오류:', rentcarError);
       } else if (rentcarData && rentcarData.length > 0) {
-        debugLog('🚗 렌터카 데이터:', rentcarData);
+        console.log('🚗 렌터카 데이터:', rentcarData);
         for (const rentcar of rentcarData) {
           if (rentcar.rentcar_price_code) {
             const { data: rentPrice, error: rentPriceError } = await supabase
@@ -1181,7 +1277,7 @@ export default function ManagerPaymentsPage() {
                 amount: rentcarAmount
               });
               total += rentcarAmount;
-              debugLog('✅ 렌터카 서비스:', rentcarAmount, '동');
+              console.log('✅ 렌터카 서비스:', rentcarAmount, '동');
             }
           } else if (rentcar.total_price && Number(rentcar.total_price) > 0) {
             // 가격 코드가 없고 total_price가 있는 경우
@@ -1195,7 +1291,7 @@ export default function ManagerPaymentsPage() {
               amount: rentcarAmount
             });
             total += rentcarAmount;
-            debugLog('✅ 렌터카 서비스 (총액):', rentcarAmount, '동');
+            console.log('✅ 렌터카 서비스 (총액):', rentcarAmount, '동');
           }
         }
       }
@@ -1209,7 +1305,7 @@ export default function ManagerPaymentsPage() {
       if (tourError) {
         console.error('투어 예약 조회 오류:', tourError);
       } else if (tourData && tourData.length > 0) {
-        debugLog('🗺️ 투어 데이터:', tourData);
+        console.log('🗺️ 투어 데이터:', tourData);
         for (const tour of tourData) {
           if (tour.tour_price_code) {
             const { data: tourPrice, error: tourPriceError } = await supabase
@@ -1225,14 +1321,14 @@ export default function ManagerPaymentsPage() {
               const quantity = Number(tour.tour_capacity) || 1;
               const tourAmount = unitPrice * quantity;
               services.push({
-                type: `투어 (${(tourPrice as any).tour?.tour_name || tour.tour_price_code})`,
+                type: `투어 (${(tourPrice as any).tour?.tour_name || (tourPrice as any).tour?.[0]?.tour_name || tour.tour_price_code})`,
                 unitPrice: unitPrice,
                 quantity: quantity,
                 quantityUnit: '명',
                 amount: tourAmount
               });
               total += tourAmount;
-              debugLog('✅ 투어 서비스:', tourAmount, '동');
+              console.log('✅ 투어 서비스:', tourAmount, '동');
             }
           } else if (tour.total_price && Number(tour.total_price) > 0) {
             // 가격 코드가 없고 total_price가 있는 경우
@@ -1246,7 +1342,7 @@ export default function ManagerPaymentsPage() {
               amount: tourAmount
             });
             total += tourAmount;
-            debugLog('✅ 투어 서비스 (총액):', tourAmount, '동');
+            console.log('✅ 투어 서비스 (총액):', tourAmount, '동');
           }
         }
       }
@@ -1260,7 +1356,7 @@ export default function ManagerPaymentsPage() {
       if (vehicleError) {
         console.error('차량 예약 조회 오류:', vehicleError);
       } else if (vehicleData && vehicleData.length > 0) {
-        debugLog('🚗 차량 데이터:', vehicleData);
+        console.log('🚗 차량 데이터:', vehicleData);
         const dedupedShtMap = new Map<string, any>();
         for (const vehicle of vehicleData) {
           // 2WAY 저장 시 Drop-off 0원 행은 중복 과금/표시에서 제외
@@ -1316,7 +1412,7 @@ export default function ManagerPaymentsPage() {
             amount: amount
           });
           total += amount;
-          debugLog('✅ SHT 차량 서비스:', amount, '동');
+          console.log('✅ SHT 차량 서비스:', amount, '동');
         }
       }
 
@@ -1341,27 +1437,6 @@ export default function ManagerPaymentsPage() {
     loadPayments();
   }, [filter, searchTerm]);
 
-  // 예약 수정 후 결제처리 화면으로 복귀할 때 최신 데이터 재조회
-  useEffect(() => {
-    const handleFocus = () => {
-      loadPayments();
-    };
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        loadPayments();
-      }
-    };
-
-    window.addEventListener('focus', handleFocus);
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    return () => {
-      window.removeEventListener('focus', handleFocus);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [filter, searchTerm]);
-
   const handleSearchClick = () => {
     setSearchTerm(searchInput);
   };
@@ -1373,6 +1448,7 @@ export default function ManagerPaymentsPage() {
   };
 
   const handleManualRefresh = async () => {
+    await syncPendingReservationsToPayments();
     await loadPayments();
   };
 
@@ -1446,11 +1522,11 @@ export default function ManagerPaymentsPage() {
     setSelectedPayments(next);
   };
 
-  // 결제완료 처리 (결제완료 시 예약도 승인으로 변경)
+  // 결제완료 처리
   const updatePaymentStatus = async (paymentId: string, status: string) => {
     await supabase
       .from('reservation_payment')
-      .update({ payment_status: status, updated_at: new Date().toISOString() })
+      .update({ payment_status: status })
       .eq('id', paymentId);
 
     // 결제 완료 시 해당 예약을 '승인(approved)' 상태로 변경 + 확인서 대기 생성
@@ -1826,7 +1902,7 @@ export default function ManagerPaymentsPage() {
                       </div>
                       <div>
                         <div className="font-bold text-gray-900 text-lg">
-                          {group.user?.name || '고객 정보 없음'}
+                          {group.user?.name ? `고객: ${group.user.name}` : '고객 정보 없음'}
                         </div>
                         <div className="text-xs text-gray-500 flex flex-wrap gap-2">
                           <span>{group.quoteTitle || (group.hasQuote ? `견적 #${String(group.quoteId).slice(0, 8).toUpperCase()}` : '견적 없음')}</span>
@@ -1997,7 +2073,7 @@ export default function ManagerPaymentsPage() {
                             </td>
                             <td className="px-6 py-4">
                               <select
-                                value={payment.payment_method || 'BANK'}
+                                value={payment.payment_method || ((payment.reservation?.re_type || payment.re_type) === 'cruise' ? 'CARD' : 'BANK')}
                                 onChange={(e) => updatePaymentMethod(payment.id, e.target.value)}
                                 className="text-xs px-2 py-1 rounded border border-gray-200 bg-white text-gray-700 cursor-pointer hover:border-blue-300 focus:outline-none focus:ring-1 focus:ring-blue-400 transition-colors"
                               >
