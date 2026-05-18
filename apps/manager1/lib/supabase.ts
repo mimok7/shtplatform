@@ -46,6 +46,15 @@ const fallbackStub: any = {
     update: () => ({ data: null, error: null, eq: () => ({ data: null, error: null }) }),
     delete: () => ({ data: null, error: null, eq: () => ({ data: null, error: null }) }),
   }),
+  channel: (_name?: string) => {
+    const realtimeChannel: any = {
+      on: (_event: any, _opts: any, _cb?: any) => realtimeChannel,
+      subscribe: () => realtimeChannel,
+      unsubscribe: () => ({}),
+    };
+    return realtimeChannel;
+  },
+  removeChannel: (_channel?: any) => ({}),
 };
 
 const supabaseProxy: any = new Proxy({}, {

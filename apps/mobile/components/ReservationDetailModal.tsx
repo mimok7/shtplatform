@@ -75,15 +75,52 @@ const formatLinePrice = (label: string, unitPrice: number, count: number, unitLa
   return `${label} ${formatMoney(unitPrice)} × ${count}${unitLabel}`;
 };
 
+const pickNumber = (...candidates: any[]): number => {
+  for (const candidate of candidates) {
+    const parsed = Number(candidate);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return 0;
+};
+
+const getServicePriceBreakdown = (service: any) => (
+  service?.priceBreakdown
+  || service?.price_breakdown
+  || service?.reservation_price_breakdown
+  || service?.reservation?.price_breakdown
+  || null
+);
+
+const getCruiseRoomPriceBreakdown = (service: any) => {
+  const pb = getServicePriceBreakdown(service);
+  const rooms = Array.isArray(pb?.rooms) ? pb.rooms : [];
+  if (rooms.length === 0) return null;
+
+  const roomCode = String(service?.room_price_code || '').trim();
+  const checkin = String(service?.checkin || '').trim();
+
+  const exactMatched = rooms.find((room: any) => {
+    const targetCode = String(room?.room_price_code || '').trim();
+    const targetCheckin = String(room?.checkin || '').trim();
+    return targetCode === roomCode && (!checkin || targetCheckin === checkin);
+  });
+  if (exactMatched) return exactMatched;
+
+  const roomCodeMatched = rooms.find((room: any) => String(room?.room_price_code || '').trim() === roomCode);
+  if (roomCodeMatched) return roomCodeMatched;
+
+  return rooms[0] || null;
+};
+
 const getCruiseDisplayTotal = (service: any): number => {
+  const roomPb = getCruiseRoomPriceBreakdown(service);
+  const roomPbTotal = Number(roomPb?.total);
+  if (Number.isFinite(roomPbTotal) && roomPbTotal > 0) return roomPbTotal;
+
   const roomTotal = Number(service?.room_total_price || 0);
   if (roomTotal > 0) return roomTotal;
 
-  const rawPb = service?.priceBreakdown
-    || service?.price_breakdown
-    || service?.reservation_price_breakdown
-    || service?.reservation?.price_breakdown
-    || null;
+  const rawPb = getServicePriceBreakdown(service);
 
   const pbGrandTotal = Number(rawPb?.grand_total);
   if (Number.isFinite(pbGrandTotal) && pbGrandTotal > 0) return pbGrandTotal;
@@ -93,19 +130,37 @@ const getCruiseDisplayTotal = (service: any): number => {
 
 const getAmountSummaryLines = (service: any, type: string): string[] => {
   if (type === 'cruise') {
-    const adultUnit = Number(service.priceAdult || service.price_adult || service.unit_price || 0);
-    const childUnit = Number(service.priceChild || service.price_child || 0);
-    const infantUnit = Number(service.priceInfant || service.price_infant || 0);
-    const childExtraBedUnit = Number(service.priceChildExtraBed || service.price_child_extra_bed || 0);
-    const extraBedUnit = Number(service.priceExtraBed || service.price_extra_bed || 0);
-    const singleUnit = Number(service.priceSingle || service.price_single || 0);
+    const roomPb = getCruiseRoomPriceBreakdown(service);
+    const unitFromPb = (key: string) => pickNumber(
+      roomPb?.category_unit_prices?.[key],
+      roomPb?.[key]?.unit_price,
+    );
+    const countFromPb = (key: string) => pickNumber(roomPb?.[key]?.count);
+
+    const adultUnit = pickNumber(unitFromPb('adult'), service.priceAdult, service.price_adult, service.unit_price);
+    const childUnit = pickNumber(unitFromPb('child'), service.priceChild, service.price_child);
+    const childOlderUnit = pickNumber(unitFromPb('child_older'), service.priceChildOlder, service.price_child_older, service.price_child);
+    const infantUnit = pickNumber(unitFromPb('infant'), service.priceInfant, service.price_infant);
+    const childExtraBedUnit = pickNumber(unitFromPb('child_extra_bed'), service.priceChildExtraBed, service.price_child_extra_bed);
+    const extraBedUnit = pickNumber(unitFromPb('extra_bed'), service.priceExtraBed, service.price_extra_bed);
+    const singleUnit = pickNumber(unitFromPb('single'), service.priceSingle, service.price_single);
+
+    const adultCount = pickNumber(countFromPb('adult'), service.adult_count, service.adult);
+    const childCount = pickNumber(countFromPb('child'), service.child_count, service.child);
+    const childOlderCount = pickNumber(countFromPb('child_older'), service.child_older_count);
+    const infantCount = pickNumber(countFromPb('infant'), service.infant_count, service.toddler);
+    const childExtraBedCount = pickNumber(countFromPb('child_extra_bed'), service.child_extra_bed_count);
+    const extraBedCount = pickNumber(countFromPb('extra_bed'), service.extra_bed_count);
+    const singleCount = pickNumber(countFromPb('single'), service.single_count);
+
     const lines = [
-      formatLinePrice('성인', adultUnit, Number(service.adult_count || service.adult || 0), '명'),
-      formatLinePrice('아동', childUnit, Number(service.child_count || service.child || 0), '명'),
-      formatLinePrice('유아', infantUnit, Number(service.infant_count || service.toddler || 0), '명'),
-      formatLinePrice('아동 엑스트라', childExtraBedUnit, Number(service.child_extra_bed_count || 0), '명'),
-      formatLinePrice('엑스트라', extraBedUnit, Number(service.extra_bed_count || 0), '개'),
-      formatLinePrice('싱글', singleUnit, Number(service.single_count || 0), '명'),
+      formatLinePrice('성인', adultUnit, adultCount, '명'),
+      formatLinePrice('아동(5~7)', childUnit, childCount, '명'),
+      formatLinePrice('아동(8~11)', childOlderUnit, childOlderCount, '명'),
+      formatLinePrice('유아', infantUnit, infantCount, '명'),
+      formatLinePrice('아동 엑스트라', childExtraBedUnit, childExtraBedCount, '명'),
+      formatLinePrice('엑스트라', extraBedUnit, extraBedCount, '개'),
+      formatLinePrice('싱글', singleUnit, singleCount, '명'),
     ].filter(Boolean) as string[];
     const cruiseDisplayTotal = getCruiseDisplayTotal(service);
     if (lines.length === 0 && cruiseDisplayTotal > 0) {

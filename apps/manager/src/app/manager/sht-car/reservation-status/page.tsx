@@ -20,6 +20,7 @@ type StatusRow = {
   vehicleNumber: string;
   seatCount: number;
   seatList: string[];
+  names: string[];
   emails: string[];
   reservationIds: string[];
 };
@@ -129,15 +130,18 @@ export default function ShtCarReservationStatusPage() {
 
       const userIds = Array.from(new Set((reservationRows || []).map((row: any) => row.re_user_id).filter(Boolean)));
       const userRows = userIds.length > 0
-        ? await fetchTableInBatches<any>('users', 'id', userIds, 'id, email', 80)
+        ? await fetchTableInBatches<any>('users', 'id', userIds, 'id, name, email', 80)
         : [];
 
-      const userEmailMap = new Map((userRows || []).map((user: any) => [user.id, user.email || '']));
-      const reservationEmailMap = new Map<string, string>();
+      const userMap = new Map((userRows || []).map((user: any) => [user.id, {
+        name: String(user.name || '').trim(),
+        email: String(user.email || '').trim(),
+      }]));
+      const reservationContactMap = new Map<string, { name: string; email: string }>();
       (reservationRows || []).forEach((row: any) => {
         if (!row.re_id || !row.re_user_id) return;
-        const email = userEmailMap.get(row.re_user_id);
-        if (email) reservationEmailMap.set(row.re_id, email);
+        const contact = userMap.get(row.re_user_id);
+        if (contact) reservationContactMap.set(row.re_id, contact);
       });
 
       const candidates: StatusRow[] = [];
@@ -148,10 +152,22 @@ export default function ShtCarReservationStatusPage() {
 
         if (seatCount <= 0 || seatCount >= 5) continue;
 
-        const emails = Array.from(value.reservationIds)
-          .map((reservationId) => reservationEmailMap.get(reservationId) || '')
+        const contactPairs = Array.from(value.reservationIds)
+          .map((reservationId) => reservationContactMap.get(reservationId) || { name: '', email: '' })
+          .filter((contact) => contact.name || contact.email)
+          .filter((contact, index, list) => {
+            const key = `${contact.name}::${contact.email}`;
+            return list.findIndex((target) => `${target.name}::${target.email}` === key) === index;
+          });
+
+        const names = contactPairs
+          .map((contact) => contact.name || '')
           .filter(Boolean)
-          .filter((email, index, list) => list.indexOf(email) === index)
+          .sort();
+
+        const emails = contactPairs
+          .map((contact) => contact.email || '')
+          .filter(Boolean)
           .sort();
 
         candidates.push({
@@ -159,6 +175,7 @@ export default function ShtCarReservationStatusPage() {
           vehicleNumber,
           seatCount,
           seatList,
+          names,
           emails,
           reservationIds: Array.from(value.reservationIds),
         });
@@ -256,9 +273,11 @@ export default function ShtCarReservationStatusPage() {
             {rows.map((row) => {
               const seats = row.seatList.slice(0, 8).join(', ');
               const seatSuffix = row.seatList.length > 8 ? ' 외' : '';
+              const names = row.names.slice(0, 5).join(', ');
+              const nameSuffix = row.names.length > 5 ? ` 외 ${row.names.length - 5}명` : '';
               const emails = row.emails.slice(0, 5).join(', ');
               const emailSuffix = row.emails.length > 5 ? ` 외 ${row.emails.length - 5}건` : '';
-              const notice = `예약자 이메일: ${emails || '-'}${emailSuffix} | 픽업일: ${row.pickupDate} | 차량: ${row.vehicleNumber} | 좌석: ${row.seatCount}석 (${seats}${seatSuffix})`;
+              const notice = `예약자: ${names || '-'}${nameSuffix} | 이메일: ${emails || '-'}${emailSuffix} | 픽업일: ${row.pickupDate} | 차량: ${row.vehicleNumber} | 좌석: ${row.seatCount}석 (${seats}${seatSuffix})`;
 
               return (
                 <div key={`${row.pickupDate}-${row.vehicleNumber}`} className="bg-white rounded-lg shadow-md border border-red-100 p-4">
@@ -275,7 +294,8 @@ export default function ShtCarReservationStatusPage() {
 
                   <div className="text-sm text-gray-700 space-y-1">
                     <div><span className="font-semibold">좌석:</span> {seats}{seatSuffix}</div>
-                    <div><span className="font-semibold">예약자 이메일:</span> {emails || '-'}{emailSuffix}</div>
+                    <div><span className="font-semibold">예약자:</span> {names || '-'}{nameSuffix}</div>
+                    <div><span className="font-semibold">이메일:</span> {emails || '-'}{emailSuffix}</div>
                     <div className="pt-1 border-t border-gray-100 text-xs text-gray-600 break-words">
                       <span className="font-semibold">안내문:</span> {notice}
                     </div>

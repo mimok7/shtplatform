@@ -1,5 +1,5 @@
 // Service Worker for PWA offline support
-const CACHE_NAME = 'sht-manager-cache-v1';
+const CACHE_NAME = 'sht-manager-cache-v2';
 const ASSETS_TO_CACHE = [
   '/',
   '/icon-192.png',
@@ -37,8 +37,21 @@ self.addEventListener('activate', event => {
 // Fetch event - serve from cache, fallback to network
 self.addEventListener('fetch', event => {
   // Skip non-GET requests and external requests
+  const url = new URL(event.request.url);
+  const path = url.pathname || '/';
   if (event.request.method !== 'GET' || 
       !event.request.url.startsWith(self.location.origin)) {
+    return;
+  }
+
+  // Never intercept auth/login or framework/api requests.
+  // These must always hit network to avoid stale session and login issues.
+  if (
+    path === '/login' ||
+    path.startsWith('/auth') ||
+    path.startsWith('/api/') ||
+    path.startsWith('/_next/')
+  ) {
     return;
   }
 
@@ -60,8 +73,17 @@ self.addEventListener('fetch', event => {
         
         return response;
       }).catch(() => {
-        // Return offline page or cached response
-        return caches.match('/') || new Response('Offline - please check connection');
+        // Always resolve with a concrete Response (never undefined)
+        return caches.match('/offline.html').then(offlinePage => {
+          if (offlinePage) return offlinePage;
+          return caches.match('/').then(rootPage => {
+            if (rootPage) return rootPage;
+            return new Response('Offline - please check connection', {
+              status: 503,
+              headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+            });
+          });
+        });
       });
     })
   );

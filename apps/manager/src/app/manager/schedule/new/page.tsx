@@ -1448,6 +1448,7 @@ export default function ManagerSchedulePage() {
         const typeMapping: Record<string, string> = {
           'cruise': 'sh_r',
           'car': 'sh_c',
+          'vehicle': 'sh_cc',
           'sht': 'sh_cc',
           'airport': 'sh_p',
           'hotel': 'sh_h',

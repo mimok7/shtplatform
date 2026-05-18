@@ -1289,6 +1289,13 @@ function CruiseReservationEditContent() {
                     const savedRoom = savedRoomBreakdowns[rowIndex] || {};
                     const categoryPricesManual = Boolean(savedRoom.category_prices_manual);
                     const roomDetail = roomPriceInfoList[rowIndex];
+                    const savedChildOlderCount = Number(savedRoom?.child_older?.count);
+                    const parsedChildOlderCount = parsedChildOlderCounts[rowIndex] ?? 0;
+                    const childOlderCount = Number.isFinite(savedChildOlderCount)
+                        ? Math.max(0, savedChildOlderCount)
+                        : Math.max(0, parsedChildOlderCount);
+                    const totalChildCount = cruiseRow.child_count ?? 0;
+                    const childCount = Math.max(0, totalChildCount - childOlderCount);
                     return syncRoomForm(createEmptyRoomForm({
                         room_count: cruiseRow.room_count ?? 1,
                         guest_count: cruiseRow.guest_count || 0,
@@ -1307,8 +1314,8 @@ function CruiseReservationEditContent() {
                         price_extra_bed: categoryPricesManual ? Number(savedRoom.extra_bed?.unit_price || 0) : 0,
                         price_single: categoryPricesManual ? Number(savedRoom.single?.unit_price || 0) : 0,
                         adult_count: cruiseRow.adult_count ?? 0,
-                        child_count: cruiseRow.child_count ?? 0,
-                        child_older_count: parsedChildOlderCounts[rowIndex] ?? 0,
+                        child_count: childCount,
+                        child_older_count: childOlderCount,
                         child_extra_bed_count: cruiseRow.child_extra_bed_count ?? 0,
                         infant_count: cruiseRow.infant_count ?? 0,
                         extra_bed_count: cruiseRow.extra_bed_count ?? 0,

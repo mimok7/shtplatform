@@ -99,6 +99,50 @@ const normalizeCruisePriceBreakdown = (pb: any, infantCount: number) => {
 
 const formatSignedAmount = (amount: number): string => `${amount > 0 ? '+' : ''}${amount.toLocaleString()}동`;
 
+const getServicePriceBreakdown = (service: any) => (
+    service?.priceBreakdown
+    || service?.price_breakdown
+    || service?.reservation_price_breakdown
+    || service?.reservation?.price_breakdown
+    || null
+);
+
+const getCruiseRoomPriceBreakdown = (service: any) => {
+    const pb = getServicePriceBreakdown(service);
+    const rooms = Array.isArray(pb?.rooms) ? pb.rooms : [];
+    if (rooms.length === 0) return null;
+
+    const roomCode = String(service?.room_price_code || '').trim();
+    const checkin = String(service?.checkin || '').trim();
+
+    const exactMatched = rooms.find((room: any) => {
+        const targetCode = String(room?.room_price_code || '').trim();
+        const targetCheckin = String(room?.checkin || '').trim();
+        return targetCode === roomCode && (!checkin || targetCheckin === checkin);
+    });
+    if (exactMatched) return exactMatched;
+
+    const roomCodeMatched = rooms.find((room: any) => String(room?.room_price_code || '').trim() === roomCode);
+    if (roomCodeMatched) return roomCodeMatched;
+
+    return rooms[0] || null;
+};
+
+const getCruiseDisplayTotal = (service: any): number => {
+    const roomPb = getCruiseRoomPriceBreakdown(service);
+    const roomPbTotal = Number(roomPb?.total);
+    if (Number.isFinite(roomPbTotal) && roomPbTotal > 0) return roomPbTotal;
+
+    const roomTotal = Number(service?.room_total_price || 0);
+    if (roomTotal > 0) return roomTotal;
+
+    const rawPb = getServicePriceBreakdown(service);
+    const pbGrandTotal = Number(rawPb?.grand_total);
+    if (Number.isFinite(pbGrandTotal) && pbGrandTotal > 0) return pbGrandTotal;
+
+    return Number(service?.totalPrice || service?.total_amount || 0);
+};
+
 const getFilteredNoteText = (note: any): string => {
     if (!note) return '';
 
@@ -753,26 +797,61 @@ export default function UserReservationDetailModal({
                     <>
                         {(() => {
                             const rawPb = service.priceBreakdown || service.price_breakdown || service.reservation_price_breakdown || service.reservation?.price_breakdown || null;
-                            const adultCount = Number(service.adult ?? service.adult_count ?? service.re_adult_count ?? service.reservation?.re_adult_count ?? 0);
-                            const childCount = Number(service.child ?? service.child_count ?? service.re_child_count ?? service.reservation?.re_child_count ?? 0);
-                            const infantCount = Number(service.infant ?? service.infant_count ?? service.re_infant_count ?? service.reservation?.re_infant_count ?? 0);
-                            const singleCount = Number(service.singleCount ?? service.single_count ?? 0);
-                            const childExtraBedCount = Number(service.childExtraBedCount ?? service.child_extra_bed_count ?? 0);
-                            const extraBedCount = Number(service.extraBedCount ?? service.extra_bed_count ?? 0);
+                            const adultCountRaw = service.adult ?? service.adult_count ?? service.re_adult_count ?? service.reservation?.re_adult_count;
+                            const childCountRaw = service.child ?? service.child_count ?? service.re_child_count ?? service.reservation?.re_child_count;
+                            const childOlderCountRaw = service.childOlderCount ?? service.child_older_count;
+                            const infantCountRaw = service.infant ?? service.infant_count ?? service.re_infant_count ?? service.reservation?.re_infant_count;
+                            const singleCountRaw = service.singleCount ?? service.single_count;
+                            const childExtraBedCountRaw = service.childExtraBedCount ?? service.child_extra_bed_count;
+                            const extraBedCountRaw = service.extraBedCount ?? service.extra_bed_count;
 
+                            const adultCount = Number(adultCountRaw ?? 0);
+                            const childCount = Number(childCountRaw ?? 0);
+                            const childOlderCount = Number(childOlderCountRaw ?? 0);
+                            const infantCount = Number(infantCountRaw ?? 0);
+                            const singleCount = Number(singleCountRaw ?? 0);
+                            const childExtraBedCount = Number(childExtraBedCountRaw ?? 0);
+                            const extraBedCount = Number(extraBedCountRaw ?? 0);
+
+                            // pb: surcharge 정규화 전용. count/unit/total은 roomPb(방별 breakdown) 기준 — 모바일과 동일
                             const pb = normalizeCruisePriceBreakdown(rawPb, infantCount);
-                            const roomTotalPrice = Number(service.room_total_price || 0);
-                            const pbGrandTotal = Number(pb?.grand_total || 0);
-                            const cruiseTotal = roomTotalPrice > 0
-                                ? roomTotalPrice
-                                : Number(pbGrandTotal > 0 ? pbGrandTotal : (service.totalPrice ?? service.total_amount ?? 0));
+                            const roomPb = getCruiseRoomPriceBreakdown(service);
+                            const cruiseTotal = getCruiseDisplayTotal(service);
+
+                            // entry(roomPb[key])가 있으면 그 count 우선(0 포함). 없으면 서비스 필드 폴백.
+                            const resolveCount = (entry: any, rawCount: any) => {
+                                if (entry !== undefined && entry !== null) {
+                                    const v = entry?.count;
+                                    if (v !== undefined && v !== null) return Number(v);
+                                    return 0;
+                                }
+                                return Number(rawCount ?? 0);
+                            };
+
+                            const makeCruiseLine = (label: string, entry: any, count: number, fallbackUnit: number) => {
+                                if (count <= 0) return null;
+                                const unit = Number(entry?.unit_price ?? fallbackUnit ?? 0);
+                                const totalFromBreakdown = Number(entry?.total ?? 0);
+                                const total = totalFromBreakdown > 0 ? totalFromBreakdown : (unit * count);
+                                return { label, value: { count, unit_price: unit, total } };
+                            };
+
+                            const adultLineCount = resolveCount(roomPb?.adult, adultCount);
+                            const childLineCount = resolveCount(roomPb?.child, childCount);
+                            const childOlderLineCount = resolveCount(roomPb?.child_older, childOlderCount);
+                            const childExtraBedLineCount = resolveCount(roomPb?.child_extra_bed, childExtraBedCount);
+                            const infantLineCount = resolveCount(roomPb?.infant, infantCount);
+                            const extraBedLineCount = resolveCount(roomPb?.extra_bed, extraBedCount);
+                            const singleLineCount = resolveCount(roomPb?.single, singleCount);
+
                             const cruiseLines = [
-                                pb?.adult && { label: '성인', value: pb.adult },
-                                pb?.child && { label: '아동', value: pb.child },
-                                pb?.child_extra_bed && { label: '아동엑베', value: pb.child_extra_bed },
-                                pb?.infant && { label: '유아', value: pb.infant },
-                                pb?.extra_bed && { label: '엑스트라베드', value: pb.extra_bed },
-                                pb?.single && { label: '싱글차액', value: pb.single },
+                                makeCruiseLine('성인', roomPb?.adult, adultLineCount, Number(service.unitPrice || service.priceAdult || 0)),
+                                makeCruiseLine('아동(5~7)', roomPb?.child, childLineCount, Number(service.priceChild || 0)),
+                                makeCruiseLine('아동(8~11)', roomPb?.child_older, childOlderLineCount, Number(service.priceChildOlder || service.priceChild || 0)),
+                                makeCruiseLine('아동엑베', roomPb?.child_extra_bed, childExtraBedLineCount, Number(service.priceChildExtraBed || 0)),
+                                makeCruiseLine('유아', roomPb?.infant, infantLineCount, Number(service.priceInfant || 0)),
+                                makeCruiseLine('엑스트라베드', roomPb?.extra_bed, extraBedLineCount, Number(service.priceExtraBed || 0)),
+                                makeCruiseLine('싱글차액', roomPb?.single, singleLineCount, Number(service.priceSingle || 0)),
                             ].filter(Boolean) as Array<{ label: string; value: any }>;
 
                             return (
@@ -795,23 +874,23 @@ export default function UserReservationDetailModal({
                                     {/* 카테고리별 요금 내역 */}
                                     <div className="border-t border-gray-100 pt-2 mt-1 space-y-1">
                                         <div className="text-xs font-semibold text-green-800 mb-1">요금 내역</div>
-                                        {cruiseLines.length > 0 ? (
-                                            cruiseLines.map((line, idx) => {
+                                        {cruiseLines.map((line, idx) => {
                                                 const lineCount = Number(line.value?.count || 0);
                                                 const rawTotal = Number(line.value?.total || 0);
                                                 const rawUnit = Number(line.value?.unit_price);
                                                 const fallbackUnitByLabel: Record<string, number> = {
                                                     성인: Number(service.unitPrice || service.priceAdult || 0),
-                                                    아동: Number(service.priceChild || 0),
+                                                    '아동(5~7)': Number(service.priceChild || 0),
+                                                    '아동(8~11)': Number(service.priceChildOlder || service.priceChild || 0),
                                                     아동엑베: Number(service.priceChildExtraBed || 0),
                                                     유아: Number(service.priceInfant || 0),
                                                     엑스트라베드: Number(service.priceExtraBed || 0),
                                                     싱글차액: Number(service.priceSingle || 0),
                                                 };
-                                                const lineUnit = Number.isFinite(rawUnit) && rawUnit > 0
-                                                    ? rawUnit
-                                                    : (lineCount > 0 && rawTotal > 0
-                                                        ? Math.round(rawTotal / lineCount)
+                                                const lineUnit = lineCount > 0 && rawTotal > 0
+                                                    ? Math.round(rawTotal / lineCount)
+                                                    : (Number.isFinite(rawUnit) && rawUnit > 0
+                                                        ? rawUnit
                                                         : Number(fallbackUnitByLabel[line.label] || 0));
                                                 const lineTotal = rawTotal > 0 ? rawTotal : lineUnit * lineCount;
                                                 return (
@@ -820,47 +899,7 @@ export default function UserReservationDetailModal({
                                                         <span className="font-medium">{lineTotal.toLocaleString()}동</span>
                                                     </div>
                                                 );
-                                            })
-                                        ) : (
-                                            <>
-                                                {adultCount > 0 && (
-                                                    <div className="flex justify-between text-sm">
-                                                        <span className="text-gray-600">성인 {Number(service.unitPrice || service.priceAdult || 0).toLocaleString()}동 × {adultCount}명</span>
-                                                        <span className="font-medium">{(Number(service.unitPrice || service.priceAdult || 0) * adultCount).toLocaleString()}동</span>
-                                                    </div>
-                                                )}
-                                                {childCount > 0 && (
-                                                    <div className="flex justify-between text-sm">
-                                                        <span className="text-gray-600">아동 {Number(service.priceChild || 0).toLocaleString()}동 × {childCount}명</span>
-                                                        <span className="font-medium">{(Number(service.priceChild || 0) * childCount).toLocaleString()}동</span>
-                                                    </div>
-                                                )}
-                                                {childExtraBedCount > 0 && (
-                                                    <div className="flex justify-between text-sm">
-                                                        <span className="text-gray-600">아동엑베 {Number(service.priceChildExtraBed || 0).toLocaleString()}동 × {childExtraBedCount}명</span>
-                                                        <span className="font-medium">{(Number(service.priceChildExtraBed || 0) * childExtraBedCount).toLocaleString()}동</span>
-                                                    </div>
-                                                )}
-                                                {infantCount > 0 && (
-                                                    <div className="flex justify-between text-sm">
-                                                        <span className="text-gray-600">유아 {Number(service.priceInfant || 0).toLocaleString()}동 × {infantCount}명</span>
-                                                        <span className="font-medium">{(Number(service.priceInfant || 0) * infantCount).toLocaleString()}동</span>
-                                                    </div>
-                                                )}
-                                                {extraBedCount > 0 && (
-                                                    <div className="flex justify-between text-sm">
-                                                        <span className="text-gray-600">엑스트라베드 {Number(service.priceExtraBed || 0).toLocaleString()}동 × {extraBedCount}개</span>
-                                                        <span className="font-medium">{(Number(service.priceExtraBed || 0) * extraBedCount).toLocaleString()}동</span>
-                                                    </div>
-                                                )}
-                                                {singleCount > 0 && (
-                                                    <div className="flex justify-between text-sm">
-                                                        <span className="text-gray-600">싱글차액 {Number(service.priceSingle || 0).toLocaleString()}동 × {singleCount}명</span>
-                                                        <span className="font-medium">{(Number(service.priceSingle || 0) * singleCount).toLocaleString()}동</span>
-                                                    </div>
-                                                )}
-                                            </>
-                                        )}
+                                            })}
 
                                         {(pb?.surcharge_total || 0) > 0 && (
                                             <div className="flex justify-between text-sm">
@@ -1397,25 +1436,23 @@ export default function UserReservationDetailModal({
                                         if (reservationId && !additionalFeeByReservation.has(reservationId)) {
                                             additionalFeeByReservation.set(reservationId, getManualAdditionalFee(s));
                                         }
-                                        const reservationTotalAmount = getReservationTotalAmount(s);
-                                        if (reservationId && reservationTotalAmount !== null && !reservationTotalByReservation.has(reservationId)) {
-                                            reservationTotalByReservation.set(reservationId, reservationTotalAmount);
-                                            return;
-                                        }
+                                        // 이미 집계된 예약 ID는 건너맜
+                                        if (reservationId && reservationTotalByReservation.has(reservationId)) return;
 
-                                        let rowTotal = Number(s.room_total_price || s.totalPrice || s.total_amount || 0);
-
-                                        // 크루즈는 카드 본문과 동일하게 보정된 price_breakdown 기준으로 fallback 집계
+                                        // 크루즈는 변경 데이터가 반영된 getCruiseDisplayTotal 우선
+                                        let rowTotal: number;
                                         if (t === 'cruise') {
-                                            const rawPb = s.priceBreakdown || s.price_breakdown || s.reservation_price_breakdown || s.reservation?.price_breakdown || null;
-                                            const normalizedPb = normalizeCruisePriceBreakdown(rawPb, Number(s.infant || 0));
-                                            const roomTotalPrice = Number(s.room_total_price || 0);
-                                            rowTotal = roomTotalPrice > 0
-                                                ? roomTotalPrice
-                                                : Number(normalizedPb?.grand_total ?? rowTotal);
+                                            rowTotal = getCruiseDisplayTotal(s);
+                                        } else {
+                                            const reservationTotalAmount = getReservationTotalAmount(s);
+                                            rowTotal = reservationTotalAmount !== null
+                                                ? reservationTotalAmount
+                                                : Number(s.room_total_price || s.totalPrice || s.total_amount || 0);
                                         }
 
-                                        if (Number.isFinite(rowTotal)) {
+                                        if (reservationId) {
+                                            reservationTotalByReservation.set(reservationId, rowTotal);
+                                        } else if (Number.isFinite(rowTotal)) {
                                             rowFallbackTotal += rowTotal;
                                         }
                                     });
