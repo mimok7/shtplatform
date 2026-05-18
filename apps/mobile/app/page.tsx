@@ -1,6 +1,5 @@
 'use client';
 
-import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -108,14 +107,12 @@ export default function HomePage() {
 
       {/* 로고 */}
       <div className="text-center py-4">
-        <Image
+        <img
           src="/logo.png"
           alt="스테이하롱 로고"
           width={160}
           height={54}
-          className="mx-auto max-w-[160px]"
-          style={{ width: 'auto', height: 'auto' }}
-          priority
+          className="mx-auto"
         />
       </div>
 

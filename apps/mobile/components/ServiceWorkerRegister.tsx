@@ -6,8 +6,13 @@ export default function ServiceWorkerRegister() {
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return;
 
-    // dev 환경에서는 SW가 라우팅/HMR 요청을 가로채지 않도록 등록 해제한다.
-    if (process.env.NODE_ENV !== 'production') {
+    const isLocalhost =
+      location.hostname === 'localhost' ||
+      location.hostname === '127.0.0.1' ||
+      location.hostname === '[::1]';
+
+    // 로컬 개발/테스트(localhost)에서는 SW를 항상 제거하여 청크 로딩 충돌을 방지한다.
+    if (process.env.NODE_ENV !== 'production' || isLocalhost) {
       navigator.serviceWorker.getRegistrations().then((registrations) => {
         registrations.forEach((registration) => {
           void registration.unregister();

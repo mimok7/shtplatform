@@ -7,6 +7,13 @@ import supabase from '@/lib/supabase';
 import { ArrowLeft, Home } from 'lucide-react';
 import { toKstDateLabel } from '@/lib/dateKst';
 
+const MANAGER_ROLES = new Set(['manager', 'admin', 'super_admin', 'superadmin', 'master', 'owner']);
+
+const normalizeRole = (value: unknown): string => {
+  if (typeof value !== 'string') return '';
+  return value.trim().toLowerCase();
+};
+
 export default function CustomerManagement() {
   const [customerCount, setCustomerCount] = useState<number>(0);
 
@@ -66,6 +73,20 @@ export default function CustomerManagement() {
         router.push('/login');
         return;
       }
+
+      const { data: profile, error: profileError } = await supabase
+        .from('users')
+        .select('role')
+        .eq('id', authUser.id)
+        .maybeSingle();
+
+      const role = normalizeRole(profile?.role);
+      if (profileError || !MANAGER_ROLES.has(role)) {
+        alert('매니저 권한이 필요합니다. 매니저 계정으로 다시 로그인해주세요.');
+        router.push('/login');
+        return;
+      }
+
       setUser(authUser);
       await loadRecentCustomers();
       setLoading(false);
@@ -285,6 +306,7 @@ export default function CustomerManagement() {
       const result = await response.json().catch(() => ({}));
 
       if (!response.ok) {
+        console.error('[reset-pw 응답]', result);
         alert(result?.error || '비밀번호 초기화에 실패했습니다.');
         return;
       }

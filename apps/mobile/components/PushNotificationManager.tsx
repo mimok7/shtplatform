@@ -25,7 +25,17 @@ function toApplicationServerKey(base64String: string): ArrayBuffer {
   return buffer;
 }
 
-async function ensureServiceWorkerRegistration(): Promise<ServiceWorkerRegistration> {
+function isPushWorkerEnabled(): boolean {
+  if (typeof window === 'undefined') return false;
+  const isLocalhost =
+    location.hostname === 'localhost' ||
+    location.hostname === '127.0.0.1' ||
+    location.hostname === '[::1]';
+  return process.env.NODE_ENV === 'production' && !isLocalhost;
+}
+
+async function ensureServiceWorkerRegistration(): Promise<ServiceWorkerRegistration | null> {
+  if (!isPushWorkerEnabled()) return null;
   const matched =
     (await navigator.serviceWorker.getRegistration('/sw.js')) ||
     (await navigator.serviceWorker.getRegistration());
@@ -87,12 +97,14 @@ export default function PushNotificationManager() {
   useEffect(() => {
     if (!VAPID_PUBLIC_KEY || typeof window === 'undefined') return;
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    if (!isPushWorkerEnabled()) return;
 
     const registerPush = async () => {
       try {
         if (Notification.permission === 'denied') return;
 
         const registration = await ensureServiceWorkerRegistration();
+        if (!registration) return;
         const existingSubscription = await registration.pushManager.getSubscription();
         if (existingSubscription) {
           await saveSubscription(existingSubscription);

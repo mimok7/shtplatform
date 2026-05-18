@@ -1,5 +1,5 @@
 // Service Worker for PWA offline support - mobile
-const CACHE_NAME = 'sht-mobile-cache-v2';
+const CACHE_NAME = 'sht-mobile-cache-v3';
 const ASSETS_TO_CACHE = [
   '/',
   '/icon-192.png',
@@ -36,9 +36,21 @@ self.addEventListener('activate', event => {
 
 // Fetch event - serve from cache, fallback to network
 self.addEventListener('fetch', event => {
+  const url = new URL(event.request.url);
+
   // Skip non-GET requests and external requests
   if (event.request.method !== 'GET' || 
       !event.request.url.startsWith(self.location.origin)) {
+    return;
+  }
+
+  // Never intercept Next.js build artifacts, HMR assets, API calls, or auth callbacks.
+  // These must go straight to network to prevent stale chunk issues.
+  if (
+    url.pathname.startsWith('/_next/') ||
+    url.pathname.startsWith('/api/') ||
+    url.pathname.startsWith('/auth/')
+  ) {
     return;
   }
 
@@ -52,10 +64,15 @@ self.addEventListener('fetch', event => {
             return networkResponse;
           }
 
-          const responseToCache = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseToCache);
-          });
+          const cacheControl = networkResponse.headers.get('cache-control') || '';
+          const canCache = !/no-store|private/i.test(cacheControl);
+
+          if (canCache) {
+            const responseToCache = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, responseToCache);
+            });
+          }
 
           return networkResponse;
         })

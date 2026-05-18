@@ -31,7 +31,17 @@ function toApplicationServerKey(base64String: string): ArrayBuffer {
   return buffer;
 }
 
-async function ensureServiceWorkerRegistration(): Promise<ServiceWorkerRegistration> {
+function isPushWorkerEnabled(): boolean {
+  if (typeof window === 'undefined') return false;
+  const isLocalhost =
+    location.hostname === 'localhost' ||
+    location.hostname === '127.0.0.1' ||
+    location.hostname === '[::1]';
+  return process.env.NODE_ENV === 'production' && !isLocalhost;
+}
+
+async function ensureServiceWorkerRegistration(): Promise<ServiceWorkerRegistration | null> {
+  if (!isPushWorkerEnabled()) return null;
   const matched =
     (await navigator.serviceWorker.getRegistration('/sw.js')) ||
     (await navigator.serviceWorker.getRegistration());
@@ -98,8 +108,17 @@ export default function MobileSettingsPage() {
       return;
     }
 
+    if (!isPushWorkerEnabled()) {
+      setIsSubscribed(false);
+      return;
+    }
+
     try {
       const registration = await ensureServiceWorkerRegistration();
+      if (!registration) {
+        setIsSubscribed(false);
+        return;
+      }
       const existing = await registration.pushManager.getSubscription();
       setIsSubscribed(!!existing);
     } catch {
@@ -166,6 +185,11 @@ export default function MobileSettingsPage() {
   const handleEnableNotification = async () => {
     if (typeof window === 'undefined') return;
 
+    if (!isPushWorkerEnabled()) {
+      alert('로컬 개발 환경에서는 푸시 알림이 비활성화됩니다. 운영 도메인에서 확인해 주세요.');
+      return;
+    }
+
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
       alert('이 브라우저는 푸시 알림을 지원하지 않습니다.');
       return;
@@ -216,6 +240,11 @@ export default function MobileSettingsPage() {
   const handleDisableNotification = async () => {
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
       alert('이 브라우저는 푸시 알림을 지원하지 않습니다.');
+      return;
+    }
+
+    if (!isPushWorkerEnabled()) {
+      alert('로컬 개발 환경에서는 푸시 알림이 비활성화됩니다. 운영 도메인에서 확인해 주세요.');
       return;
     }
 

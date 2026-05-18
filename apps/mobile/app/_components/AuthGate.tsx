@@ -5,6 +5,37 @@ import { usePathname, useRouter } from 'next/navigation';
 import supabase, { hasSupabaseEnv } from '@/lib/supabase';
 import { canAccessManagerApp, isPublicPath } from '@/lib/auth';
 
+const TAB_SESSION_KEY = 'sht:tab:id';
+const ACTIVE_TAB_PREFIX = 'sht:active:tab:user:mobile:';
+
+function getOrCreateTabId(): string {
+  if (typeof window === 'undefined') return '';
+  let tabId = sessionStorage.getItem(TAB_SESSION_KEY);
+  if (!tabId) {
+    tabId = `tab_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    sessionStorage.setItem(TAB_SESSION_KEY, tabId);
+  }
+  return tabId;
+}
+
+function parseActiveTabValue(raw: string | null): string | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    return typeof parsed?.tabId === 'string' ? parsed.tabId : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function isActiveTabOwner(userId: string): boolean {
+  if (typeof window === 'undefined') return true;
+  const activeRaw = localStorage.getItem(`${ACTIVE_TAB_PREFIX}${userId}`);
+  const activeTabId = parseActiveTabValue(activeRaw);
+  if (!activeTabId) return true;
+  return activeTabId === getOrCreateTabId();
+}
+
 type AuthGateProps = {
   children: React.ReactNode;
 };
@@ -44,6 +75,13 @@ export default function AuthGate({ children }: AuthGateProps) {
           return;
         }
 
+        if (!isActiveTabOwner(session.user.id)) {
+          try { await supabase.auth.signOut({ scope: 'local' }); } catch (e) { /* noop */ }
+          router.replace('/login?error=session-conflict');
+          if (!cancelled) setChecking(false);
+          return;
+        }
+
         // 네트워크 지연 시 무한 대기를 방지하기 위해 권한 확인에 타임아웃을 둔다.
         const canAccess = await Promise.race<boolean>([
           canAccessManagerApp(session.user),
@@ -53,7 +91,7 @@ export default function AuthGate({ children }: AuthGateProps) {
         ]);
 
         if (!canAccess) {
-          await supabase.auth.signOut();
+          await supabase.auth.signOut({ scope: 'local' });
           router.replace('/login?error=forbidden');
           if (!cancelled) setChecking(false);
           return;
@@ -78,6 +116,14 @@ export default function AuthGate({ children }: AuthGateProps) {
         return;
       }
 
+      if (!isActiveTabOwner(session.user.id)) {
+        void (async () => {
+          try { await supabase.auth.signOut({ scope: 'local' }); } catch (e) { /* noop */ }
+          router.replace('/login?error=session-conflict');
+        })();
+        return;
+      }
+
       void (async () => {
         if (cancelled) return;
         const canAccess = await Promise.race<boolean>([
@@ -87,17 +133,34 @@ export default function AuthGate({ children }: AuthGateProps) {
           }),
         ]);
         if (!canAccess) {
-          await supabase.auth.signOut();
+          await supabase.auth.signOut({ scope: 'local' });
           router.replace('/login?error=forbidden');
         }
       })();
     });
 
+    const handleStorage = (e: StorageEvent) => {
+      if (cancelled || !e.key || !e.key.startsWith(ACTIVE_TAB_PREFIX)) return;
+      const incomingTabId = parseActiveTabValue(e.newValue);
+      if (!incomingTabId || incomingTabId === getOrCreateTabId()) return;
+
+      void (async () => {
+        const { data } = await supabase.auth.getUser();
+        const currentUser = data?.user;
+        if (!currentUser) return;
+        if (e.key !== `${ACTIVE_TAB_PREFIX}${currentUser.id}`) return;
+        try { await supabase.auth.signOut({ scope: 'local' }); } catch (err) { /* noop */ }
+        router.replace('/login?error=session-conflict');
+      })();
+    };
+    window.addEventListener('storage', handleStorage);
+
     return () => {
       cancelled = true;
+      window.removeEventListener('storage', handleStorage);
       try {
         subscription?.unsubscribe?.();
-      } catch {
+      } catch (e) {
         /* noop */
       }
     };
