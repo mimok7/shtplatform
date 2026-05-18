@@ -23,6 +23,8 @@ type NotificationItem = {
   table_info: 'notifications' | 'payment_notifications';
 };
 
+const PAGE_SIZE = 20;
+
 const getPriorityColor = (priority: string) => {
   switch (priority) {
     case 'urgent':
@@ -94,29 +96,50 @@ export default function MobileNotificationsPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [activeTab, setActiveTab] = useState<'all' | 'sht-car'>('all');
+  const [statusFilter, setStatusFilter] = useState<'unread' | 'all'>('unread');
   const [markingId, setMarkingId] = useState<string | null>(null);
   const [markingAll, setMarkingAll] = useState(false);
   const [hideOld, setHideOld] = useState(true); // 오늘 이전 알림 숨기기
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [authReady, setAuthReady] = useState(false);
 
-  const loadUnread = useCallback(async () => {
+  const loadNotifications = useCallback(async (mode: 'reset' | 'append' = 'reset') => {
+    const nextPage = mode === 'append' ? page + 1 : 0;
+    const from = nextPage * PAGE_SIZE;
+    const to = from + PAGE_SIZE - 1;
+
+    if (mode === 'append') {
+      setLoadingMore(true);
+    }
+
     try {
-      // 1. notifications 테이블 (unread)
-      const { data: notiData } = await supabase
+      // 1. notifications 테이블
+      let notiQuery = supabase
         .from('notifications')
         .select('id, type, category, subcategory, title, message, priority, status, target_table, target_id, metadata, created_at')
-        .eq('status', 'unread')
         .order('created_at', { ascending: false })
-        .limit(200);
+        .range(from, to);
 
-      // 2. payment_notifications 테이블 (미발송)
-      const { data: payData } = await supabase
+      if (statusFilter === 'unread') {
+        notiQuery = notiQuery.eq('status', 'unread');
+      }
+
+      // 2. payment_notifications 테이블
+      let payQuery = supabase
         .from('payment_notifications')
         .select('id, notification_type, message_content, priority, is_sent, reservation_id, notification_date, created_at')
-        .eq('is_sent', false)
         .order('notification_date', { ascending: false })
-        .limit(100);
+        .range(from, to);
+
+      if (statusFilter === 'unread') {
+        payQuery = payQuery.eq('is_sent', false);
+      }
+
+      const [{ data: notiData }, { data: payData }] = await Promise.all([notiQuery, payQuery]);
 
       const notiItems: NotificationItem[] = (notiData || []).map((n) => ({
         id: n.id,
@@ -146,7 +169,7 @@ export default function MobileNotificationsPage() {
             : p.notification_type || '결제 알림',
         message: p.message_content || '',
         priority: p.priority || 'normal',
-        status: 'unread',
+        status: p.is_sent ? 'read' : 'unread',
         target_table: 'reservation',
         target_id: p.reservation_id ? String(p.reservation_id) : undefined,
         metadata: { reservation_id: p.reservation_id },
@@ -157,11 +180,34 @@ export default function MobileNotificationsPage() {
       const all = [...notiItems, ...payItems].sort(
         (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       );
-      setNotifications(all);
+
+      setHasMore(notiItems.length === PAGE_SIZE || payItems.length === PAGE_SIZE);
+
+      if (mode === 'append') {
+        setNotifications((prev) => {
+          const map = new Map<string, NotificationItem>();
+          for (const item of prev) {
+            map.set(`${item.table_info}:${item.id}`, item);
+          }
+          for (const item of all) {
+            map.set(`${item.table_info}:${item.id}`, item);
+          }
+          return Array.from(map.values()).sort(
+            (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          );
+        });
+      } else {
+        setNotifications(all);
+      }
+      setPage(nextPage);
     } catch (err) {
       console.error('알림 로드 실패:', err);
+    } finally {
+      if (mode === 'append') {
+        setLoadingMore(false);
+      }
     }
-  }, []);
+  }, [page, statusFilter]);
 
   useEffect(() => {
     let cancelled = false;
@@ -173,21 +219,40 @@ export default function MobileNotificationsPage() {
           router.replace('/login');
           return;
         }
-        await loadUnread();
+        setAuthReady(true);
       } catch (e) {
         console.error(e);
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled && !authReady) setLoading(false);
       }
     };
     init();
     return () => { cancelled = true; };
   }, []);
 
+  useEffect(() => {
+    if (!authReady) return;
+    let cancelled = false;
+    const run = async () => {
+      setLoading(true);
+      await loadNotifications('reset');
+      if (!cancelled) setLoading(false);
+    };
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [authReady, statusFilter]);
+
   const handleRefresh = async () => {
     setRefreshing(true);
-    await loadUnread();
+    await loadNotifications('reset');
     setRefreshing(false);
+  };
+
+  const handleLoadMore = async () => {
+    if (loadingMore || !hasMore) return;
+    await loadNotifications('append');
   };
 
   const markAsRead = async (item: NotificationItem) => {
@@ -205,7 +270,15 @@ export default function MobileNotificationsPage() {
           .update({ is_sent: true, sent_at: new Date().toISOString() })
           .eq('id', item.id);
       }
-      setNotifications((prev) => prev.filter((n) => n.id !== item.id));
+      setNotifications((prev) => {
+        if (statusFilter === 'unread') {
+          return prev.filter((n) => !(n.id === item.id && n.table_info === item.table_info));
+        }
+        return prev.map((n) => {
+          if (n.id !== item.id || n.table_info !== item.table_info) return n;
+          return { ...n, status: 'read' };
+        });
+      });
     } catch (err) {
       console.error('읽음 처리 실패:', err);
       alert('읽음 처리에 실패했습니다.');
@@ -215,12 +288,13 @@ export default function MobileNotificationsPage() {
   };
 
   const markAllAsRead = async () => {
-    if (notifications.length === 0 || markingAll) return;
-    if (!confirm(`읽지 않은 알림 ${notifications.length}개를 모두 읽음 처리하시겠습니까?`)) return;
+    const unreadTargets = notifications.filter((n) => n.status === 'unread');
+    if (unreadTargets.length === 0 || markingAll) return;
+    if (!confirm(`읽지 않은 알림 ${unreadTargets.length}개를 모두 읽음 처리하시겠습니까?`)) return;
     setMarkingAll(true);
     try {
-      const notiIds = notifications.filter(n => n.table_info === 'notifications').map(n => n.id);
-      const payIds = notifications.filter(n => n.table_info === 'payment_notifications').map(n => n.id);
+      const notiIds = unreadTargets.filter(n => n.table_info === 'notifications').map(n => n.id);
+      const payIds = unreadTargets.filter(n => n.table_info === 'payment_notifications').map(n => n.id);
 
       const promises: Promise<any>[] = [];
       if (notiIds.length > 0) {
@@ -240,7 +314,12 @@ export default function MobileNotificationsPage() {
         );
       }
       await Promise.all(promises);
-      setNotifications([]);
+      setNotifications((prev) => {
+        if (statusFilter === 'unread') {
+          return prev.filter((n) => n.status !== 'unread');
+        }
+        return prev.map((n) => (n.status === 'unread' ? { ...n, status: 'read' } : n));
+      });
     } catch (err) {
       console.error('일괄 읽음 실패:', err);
       alert('일괄 읽음 처리에 실패했습니다.');
@@ -260,14 +339,21 @@ export default function MobileNotificationsPage() {
   return (
     <ManagerLayout title="알림 관리">
       <div className="max-w-md mx-auto space-y-3 pb-6">
+        {(() => {
+          const unreadCount = notifications.filter((n) => n.status === 'unread').length;
+
+          return (
+            <>
         {/* 헤더 영역 */}
         <div className="flex items-center justify-between pt-2 px-1">
           <div className="flex items-center gap-2">
             <Bell className="w-5 h-5 text-blue-600" />
-            <span className="text-sm font-semibold text-gray-800">읽지 않은 알림</span>
-            {notifications.length > 0 && (
+            <span className="text-sm font-semibold text-gray-800">
+              {statusFilter === 'unread' ? '읽지 않은 알림' : '전체 알림'}
+            </span>
+            {unreadCount > 0 && (
               <span className="bg-red-500 text-white text-[11px] font-bold px-2 py-0.5 rounded-full">
-                {notifications.length}
+                {unreadCount}
               </span>
             )}
           </div>
@@ -281,7 +367,7 @@ export default function MobileNotificationsPage() {
             >
               <RefreshCw className={`w-4 h-4 text-gray-600 ${refreshing ? 'animate-spin' : ''}`} />
             </button>
-            {notifications.length > 0 && (
+            {unreadCount > 0 && (
               <button
                 type="button"
                 onClick={markAllAsRead}
@@ -293,6 +379,33 @@ export default function MobileNotificationsPage() {
               </button>
             )}
           </div>
+        </div>
+
+        <div className="px-1 flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setStatusFilter('unread')}
+            className={`inline-flex items-center gap-1.5 text-[12px] px-2.5 py-1.5 rounded-full font-medium transition-colors whitespace-nowrap ${
+              statusFilter === 'unread'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-100 text-gray-700 border border-gray-200'
+            }`}
+            aria-label="읽지 않은 알림만"
+          >
+            읽지 않음
+          </button>
+          <button
+            type="button"
+            onClick={() => setStatusFilter('all')}
+            className={`inline-flex items-center gap-1.5 text-[12px] px-2.5 py-1.5 rounded-full font-medium transition-colors whitespace-nowrap ${
+              statusFilter === 'all'
+                ? 'bg-emerald-600 text-white'
+                : 'bg-gray-100 text-gray-700 border border-gray-200'
+            }`}
+            aria-label="읽은 알림 포함 전체"
+          >
+            전체(읽음 포함)
+          </button>
         </div>
 
         {/* 상단 아이콘 필터 */}
@@ -359,7 +472,9 @@ export default function MobileNotificationsPage() {
               {displayList.length === 0 && (
                 <div className="flex flex-col items-center justify-center py-16 text-gray-400">
                   <Bell className="w-12 h-12 mb-3 text-gray-300" />
-                  <p className="text-sm font-medium">읽지 않은 알림이 없습니다</p>
+                  <p className="text-sm font-medium">
+                    {statusFilter === 'unread' ? '읽지 않은 알림이 없습니다' : '표시할 알림이 없습니다'}
+                  </p>
                   <button
                     type="button"
                     onClick={handleRefresh}
@@ -377,7 +492,11 @@ export default function MobileNotificationsPage() {
                   type="button"
                   onClick={() => markAsRead(item)}
                   disabled={markingId === item.id}
-                  className="w-full text-left bg-white rounded-2xl shadow-sm border border-blue-100 p-4 active:scale-[0.98] transition-all disabled:opacity-60"
+                  className={`w-full text-left rounded-2xl shadow-sm border p-4 active:scale-[0.98] transition-all disabled:opacity-60 ${
+                    item.status === 'read'
+                      ? 'bg-gray-50 border-gray-200'
+                      : 'bg-white border-blue-100'
+                  }`}
                 >
                   <div className="flex items-start gap-3">
                     {/* 우선순위 점 */}
@@ -417,6 +536,7 @@ export default function MobileNotificationsPage() {
                       {/* 시간 */}
                       <p className="mt-1.5 text-[11px] text-gray-400">
                         {formatRelativeTime(item.created_at)}
+                        {item.status === 'read' ? ' · 읽음' : ''}
                       </p>
                     </div>
 
@@ -429,6 +549,22 @@ export default function MobileNotificationsPage() {
                   </div>
                 </button>
               ))}
+
+              {displayList.length > 0 && hasMore && (
+                <div className="px-1">
+                  <button
+                    type="button"
+                    onClick={handleLoadMore}
+                    disabled={loadingMore}
+                    className="w-full text-[13px] font-medium py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 active:bg-gray-50 disabled:opacity-60"
+                  >
+                    {loadingMore ? '불러오는 중...' : '더 불러오기'}
+                  </button>
+                </div>
+              )}
+            </>
+          );
+        })()}
             </>
           );
         })()}

@@ -31,6 +31,28 @@ function toApplicationServerKey(base64String: string): ArrayBuffer {
   return buffer;
 }
 
+function arrayBuffersEqual(left: ArrayBuffer, right: ArrayBuffer): boolean {
+  if (left.byteLength !== right.byteLength) return false;
+  const leftBytes = new Uint8Array(left);
+  const rightBytes = new Uint8Array(right);
+  return leftBytes.every((value, index) => value === rightBytes[index]);
+}
+
+async function getCurrentPushSubscription(
+  registration: ServiceWorkerRegistration,
+  applicationServerKey: ArrayBuffer
+): Promise<PushSubscription | null> {
+  const subscription = await registration.pushManager.getSubscription();
+  const existingKey = subscription?.options?.applicationServerKey;
+
+  if (subscription && existingKey && !arrayBuffersEqual(existingKey, applicationServerKey)) {
+    await subscription.unsubscribe().catch(() => false);
+    return null;
+  }
+
+  return subscription;
+}
+
 function isPushWorkerEnabled(): boolean {
   if (typeof window === 'undefined') return false;
   const isLocalhost =
@@ -40,13 +62,44 @@ function isPushWorkerEnabled(): boolean {
   return process.env.NODE_ENV === 'production' && !isLocalhost;
 }
 
+function waitForActiveServiceWorker(
+  registration: ServiceWorkerRegistration,
+  timeoutMs = 5000
+): Promise<ServiceWorkerRegistration> {
+  if (registration.active) return Promise.resolve(registration);
+
+  const worker = registration.installing || registration.waiting;
+  if (!worker) return Promise.resolve(registration);
+
+  return new Promise((resolve) => {
+    const timeout = window.setTimeout(() => resolve(registration), timeoutMs);
+    worker.addEventListener('statechange', () => {
+      if (worker.state === 'activated') {
+        window.clearTimeout(timeout);
+        resolve(registration);
+      }
+    });
+  });
+}
+
 async function ensureServiceWorkerRegistration(): Promise<ServiceWorkerRegistration | null> {
   if (!isPushWorkerEnabled()) return null;
-  const matched =
-    (await navigator.serviceWorker.getRegistration('/sw.js')) ||
-    (await navigator.serviceWorker.getRegistration());
-  if (matched) return matched;
-  return navigator.serviceWorker.register('/sw.js');
+
+  const matched = await navigator.serviceWorker.getRegistration('/');
+  const registration = matched || await navigator.serviceWorker.register('/sw.js', {
+    scope: '/',
+    updateViaCache: 'none',
+  });
+
+  await registration.update().catch(() => undefined);
+  await waitForActiveServiceWorker(registration);
+
+  return Promise.race([
+    navigator.serviceWorker.ready,
+    new Promise<ServiceWorkerRegistration>((resolve) => {
+      window.setTimeout(() => resolve(registration), 5000);
+    }),
+  ]);
 }
 
 export default function MobileSettingsPage() {
@@ -113,13 +166,21 @@ export default function MobileSettingsPage() {
       return;
     }
 
+    if (!VAPID_PUBLIC_KEY) {
+      setIsSubscribed(false);
+      return;
+    }
+
     try {
       const registration = await ensureServiceWorkerRegistration();
       if (!registration) {
         setIsSubscribed(false);
         return;
       }
-      const existing = await registration.pushManager.getSubscription();
+      const existing = await getCurrentPushSubscription(
+        registration,
+        toApplicationServerKey(VAPID_PUBLIC_KEY)
+      );
       setIsSubscribed(!!existing);
     } catch {
       setIsSubscribed(false);
@@ -208,7 +269,12 @@ export default function MobileSettingsPage() {
     setNotificationBusy(true);
     try {
       const registration = await ensureServiceWorkerRegistration();
-      let subscription = await registration.pushManager.getSubscription();
+      if (!registration) {
+        alert('푸시 알림 서비스워커를 준비하지 못했습니다. 운영 도메인에서 다시 시도해 주세요.');
+        return;
+      }
+      const applicationServerKey = toApplicationServerKey(VAPID_PUBLIC_KEY);
+      let subscription = await getCurrentPushSubscription(registration, applicationServerKey);
 
       if (!subscription) {
         const ask = await Notification.requestPermission();
@@ -221,7 +287,7 @@ export default function MobileSettingsPage() {
 
         subscription = await registration.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: toApplicationServerKey(VAPID_PUBLIC_KEY),
+          applicationServerKey,
         });
       }
 
@@ -251,7 +317,14 @@ export default function MobileSettingsPage() {
     setNotificationBusy(true);
     try {
       const registration = await ensureServiceWorkerRegistration();
-      const subscription = await registration.pushManager.getSubscription();
+      if (!registration) {
+        setIsSubscribed(false);
+        alert('푸시 알림 서비스워커를 찾을 수 없습니다.');
+        return;
+      }
+      const subscription = VAPID_PUBLIC_KEY
+        ? await getCurrentPushSubscription(registration, toApplicationServerKey(VAPID_PUBLIC_KEY))
+        : await registration.pushManager.getSubscription();
 
       if (!subscription) {
         setIsSubscribed(false);
