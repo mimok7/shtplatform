@@ -1299,15 +1299,20 @@ function CruiseReservationEditContent() {
                         : Math.max(0, parsedChildOlderCount);
                     const totalChildCount = cruiseRow.child_count ?? 0;
                     const childCount = Math.max(0, totalChildCount - childOlderCount);
+                    // price_breakdown.rooms에서 이전 수정 단가 복원
+                    const savedUnitPrice = Number(savedRoom?.unit_price);
+                    const hasManualUnitPrice = Number.isFinite(savedUnitPrice) && savedUnitPrice > 0;
                     return syncRoomForm(createEmptyRoomForm({
                         room_count: cruiseRow.room_count ?? 1,
                         guest_count: cruiseRow.guest_count || 0,
-                        unit_price: Number(
-                            roomPriceInfoList[rowIndex]?.price_adult
-                            || roomPriceInfoList[rowIndex]?.price
-                            || 0
-                        ),
-                        unit_price_manual: false,
+                        unit_price: hasManualUnitPrice
+                            ? savedUnitPrice
+                            : Number(
+                                roomPriceInfoList[rowIndex]?.price_adult
+                                || roomPriceInfoList[rowIndex]?.price
+                                || 0
+                            ),
+                        unit_price_manual: hasManualUnitPrice,
                         category_prices_manual: categoryPricesManual,
                         price_adult: categoryPricesManual ? Number(savedRoom.adult?.unit_price || 0) : 0,
                         price_child: categoryPricesManual ? Number(savedRoom.child?.unit_price || 0) : 0,
@@ -1414,7 +1419,7 @@ function CruiseReservationEditContent() {
                 room_price_code: room.room_price_code,
                 room_count: isCatherineHorizonCruise ? null : room.room_count,
                 guest_count: room.guest_count,
-                unit_price: getRoomCategoryPrices(room, getRoomDetail(index)).price_adult || room.unit_price || 0,
+                unit_price: room.unit_price_manual ? (room.unit_price || 0) : (getRoomCategoryPrices(room, getRoomDetail(index)).price_adult || 0),
                 adult_count: room.adult_count,
                 child_count: (room.child_count || 0) + (room.child_older_count || 0),
                 child_extra_bed_count: room.child_extra_bed_count,
@@ -1510,7 +1515,8 @@ function CruiseReservationEditContent() {
                 const detail = getRoomDetail(index);
                 const prices = getRoomCategoryPrices(room, detail);
 
-                const adultTotal = prices.price_adult * (room.adult_count || 0);
+                const adultUnitPrice = room.unit_price_manual ? Number(room.unit_price || 0) : prices.price_adult;
+                const adultTotal = adultUnitPrice * (room.adult_count || 0);
                 const childTotal = prices.price_child * (room.child_count || 0);
                 const childOlderTotal = prices.price_child_older * (room.child_older_count || 0);
                 const infantTotal = prices.price_infant * (room.infant_count || 0);
@@ -1539,7 +1545,7 @@ function CruiseReservationEditContent() {
                         extra_bed: prices.price_extra_bed,
                         single: prices.price_single,
                     },
-                    adult: { unit_price: room.unit_price_manual ? (room.unit_price || 0) : prices.price_adult, count: room.adult_count || 0, total: adultTotal },
+                    adult: { unit_price: adultUnitPrice, count: room.adult_count || 0, total: adultTotal },
                     child: { unit_price: prices.price_child, count: room.child_count || 0, total: childTotal },
                     child_older: { unit_price: prices.price_child_older, count: room.child_older_count || 0, total: childOlderTotal },
                     infant: { unit_price: prices.price_infant, count: room.infant_count || 0, total: infantTotal },
