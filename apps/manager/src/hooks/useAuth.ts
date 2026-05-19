@@ -43,6 +43,16 @@ function isActiveTabOwner(userId: string): boolean {
     return activeTabId === getOrCreateTabId();
 }
 
+function adoptCurrentTab(userId: string) {
+    if (typeof window === 'undefined') return;
+    const tabId = getOrCreateTabId();
+    try {
+        localStorage.setItem(`${ACTIVE_TAB_PREFIX}${userId}`, JSON.stringify({ tabId, ts: Date.now() }));
+    } catch {
+        /* noop */
+    }
+}
+
 function readSessionCache(): { user: any | null; role: string | null } | null {
     if (authCache?.user) return { user: authCache.user, role: authCache.role };
     if (typeof window === 'undefined') return null;
@@ -122,11 +132,7 @@ export function useAuth(requiredRoles?: string[], redirectOnFail: string = '/log
             }
 
             if (!isActiveTabOwner(user.id)) {
-                try { await supabase.auth.signOut({ scope: 'local' }); } catch { /* noop */ }
-                writeSessionCache(null);
-                setAuthState({ user: null, role: null, loading: false, error: null });
-                router.replace(redirectOnFail);
-                return;
+                adoptCurrentTab(user.id);
             }
 
             let role: string | null = cached?.role ?? null;
@@ -184,10 +190,7 @@ export function useAuth(requiredRoles?: string[], redirectOnFail: string = '/log
             if (!incomingTabId || incomingTabId === getOrCreateTabId()) return;
 
             void (async () => {
-                try { await supabase.auth.signOut({ scope: 'local' }); } catch { /* noop */ }
-                writeSessionCache(null);
-                setAuthState({ user: null, role: null, loading: false, error: null });
-                router.replace(redirectOnFail);
+                adoptCurrentTab(current.user.id);
             })();
         };
         window.addEventListener('storage', handleStorage);

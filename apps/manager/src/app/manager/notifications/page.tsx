@@ -133,6 +133,30 @@ const isShtCarNotification = (n: NotificationItem): boolean => {
     return true;
   }
 
+  const structuredSearch = [
+    n.target_table,
+    (n as CustomerNotification).service_type,
+    String(n.metadata?.service_type || ''),
+    String(n.metadata?.reservation_type || ''),
+    String(n.metadata?.target_table || ''),
+    String(n.metadata?.targetTable || ''),
+    String(n.metadata?.url || ''),
+    String(n.metadata?.tag || ''),
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  if (
+    structuredSearch.includes('reservation_car_sht') ||
+    structuredSearch.includes('car_sht') ||
+    structuredSearch.includes('/sht-car') ||
+    structuredSearch.includes('sht-car') ||
+    structuredSearch.includes('sht_car')
+  ) {
+    return true;
+  }
+
   const haystack = [n.category, n.subcategory, n.title, n.message]
     .filter(Boolean)
     .join(' ')
@@ -192,6 +216,10 @@ const parseNotificationMessageLines = (message: string): ParsedMessageLine[] => 
         value: part.slice(idx + 1).trim(),
       };
     });
+};
+
+const getDisplayNotificationTitle = (title: string): string => {
+  return String(title || '').replace(/\s*\([^()]*\d[\d,]*원[^()]*\)\s*$/, '').trim();
 };
 
 const getShtCarCancelDisplayData = (item: NotificationItem) => {
@@ -272,6 +300,7 @@ export default function NotificationManagement() {
     quote: 0,      // 견적
     reservation: 0, // 예약
     payment: 0,     // 결제
+    shtCar: 0,      // 스차
     customer: 0,    // 고객
     request: 0,     // 고객요청 추가
     unread: 0,      // 읽지않음
@@ -318,6 +347,7 @@ export default function NotificationManagement() {
         quote: 0,
         reservation: 0,
         payment: 0,
+        shtCar: 0,
         customer: 0,
         request: 0,
         unread: 0,
@@ -422,17 +452,21 @@ export default function NotificationManagement() {
       }
 
       if (priorityFilter !== 'all') {
-        // 🔧 priority가 한글로 저장되므로 값 변환
+        // 영문/한글 혼재 데이터 모두 매칭
         const priorityMap: Record<string, string> = {
           'urgent': '긴급',
           'high': '높음',
           'normal': '보통',
           'low': '낮음'
         };
-        const filterPriority = priorityMap[priorityFilter] || priorityFilter;
-        businessQuery = businessQuery.eq('priority', filterPriority);
-        customerQuery = customerQuery.eq('priority', filterPriority);
-        requestQuery = requestQuery.eq('priority', filterPriority);
+        const priorityCandidates = Array.from(new Set([
+          priorityFilter,
+          priorityMap[priorityFilter],
+        ].filter(Boolean) as string[]));
+
+        businessQuery = businessQuery.in('priority', priorityCandidates);
+        customerQuery = customerQuery.in('priority', priorityCandidates);
+        requestQuery = requestQuery.in('priority', priorityCandidates);
       }
 
       // 결제 알림도 함께 조회
@@ -445,6 +479,21 @@ export default function NotificationManagement() {
         // payment_notifications는 is_sent로 상태를 관리하므로 매핑
         if (statusFilter === 'unread') paymentQuery = paymentQuery.eq('is_sent', false);
         if (statusFilter === 'read') paymentQuery = paymentQuery.eq('is_sent', true);
+      }
+
+      if (priorityFilter !== 'all') {
+        const priorityMap: Record<string, string> = {
+          'urgent': '긴급',
+          'high': '높음',
+          'normal': '보통',
+          'low': '낮음'
+        };
+        const priorityCandidates = Array.from(new Set([
+          priorityFilter,
+          priorityMap[priorityFilter],
+        ].filter(Boolean) as string[]));
+
+        paymentQuery = paymentQuery.in('priority', priorityCandidates);
       }
 
       const [businessResult, customerResult, requestResult, paymentResult] = await Promise.all([
@@ -469,84 +518,83 @@ export default function NotificationManagement() {
       // 통합 알림 목록 생성
       let allNotifications: NotificationItem[] = [];
 
-      // 탭별 필터링
-      if (activeTab === 'business' || activeTab === 'all' || activeTab === 'request' || activeTab === 'sht-car') {
-        const businessItems = businessNotifications.map(n => ({
-          ...n,
+      const businessItems = businessNotifications.map(n => ({
+        ...n,
+        type: 'business' as const,
+        table_info: 'notifications' as const
+      }));
+
+      const paymentItems = (categoryFilter === 'all' || categoryFilter === '결제')
+        ? paymentNotifications.map((pn: any) => ({
+          id: pn.id,
           type: 'business' as const,
-          table_info: 'notifications' as const
-        }));
-        allNotifications.push(...businessItems);
+          category: '결제',
+          title: pn.notification_type === 'payment_due' ? '결제 예정 알림' : pn.notification_type === 'payment_overdue' ? '결제 연체 알림' : pn.notification_type,
+          message: pn.message_content || pn.message || '',
+          priority: (pn.priority || 'normal') as 'low' | 'normal' | 'high' | 'urgent',
+          status: (pn.is_sent ? 'read' : 'unread') as 'unread' | 'read' | 'processing' | 'completed' | 'dismissed',
+          target_table: 'reservation',
+          target_id: pn.reservation_id ? String(pn.reservation_id) : undefined,
+          notification_date: pn.notification_date,
+          created_at: pn.created_at || (pn.notification_date ? (new Date(pn.notification_date)).toISOString() : new Date().toISOString()),
+          updated_at: pn.sent_at || pn.created_at || new Date().toISOString(),
+          metadata: { reservation_id: pn.reservation_id },
+          table_info: 'payment_notifications' as const
+        }))
+        : [];
 
-        // payment_notifications 를 업무 알림으로 펼쳐서 표시 (카테고리 필터 존중)
-        if (categoryFilter === 'all' || categoryFilter === '결제') {
-          const paymentItems = paymentNotifications.map((pn: any) => ({
-            id: pn.id,
-            type: 'business' as const,
-            category: '결제',
-            title: pn.notification_type === 'payment_due' ? '결제 예정 알림' : pn.notification_type === 'payment_overdue' ? '결제 연체 알림' : pn.notification_type,
-            message: pn.message_content || pn.message || '',
-            priority: (pn.priority || 'normal') as 'low' | 'normal' | 'high' | 'urgent',
-            status: (pn.is_sent ? 'read' : 'unread') as 'unread' | 'read' | 'processing' | 'completed' | 'dismissed',
-            target_table: 'reservation',
-            target_id: pn.reservation_id ? String(pn.reservation_id) : undefined,
-            notification_date: pn.notification_date,
-            created_at: pn.created_at || (pn.notification_date ? (new Date(pn.notification_date)).toISOString() : new Date().toISOString()),
-            updated_at: pn.sent_at || pn.created_at || new Date().toISOString(),
-            metadata: { reservation_id: pn.reservation_id },
-            table_info: 'payment_notifications' as const
-          }));
-          allNotifications.push(...paymentItems);
-        }
-      }
-      if (activeTab === 'customer' || activeTab === 'all' || activeTab === 'request') {
-        const customerItems = customerNotifications.map(n => {
-          const details = n.customer_details && n.customer_details[0];
-          return {
-            ...n,
-            type: 'customer' as const,
-            table_info: 'notifications' as const,
-            customer_name: details?.users?.name || details?.customer_name || n.customer_name,
-            customer_email: details?.users?.email || details?.customer_email || n.customer_email,
-            customer_phone: details?.users?.phone_number || details?.customer_phone || n.customer_phone,
-            customer_details: details ? [{
-              ...details,
-              customer_name: details.users?.name || details.customer_name,
-              customer_email: details.users?.email || details.customer_email,
-              customer_phone: details.users?.phone_number || details.customer_phone
-            }] : []
-          };
-        });
-        allNotifications.push(...customerItems);
-      }
+      const customerItems = customerNotifications.map(n => {
+        const details = n.customer_details && n.customer_details[0];
+        return {
+          ...n,
+          type: 'customer' as const,
+          table_info: 'notifications' as const,
+          customer_name: details?.users?.name || details?.customer_name || n.customer_name,
+          customer_email: details?.users?.email || details?.customer_email || n.customer_email,
+          customer_phone: details?.users?.phone_number || details?.customer_phone || n.customer_phone,
+          customer_details: details ? [{
+            ...details,
+            customer_name: details.users?.name || details.customer_name,
+            customer_email: details.users?.email || details.customer_email,
+            customer_phone: details.users?.phone_number || details.customer_phone
+          }] : []
+        };
+      });
 
-      if (activeTab === 'request' || activeTab === 'all') {
-        // 중복 방지를 위해 이미 포함된 것 제외하고 추가
-        const existingIds = new Set(allNotifications.map(n => n.id));
-        const requestItems = requestNotifications
-          .filter(n => !existingIds.has(n.id))
-          .map(n => {
-            const details = n.customer_details && n.customer_details[0];
-            return {
-              ...n,
-              type: n.type || 'customer',
-              table_info: 'notifications' as const,
-              customer_name: details?.users?.name || details?.customer_name || n.customer_name,
-              customer_email: details?.users?.email || details?.customer_email || n.customer_email,
-              customer_phone: details?.users?.phone_number || details?.customer_phone || n.customer_phone,
-              customer_details: details ? [{
-                ...details,
-                customer_name: details.users?.name || details.customer_name,
-                customer_email: details.users?.email || details.customer_email,
-                customer_phone: details.users?.phone_number || details.customer_phone
-              }] : []
-            } as NotificationItem;
-          });
-        allNotifications.push(...requestItems);
-      }
+      const requestItems = requestNotifications.map(n => {
+        const details = n.customer_details && n.customer_details[0];
+        return {
+          ...n,
+          type: n.type || 'customer',
+          table_info: 'notifications' as const,
+          customer_name: details?.users?.name || details?.customer_name || n.customer_name,
+          customer_email: details?.users?.email || details?.customer_email || n.customer_email,
+          customer_phone: details?.users?.phone_number || details?.customer_phone || n.customer_phone,
+          customer_details: details ? [{
+            ...details,
+            customer_name: details.users?.name || details.customer_name,
+            customer_email: details.users?.email || details.customer_email,
+            customer_phone: details.users?.phone_number || details.customer_phone
+          }] : []
+        } as NotificationItem;
+      });
+
+      const mergedByKey = new Map<string, NotificationItem>();
+      [...businessItems, ...paymentItems, ...customerItems, ...requestItems].forEach((item) => {
+        mergedByKey.set(`${item.table_info || 'notifications'}:${item.id}`, item);
+      });
+      allNotifications = Array.from(mergedByKey.values());
 
       // 시간순 정렬
       allNotifications.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+      if (activeTab === 'business') {
+        allNotifications = allNotifications.filter((n) => n.type === 'business');
+      }
+
+      if (activeTab === 'customer') {
+        allNotifications = allNotifications.filter((n) => n.type === 'customer');
+      }
 
       // 고객 요청 필터링 추가 (target_table 기준)
       if (activeTab === 'request') {
@@ -594,6 +642,7 @@ export default function NotificationManagement() {
         quote: 0,
         reservation: 0,
         payment: 0,
+        shtCar: 0,
         customer: 0,
         request: 0,
         unread: 0,
@@ -614,6 +663,7 @@ export default function NotificationManagement() {
         quoteRes,
         reservationRes,
         paymentRes,
+        shtCarRes,
       ] = await Promise.all([
         supabase.from('notifications').select('*', { count: 'exact', head: true }).neq('status', 'completed'),
         supabase.from('notifications').select('*', { count: 'exact', head: true }).eq('status', 'unread'),
@@ -623,13 +673,17 @@ export default function NotificationManagement() {
         supabase.from('notifications').select('*', { count: 'exact', head: true }).eq('category', '견적').neq('status', 'completed'),
         supabase.from('notifications').select('*', { count: 'exact', head: true }).eq('category', '예약').neq('status', 'completed'),
         supabase.from('notifications').select('*', { count: 'exact', head: true }).eq('category', '결제').neq('status', 'completed'),
+        supabase.from('notifications').select('id, type, category, subcategory, title, message, target_table, metadata').neq('status', 'completed'),
       ]);
+
+      const shtCarCount = (shtCarRes.data || []).filter((notification) => isShtCarNotification(notification as NotificationItem)).length;
 
       setStats({
         total: totalRes.count || 0,
         quote: quoteRes.count || 0,
         reservation: reservationRes.count || 0,
         payment: paymentRes.count || 0,
+        shtCar: shtCarCount,
         customer: customerRes.count || 0,
         request: requestRes.count || 0,
         unread: unreadRes.count || 0,
@@ -980,7 +1034,7 @@ export default function NotificationManagement() {
               }`}
           >
             <span className="text-xs font-bold text-indigo-500">스차:</span>
-            <span className="text-sm font-bold text-indigo-700">필터</span>
+            <span className="text-sm font-bold text-indigo-700">{stats.shtCar}</span>
           </button>
 
           <div className="bg-white rounded pl-3 pr-2 py-1.5 shadow-sm border border-gray-200 flex items-center gap-2 select-none">
@@ -1212,18 +1266,13 @@ export default function NotificationManagement() {
                         </span>
                       </div>
 
-                      <h3 className="text-md font-semibold text-gray-900 mb-2 line-clamp-2">{notification.title}</h3>
+                      <h3 className="text-md font-semibold text-gray-900 mb-2 line-clamp-2">{getDisplayNotificationTitle(notification.title)}</h3>
 
-                      {(notification.customer_name || notification.customer_email) && (
+                      {notification.customer_email && (
                         <div className="bg-blue-50 rounded-lg p-2 mb-3">
                           <div className="flex items-center gap-2 text-sm">
-                            <span className="text-blue-600 font-medium">👤 고객정보:</span>
-                            {notification.customer_name && (
-                              <span className="text-gray-800">{notification.customer_name}</span>
-                            )}
-                            {notification.customer_email && (
-                              <span className="text-blue-600">📧 {notification.customer_email}</span>
-                            )}
+                            <span className="text-blue-600 font-medium">이메일:</span>
+                            <span className="text-blue-600">{notification.customer_email}</span>
                           </div>
                         </div>
                       )}
@@ -1323,7 +1372,7 @@ export default function NotificationManagement() {
 
                   <div>
                     <h4 className="font-medium text-gray-900 mb-2">{getKoreanFieldName('title')}</h4>
-                    <p className="text-gray-700">{selectedNotification.title}</p>
+                    <p className="text-gray-700">{getDisplayNotificationTitle(selectedNotification.title)}</p>
                   </div>
 
                   <div>

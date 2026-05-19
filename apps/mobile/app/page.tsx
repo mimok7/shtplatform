@@ -19,6 +19,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import supabase from '@/lib/supabase';
+import { clearManagerAccessCache } from '@/lib/auth';
 
 type MenuItem = {
   href: string;
@@ -86,6 +87,8 @@ export default function HomePage() {
   };
 
   const handleLogout = async () => {
+    const { data } = await supabase.auth.getUser();
+    clearManagerAccessCache(data.user?.id);
     await supabase.auth.signOut();
     router.replace('/login');
   };

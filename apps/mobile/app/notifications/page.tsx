@@ -177,6 +177,55 @@ const parseNotificationMessageLines = (message: string): ParsedMessageLine[] => 
     });
 };
 
+const normalizeDateValue = (value: unknown): string | null => {
+  const text = String(value || '').trim();
+  if (!text) return null;
+
+  const normalized = text.replace(/\./g, '-').replace(/\//g, '-');
+  const match = normalized.match(/(\d{4}-\d{1,2}-\d{1,2})/);
+  if (match?.[1]) {
+    return match[1]
+      .split('-')
+      .map((part, index) => (index === 0 ? part : part.padStart(2, '0')))
+      .join('-');
+  }
+
+  const parsed = new Date(text);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString().split('T')[0];
+};
+
+const getFilterBaseDate = (item: NotificationItem): string | null => {
+  const metadata = item.metadata || {};
+  const message = String(item.message || '');
+
+  const candidates = [
+    metadata.checkin,
+    metadata.checkinDate,
+    metadata.checkin_date,
+    metadata.usageDate,
+    metadata.usage_date,
+    metadata.use_date,
+    metadata.usedate,
+    metadata.pickupDate,
+    metadata.startDate,
+    parseBodyField(message, '체크인'),
+    parseBodyField(message, '사용일자'),
+    parseBodyField(message, '이용일자'),
+    parseBodyField(message, '사용일'),
+    parseBodyField(message, '픽업일'),
+    parseBodyField(message, '투어일자'),
+    parseBodyField(message, '출발일'),
+  ];
+
+  for (const candidate of candidates) {
+    const normalized = normalizeDateValue(candidate);
+    if (normalized) return normalized;
+  }
+
+  return normalizeDateValue(item.created_at);
+};
+
 const getShtCarCancelDisplayData = (item: NotificationItem) => {
   const metadata = item.metadata || {};
   const message = String(item.message || '');
@@ -230,11 +279,11 @@ export default function MobileNotificationsPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
-  const [activeTab, setActiveTab] = useState<'all' | 'sht-car' | 'customer'>('all');
-  const [statusFilter, setStatusFilter] = useState<'unread' | 'all'>('unread');
+  const [activeTab, setActiveTab] = useState<'all' | 'sht-car' | 'customer'>('sht-car');
+  const [statusFilter, setStatusFilter] = useState<'unread' | 'all'>('all');
   const [markingId, setMarkingId] = useState<string | null>(null);
   const [markingAll, setMarkingAll] = useState(false);
-  const [hideOld, setHideOld] = useState(true); // 오늘 이전 알림 숨기기
+  const [hideOld, setHideOld] = useState(false); // 오늘 이전 알림 표시
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [authReady, setAuthReady] = useState(false);
@@ -681,6 +730,18 @@ export default function MobileNotificationsPage() {
             <div className="flex items-center gap-1.5">
               <button
                 type="button"
+                onClick={() => setStatusFilter('all')}
+                className={`inline-flex items-center gap-1.5 text-[12px] px-2.5 py-1.5 rounded-full font-medium transition-colors whitespace-nowrap ${
+                  statusFilter === 'all'
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-gray-100 text-gray-700 border border-gray-200'
+                }`}
+                aria-label="전체 알림"
+              >
+                전체
+              </button>
+              <button
+                type="button"
                 onClick={() => setStatusFilter('unread')}
                 className={`inline-flex items-center gap-1.5 text-[12px] px-2.5 py-1.5 rounded-full font-medium transition-colors whitespace-nowrap ${
                   statusFilter === 'unread'
@@ -690,18 +751,6 @@ export default function MobileNotificationsPage() {
                 aria-label="읽지 않은 알림만"
               >
                 읽지 않음
-              </button>
-              <button
-                type="button"
-                onClick={() => setStatusFilter('all')}
-                className={`inline-flex items-center gap-1.5 text-[12px] px-2.5 py-1.5 rounded-full font-medium transition-colors whitespace-nowrap ${
-                  statusFilter === 'all'
-                    ? 'bg-emerald-600 text-white'
-                    : 'bg-gray-100 text-gray-700 border border-gray-200'
-                }`}
-                aria-label="읽은 알림 포함 전체"
-              >
-                전체(읽음 포함)
               </button>
             </div>
 
@@ -768,7 +817,12 @@ export default function MobileNotificationsPage() {
           const todayStart = new Date();
           todayStart.setHours(0, 0, 0, 0);
           const dateFiltered = hideOld
-            ? notifications.filter(n => new Date(n.created_at) >= todayStart)
+            ? notifications.filter((n) => {
+              const baseDate = getFilterBaseDate(n);
+              if (!baseDate) return false;
+              const targetDate = new Date(`${baseDate}T00:00:00`);
+              return !Number.isNaN(targetDate.getTime()) && targetDate >= todayStart;
+            })
             : notifications;
 
           const displayList = activeTab === 'sht-car'

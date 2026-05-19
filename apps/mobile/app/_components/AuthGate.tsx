@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import supabase, { hasSupabaseEnv } from '@/lib/supabase';
-import { canAccessManagerApp, isPublicPath } from '@/lib/auth';
+import { canAccessManagerApp, clearManagerAccessCache, isPublicPath } from '@/lib/auth';
 
 const TAB_SESSION_KEY = 'sht:tab:id';
 const ACTIVE_TAB_PREFIX = 'sht:active:tab:user:mobile:';
@@ -34,6 +34,16 @@ function isActiveTabOwner(userId: string): boolean {
   const activeTabId = parseActiveTabValue(activeRaw);
   if (!activeTabId) return true;
   return activeTabId === getOrCreateTabId();
+}
+
+function adoptCurrentTab(userId: string): void {
+  if (typeof window === 'undefined') return;
+  const tabId = getOrCreateTabId();
+  try {
+    localStorage.setItem(`${ACTIVE_TAB_PREFIX}${userId}`, JSON.stringify({ tabId, ts: Date.now() }));
+  } catch {
+    // noop
+  }
 }
 
 type AuthGateProps = {
@@ -76,22 +86,14 @@ export default function AuthGate({ children }: AuthGateProps) {
         }
 
         if (!isActiveTabOwner(session.user.id)) {
-          try { await supabase.auth.signOut({ scope: 'local' }); } catch (e) { /* noop */ }
-          router.replace('/login?error=session-conflict');
-          if (!cancelled) setChecking(false);
-          return;
+          adoptCurrentTab(session.user.id);
         }
 
-        // 네트워크 지연 시 무한 대기를 방지하기 위해 권한 확인에 타임아웃을 둔다.
-        const canAccess = await Promise.race<boolean>([
-          canAccessManagerApp(session.user),
-          new Promise<boolean>((resolve) => {
-            setTimeout(() => resolve(false), 8000);
-          }),
-        ]);
+        const canAccess = await canAccessManagerApp(session.user);
 
         if (!canAccess) {
           await supabase.auth.signOut({ scope: 'local' });
+          clearManagerAccessCache(session.user.id);
           router.replace('/login?error=forbidden');
           if (!cancelled) setChecking(false);
           return;
@@ -117,23 +119,15 @@ export default function AuthGate({ children }: AuthGateProps) {
       }
 
       if (!isActiveTabOwner(session.user.id)) {
-        void (async () => {
-          try { await supabase.auth.signOut({ scope: 'local' }); } catch (e) { /* noop */ }
-          router.replace('/login?error=session-conflict');
-        })();
-        return;
+        adoptCurrentTab(session.user.id);
       }
 
       void (async () => {
         if (cancelled) return;
-        const canAccess = await Promise.race<boolean>([
-          canAccessManagerApp(session.user),
-          new Promise<boolean>((resolve) => {
-            setTimeout(() => resolve(false), 8000);
-          }),
-        ]);
+        const canAccess = await canAccessManagerApp(session.user);
         if (!canAccess) {
           await supabase.auth.signOut({ scope: 'local' });
+          clearManagerAccessCache(session.user.id);
           router.replace('/login?error=forbidden');
         }
       })();
@@ -149,8 +143,7 @@ export default function AuthGate({ children }: AuthGateProps) {
         const currentUser = data?.user;
         if (!currentUser) return;
         if (e.key !== `${ACTIVE_TAB_PREFIX}${currentUser.id}`) return;
-        try { await supabase.auth.signOut({ scope: 'local' }); } catch (err) { /* noop */ }
-        router.replace('/login?error=session-conflict');
+        adoptCurrentTab(currentUser.id);
       })();
     };
     window.addEventListener('storage', handleStorage);

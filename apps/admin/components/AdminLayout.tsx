@@ -192,10 +192,14 @@ export default function AdminLayout({ children, title, activeTab }: AdminLayoutP
   type TabItem = { id: string; label: string; path: string; icon: string };
   type TabGroup = { id: string; label: string; icon: string; items: TabItem[] };
 
-  const dashboardTab: TabItem = { id: 'dashboard', label: '대시보드', path: '/admin', icon: '📊' };
-  const settingsTab: TabItem = { id: 'settings', label: '설정', path: '/admin/settings', icon: '⚙️' };
-
   const tabGroups: TabGroup[] = [
+    {
+      id: 'group-stats', label: '통계', icon: '📊', items: [
+        { id: 'dashboard', label: '대시보드', path: '/admin', icon: '📊' },
+        { id: 'revenue-monthly', label: '월별 매출 현황', path: '/admin/revenue/monthly', icon: '📈' },
+        { id: 'revenue-daily', label: '일별 매출 현황', path: '/admin/revenue/daily', icon: '📉' },
+      ]
+    },
     {
       id: 'group-users', label: '사용자', icon: '👥', items: [
         { id: 'users', label: '사용자 관리', path: '/admin/users', icon: '👥' },
@@ -245,7 +249,9 @@ export default function AdminLayout({ children, title, activeTab }: AdminLayoutP
     },
   ];
 
-  const allTabs: TabItem[] = [dashboardTab, settingsTab, ...tabGroups.flatMap(g => g.items)];
+  const settingsTab: TabItem = { id: 'settings', label: '설정', path: '/admin/settings', icon: '⚙️' };
+
+  const allTabs: TabItem[] = [settingsTab, ...tabGroups.flatMap(g => g.items)];
 
   // 현재 경로로부터 활성 탭을 자동 계산 (가장 긴 경로 매칭 우선)
   const computedActiveTab = activeTab || (pathname
@@ -345,7 +351,6 @@ export default function AdminLayout({ children, title, activeTab }: AdminLayoutP
             <aside className="w-60 mr-4 mb-0 flex-none order-1">
               <div className="bg-white rounded-lg shadow-sm p-4 md:sticky md:top-24 flex flex-col justify-between h-full">
                 <nav className="space-y-1">
-                  {renderTabLink(dashboardTab)}
                   {tabGroups.map((group) => {
                     const isOpen = openGroupId === group.id;
                     const hasActive = group.items.some(it => it.id === computedActiveTab);

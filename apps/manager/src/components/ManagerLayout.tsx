@@ -45,6 +45,16 @@ function isActiveTabOwner(userId: string): boolean {
   return activeTabId === getOrCreateTabId();
 }
 
+function adoptCurrentTab(userId: string): void {
+  if (typeof window === 'undefined') return;
+  const tabId = getOrCreateTabId();
+  try {
+    localStorage.setItem(`${ACTIVE_TAB_PREFIX}${userId}`, JSON.stringify({ tabId, ts: Date.now() }));
+  } catch {
+    /* noop */
+  }
+}
+
 interface ManagerLayoutProps {
   children: React.ReactNode;
   title?: string;
@@ -101,13 +111,7 @@ function ManagerLayoutContent({ children, title, activeTab }: ManagerLayoutProps
         }
 
         if (!isActiveTabOwner(sessionUser.id)) {
-          try { await supabase.auth.signOut({ scope: 'local' }); } catch { /* noop */ }
-          clearCachedRole();
-          clearAuthCache();
-          setUser(null);
-          setUserRole('guest');
-          router.replace('/login');
-          return;
+          adoptCurrentTab(sessionUser.id);
         }
 
         setUser(sessionUser);
@@ -162,12 +166,7 @@ function ManagerLayoutContent({ children, title, activeTab }: ManagerLayoutProps
         const currentUser = data?.user;
         if (!currentUser) return;
         if (e.key !== `${ACTIVE_TAB_PREFIX}${currentUser.id}`) return;
-        try { await supabase.auth.signOut({ scope: 'local' }); } catch { /* noop */ }
-        clearCachedRole();
-        clearAuthCache();
-        setUser(null);
-        setUserRole('guest');
-        router.replace('/login');
+        adoptCurrentTab(currentUser.id);
       })();
     };
     window.addEventListener('storage', handleStorage);
