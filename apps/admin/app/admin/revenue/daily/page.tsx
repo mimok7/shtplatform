@@ -205,7 +205,13 @@ export default function DailyRevenuePage() {
 
                           return (
                             <div key={row.date} className="flex min-w-[34px] flex-1 flex-col items-center justify-end gap-2 border-r border-gray-300 first:border-l">
-                              <div className="text-[10px] leading-none text-gray-400">{row.reservationCount}</div>
+                              <div
+                                className={`text-[10px] leading-none ${
+                                  row.reservationCount >= 10 ? 'bg-yellow-400 text-black font-bold px-1 py-0.5 rounded' : 'text-gray-400'
+                                }`}
+                              >
+                                {row.reservationCount}
+                              </div>
                               <div className="flex h-52 w-full items-end justify-center gap-1 border-t border-dashed border-gray-300 px-1 pt-2">
                                 <div className="w-3 rounded-t-sm bg-blue-500" style={{ height: `${countHeight}%` }} title={`${row.date} 건수 ${row.reservationCount}건`} />
                                 <div className="w-3 rounded-t-sm bg-emerald-500" style={{ height: `${revenueHeight}%` }} title={`${row.date} 매출액 ${formatMoney(row.reservationTotal)}`} />
@@ -217,12 +223,12 @@ export default function DailyRevenuePage() {
                       </div>
                     </div>
 
-                    <div className="mt-3 grid grid-cols-2 gap-3 text-xs md:grid-cols-5">
+                    <div className="mt-3 grid grid-cols-2 gap-3 text-xs md:grid-cols-10">
                       {filteredData.map((row) => (
                         <div key={`summary-${row.date}`} className="rounded border border-gray-300 px-3 py-2">
                           <div className="font-semibold text-gray-700">{row.date.slice(5)}</div>
                           <div className="mt-1 text-blue-700">건수 {row.reservationCount}건</div>
-                          <div className="text-emerald-700">매출 {formatMoney(row.reservationTotal)}</div>
+                          <div className="text-emerald-700">{formatMoney(row.reservationTotal)}</div>
                         </div>
                       ))}
                     </div>

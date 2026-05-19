@@ -11,7 +11,6 @@ import {
   Ship, Plane, Building, MapPin, Car, Bus, Package, Home
 } from 'lucide-react';
 import ReservationDetailModal from '@/components/ReservationDetailModal';
-import ConfirmationGenerateModal from '@/components/ConfirmationGenerateModal';
 
 /* ── 타입 정의 ─────────────────────────────── */
 interface ServiceReservation {
@@ -37,7 +36,7 @@ interface ReservationItem {
 type BulkAction = 'approve' | 'confirm' | 'cancel' | 'delete' | 'status_update';
 type SortType = 'date' | 'name';
 
-/* ── 메인 컴포넌트 ─────────────────────────── */
+/* ── 메인 컴포넌트 ──────────────────────────── */
 export default function ReservationsPage() {
   const router = useRouter();
   const [reservations, setReservations] = useState<ReservationItem[]>([]);
@@ -60,8 +59,6 @@ export default function ReservationsPage() {
   const [detailModalItems, setDetailModalItems] = useState<any[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailProcessing, setDetailProcessing] = useState(false);
-  const [confirmationOpen, setConfirmationOpen] = useState(false);
-  const [confirmationQuoteId, setConfirmationQuoteId] = useState('');
 
   useEffect(() => { loadReservations(); }, [filter, serviceFilter, searchTrigger, sortType]);
 
@@ -303,56 +300,10 @@ export default function ReservationsPage() {
 
       alert(`${updates.length}건 처리 완료`);
       await loadReservations();
-
-      const hasConfirmed = updates.some((u) => u.nextStatus === 'confirmed');
-      const nextConfirmationId = String(detailItem.re_quote_id || updates[0]?.id || '').trim();
-      if (hasConfirmed && nextConfirmationId && confirm('예약 처리가 완료되었습니다. 예약확인서를 생성하시겠습니까?')) {
-        setConfirmationQuoteId(nextConfirmationId);
-        setConfirmationOpen(true);
-      }
     } catch (err: any) {
       alert(`오류: ${err.message || '상세 처리에 실패했습니다.'}`);
     } finally {
       setDetailProcessing(false);
-    }
-  };
-
-  const handleDeleteDetailService = async (service: any) => {
-    const reservationId = String(service?.reservation_id || service?.reservationId || service?.re_id || '').trim();
-    if (!reservationId) {
-      alert('삭제할 예약 ID를 찾을 수 없습니다.');
-      return;
-    }
-
-    if (!confirm('이 예약 건을 삭제하시겠습니까?\n삭제 후 복구할 수 없습니다.')) return;
-
-    try {
-      const { error } = await supabase.from('reservation').delete().eq('re_id', reservationId);
-      if (error) throw new Error(error.message);
-
-      const nextModalItems = detailModalItems.filter((item) => {
-        const id = String(item?.reservation_id || item?.reservationId || item?.re_id || '').trim();
-        return id !== reservationId;
-      });
-
-      setDetailModalItems(nextModalItems);
-      setDetailModalItem(nextModalItems[0] || null);
-      setDetailItem((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          services: prev.services.filter((svc) => svc.re_id !== reservationId),
-        };
-      });
-
-      if (nextModalItems.length === 0) {
-        setDetailOpen(false);
-      }
-
-      await loadReservations();
-      alert('선택한 예약 건이 삭제되었습니다.');
-    } catch (err: any) {
-      alert(`삭제 실패: ${err?.message || '알 수 없는 오류'}`);
     }
   };
 
@@ -617,22 +568,11 @@ export default function ReservationsPage() {
     router.push('/reservation-edit');
   };
 
-  const openConfirmationFromDetail = () => {
-    if (!detailItem) return;
-    const targetId = String(detailItem.re_quote_id || detailItem.services?.[0]?.re_id || '').trim();
-    if (!targetId) {
-      alert('확인서 생성 대상 예약을 찾을 수 없습니다.');
-      return;
-    }
-    setConfirmationQuoteId(targetId);
-    setConfirmationOpen(true);
-  };
-
   /* ── UI ──────────────────────────────────── */
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
       {/* 헤더 */}
-      <div className="bg-white border-b shadow-sm px-2 py-2">
+      <div className="bg-white border-b border-black shadow-sm px-2 py-3">
         <div className="flex items-center gap-2">
           <button onClick={() => router.back()} className="p-1.5 rounded-lg hover:bg-gray-100">
             <ArrowLeft className="w-5 h-5 text-gray-600" />
@@ -642,55 +582,50 @@ export default function ReservationsPage() {
             <Home className="w-5 h-5 text-gray-600" />
           </Link>
         </div>
-      </div>
 
-      {/* 본문 */}
-      <div className="px-2 py-4 mt-2">
-        {/* 컨트롤 카드 */}
-        <div className="bg-white rounded-lg shadow-md p-3">
-          <div className="space-y-2">
-            <div className="flex gap-1">
-              <Select value={sortType} onChange={e => setSortType(e.target.value as SortType)} label="정렬"
-                options={[['date', '예약일순'], ['name', '고객명순']]} />
-              <Select value={filter} onChange={e => setFilter(e.target.value as any)} label="상태"
-                options={[[ 'all', '전체'], ['pending', '대기중'], ['approved', '승인'], ['confirmed', '확정'], ['cancelled', '취소']]} />
-              <Select value={serviceFilter} onChange={e => setServiceFilter(e.target.value)} label="서비스"
-                options={[['all', '전체'], ['cruise', '크루즈'], ['airport', '공항'], ['hotel', '호텔'],
-                  ['tour', '투어'], ['rentcar', '렌터카'], ['vehicle', '차량'], ['sht', '스하차량'], ['package', '패키지']]} />
-            </div>
+        {/* 필터 */}
+        <div className="space-y-1">
+          <div className="flex gap-1">
+            <Select value={sortType} onChange={e => setSortType(e.target.value as SortType)} label="정렬"
+              options={[['date', '예약일순'], ['name', '고객명순']]} />
+            <Select value={filter} onChange={e => setFilter(e.target.value as any)} label="상태"
+              options={[[ 'all', '전체'], ['pending', '대기중'], ['approved', '승인'], ['confirmed', '확정'], ['cancelled', '취소']]} />
+            <Select value={serviceFilter} onChange={e => setServiceFilter(e.target.value)} label="서비스"
+              options={[['all', '전체'], ['cruise', '크루즈'], ['airport', '공항'], ['hotel', '호텔'],
+                ['tour', '투어'], ['rentcar', '렌터카'], ['vehicle', '차량'], ['sht', '스하차량'], ['package', '패키지']]} />
+          </div>
 
-            {/* 검색 & 일괄 처리 (1행) */}
-            <div className="flex gap-1 items-end">
-              <form onSubmit={e => { e.preventDefault(); setSearchTrigger(v => v + 1); }} className="flex gap-1 flex-1">
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  placeholder="이름검색..."
-                  className="flex-1 px-2 py-1.5 text-xs border rounded-lg bg-white"
-                />
-                <button type="submit" className="px-3 py-1.5 bg-blue-500 text-white rounded-lg text-xs font-medium">검색</button>
-              </form>
+          {/* 검색 & 일괄 처리 (1행) */}
+          <div className="flex gap-1 items-end">
+            <form onSubmit={e => { e.preventDefault(); setSearchTrigger(v => v + 1); }} className="flex gap-1 flex-1">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="이름검색..."
+                className="flex-1 px-2 py-1.5 text-xs border rounded-lg bg-gray-50"
+              />
+              <button type="submit" className="px-3 py-1.5 bg-blue-500 text-white rounded-lg text-xs font-medium">검색</button>
+            </form>
 
-              {/* 일괄 처리 */}
-              <div className="flex gap-1 items-center">
-                <Select value={bulkAction} onChange={e => setBulkAction(e.target.value as BulkAction)} label=""
-                  options={[[ 'approve', '승인'], ['confirm', '확정'], ['cancel', '취소'], ['status_update', '상태변경'], ['delete', '삭제']]} />
-                {bulkAction === 'status_update' && (
-                  <Select value={newStatus} onChange={e => setNewStatus(e.target.value)} label=""
-                    options={[[ 'pending', '대기중'], ['approved', '승인'], ['confirmed', '확정'], ['cancelled', '취소']]} />
-                )}
-                <button
-                  onClick={handleBulkAction}
-                  disabled={selectedItems.size === 0 || processing}
-                  className={`px-2 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap ${
-                    selectedItems.size === 0 ? 'bg-gray-300 text-gray-500' :
-                    bulkAction === 'delete' ? 'bg-red-500 text-white' : 'bg-green-500 text-white'
-                  }`}
-                >
-                  {processing ? '처리중...' : `${selectedItems.size}건 처리`}
-                </button>
-              </div>
+            {/* 일괄 처리 */}
+            <div className="flex gap-1 items-center">
+              <Select value={bulkAction} onChange={e => setBulkAction(e.target.value as BulkAction)} label=""
+                options={[[ 'approve', '승인'], ['confirm', '확정'], ['cancel', '취소'], ['status_update', '상태변경'], ['delete', '삭제']]} />
+              {bulkAction === 'status_update' && (
+                <Select value={newStatus} onChange={e => setNewStatus(e.target.value)} label=""
+                  options={[[ 'pending', '대기중'], ['approved', '승인'], ['confirmed', '확정'], ['cancelled', '취소']]} />
+              )}
+              <button
+                onClick={handleBulkAction}
+                disabled={selectedItems.size === 0 || processing}
+                className={`px-2 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap ${
+                  selectedItems.size === 0 ? 'bg-gray-300 text-gray-500' :
+                  bulkAction === 'delete' ? 'bg-red-500 text-white' : 'bg-green-500 text-white'
+                }`}
+              >
+                {processing ? '처리중...' : `${selectedItems.size}건 처리`}
+              </button>
             </div>
           </div>
         </div>
@@ -712,7 +647,7 @@ export default function ReservationsPage() {
       )}
 
       {/* 콘텐츠 */}
-      <div className="px-2 pb-2">
+      <div className="px-2 py-2">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20">
             <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-500 rounded-full animate-spin" />
@@ -813,20 +748,12 @@ export default function ReservationsPage() {
         isOpen={detailOpen}
         onClose={() => setDetailOpen(false)}
         onEdit={detailItem ? (() => moveToReservationEdit()) : undefined}
-        onDeleteService={handleDeleteDetailService}
         onProcess={detailItem ? handleDetailProcess : undefined}
-        onGenerateConfirmation={detailItem?.services?.some((s) => s.re_status === 'confirmed') ? openConfirmationFromDetail : undefined}
         processLoading={detailProcessing}
         processDisabled={detailLoading || detailProcessing || detailProcessInfo.count === 0}
         processLabel={`${detailProcessInfo.label} (${detailProcessInfo.count})`}
         item={detailModalItem}
         items={detailModalItems}
-      />
-
-      <ConfirmationGenerateModal
-        isOpen={confirmationOpen}
-        onClose={() => setConfirmationOpen(false)}
-        quoteId={confirmationQuoteId}
       />
     </div>
   );
