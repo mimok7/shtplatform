@@ -28,6 +28,7 @@ type VehicleAggregate = {
   seatList: string[];
   reservationIds: string[];
   emails: string[];
+  bookers: Array<{ name: string; email: string }>;
 };
 
 function getKstDate(offsetDays: number) {
@@ -115,11 +116,17 @@ function buildBody(candidate: VehicleAggregate) {
   const extra = candidate.emails.length > 3 ? ` 외 ${candidate.emails.length - 3}건` : '';
   const seats = candidate.seatList.slice(0, 8).join(', ');
   const seatSuffix = candidate.seatList.length > 8 ? ' 외' : '';
+  const previewBookerNames = candidate.bookers
+    .map((b) => b.name)
+    .filter(Boolean)
+    .slice(0, 3)
+    .join(', ');
 
   return [
     `픽업일: ${candidate.pickupDate}`,
     `차량: ${candidate.vehicleNumber}`,
     `좌석: ${candidate.seatCount}석 (${seats}${seatSuffix})`,
+    `예약자: ${previewBookerNames || '-'}`,
     `예약자 이메일: ${previewEmails || '-'}${extra}`,
   ].join(' | ');
 }
@@ -239,7 +246,35 @@ async function runCron() {
       seatList,
       reservationIds: Array.from(value.reservationIds),
       emails,
+      bookers: [],
     });
+  }
+
+  const allCandidateEmails = Array.from(new Set(candidates.flatMap((c) => c.emails)));
+  const emailNameMap = new Map<string, string>();
+
+  if (allCandidateEmails.length > 0) {
+    const { data: usersByEmail, error: usersByEmailError } = await serviceSupabase
+      .from('users')
+      .select('email, name')
+      .in('email', allCandidateEmails);
+
+    if (usersByEmailError) {
+      console.error('[sht-car-low-seat-warning] users(email) 조회 실패:', usersByEmailError);
+    } else {
+      (usersByEmail || []).forEach((row: { email?: string | null; name?: string | null }) => {
+        const email = String(row.email || '').trim();
+        if (!email) return;
+        emailNameMap.set(email, String(row.name || '').trim() || '-');
+      });
+    }
+  }
+
+  for (const candidate of candidates) {
+    candidate.bookers = candidate.emails.map((email) => ({
+      email,
+      name: emailNameMap.get(email) || '-',
+    }));
   }
 
   if (candidates.length === 0) {
@@ -319,6 +354,7 @@ async function runCron() {
           seatList: candidate.seatList,
           reservationIds: candidate.reservationIds,
           emails: candidate.emails,
+          bookers: candidate.bookers,
         },
       });
 
@@ -403,6 +439,7 @@ async function runCron() {
         seatCount: candidate.seatCount,
         seatList: candidate.seatList,
         emails: candidate.emails,
+        bookers: candidate.bookers,
       },
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),

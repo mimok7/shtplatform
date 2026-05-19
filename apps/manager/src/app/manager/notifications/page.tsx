@@ -50,6 +50,16 @@ interface CustomerNotification extends BaseNotification {
 
 type NotificationItem = BaseNotification | CustomerNotification;
 
+type BookerInfo = {
+  name: string;
+  email: string;
+};
+
+type ParsedMessageLine = {
+  label: string;
+  value: string;
+};
+
 // 한글 컬럼명 매핑
 const getKoreanFieldName = (field: string): string => {
   const fieldMap: Record<string, string> = {
@@ -135,6 +145,100 @@ const isShtCarNotification = (n: NotificationItem): boolean => {
     haystack.includes('sht-car') ||
     haystack.includes('sht_car')
   );
+};
+
+const isShtCarCancelRisk = (n: NotificationItem): boolean => {
+  const eventKey = String(n.metadata?.eventKey || '').toLowerCase();
+  if (eventKey === 'sht_car_cancel') {
+    return true;
+  }
+
+  const haystack = [n.category, n.subcategory, n.title, n.message]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  return (
+    (haystack.includes('스하차량') || haystack.includes('스차') || haystack.includes('sht car') || haystack.includes('sht-car') || haystack.includes('sht_car')) &&
+    (haystack.includes('취소') || haystack.includes('cancel') || haystack.includes('위험') || haystack.includes('risk'))
+  );
+};
+
+const parseBodyField = (message: string, field: string) => {
+  const m = String(message || '').match(new RegExp(`${field}\\s*:\\s*([^|\\n]+)`, 'i'));
+  return (m?.[1] || '').trim();
+};
+
+const fallbackNameFromEmail = (email: string) => {
+  const value = String(email || '').trim();
+  if (!value.includes('@')) return '-';
+  const local = value.split('@')[0]?.trim();
+  return local || '-';
+};
+
+const parseNotificationMessageLines = (message: string): ParsedMessageLine[] => {
+  return String(message || '')
+    .split(/\||\n/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => {
+      const idx = part.indexOf(':');
+      if (idx <= 0) {
+        return { label: '', value: part };
+      }
+
+      return {
+        label: part.slice(0, idx).trim(),
+        value: part.slice(idx + 1).trim(),
+      };
+    });
+};
+
+const getShtCarCancelDisplayData = (item: NotificationItem) => {
+  const metadata = item.metadata || {};
+  const message = String(item.message || '');
+
+  const pickupDate = metadata.pickupDate || parseBodyField(message, '픽업일') || '-';
+  const vehicleNumber = metadata.vehicleNumber || parseBodyField(message, '차량') || '-';
+
+  const seatList: string[] = Array.isArray(metadata.seatList)
+    ? metadata.seatList.map((s: unknown) => String(s)).filter(Boolean)
+    : [];
+  const seatCount = Number(metadata.seatCount || seatList.length || 0);
+  const seatsText = seatList.length > 0 ? `${seatCount}석 (${seatList.join(', ')})` : `${seatCount || '-'}석`;
+
+  const mappedBookers: BookerInfo[] = Array.isArray(metadata.bookers)
+    ? metadata.bookers
+      .map((b: unknown) => ({
+        name: String((b as { name?: string })?.name || '-').trim() || '-',
+        email: String((b as { email?: string })?.email || '-').trim() || '-',
+      }))
+      .filter((b) => b.name !== '-' || b.email !== '-')
+    : [];
+
+  if (mappedBookers.length > 0) {
+    return {
+      pickupDate,
+      vehicleNumber,
+      seatsText,
+      namesText: mappedBookers.map((b) => (b.name && b.name !== '-' ? b.name : fallbackNameFromEmail(b.email))).join(', '),
+      emailsText: mappedBookers.map((b) => b.email).join(', '),
+    };
+  }
+
+  const fallbackEmails = Array.isArray(metadata.emails)
+    ? metadata.emails.map((e: unknown) => String(e).trim()).filter(Boolean)
+    : [];
+  const msgEmail = parseBodyField(message, '예약자 이메일');
+  const emails = fallbackEmails.length > 0 ? fallbackEmails : (msgEmail ? msgEmail.split(',').map((e: string) => e.trim()).filter(Boolean) : []);
+
+  return {
+    pickupDate,
+    vehicleNumber,
+    seatsText,
+    namesText: emails.length > 0 ? emails.map((e: string) => fallbackNameFromEmail(e)).join(', ') : '-',
+    emailsText: emails.length > 0 ? emails.join(', ') : '-',
+  };
 };
 
 export default function NotificationManagement() {
@@ -1125,6 +1229,19 @@ export default function NotificationManagement() {
                       )}
 
                       {(() => {
+                        if (isShtCarCancelRisk(notification)) {
+                          const display = getShtCarCancelDisplayData(notification);
+                          return (
+                            <div className="text-gray-700 text-sm space-y-1 mb-3">
+                              <div><span className="text-blue-600 font-semibold">픽업일:</span> {display.pickupDate}</div>
+                              <div><span className="text-blue-600 font-semibold">차량:</span> {display.vehicleNumber}</div>
+                              <div><span className="text-blue-600 font-semibold">좌석:</span> {display.seatsText}</div>
+                              <div><span className="text-blue-600 font-semibold">예약자:</span> {display.namesText || '-'}</div>
+                              <div><span className="text-blue-600 font-semibold">예약자 이메일:</span> {display.emailsText || '-'}</div>
+                            </div>
+                          );
+                        }
+
                         const msg = notification.message || '';
                         // 중복 정보 제거: 고객/연락/견적/금액/상태 키-값 패턴을 제거
                         const cleaned = msg
@@ -1141,10 +1258,17 @@ export default function NotificationManagement() {
                           .replace(/예약\s*상태:\s*[^\s]+\s*/g, '')
                           .trim();
 
+                        const lines = parseNotificationMessageLines(cleaned || msg).slice(0, 4);
                         return (
-                          <p className="text-gray-600 text-sm line-clamp-3 mb-3">
-                            {cleaned || msg}
-                          </p>
+                          <div className="text-gray-600 text-sm space-y-1 mb-3">
+                            {lines.map((line, idx) => (
+                              <div key={`${notification.id}-line-${idx}`}>
+                                {line.label ? <span className="text-blue-600 font-semibold">{line.label}:</span> : null}
+                                {line.label ? ' ' : ''}
+                                {line.value || '-'}
+                              </div>
+                            ))}
+                          </div>
                         );
                       })()}
 
@@ -1206,44 +1330,35 @@ export default function NotificationManagement() {
                     <h4 className="font-medium text-gray-900 mb-2">{getKoreanFieldName('message')}</h4>
                     <div className="text-gray-700">
                       {(() => {
-                        const message = selectedNotification.message;
-
-                        // 정규식으로 각 항목 추출
-                        const customerNameMatch = message.match(/고객명:\s*([^\s]+)/);
-                        const serviceMatch = message.match(/서비스:\s*([^\s]+)/);
-                        const quoteNameMatch = message.match(/견적명:\s*([^\s]+(?:\s+\d+)?)/);
-                        const amountMatch = message.match(/예약\s+금액:\s*([^\s]+)/);
-                        const statusMatch = message.match(/예약\s+상태:\s*([^\s]+)/);
-
-                        // 추출된 데이터로 나머지 메시지 생성
-                        let remainingText = message
-                          .replace(/고객명:\s*[^\s]+\s*/g, '')
-                          .replace(/이메일:\s*[^\s]+\s*/g, '')
-                          .replace(/연락처:\s*[^\s]+\s*/g, '')
-                          .replace(/고객ID:\s*[^\s-]+\s*/g, '')
-                          .replace(/고객\s*ID:\s*[^\s-]+\s*/g, '')
-                          .replace(/서비스:\s*[^\s]+\s*/g, '')
-                          .replace(/견적명:\s*[^\s]+(?:\s+\d+)?\s*/g, '')
-                          .replace(/예약\s+금액:\s*[^\s]+\s*/g, '')
-                          .replace(/예약\s+상태:\s*[^\s]+\s*/g, '')
-                          .trim();
-
-                        // 파싱된 데이터가 있으면 구조화해서 표시
-                        if (customerNameMatch || serviceMatch || quoteNameMatch) {
+                        if (isShtCarCancelRisk(selectedNotification)) {
+                          const display = getShtCarCancelDisplayData(selectedNotification);
                           return (
                             <div className="space-y-1">
-                              {customerNameMatch && <div><span className="font-medium">고객명:</span> {customerNameMatch[1]}</div>}
-                              {serviceMatch && <div><span className="font-medium">서비스:</span> {serviceMatch[1]}</div>}
-                              {quoteNameMatch && <div><span className="font-medium">견적명:</span> {quoteNameMatch[1]}</div>}
-                              {amountMatch && <div><span className="font-medium">예약 금액:</span> {amountMatch[1]}</div>}
-                              {statusMatch && <div><span className="font-medium">예약 상태:</span> {statusMatch[1]}</div>}
-                              {remainingText && <div className="mt-2">{remainingText}</div>}
+                              <div><span className="text-blue-600 font-semibold">픽업일:</span> {display.pickupDate}</div>
+                              <div><span className="text-blue-600 font-semibold">차량:</span> {display.vehicleNumber}</div>
+                              <div><span className="text-blue-600 font-semibold">좌석:</span> {display.seatsText}</div>
+                              <div><span className="text-blue-600 font-semibold">예약자:</span> {display.namesText || '-'}</div>
+                              <div><span className="text-blue-600 font-semibold">예약자 이메일:</span> {display.emailsText || '-'}</div>
                             </div>
                           );
                         }
 
-                        // 파싱할 수 없으면 원본 메시지 표시
-                        return <p className="whitespace-pre-line">{message}</p>;
+                        const lines = parseNotificationMessageLines(selectedNotification.message || '');
+                        if (lines.length === 0) {
+                          return <p className="whitespace-pre-line">{selectedNotification.message}</p>;
+                        }
+
+                        return (
+                          <div className="space-y-1">
+                            {lines.map((line, idx) => (
+                              <div key={`${selectedNotification.id}-detail-line-${idx}`}>
+                                {line.label ? <span className="text-blue-600 font-semibold">{line.label}:</span> : null}
+                                {line.label ? ' ' : ''}
+                                {line.value || '-'}
+                              </div>
+                            ))}
+                          </div>
+                        );
                       })()}
                     </div>
                   </div>

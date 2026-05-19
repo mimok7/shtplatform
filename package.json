@@ -23,6 +23,7 @@
     "test": "turbo run test",
     "clean": "turbo run clean && rimraf node_modules",
     "check:manager1-mirror": "node scripts/check-manager1-mirror.js",
+    "backfill:sht-car-cancel": "node scripts/backfill-sht-car-cancel-notifications.js",
     "migrate:cruise-prices": "node scripts/migrate-cruise-unit-prices.js",
     "verify:cruise-prices": "node scripts/verify-cruise-prices.js"
   },
