@@ -15,8 +15,9 @@ export default function ManagerLayout({
 }) {
     return (
         <div className="min-h-screen bg-slate-50 pb-16">
-            <header className="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-black">
-                <div className="mx-auto flex items-center justify-between px-3 py-2.5">
+            <header className="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-black mt-0.5">
+                {/* 제목 및 네비게이션 */}
+                <div className="mx-auto flex items-center justify-between px-3 py-3">
                     <Link href="/" className="p-1.5 rounded-lg text-slate-600 active:text-slate-900 active:bg-slate-100" aria-label="이전">
                         <ArrowLeft className="w-5 h-5" />
                     </Link>

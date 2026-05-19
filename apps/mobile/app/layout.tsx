@@ -46,6 +46,15 @@ export default function RootLayout({
   return (
     <html lang="ko">
       <body className="mobile-ui bg-slate-100 text-gray-900 antialiased">
+        {/* 글로벌 로고 헤더 */}
+        <header className="sticky top-0 z-50 bg-white border-b border-gray-300 px-3 py-2">
+          <img
+            src="/logo.png"
+            alt="스테이하롱 로고"
+            style={{ height: '24px', width: 'auto' }}
+          />
+        </header>
+        
         <ServiceWorkerRegister />
         <PushNotificationManager />
         <AuthGate>{children}</AuthGate>

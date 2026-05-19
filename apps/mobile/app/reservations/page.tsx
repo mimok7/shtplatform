@@ -645,7 +645,7 @@ export default function ReservationsPage() {
       </div>
 
       {/* 본문 */}
-      <div className="px-2 py-4">
+      <div className="px-2 py-4 mt-2">
         {/* 컨트롤 카드 */}
         <div className="bg-white rounded-lg shadow-md p-3">
           <div className="space-y-2">

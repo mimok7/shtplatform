@@ -92,8 +92,8 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-10">
-      {/* 표준 헤더 */}
-      <div className="bg-white border-b shadow-sm px-2 py-2">
+      {/* 헤더 */}
+      <div className="bg-white border-b shadow-sm px-2 py-2.5">
         <div className="flex items-center gap-2">
           <Link href="/settings" className="p-1.5 rounded-lg hover:bg-gray-100">
             <Settings className="w-5 h-5 text-gray-600" />
@@ -105,18 +105,7 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* 로고 */}
-      <div className="text-center py-4">
-        <img
-          src="/logo.png"
-          alt="스테이하롱 로고"
-          width={160}
-          height={54}
-          className="mx-auto"
-        />
-      </div>
-
-      <section className="px-3 w-full">
+      <section className="px-3 w-full mt-4">
         <div className="grid grid-cols-2 gap-2">
           {FAVORITES.map((item) => {
             const Icon = item.icon;

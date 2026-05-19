@@ -1284,7 +1284,7 @@ export default function SchedulePage() {
       </div>
 
       {/* 본문 */}
-      <div className="px-2 py-4">
+      <div className="px-2 py-4 mt-2">
         <div className="bg-white rounded-lg shadow-md p-3 mb-3 space-y-2">
           {/* 날짜 네비게이션 */}
           <div className="flex items-center justify-between">
