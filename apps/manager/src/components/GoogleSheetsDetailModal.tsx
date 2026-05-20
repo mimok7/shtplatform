@@ -66,6 +66,14 @@ export default function GoogleSheetsDetailModal({
         return value || '-';
     };
 
+    const getShtDirectionLabel = (value: any) => {
+        const raw = String(value || '').trim().toLowerCase();
+        if (!raw) return '';
+        if (raw.includes('pickup') || raw.includes('픽업')) return '픽업';
+        if (raw.includes('drop') || raw.includes('드롭') || raw.includes('도롭') || raw.includes('샌딩')) return '드롭';
+        return String(value || '').trim();
+    };
+
     const getServiceIcon = (serviceType: string) => {
         switch (serviceType) {
             case 'cruise':
@@ -96,9 +104,9 @@ export default function GoogleSheetsDetailModal({
             case 'cruise':
                 return '크루즈';
             case 'vehicle':
-                return '차량 SHT';
+                return '스하차량';
             case 'sht':
-                return '차량 SHT';
+                return '스하차량';
             case 'cruise_car':
                 return '크루즈 차량';
             case 'sapa':
@@ -166,6 +174,8 @@ export default function GoogleSheetsDetailModal({
                 <div className="space-y-1 text-sm">
                     <div><span className="font-semibold text-gray-600">구분:</span> {service.division}</div>
                     <div><span className="font-semibold text-gray-600">분류:</span> {service.category}</div>
+                    <div><span className="font-semibold text-gray-600">픽업장소:</span> {service.pickupLocation || '-'}</div>
+                    <div><span className="font-semibold text-gray-600">드롭장소:</span> {service.dropoffLocation || '-'}</div>
                     <div><span className="font-semibold text-gray-600">승차일:</span> {service.boardingDate}</div>
                     <div><span className="font-semibold text-gray-600">차량번호:</span> {service.vehicleNumber}</div>
                     {service.seatNumber && <div><span className="font-semibold text-gray-600">좌석:</span> {service.seatNumber}</div>}
@@ -522,6 +532,11 @@ export default function GoogleSheetsDetailModal({
                                             <h4 className="font-bold text-gray-800">
                                                 {getServiceLabel(service.serviceType)}
                                             </h4>
+                                            {(service.serviceType === 'vehicle' || service.serviceType === 'sht') && getShtDirectionLabel(service.category || service.division) && (
+                                                <span className="ml-1 inline-flex items-center rounded-full bg-white/80 px-2 py-0.5 text-xs font-semibold text-purple-700 border border-purple-300">
+                                                    {getShtDirectionLabel(service.category || service.division)}
+                                                </span>
+                                            )}
                                         </div>
                                         <div className="space-y-2">
                                             <div className="flex items-center gap-2 mb-2">
@@ -575,6 +590,11 @@ export default function GoogleSheetsDetailModal({
                                             <h4 className="font-bold text-gray-800">
                                                 {getServiceLabel(service.serviceType)}
                                             </h4>
+                                            {(service.serviceType === 'vehicle' || service.serviceType === 'sht') && getShtDirectionLabel(service.sht_category || service.category || service.division) && (
+                                                <span className="ml-1 inline-flex items-center rounded-full bg-white/80 px-2 py-0.5 text-xs font-semibold text-purple-700 border border-purple-300">
+                                                    {getShtDirectionLabel(service.sht_category || service.category || service.division)}
+                                                </span>
+                                            )}
                                         </div>
 
                                         <div className="space-y-2">

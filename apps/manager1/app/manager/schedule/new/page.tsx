@@ -300,6 +300,26 @@ export default function ManagerSchedulePage() {
         supabase.from('sh_rc').select('*').eq('order_id', orderId)  // 렌트카
       ]);
 
+      const normalizeLegacyKey = (value: any) =>
+        String(value ?? '')
+          .trim()
+          .replace(/\.0+$/, '')
+          .toLowerCase();
+
+      const shCBySheetId = new Map<string, { pickupLocation?: string; dropoffLocation?: string }>();
+      const shCByOrderId = new Map<string, { pickupLocation?: string; dropoffLocation?: string }>();
+      (shCData.data || []).forEach((c: any) => {
+        const location = {
+          pickupLocation: c.boarding_location || c.pickup_location || c.location_name || '',
+          dropoffLocation: c.dropoff_location || c.destination || '',
+        };
+
+        const sheetKey = normalizeLegacyKey(c.sheet_id);
+        const orderKey = normalizeLegacyKey(c.order_id);
+        if (sheetKey) shCBySheetId.set(sheetKey, location);
+        if (orderKey) shCByOrderId.set(orderKey, location);
+      });
+
       // 데이터 매핑 및 합치기 (모든 필드 포함)
       const allData = [
         ...(shRData.data || []).map((r: any) => ({
@@ -331,7 +351,12 @@ export default function ManagerSchedulePage() {
           passengerCount: c.passenger_count || 0,
           carCount: c.vehicle_count || 0  // ✅ vehicle_count
         })),
-        ...(shCCData.data || []).map((cc: any) => ({
+        ...(shCCData.data || []).map((cc: any) => {
+          const sheetKey = normalizeLegacyKey(cc.sheet_id || cc.id);
+          const orderKey = normalizeLegacyKey(cc.order_id);
+          const matchedLocation = shCBySheetId.get(sheetKey) || shCByOrderId.get(orderKey) || {};
+
+          return ({
           ...cc,
           serviceType: 'vehicle',
           orderId: cc.order_id,
@@ -341,8 +366,11 @@ export default function ManagerSchedulePage() {
           vehicleNumber: cc.vehicle_number,
           seatNumber: cc.seat_number,
           category: cc.category,
-          division: cc.division
-        })),
+          division: cc.division,
+          pickupLocation: cc.boarding_location || cc.pickup_location || matchedLocation.pickupLocation || undefined,
+          dropoffLocation: cc.dropoff_location || cc.destination || matchedLocation.dropoffLocation || undefined,
+        });
+        }),
         ...(shPData.data || []).map((p: any) => ({
           ...p,
           serviceType: 'airport',

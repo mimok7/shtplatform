@@ -14,6 +14,16 @@
 - `크루즈가격_안내`: 크루즈 가격표, 객실 안내, 포함사항을 상담용으로 정리한 탭
 - `예약자_목록`: 예약자 마스터와 예약 건수
 
+## 올드 테이블 매핑 지침
+
+- 올드 `sh_*` 테이블 간 조인 기본 키는 `sheet_id`입니다.
+- `order_id`는 보조(fallback) 키로만 사용합니다.
+- 스하차량 올드 카드(`sh_cc`)의 픽업/드롭은 `sh_c`를 `sheet_id`로 매핑해 표시합니다.
+- 매핑 컬럼:
+	- `sh_c.sheet_id`
+	- `sh_c.boarding_location` (픽업)
+	- `sh_c.dropoff_location` (드롭)
+
 ## 필요한 환경변수
 
 `apps/admin/.env.local` 또는 배포 환경에 아래 값을 설정합니다. 예시는 `apps/admin/.env.sheets-sync.example`에 있습니다.

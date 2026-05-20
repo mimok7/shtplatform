@@ -489,7 +489,13 @@ function ServiceCard({
   const manualAdditionalFee = getManualAdditionalFee(service);
   const manualAdditionalFeeDetail = getManualAdditionalFeeDetail(service);
   const isPackageService = !!service?.isPackageService;
-  const isShtDropoff = type === 'sht' && String(service?.category || '').toLowerCase().includes('drop');
+  const shtCategory = String(service?.category || '').toLowerCase();
+  const isShtDropoff = type === 'sht' && (
+    shtCategory.includes('drop')
+    || shtCategory.includes('드롭')
+    || shtCategory.includes('도롭')
+    || shtCategory.includes('샌딩')
+  );
 
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-3">
@@ -556,6 +562,8 @@ function ServiceCard({
           <DetailLine label="일시" value={service.ra_datetime ? formatDatetimeOffset(service.ra_datetime) : `${service.date || '-'} ${service.time || ''}`.trim()} />
           <DetailLine label="항공편" value={service.flightNumber || service.ra_flight_number || '-'} />
           <DetailLine label="공항" value={service.ra_airport_location || service.airportName || '-'} />
+          <DetailLine label="픽업위치" value={service.pickupLocation || service.pickup_location || service.placeName || service.accommodation_info || '-'} />
+          <DetailLine label="드롭위치" value={service.dropoffLocation || service.dropoff_location || service.placeName || service.accommodation_info || '-'} />
           <DetailLine label="하차/승차" value={service.accommodation_info || service.placeName || service.pickupLocation || service.dropoffLocation || '-'} />
           <DetailLine label="경유지" value={service.stopover || service.ra_stopover_location || '-'} />
           <DetailLine label="인원" value={`${Number(service.passengerCount ?? service.ra_passenger_count ?? 0)}명`} />
