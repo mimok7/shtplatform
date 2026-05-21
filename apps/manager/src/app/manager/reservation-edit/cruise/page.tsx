@@ -2408,8 +2408,8 @@ function CruiseReservationEditContent() {
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700 mb-1">선택된 추가내역</label>
                                             <div className="space-y-2">
-                                                {additionalFeeItems.map((item) => (
-                                                    <div key={item.key} className="flex items-center justify-between gap-2 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2">
+                                                {additionalFeeItems.map((item, index) => (
+                                                    <div key={`${item.key}-${index}`} className="flex items-center justify-between gap-2 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2">
                                                         <div>
                                                             <div className="text-sm font-medium text-gray-900">{item.name}</div>
                                                             <div className={`text-xs ${item.amount >= 0 ? 'text-orange-700' : 'text-indigo-700'}`}>

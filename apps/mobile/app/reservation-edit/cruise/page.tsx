@@ -105,6 +105,13 @@ interface AdditionalFeeItem {
 
 const BIRTHDAY_EVENT_FEE = 1000000;
 
+const isBirthdayEventAdditionalFeeItem = (item: AdditionalFeeItem) => {
+    if (String(item.key || '').startsWith('birthday-event-')) return true;
+    return item.template_id === null
+        && item.name === '생일이벤트 추가'
+        && Number(item.amount) === BIRTHDAY_EVENT_FEE;
+};
+
 const toBoolean = (value: unknown): boolean => {
     if (typeof value === 'boolean') return value;
     if (typeof value === 'string') {
@@ -175,6 +182,7 @@ function CruiseReservationEditContent() {
     const [manualAdditionalFeeInput, setManualAdditionalFeeInput] = useState('');
     const [additionalFeeDetail, setAdditionalFeeDetail] = useState('');
     const [additionalFeeItems, setAdditionalFeeItems] = useState<AdditionalFeeItem[]>([]);
+    const [removedBirthdayEventKeys, setRemovedBirthdayEventKeys] = useState<string[]>([]);
     const [discountRate, setDiscountRate] = useState(0);
     const [manualDiscountAmount, setManualDiscountAmount] = useState(0);
     const [discountRateOrder, setDiscountRateOrder] = useState<number | null>(null);
@@ -629,14 +637,30 @@ function CruiseReservationEditContent() {
     }, [birthdayEventCount]);
 
     const computedAdditionalFeeItems = useMemo(() => {
-        const birthdayItems: AdditionalFeeItem[] = Array.from({ length: birthdayEventCount }, (_, index) => ({
-            key: `birthday-event-${index}`,
-            template_id: null,
-            name: '생일이벤트 추가',
-            amount: BIRTHDAY_EVENT_FEE,
-        }));
+        const usedKeys = new Set(additionalFeeItems.map((item) => String(item.key || '')).filter(Boolean));
+        const removedKeySet = new Set(removedBirthdayEventKeys);
+
+        const birthdayItems: AdditionalFeeItem[] = Array.from({ length: birthdayEventCount }, (_, index) => {
+            let candidateKey = `birthday-event-${index}`;
+            let suffix = 1;
+
+            while (usedKeys.has(candidateKey)) {
+                candidateKey = `birthday-event-${index}-${suffix}`;
+                suffix += 1;
+            }
+
+            usedKeys.add(candidateKey);
+
+            return {
+                key: candidateKey,
+                template_id: null,
+                name: '생일이벤트 추가',
+                amount: BIRTHDAY_EVENT_FEE,
+            };
+        }).filter((item) => !removedKeySet.has(item.key));
+
         return [...additionalFeeItems, ...birthdayItems];
-    }, [additionalFeeItems, birthdayEventCount]);
+    }, [additionalFeeItems, birthdayEventCount, removedBirthdayEventKeys]);
 
     const templateAdditionalFeeTotal = useMemo(() => {
         return computedAdditionalFeeItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
@@ -1190,7 +1214,7 @@ function CruiseReservationEditContent() {
             const rawAdditionalFeeItems = Array.isArray(resRow.price_breakdown?.additional_fee_items)
                 ? resRow.price_breakdown.additional_fee_items
                 : [];
-            const savedAdditionalFeeItems: AdditionalFeeItem[] = rawAdditionalFeeItems
+            const normalizedAdditionalFeeItems: AdditionalFeeItem[] = rawAdditionalFeeItems
                 .map((item: any, index: number) => ({
                     key: String(item?.key || `saved-${index + 1}`),
                     template_id: Number.isFinite(Number(item?.template_id)) ? Number(item.template_id) : null,
@@ -1198,11 +1222,20 @@ function CruiseReservationEditContent() {
                     amount: Number(item?.amount) || 0,
                 }))
                 .filter((item: AdditionalFeeItem) => item.name && item.amount !== 0);
+
+            const savedBirthdayAutoFeeItems = normalizedAdditionalFeeItems.filter((item) =>
+                isBirthdayEventAdditionalFeeItem(item)
+            );
+            const savedAdditionalFeeItems = normalizedAdditionalFeeItems.filter((item) =>
+                !isBirthdayEventAdditionalFeeItem(item)
+            );
+
             const savedTemplateAdditionalFeeTotal = savedAdditionalFeeItems.reduce((sum, item) => sum + item.amount, 0);
+            const savedBirthdayAutoFeeTotal = savedBirthdayAutoFeeItems.reduce((sum, item) => sum + item.amount, 0);
 
             const savedAdditionalFeeTotal = Number(resRow.price_breakdown?.additional_fee);
             const fallbackManualAdditionalFee = Number.isFinite(savedAdditionalFeeTotal)
-                ? Math.max(0, savedAdditionalFeeTotal - savedTemplateAdditionalFeeTotal)
+                ? Math.max(0, savedAdditionalFeeTotal - savedTemplateAdditionalFeeTotal - savedBirthdayAutoFeeTotal)
                 : 0;
             const savedManualAdditionalFee = Number(
                 resRow.price_breakdown?.additional_fee_manual
@@ -1216,6 +1249,7 @@ function CruiseReservationEditContent() {
             const migratedManualAdjustment = nextManualAdditionalFee - (Number.isFinite(savedManualDiscount) ? Math.max(0, savedManualDiscount) : 0);
 
             setAdditionalFeeItems(savedAdditionalFeeItems);
+            setRemovedBirthdayEventKeys([]);
             applyManualAdditionalFee(migratedManualAdjustment);
             setStoredAdditionalFee(migratedManualAdjustment);
             const savedDiscountRate = Number(resRow.price_breakdown?.discount_rate);
@@ -2435,29 +2469,31 @@ function CruiseReservationEditContent() {
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700 mb-1">선택된 추가내역</label>
                                             <div className="space-y-2">
-                                                {computedAdditionalFeeItems.map((item) => (
-                                                    <div key={item.key} className="flex items-center justify-between gap-2 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2">
+                                                {computedAdditionalFeeItems.map((item, index) => (
+                                                    <div key={`${item.key}-${index}`} className="flex items-center justify-between gap-2 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2">
                                                         <div>
                                                             <div className="text-sm font-medium text-gray-900">{item.name}</div>
                                                             <div className={`text-xs ${item.amount >= 0 ? 'text-orange-700' : 'text-indigo-700'}`}>
                                                                 {item.amount >= 0 ? '+' : ''}{item.amount.toLocaleString()}동
                                                             </div>
                                                         </div>
-                                                        {item.key.startsWith('birthday-event-') ? (
-                                                            <span className="px-2 py-1 text-xs rounded border border-blue-200 text-blue-700 bg-blue-50">
-                                                                자동 반영
-                                                            </span>
-                                                        ) : (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => {
-                                                                    setAdditionalFeeItems((prev) => prev.filter((fee) => fee.key !== item.key));
-                                                                }}
-                                                                className="px-2 py-1 text-xs rounded border border-red-200 text-red-600 bg-white hover:bg-red-50"
-                                                            >
-                                                                삭제
-                                                            </button>
-                                                        )}
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                if (item.key.startsWith('birthday-event-')) {
+                                                                    setRemovedBirthdayEventKeys((prev) => {
+                                                                        if (prev.includes(item.key)) return prev;
+                                                                        return [...prev, item.key];
+                                                                    });
+                                                                    return;
+                                                                }
+
+                                                                setAdditionalFeeItems((prev) => prev.filter((fee) => fee.key !== item.key));
+                                                            }}
+                                                            className="px-2 py-1 text-xs rounded border border-red-200 text-red-600 bg-white hover:bg-red-50"
+                                                        >
+                                                            삭제
+                                                        </button>
                                                     </div>
                                                 ))}
                                             </div>
@@ -2483,6 +2519,7 @@ function CruiseReservationEditContent() {
                                                 setManualDiscountOrder(null);
                                                 applyManualAdditionalFee(0);
                                                 setAdditionalFeeItems([]);
+                                                setRemovedBirthdayEventKeys([]);
                                                 setAdditionalFeeOrder(null);
                                                 setAdditionalFeeDetail('');
                                                 discountOrderRef.current = 1;
