@@ -10,6 +10,10 @@
       "schedule": "10 15 * * *"
     },
     {
+      "path": "/api/cron/service-missing-fields-notifications",
+      "schedule": "5 0 * * *"
+    },
+    {
       "path": "/api/cron/payment-notifications-generate",
       "schedule": "0 0 * * *"
     }

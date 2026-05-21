@@ -51,6 +51,17 @@ type EventDraft = {
   default_priority: 'low' | 'normal' | 'high' | 'urgent';
 };
 
+type ServiceEventPreset = {
+  event_key: string;
+  event_label: string;
+  description: string;
+  default_title: string;
+  default_body: string;
+  default_url: string;
+  default_priority: EventDraft['default_priority'];
+  sort_order: number;
+};
+
 type ActiveSubscriberRow = {
   id: string;
   app_name: string;
@@ -79,6 +90,69 @@ const PRIORITY_LABELS = {
   high: '높음',
   urgent: '긴급',
 };
+
+const SERVICE_EVENT_PRESETS: ServiceEventPreset[] = [
+  {
+    event_key: 'airport_pickup_missing_info_d3',
+    event_label: '공항 픽업 3일전 정보미입력',
+    description: '공항 픽업 사용일 3일 전, 위치 정보가 비었거나 Updating인 예약 알림',
+    default_title: '공항 픽업 정보 확인 필요',
+    default_body: '공항 픽업 정보 중 미입력/Updating 항목이 있습니다.',
+    default_url: 'https://manager.staycruise.kr/manager/reservations',
+    default_priority: 'high',
+    sort_order: 210,
+  },
+  {
+    event_key: 'airport_sending_missing_info_d3',
+    event_label: '공항 샌딩 3일전 정보미입력',
+    description: '공항 샌딩 사용일 3일 전, 위치 정보가 비었거나 Updating인 예약 알림',
+    default_title: '공항 샌딩 정보 확인 필요',
+    default_body: '공항 샌딩 정보 중 미입력/Updating 항목이 있습니다.',
+    default_url: 'https://manager.staycruise.kr/manager/reservations',
+    default_priority: 'high',
+    sort_order: 220,
+  },
+  {
+    event_key: 'rentcar_pickup_missing_info_d3',
+    event_label: '렌트카 픽업 3일전 정보미입력',
+    description: '렌트카 픽업 사용일 3일 전, 위치 정보가 비었거나 Updating인 예약 알림',
+    default_title: '렌트카 픽업 정보 확인 필요',
+    default_body: '렌트카 픽업 정보 중 미입력/Updating 항목이 있습니다.',
+    default_url: 'https://manager.staycruise.kr/manager/reservations',
+    default_priority: 'high',
+    sort_order: 230,
+  },
+  {
+    event_key: 'rentcar_drop_missing_info_d3',
+    event_label: '렌트카 드롭 3일전 정보미입력',
+    description: '렌트카 드롭 사용일 3일 전, 위치 정보가 비었거나 Updating인 예약 알림',
+    default_title: '렌트카 드롭 정보 확인 필요',
+    default_body: '렌트카 드롭 정보 중 미입력/Updating 항목이 있습니다.',
+    default_url: 'https://manager.staycruise.kr/manager/reservations',
+    default_priority: 'high',
+    sort_order: 240,
+  },
+  {
+    event_key: 'sht_pickup_missing_info_d3',
+    event_label: '스하차량 픽업 3일전 정보미입력',
+    description: '스하차량 픽업 사용일 3일 전, 픽업/드롭 위치가 비었거나 Updating인 예약 알림',
+    default_title: '스하차량 픽업 정보 확인 필요',
+    default_body: '스하차량 픽업 정보 중 미입력/Updating 항목이 있습니다.',
+    default_url: 'https://manager.staycruise.kr/manager/sht-car',
+    default_priority: 'high',
+    sort_order: 250,
+  },
+  {
+    event_key: 'sht_drop_missing_info_d3',
+    event_label: '스하차량 드롭 3일전 정보미입력',
+    description: '스하차량 드롭 사용일 3일 전, 픽업/드롭 위치가 비었거나 Updating인 예약 알림',
+    default_title: '스하차량 드롭 정보 확인 필요',
+    default_body: '스하차량 드롭 정보 중 미입력/Updating 항목이 있습니다.',
+    default_url: 'https://manager.staycruise.kr/manager/sht-car',
+    default_priority: 'high',
+    sort_order: 260,
+  },
+];
 
 function normalizeKey(value: string) {
   return value
@@ -144,6 +218,7 @@ export default function ReservationSettingsPage() {
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [seeding, setSeeding] = useState(false);
   const [addingEvent, setAddingEvent] = useState(false);
+  const [seedingServiceEvents, setSeedingServiceEvents] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [draft, setDraft] = useState<EventDraft>(DEFAULT_DRAFT);
@@ -401,6 +476,64 @@ export default function ReservationSettingsPage() {
     setSuccessMessage('새 알림 유형을 추가했습니다.');
     await loadSettings();
     setAddingEvent(false);
+  };
+
+  const seedServiceEventTypes = async () => {
+    if (SERVICE_EVENT_PRESETS.length === 0) return;
+
+    setSeedingServiceEvents(true);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+
+    const now = new Date().toISOString();
+    const { error: eventError } = await supabase.from(EVENT_TYPES_TABLE).upsert(
+      SERVICE_EVENT_PRESETS.map((preset) => ({
+        event_key: preset.event_key,
+        event_label: preset.event_label,
+        description: preset.description,
+        default_title: preset.default_title,
+        default_body: preset.default_body,
+        default_url: preset.default_url,
+        default_priority: preset.default_priority,
+        is_active: true,
+        sort_order: preset.sort_order,
+        updated_by: adminUserId,
+        updated_at: now,
+      })),
+      { onConflict: 'event_key' }
+    );
+
+    if (eventError) {
+      setErrorMessage('서비스별 알림유형 생성에 실패했습니다.');
+      setSeedingServiceEvents(false);
+      return;
+    }
+
+    if (apps.length > 0) {
+      const settingRows = apps.flatMap((app) =>
+        SERVICE_EVENT_PRESETS.map((preset) => ({
+          app_name: app.app_name,
+          event_key: preset.event_key,
+          enabled: true,
+          updated_by: adminUserId,
+          updated_at: now,
+        }))
+      );
+
+      const { error: settingsError } = await supabase
+        .from(APP_EVENT_SETTINGS_TABLE)
+        .upsert(settingRows, { onConflict: 'app_name,event_key' });
+
+      if (settingsError) {
+        setErrorMessage('서비스별 앱 알림 설정 생성에 실패했습니다.');
+        setSeedingServiceEvents(false);
+        return;
+      }
+    }
+
+    setSuccessMessage('서비스별 알림유형을 생성/동기화했습니다.');
+    await loadSettings();
+    setSeedingServiceEvents(false);
   };
 
   const loadActiveSubscribers = async (appFilter: string = subscriberAppFilter) => {
@@ -810,6 +943,24 @@ export default function ReservationSettingsPage() {
           <div className="mb-4 flex items-center gap-2">
             <Plus className="h-5 w-5 text-blue-600" />
             <h3 className="text-base font-semibold text-gray-900">알림 내용/유형 추가</h3>
+          </div>
+
+          <div className="mb-5 rounded-lg border border-indigo-200 bg-indigo-50 p-4">
+            <p className="text-sm font-semibold text-indigo-900">서비스별 기본 알림유형 빠른 추가</p>
+            <p className="mt-1 text-xs text-indigo-700">
+              공항(픽업·샌딩), 렌트카/스하차량(픽업·드롭) 사용일 3일전 미입력 점검용 이벤트 키를 자동 생성합니다.
+            </p>
+            <div className="mt-3">
+              <button
+                type="button"
+                onClick={() => void seedServiceEventTypes()}
+                disabled={seedingServiceEvents}
+                className="inline-flex items-center rounded-lg border border-indigo-300 bg-white px-3 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-100 disabled:opacity-50"
+              >
+                {seedingServiceEvents ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
+                서비스별 알림유형 자동 추가
+              </button>
+            </div>
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
