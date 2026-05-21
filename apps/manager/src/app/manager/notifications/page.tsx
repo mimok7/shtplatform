@@ -445,11 +445,8 @@ export default function NotificationManagement() {
         requestQuery = requestQuery.eq('category', categoryFilter);
       }
 
-      if (statusFilter !== 'all') {
-        businessQuery = businessQuery.eq('status', statusFilter);
-        customerQuery = customerQuery.eq('status', statusFilter);
-        requestQuery = requestQuery.eq('status', statusFilter);
-      }
+      // statusFilter는 클라이언트에서 notification_reads 오버레이 후 필터링
+      // (계정별 읽음 추적 방식)
 
       if (priorityFilter !== 'all') {
         // 영문/한글 혼재 데이터 모두 매칭
@@ -622,6 +619,31 @@ export default function NotificationManagement() {
       // 클라이언트 필터: completed 상태 최종 제거
       allNotifications = allNotifications.filter(n => n.status !== 'completed');
 
+      // 계정별 읽음 오버레이: notification_reads에서 현재 사용자 읽음 기록 조회
+      if (user?.id) {
+        const notiIds = allNotifications
+          .filter(n => n.table_info === 'notifications')
+          .map(n => n.id);
+        if (notiIds.length > 0) {
+          const { data: readsData } = await supabase
+            .from('notification_reads')
+            .select('notification_id')
+            .eq('user_id', user.id)
+            .in('notification_id', notiIds);
+          const readSet = new Set((readsData || []).map((r: any) => r.notification_id as string));
+          allNotifications = allNotifications.map(n => {
+            if (n.table_info !== 'notifications') return n;
+            if (['completed', 'processing', 'dismissed'].includes(n.status)) return n;
+            return { ...n, status: readSet.has(n.id) ? 'read' : 'unread' };
+          });
+        }
+      }
+
+      // statusFilter 클라이언트 적용 (notification_reads 오버레이 이후)
+      if (statusFilter === 'unread') {
+        allNotifications = allNotifications.filter(n => n.status === 'unread');
+      }
+
       setNotifications(allNotifications);
       setCustomerNotifications(customerNotifications);
 
@@ -726,8 +748,17 @@ export default function NotificationManagement() {
         } else if (data && !data.success) {
           throw new Error(data.message || '알림 처리 중 오류가 발생했습니다.');
         }
+      } else if (status === 'read') {
+        // 계정별 읽음 처리: notification_reads에 upsert
+        const { error } = await supabase
+          .from('notification_reads')
+          .upsert(
+            { notification_id: notificationId, user_id: user?.id || '', read_at: new Date().toISOString() },
+            { onConflict: 'notification_id,user_id' }
+          );
+        if (error) throw error;
       } else {
-        // 읽음/처리중: 직접 DB 업데이트
+        // processing/dismissed: 글로벌 DB 업데이트
         const { error } = await supabase
           .from('notifications')
           .update({
@@ -815,17 +846,18 @@ export default function NotificationManagement() {
             );
           }
         } else {
-          // 단순 읽음 처리는 bulk update (100개씩 청크 처리 - URL 길이 초과 방지)
+          // 계정별 일괄 읽음 처리: notification_reads에 bulk upsert (100개씩)
           const chunks = chunkArray(notificationsIds, 100);
           for (const chunk of chunks) {
+            const rows = chunk.map((id) => ({
+              notification_id: id,
+              user_id: user?.id || '',
+              read_at: new Date().toISOString(),
+            }));
             updatePromises.push(
               supabase
-                .from('notifications')
-                .update({
-                  status: 'read',
-                  updated_at: new Date().toISOString()
-                })
-                .in('id', chunk)
+                .from('notification_reads')
+                .upsert(rows, { onConflict: 'notification_id,user_id' })
                 .then(result => {
                   if (result.error) {
                     console.error('❌ 읽음 처리 실패:', result.error.message);

@@ -287,6 +287,7 @@ export default function MobileNotificationsPage() {
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [authReady, setAuthReady] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   const enrichCancelRiskBookers = useCallback(async (items: NotificationItem[]) => {
     const emailNameFromFeed = new Map<string, string>();
@@ -452,6 +453,26 @@ export default function MobileNotificationsPage() {
     });
   }, []);
 
+  // notification_reads에서 현재 사용자가 읽은 알림 ID Set 조회
+  const fetchUserReadSet = useCallback(async (userId: string, notificationIds: string[]): Promise<Set<string>> => {
+    if (notificationIds.length === 0) return new Set();
+    const { data } = await supabase
+      .from('notification_reads')
+      .select('notification_id')
+      .eq('user_id', userId)
+      .in('notification_id', notificationIds);
+    return new Set((data || []).map((r: any) => r.notification_id as string));
+  }, []);
+
+  // 알림 목록에 사용자별 읽음 상태 오버레이 적용
+  const applyReadOverlay = useCallback((items: NotificationItem[], readSet: Set<string>): NotificationItem[] => {
+    return items.map((item) => {
+      if (item.table_info !== 'notifications') return item;
+      if (['completed', 'processing', 'dismissed'].includes(item.status)) return item;
+      return { ...item, status: readSet.has(item.id) ? 'read' : 'unread' };
+    });
+  }, []);
+
   const loadNotifications = useCallback(async (mode: 'reset' | 'append' = 'reset') => {
     const nextPage = mode === 'append' ? page + 1 : 0;
     const from = nextPage * PAGE_SIZE;
@@ -462,16 +483,12 @@ export default function MobileNotificationsPage() {
     }
 
     try {
-      // 1. notifications 테이블
-      let notiQuery = supabase
+      // 1. notifications 테이블 (status 필터 제거 → 클라이언트에서 오버레이 후 필터)
+      const notiQuery = supabase
         .from('notifications')
         .select('id, type, category, subcategory, title, message, priority, status, target_table, target_id, metadata, created_at')
         .order('created_at', { ascending: false })
         .range(from, to);
-
-      if (statusFilter === 'unread') {
-        notiQuery = notiQuery.eq('status', 'unread');
-      }
 
       // 2. payment_notifications 테이블
       let payQuery = supabase
@@ -486,7 +503,7 @@ export default function MobileNotificationsPage() {
 
       const [{ data: notiData }, { data: payData }] = await Promise.all([notiQuery, payQuery]);
 
-      const notiItems: NotificationItem[] = (notiData || []).map((n) => ({
+      let notiItems: NotificationItem[] = (notiData || []).map((n: any) => ({
         id: n.id,
         type: n.type || 'business',
         category: n.category || '',
@@ -502,7 +519,21 @@ export default function MobileNotificationsPage() {
         table_info: 'notifications',
       }));
 
-      const payItems: NotificationItem[] = (payData || []).map((p) => ({
+      // 계정별 읽음 오버레이 적용
+      if (currentUserId && notiItems.length > 0) {
+        const notiIds = notiItems.map((i) => i.id);
+        const readSet = await fetchUserReadSet(currentUserId, notiIds);
+        notiItems = applyReadOverlay(notiItems, readSet);
+      }
+
+      // statusFilter 클라이언트 필터 (notifications)
+      if (statusFilter === 'unread') {
+        notiItems = notiItems.filter((i) => i.status === 'unread');
+      } else if (statusFilter === 'read') {
+        notiItems = notiItems.filter((i) => i.status === 'read');
+      }
+
+      const payItems: NotificationItem[] = (payData || []).map((p: any) => ({
         id: p.id,
         type: 'business',
         category: '결제',
@@ -553,7 +584,7 @@ export default function MobileNotificationsPage() {
         setLoadingMore(false);
       }
     }
-  }, [page, statusFilter, enrichCancelRiskBookers]);
+  }, [page, statusFilter, enrichCancelRiskBookers, currentUserId, fetchUserReadSet, applyReadOverlay]);
 
   useEffect(() => {
     let cancelled = false;
@@ -565,6 +596,7 @@ export default function MobileNotificationsPage() {
           router.replace('/login');
           return;
         }
+        setCurrentUserId(user.id);
         setAuthReady(true);
       } catch (e) {
         console.error(e);
@@ -602,15 +634,19 @@ export default function MobileNotificationsPage() {
   };
 
   const markAsRead = async (item: NotificationItem) => {
-    if (markingId === item.id) return;
+    if (markingId === item.id || !currentUserId) return;
     setMarkingId(item.id);
     try {
       if (item.table_info === 'notifications') {
+        // 계정별 읽음 처리: notification_reads에 upsert
         await supabase
-          .from('notifications')
-          .update({ status: 'read', updated_at: new Date().toISOString() })
-          .eq('id', item.id);
+          .from('notification_reads')
+          .upsert(
+            { notification_id: item.id, user_id: currentUserId, read_at: new Date().toISOString() },
+            { onConflict: 'notification_id,user_id' }
+          );
       } else {
+        // payment_notifications는 global is_sent 유지
         await supabase
           .from('payment_notifications')
           .update({ is_sent: true, sent_at: new Date().toISOString() })
@@ -635,7 +671,7 @@ export default function MobileNotificationsPage() {
 
   const markAllAsRead = async () => {
     const unreadTargets = notifications.filter((n) => n.status === 'unread');
-    if (unreadTargets.length === 0 || markingAll) return;
+    if (unreadTargets.length === 0 || markingAll || !currentUserId) return;
     if (!confirm(`읽지 않은 알림 ${unreadTargets.length}개를 모두 읽음 처리하시겠습니까?`)) return;
     setMarkingAll(true);
     try {
@@ -644,11 +680,16 @@ export default function MobileNotificationsPage() {
 
       const promises: Promise<any>[] = [];
       if (notiIds.length > 0) {
+        // 계정별 일괄 읽음: notification_reads에 bulk upsert
+        const rows = notiIds.map((id) => ({
+          notification_id: id,
+          user_id: currentUserId,
+          read_at: new Date().toISOString(),
+        }));
         promises.push(
           supabase
-            .from('notifications')
-            .update({ status: 'read', updated_at: new Date().toISOString() })
-            .in('id', notiIds)
+            .from('notification_reads')
+            .upsert(rows, { onConflict: 'notification_id,user_id' })
         );
       }
       if (payIds.length > 0) {
