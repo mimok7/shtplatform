@@ -267,6 +267,86 @@ const getAmountSummaryLines = (service: any, type: string): string[] => {
   return [];
 };
 
+type CruiseAmountRow = { label: string; amount: number };
+
+const getCruiseAmountRows = (service: any): CruiseAmountRow[] => {
+  const rawPb = getServicePriceBreakdown(service);
+  const roomPb = getCruiseRoomPriceBreakdown(service);
+
+  // manager1과 동일: roomPb entry가 있으면 그 count 우선, 없으면 서비스 필드 폴백
+  const resolveCount = (entry: any, ...fallbacks: any[]): number => {
+    if (entry !== undefined && entry !== null) {
+      const v = entry?.count;
+      if (v !== undefined && v !== null) return Number(v);
+      return 0;
+    }
+    for (const f of fallbacks) {
+      const n = Number(f ?? 0);
+      if (n > 0) return n;
+    }
+    return 0;
+  };
+
+  const adultCount = resolveCount(roomPb?.adult, service.adult, service.adult_count, service.re_adult_count, service.reservation?.re_adult_count);
+  const childCount = resolveCount(roomPb?.child, service.child, service.child_count, service.re_child_count, service.reservation?.re_child_count);
+  const childOlderCount = resolveCount(roomPb?.child_older, service.childOlderCount, service.child_older_count);
+  const infantCount = resolveCount(roomPb?.infant, service.infant, service.infant_count, service.re_infant_count, service.reservation?.re_infant_count);
+  const singleCount = resolveCount(roomPb?.single, service.singleCount, service.single_count);
+  const childExtraBedCount = resolveCount(roomPb?.child_extra_bed, service.childExtraBedCount, service.child_extra_bed_count);
+  const extraBedCount = resolveCount(roomPb?.extra_bed, service.extraBedCount, service.extra_bed_count);
+
+  // manager1과 동일: count > 0이면 라인 생성. unit은 total/count 역산 → rawUnit → fallbackUnit 순서
+  const makeLine = (
+    label: string,
+    entry: any,
+    count: number,
+    fallbackUnit: number,
+    unitLabel = '명',
+  ): CruiseAmountRow | null => {
+    if (count <= 0) return null;
+    const rawUnit = Number(entry?.unit_price ?? 0);
+    const rawTotal = Number(entry?.total ?? 0);
+    const unit = rawTotal > 0 && count > 0
+      ? Math.round(rawTotal / count)
+      : (rawUnit > 0 ? rawUnit : fallbackUnit);
+    const amount = rawTotal > 0 ? rawTotal : unit * count;
+    const labelStr = unit > 0
+      ? `${label} ${formatMoney(unit)} × ${count}${unitLabel}`
+      : `${label} ${count}${unitLabel}`;
+    return { label: labelStr, amount };
+  };
+
+  const rows: CruiseAmountRow[] = [];
+  const add = (r: CruiseAmountRow | null) => { if (r) rows.push(r); };
+
+  add(makeLine('성인', roomPb?.adult, adultCount, Number(service.unitPrice || service.priceAdult || 0)));
+  add(makeLine('아동(5~7)', roomPb?.child, childCount, Number(service.priceChild || 0)));
+  add(makeLine('아동(8~11)', roomPb?.child_older, childOlderCount, Number(service.priceChildOlder || service.priceChild || 0)));
+  add(makeLine('아동엑베', roomPb?.child_extra_bed, childExtraBedCount, Number(service.priceChildExtraBed || 0)));
+  add(makeLine('유아', roomPb?.infant, infantCount, Number(service.priceInfant || 0)));
+  add(makeLine('엑스트라베드', roomPb?.extra_bed, extraBedCount, Number(service.priceExtraBed || 0), '개'));
+  add(makeLine('싱글차액', roomPb?.single, singleCount, Number(service.priceSingle || 0)));
+
+  const optionsTotal = Number(rawPb?.options_total ?? rawPb?.option_total ?? 0);
+  if (optionsTotal > 0) rows.push({ label: '선택 옵션 합계', amount: optionsTotal });
+
+  const surchargeTotal = Number(rawPb?.surcharge_total || 0);
+  if (surchargeTotal > 0) rows.push({ label: '성수기/공휴일 추가요금', amount: surchargeTotal });
+
+  const discountAmount = Number(rawPb?.discount_amount || 0);
+  if (discountAmount > 0) {
+    const discountRate = Number(rawPb?.discount_rate || 0);
+    rows.push({ label: `할인요금${discountRate > 0 ? ` (${discountRate}%)` : ''}`, amount: -discountAmount });
+  }
+
+  if (rows.length === 0) {
+    const total = getCruiseDisplayTotal(service);
+    if (total > 0) rows.push({ label: '총액', amount: total });
+  }
+
+  return rows;
+};
+
 function formatDatetimeOffset(value: any): string {
   if (!value) return '-';
   const raw = String(value).trim();
@@ -527,7 +607,8 @@ function ServiceCard({
   const reservationId = String(service?.reservation_id || service?.reservationId || service?.re_id || '').trim();
   const canDelete = !!onDeleteService && !!reservationId;
   const isDeleting = !!deletingReservationId && deletingReservationId === reservationId;
-  const amountSummaryLines = getAmountSummaryLines(service, type);
+  const amountSummaryLines = type === 'cruise' ? [] : getAmountSummaryLines(service, type);
+  const cruiseAmountRows = type === 'cruise' ? getCruiseAmountRows(service) : [];
   const manualAdditionalFee = getManualAdditionalFee(service);
   const manualAdditionalFeeDetail = getManualAdditionalFeeDetail(service);
   const additionalFeeItems = (() => {
@@ -700,7 +781,22 @@ function ServiceCard({
         </div>
       )}
 
-      {amountSummaryLines.length > 0 && (
+      {type === 'cruise' && cruiseAmountRows.length > 0 && (
+        <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-2">
+          <div className="mb-1 text-[11px] font-semibold text-blue-700 whitespace-nowrap">요금 내역</div>
+          <div className="space-y-1">
+            {cruiseAmountRows.map((row, idx) => (
+              <div key={`cruise-amt-${idx}`} className="flex items-center justify-between text-[11px]">
+                <span className="text-amber-900">{row.label}</span>
+                <span className={`font-semibold ${row.amount < 0 ? 'text-indigo-700' : 'text-amber-900'}`}>
+                  {row.amount < 0 ? `-${formatMoney(-row.amount)}` : formatMoney(row.amount)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {type !== 'cruise' && amountSummaryLines.length > 0 && (
         <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-2">
           <div className="mb-1 text-[11px] font-semibold text-blue-700 whitespace-nowrap">요금 내역</div>
           <div className="space-y-0.5">
@@ -1122,6 +1218,21 @@ export default function ReservationDetailModal({
 
     for (const current of enrichedServices || []) {
       const reservationId = String(current?.reservation_id || current?.reservationId || '').trim();
+      const serviceType = String(current?.serviceType || '').toLowerCase();
+
+      // 크루즈는 price_breakdown 기반 계산 우선 사용 (DB total_amount는 옵션이 누락된 경우가 있음)
+      if (serviceType === 'cruise') {
+        const cruiseTotal = getCruiseDisplayTotal(current);
+        if (cruiseTotal > 0) {
+          if (reservationId && !reservationTotals.has(reservationId)) {
+            reservationTotals.set(reservationId, cruiseTotal);
+          } else if (!reservationId) {
+            rowFallbackTotal += cruiseTotal;
+          }
+          continue;
+        }
+      }
+
       const reservationTotal = getReservationTotalAmount(current);
 
       if (reservationId && reservationTotal !== null && reservationTotal > 0) {
@@ -1131,7 +1242,6 @@ export default function ReservationDetailModal({
         continue;
       }
 
-      const serviceType = String(current?.serviceType || '').toLowerCase();
       const rowTotal = serviceType === 'cruise'
         ? getCruiseDisplayTotal(current)
         : Number(current?.totalAmount ?? current?.total_amount ?? current?.amount ?? current?.totalPrice ?? current?.total_price ?? current?.room_total_price ?? current?.car_total_price ?? 0);

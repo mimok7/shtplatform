@@ -1364,16 +1364,20 @@ function CruiseReservationEditContent() {
                     .filter((id: number) => !isNaN(id));
             }
 
-            const persistedOptions = Array.isArray(resRow.price_breakdown?.options)
+            // price_breakdown.options (신형) 또는 price_breakdown.selected_options (구형) 모두 지원
+            const rawPersistedOptionsArray = Array.isArray(resRow.price_breakdown?.options)
                 ? resRow.price_breakdown.options
-                    .map((option: any) => ({
-                        option_id: Number(option?.option_id),
-                        name: String(option?.name || option?.option_name || ''),
-                        price: Number(option?.price || option?.option_price || 0),
-                        quantity: Number(option?.quantity) || 1,
-                    }))
-                    .filter((option: any) => Number.isFinite(option.option_id))
+                : Array.isArray(resRow.price_breakdown?.selected_options)
+                ? resRow.price_breakdown.selected_options
                 : [];
+            const persistedOptions = rawPersistedOptionsArray
+                .map((option: any) => ({
+                    option_id: Number(option?.option_id),
+                    name: String(option?.name || option?.option_name || ''),
+                    price: Number(option?.price || option?.option_price || option?.unit_price || 0),
+                    quantity: Number(option?.quantity) || 1,
+                }))
+                .filter((option: any) => Number.isFinite(option.option_id) && option.option_id > 0);
 
             // price_breakdown.options에서 수량 복원
             const restoredQuantities: Record<number, number> = {};
