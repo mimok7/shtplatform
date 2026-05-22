@@ -85,7 +85,7 @@ const normalizeCruisePriceBreakdown = (pb: any, infantCount: number) => {
         .reduce((sum: number, s: any) => sum + Number(s?.total || 0), 0);
 
     const subtotal = Number(pb?.subtotal || 0);
-    const optionTotal = Number(pb?.option_total || 0);
+    const optionTotal = Number(pb?.options_total ?? pb?.option_total ?? 0);
 
     const computedGrandTotal = subtotal + surchargeTotal + optionTotal;
 
@@ -129,16 +129,38 @@ const getCruiseRoomPriceBreakdown = (service: any) => {
 };
 
 const getCruiseDisplayTotal = (service: any): number => {
-    const roomPb = getCruiseRoomPriceBreakdown(service);
-    const roomPbTotal = Number(roomPb?.total);
-    if (Number.isFinite(roomPbTotal) && roomPbTotal > 0) return roomPbTotal;
-
-    const roomTotal = Number(service?.room_total_price || 0);
-    if (roomTotal > 0) return roomTotal;
-
     const rawPb = getServicePriceBreakdown(service);
+
+    // 1. price_breakdown.grand_total 우선 (예약수정 저장 시 옵션 포함 최신값)
     const pbGrandTotal = Number(rawPb?.grand_total);
     if (Number.isFinite(pbGrandTotal) && pbGrandTotal > 0) return pbGrandTotal;
+
+    // 2. roomTotal + options_total + surcharge + additionalFee - discount 직접 계산
+    const roomPb = getCruiseRoomPriceBreakdown(service);
+    const roomPbTotal = Number(roomPb?.total);
+    const roomTotal = roomPbTotal > 0 ? roomPbTotal : Number(service?.room_total_price || 0);
+
+    if (roomTotal > 0) {
+        const optionTotal = Number(rawPb?.options_total ?? rawPb?.option_total ?? 0);
+        const surchargeTotal = Number(rawPb?.surcharge_total || 0);
+        const additionalFee = Number((rawPb?.additional_fee_manual ?? rawPb?.adjustment_total ?? rawPb?.additional_fee) || 0);
+        const discountAmount = Number(rawPb?.discount_amount || 0);
+
+        const computedTotal = roomTotal + optionTotal + surchargeTotal + additionalFee - discountAmount;
+        if (computedTotal > 0) return computedTotal;
+        return roomTotal;
+    }
+
+    // 3. reservation.total_amount 폴백
+    const reservationAmount = getReservationStoredAmount({
+        total_amount: service?.reservation_total_amount
+            ?? service?.reservationTotalAmount
+            ?? service?.reservation?.total_amount,
+        price_breakdown: service?.reservation_price_breakdown
+            ?? service?.reservation?.price_breakdown
+            ?? null,
+    });
+    if (reservationAmount > 0) return reservationAmount;
 
     return Number(service?.totalPrice || service?.total_amount || 0);
 };
@@ -907,10 +929,10 @@ export default function UserReservationDetailModal({
                                                 <span className="font-medium">{Number(pb.surcharge_total || 0).toLocaleString()}동</span>
                                             </div>
                                         )}
-                                        {(pb?.option_total || 0) > 0 && (
+                                        {Number(pb?.options_total ?? pb?.option_total ?? 0) > 0 && (
                                             <div className="flex justify-between text-sm">
                                                 <span className="text-gray-600">선택 옵션 합계</span>
-                                                <span className="font-medium">{Number(pb.option_total || 0).toLocaleString()}동</span>
+                                                <span className="font-medium">{Number(pb?.options_total ?? pb?.option_total ?? 0).toLocaleString()}동</span>
                                             </div>
                                         )}
                                         {Array.isArray(pb?.additional_fee_items) && pb.additional_fee_items.map((item: any, idx: number) => {

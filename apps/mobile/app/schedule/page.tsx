@@ -201,10 +201,25 @@ const formatScheduleRequestNote = (value: any) => {
   const text = String(value || '').trim();
   if (!text) return '';
 
-  return text
+  const autoRoomSegmentPattern = /(?:비고\s*:\s*)?(?:\[(?:객실|구성)\s*\d+\]|(?:객실|구성)\s*\d+\b)\s*[^|\n]*\|\s*성인\s*\d+\s*,\s*아동(?:\([^)]+\))?\s*\d+\s*,\s*아동엑베\s*\d+\s*,\s*유아\s*\d+\s*,\s*성인엑베\s*\d+\s*,\s*싱글\s*\d+/gi;
+  const hiddenLinePattern = /^(?:비고\s*:\s*)?(?:\[(?:옵션|객실|구성)\s*\d+\]|(?:옵션|객실|구성)\s*\d+\b)/;
+
+  const sanitized = text
     .replace(/\[CHILD_OLDER_COUNTS:[^\]]*\]\s*/gi, '')
-    .replace(/\s{2,}/g, ' ')
+    .replace(autoRoomSegmentPattern, ' ')
     .trim();
+
+  const lines = sanitized
+    .split('\n')
+    .map((line) => line.replace(/\u00A0/g, ' ').trim())
+    .filter(Boolean)
+    .filter((line) => {
+      if (hiddenLinePattern.test(line)) return false;
+      if (/\|\s*성인\s*\d+/.test(line) && /(아동\s*\d+|유아\s*\d+|싱글\s*\d+|엑베)/.test(line)) return false;
+      return true;
+    });
+
+  return lines.join('\n').replace(/\s{2,}/g, ' ').trim();
 };
 
 const hasReservationOrderId = (row: any): boolean => {

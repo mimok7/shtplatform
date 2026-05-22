@@ -1,13 +1,14 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Bell, Check, Loader2, Plus, RefreshCw, Save, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Bell, Check, Loader2, Plus, RefreshCw, Save, ToggleLeft, ToggleRight, Trash2 } from 'lucide-react';
 import AdminLayout from '@/components/AdminLayout';
 import supabase from '@/lib/supabase';
 
 const APPS_TABLE = 'notification_apps';
 const EVENT_TYPES_TABLE = 'notification_event_types';
 const APP_EVENT_SETTINGS_TABLE = 'notification_app_event_settings';
+const PROTECTED_EVENT_KEYS = new Set(['reservation_realtime']);
 
 type NotificationApp = {
   app_name: string;
@@ -219,6 +220,7 @@ export default function ReservationSettingsPage() {
   const [seeding, setSeeding] = useState(false);
   const [addingEvent, setAddingEvent] = useState(false);
   const [seedingServiceEvents, setSeedingServiceEvents] = useState(false);
+  const [deletingEventKey, setDeletingEventKey] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [draft, setDraft] = useState<EventDraft>(DEFAULT_DRAFT);
@@ -476,6 +478,35 @@ export default function ReservationSettingsPage() {
     setSuccessMessage('새 알림 유형을 추가했습니다.');
     await loadSettings();
     setAddingEvent(false);
+  };
+
+  const deleteEventType = async (eventKey: string) => {
+    if (PROTECTED_EVENT_KEYS.has(eventKey)) {
+      setErrorMessage(`핵심 이벤트(${eventKey})는 삭제할 수 없습니다.`);
+      setSuccessMessage(null);
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `알림 유형(${eventKey})을 삭제하시겠습니까?\n\n해당 이벤트의 앱별 허용 설정도 함께 삭제됩니다.`
+    );
+    if (!confirmed) return;
+
+    setDeletingEventKey(eventKey);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+
+    const { error } = await supabase.from(EVENT_TYPES_TABLE).delete().eq('event_key', eventKey);
+
+    if (error) {
+      setErrorMessage('알림 유형 삭제에 실패했습니다.');
+      setDeletingEventKey(null);
+      return;
+    }
+
+    setSuccessMessage('알림 유형을 삭제했습니다.');
+    await loadSettings();
+    setDeletingEventKey(null);
   };
 
   const seedServiceEventTypes = async () => {
@@ -883,12 +914,26 @@ export default function ReservationSettingsPage() {
               <tbody className="divide-y divide-gray-100">
                 {events.map((event) => {
                   const eventSaving = savingKey === `event:${event.event_key}`;
+                  const eventDeleting = deletingEventKey === event.event_key;
+                  const isProtectedEvent = PROTECTED_EVENT_KEYS.has(event.event_key);
                   return (
                     <tr key={event.event_key}>
                       <td className="sticky left-0 z-10 bg-white px-3 py-3">
                         <p className="font-semibold text-gray-900">{event.event_label}</p>
                         <p className="mt-0.5 text-xs text-gray-500">{event.event_key}</p>
                         {event.description && <p className="mt-1 max-w-sm text-xs text-gray-500">{event.description}</p>}
+                        <div className="mt-2">
+                          <button
+                            type="button"
+                            disabled={eventDeleting || isProtectedEvent}
+                            onClick={() => void deleteEventType(event.event_key)}
+                            title={isProtectedEvent ? '핵심 이벤트는 삭제할 수 없습니다.' : undefined}
+                            className="inline-flex items-center rounded-md border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {eventDeleting ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Trash2 className="mr-1.5 h-3.5 w-3.5" />}
+                            삭제
+                          </button>
+                        </div>
                       </td>
                       {apps.map((app) => {
                         const setting = settingMap.get(`${app.app_name}:${event.event_key}`);

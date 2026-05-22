@@ -170,6 +170,8 @@ function CruiseReservationEditContent() {
     // 추가 옵션 (cruise_tour_options)
     const [tourOptions, setTourOptions] = useState<any[]>([]);
     const [selectedOptionIds, setSelectedOptionIds] = useState<number[]>([]);
+    const [persistedSelectedOptions, setPersistedSelectedOptions] = useState<Array<{ option_id: number; name: string; price: number }>>([]);
+    const [optionQuantities, setOptionQuantities] = useState<Record<number, number>>({});
     const [additionalFee, setAdditionalFee] = useState(0);
     const [manualAdditionalFee, setManualAdditionalFee] = useState(0);
     const [manualAdditionalFeeInput, setManualAdditionalFeeInput] = useState('');
@@ -605,20 +607,64 @@ function CruiseReservationEditContent() {
         [tourOptions, currentCruiseName, currentScheduleType]
     );
 
-    const effectiveSelectedOptionIds = useMemo(() => {
-        const visibleOptionIdSet = new Set(visibleTourOptions.map((opt: any) => opt.option_id));
-        return selectedOptionIds.filter((id) => visibleOptionIdSet.has(id));
-    }, [selectedOptionIds, visibleTourOptions]);
+    const selectedOptionDetails = useMemo(() => {
+        const liveOptionMap = new Map<number, any>();
+        tourOptions.forEach((option: any) => {
+            const id = Number(option?.option_id);
+            if (Number.isFinite(id)) liveOptionMap.set(id, option);
+        });
+
+        const persistedOptionMap = new Map<number, { option_id: number; name: string; price: number }>();
+        persistedSelectedOptions.forEach((option) => {
+            const id = Number(option?.option_id);
+            if (Number.isFinite(id)) persistedOptionMap.set(id, option);
+        });
+
+        const visibleOptionIdSet = new Set(
+            visibleTourOptions
+                .map((option: any) => Number(option?.option_id))
+                .filter((id: number) => Number.isFinite(id))
+        );
+
+        return selectedOptionIds
+            .map((rawId) => Number(rawId))
+            .filter((id) => Number.isFinite(id))
+            .map((id) => {
+                const liveOption = liveOptionMap.get(id);
+                if (liveOption) {
+                    return {
+                        option_id: id,
+                        name: String(liveOption.option_name || liveOption.option_name_en || `옵션 ${id}`),
+                        price: Number(liveOption.option_price) || 0,
+                        hidden_by_filter: !visibleOptionIdSet.has(id),
+                    };
+                }
+
+                const persisted = persistedOptionMap.get(id);
+                if (persisted) {
+                    return {
+                        option_id: id,
+                        name: String(persisted.name || `옵션 ${id}`),
+                        price: Number(persisted.price) || 0,
+                        hidden_by_filter: true,
+                    };
+                }
+
+                return {
+                    option_id: id,
+                    name: `옵션 ${id}`,
+                    price: 0,
+                    hidden_by_filter: true,
+                };
+            });
+    }, [persistedSelectedOptions, selectedOptionIds, tourOptions, visibleTourOptions]);
 
     const selectedOptionsTotal = useMemo(() => {
-        return visibleTourOptions.reduce((sum: number, option: any) => {
-            if (!effectiveSelectedOptionIds.includes(option.option_id)) {
-                return sum;
-            }
-
-            return sum + (Number(option.option_price) || 0);
+        return selectedOptionDetails.reduce((sum, option) => {
+            const qty = optionQuantities[Number(option.option_id)] || 1;
+            return sum + (Number(option.price) || 0) * qty;
         }, 0);
-    }, [visibleTourOptions, effectiveSelectedOptionIds]);
+    }, [selectedOptionDetails, optionQuantities]);
 
     const birthdayEventCount = useMemo(() => {
         return roomForms.filter((room) => Boolean(room.birthday_event)).length;
@@ -817,6 +863,35 @@ function CruiseReservationEditContent() {
         }
     }, [reservationId]);
 
+    // requestNote 텍스트에서 옵션 파싱 (price_breakdown.options 없는 구형 예약 대응)
+    useEffect(() => {
+        if (tourOptions.length === 0 || loading || selectedOptionIds.length > 0 || !requestNote) return;
+        const lines = requestNote.split('\n');
+        const parsedIds: number[] = [];
+        const newQty: Record<number, number> = {};
+        for (const line of lines) {
+            const match = line.trim().match(/^[-•]\s+(.+?)\s+x(\d+)/);
+            if (!match) continue;
+            const optName = match[1].trim();
+            const qty = parseInt(match[2], 10) || 1;
+            const found = tourOptions.find((opt) =>
+                opt.option_name === optName ||
+                opt.option_name.includes(optName) ||
+                optName.includes(opt.option_name)
+            );
+            if (found) {
+                const optId = Number(found.option_id);
+                parsedIds.push(optId);
+                if (qty > 1) newQty[optId] = qty;
+            }
+        }
+        if (parsedIds.length > 0) {
+            setSelectedOptionIds(parsedIds);
+            if (Object.keys(newQty).length > 0) setOptionQuantities(newQty);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [tourOptions.length, loading, requestNote]);
+
     const loadRoomPriceOptions = async () => {
         try {
             // cruise_rate_card 테이블에서 모든 옵션 가져오기
@@ -941,8 +1016,8 @@ function CruiseReservationEditContent() {
                 return;
             }
 
+            setTourOptions(options || []);
             if (options && options.length > 0) {
-                setTourOptions(options);
                 console.log('✅ 추가 옵션 로드 완료:', options.length, '개');
             } else {
                 console.log('ℹ️ 추가 옵션 데이터 없음');
@@ -1265,6 +1340,28 @@ function CruiseReservationEditContent() {
                 parsedOptionIds = optionsMatch[1].split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
             }
 
+            const persistedOptions = Array.isArray(resRow.price_breakdown?.options)
+                ? resRow.price_breakdown.options
+                    .map((option: any) => ({
+                        option_id: Number(option?.option_id),
+                        name: String(option?.name || option?.option_name || ''),
+                        price: Number(option?.price || option?.option_price || 0),
+                        quantity: Number(option?.quantity) || 1,
+                    }))
+                    .filter((option: any) => Number.isFinite(option.option_id))
+                : [];
+
+            // price_breakdown.options에서 수량 복원
+            const restoredQuantities: Record<number, number> = {};
+            persistedOptions.forEach((opt: any) => {
+                if (opt.quantity && opt.quantity > 1) restoredQuantities[opt.option_id] = opt.quantity;
+            });
+
+            const mergedOptionIds = Array.from(new Set([
+                ...parsedOptionIds,
+                ...persistedOptions.map((option: any) => option.option_id),
+            ])).filter((id) => Number.isFinite(id));
+
             const childBirthDatesMatch = storedRequestNote.match(/\[CHILD_BIRTH_DATES:([^\]]*)\]/);
             const infantBirthDatesMatch = storedRequestNote.match(/\[INFANT_BIRTH_DATES:([^\]]*)\]/);
             const childOlderCountsMatch = storedRequestNote.match(/\[CHILD_OLDER_COUNTS:([^\]]*)\]/);
@@ -1282,7 +1379,9 @@ function CruiseReservationEditContent() {
             setChildBirthDates(parsedChildBirthDates);
             setInfantBirthDates(parsedInfantBirthDates);
 
-            setSelectedOptionIds(parsedOptionIds);
+            setPersistedSelectedOptions(persistedOptions);
+            setSelectedOptionIds(mergedOptionIds);
+            if (Object.keys(restoredQuantities).length > 0) setOptionQuantities(restoredQuantities);
 
             // request_note에서 OPTIONS 부분을 제거한 실제 요청사항만 추출
             const cleanRequestNote = storedRequestNote
@@ -1574,13 +1673,16 @@ function CruiseReservationEditContent() {
             });
 
             const subtotal = roomSummary.roomTotalPrice;
-            const selectedOptionDetails = visibleTourOptions
-                .filter((option: any) => effectiveSelectedOptionIds.includes(option.option_id))
-                .map((option: any) => ({
+            const serializedSelectedOptionDetails = selectedOptionDetails.map((option) => {
+                const qty = optionQuantities[Number(option.option_id)] || 1;
+                return {
                     option_id: option.option_id,
-                    name: option.option_name,
-                    price: Number(option.option_price) || 0,
-                }));
+                    name: option.name,
+                    price: Number(option.price) || 0,
+                    quantity: qty,
+                    total: (Number(option.price) || 0) * qty,
+                };
+            });
             const discountSequence = [
                 discountRate > 0 && discountRateOrder !== null
                     ? { type: 'rate', order: discountRateOrder, value: discountRate }
@@ -1609,7 +1711,7 @@ function CruiseReservationEditContent() {
                 extra_bed: roomSummary.extraBedCount > 0 ? { unit_price: null, count: roomSummary.extraBedCount, total: aggregatedRoomTotals.extra_bed } : null,
                 single: roomSummary.singleCount > 0 ? { unit_price: null, count: roomSummary.singleCount, total: aggregatedRoomTotals.single } : null,
                 child_extra_bed: roomSummary.childExtraBedCount > 0 ? { unit_price: null, count: roomSummary.childExtraBedCount, total: aggregatedRoomTotals.child_extra_bed } : null,
-                options: selectedOptionDetails,
+                options: serializedSelectedOptionDetails,
                 options_total: selectedOptionsTotal,
                 car_total: carTotalPrice,
                 subtotal,
@@ -2664,40 +2766,85 @@ function CruiseReservationEditContent() {
                             {(() => {
                                 const filteredOptions = visibleTourOptions;
 
-                                if (filteredOptions.length === 0) {
-                                    return <p className="text-gray-600 text-sm">이 크루즈의 추가 옵션이 없습니다.</p>;
-                                }
-
                                 return (
                                     <div className="grid grid-cols-1 gap-2">
-                                        {filteredOptions.map(option => (
-                                            <label
+                                        {selectedOptionDetails.length > 0 && (
+                                            <div className="rounded-md border border-emerald-200 bg-emerald-50 p-2">
+                                                <div className="text-xs font-semibold text-emerald-800 mb-1">선택된 옵션</div>
+                                                <div className="space-y-1">
+                                                    {selectedOptionDetails.map((option) => {
+                                                        const qty = optionQuantities[Number(option.option_id)] || 1;
+                                                        const totalPrice = (Number(option.price) || 0) * qty;
+                                                        return (
+                                                            <div key={`selected-${option.option_id}`} className="flex items-center justify-between text-xs text-emerald-900">
+                                                                <span className="flex items-center gap-1">
+                                                                    {option.name}{option.hidden_by_filter ? ' (필터 외)' : ''}
+                                                                    {qty > 1 && <span className="text-emerald-600 font-bold">×{qty}</span>}
+                                                                </span>
+                                                                <span className="font-semibold">+{totalPrice.toLocaleString()}동</span>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {filteredOptions.length === 0 && (
+                                            <p className="text-gray-600 text-sm">이 크루즈의 추가 옵션이 없습니다.</p>
+                                        )}
+
+                                        {filteredOptions.map(option => {
+                                            const optId = Number(option.option_id);
+                                            const isSelected = selectedOptionIds.includes(optId);
+                                            const qty = optionQuantities[optId] || 1;
+                                            return (
+                                            <div
                                                 key={option.option_id}
-                                                className={`flex items-start p-2.5 rounded-md border hover:border-blue-300 cursor-pointer transition-colors ${
-                                                    selectedOptionIds.includes(option.option_id)
-                                                        ? 'bg-blue-50 border-blue-500'
-                                                        : 'bg-white border-gray-200'
+                                                className={`rounded-md border transition-colors ${isSelected
+                                                    ? 'bg-blue-50 border-blue-500'
+                                                    : 'bg-white border-gray-200 hover:border-blue-300'
                                                 }`}
                                             >
-                                                <input
-                                                    type="checkbox"
-                                                    checked={selectedOptionIds.includes(option.option_id)}
-                                                    onChange={(e) => {
-                                                        if (e.target.checked) {
-                                                            setSelectedOptionIds(prev => [...prev, option.option_id]);
-                                                        } else {
-                                                            setSelectedOptionIds(prev => prev.filter(id => id !== option.option_id));
-                                                        }
-                                                    }}
-                                                    className="mt-0.5 mr-2 h-4 w-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
-                                                />
-                                                <div className="flex-1">
-                                                    <div className="text-xs font-semibold text-gray-900">{option.option_name}</div>
-                                                    <div className="text-xs text-gray-600 mt-1">{option.description || option.option_name_en}</div>
-                                                    <div className="text-xs font-bold text-blue-600 mt-1.5">+{option.option_price?.toLocaleString()}동</div>
-                                                </div>
-                                            </label>
-                                        ))}
+                                                <label className="flex items-start p-2.5 cursor-pointer">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={isSelected}
+                                                        onChange={(e) => {
+                                                            if (e.target.checked) {
+                                                                setSelectedOptionIds(prev => [...prev, optId]);
+                                                            } else {
+                                                                setSelectedOptionIds(prev => prev.filter(id => id !== optId));
+                                                                setOptionQuantities(prev => { const n = {...prev}; delete n[optId]; return n; });
+                                                            }
+                                                        }}
+                                                        className="mt-0.5 mr-2 h-4 w-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                                                    />
+                                                    <div className="flex-1">
+                                                        <div className="text-xs font-semibold text-gray-900">{option.option_name}</div>
+                                                        <div className="text-xs text-gray-600 mt-1">{option.description || option.option_name_en}</div>
+                                                        <div className="text-xs font-bold text-blue-600 mt-1.5">+{option.option_price?.toLocaleString()}동</div>
+                                                    </div>
+                                                </label>
+                                                {isSelected && (
+                                                    <div className="flex items-center gap-1.5 px-3 pb-2.5">
+                                                        <span className="text-xs text-gray-500">수량:</span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setOptionQuantities(prev => ({...prev, [optId]: Math.max(1, (prev[optId] || 1) - 1)}))}
+                                                            className="w-5 h-5 flex items-center justify-center rounded bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold"
+                                                        >−</button>
+                                                        <span className="text-xs font-semibold text-gray-800 w-4 text-center">{qty}</span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setOptionQuantities(prev => ({...prev, [optId]: (prev[optId] || 1) + 1}))}
+                                                            className="w-5 h-5 flex items-center justify-center rounded bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold"
+                                                        >+</button>
+                                                        {qty > 1 && <span className="text-xs text-blue-600 font-semibold ml-1">=+{((option.option_price || 0) * qty).toLocaleString()}동</span>}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            );
+                                        })}
                                     </div>
                                 );
                             })()}

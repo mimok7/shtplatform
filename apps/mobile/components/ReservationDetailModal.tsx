@@ -113,17 +113,38 @@ const getCruiseRoomPriceBreakdown = (service: any) => {
 };
 
 const getCruiseDisplayTotal = (service: any): number => {
-  const roomPb = getCruiseRoomPriceBreakdown(service);
-  const roomPbTotal = Number(roomPb?.total);
-  if (Number.isFinite(roomPbTotal) && roomPbTotal > 0) return roomPbTotal;
-
-  const roomTotal = Number(service?.room_total_price || 0);
-  if (roomTotal > 0) return roomTotal;
-
   const rawPb = getServicePriceBreakdown(service);
 
+  // 1. price_breakdown.grand_total 우선 (예약수정 저장 시 옵션 포함 최신값)
   const pbGrandTotal = Number(rawPb?.grand_total);
   if (Number.isFinite(pbGrandTotal) && pbGrandTotal > 0) return pbGrandTotal;
+
+  // 2. roomTotal + options_total + surcharge + additionalFee - discount 직접 계산
+  const roomPb = getCruiseRoomPriceBreakdown(service);
+  const roomPbTotal = Number(roomPb?.total);
+  const roomTotal = roomPbTotal > 0 ? roomPbTotal : Number(service?.room_total_price || 0);
+
+  if (roomTotal > 0) {
+    const optionTotal = Number(rawPb?.options_total ?? rawPb?.option_total ?? 0);
+    const surchargeTotal = Number(rawPb?.surcharge_total || 0);
+    const additionalFee = Number((rawPb?.additional_fee_manual ?? rawPb?.adjustment_total ?? rawPb?.additional_fee) || 0);
+    const discountAmount = Number(rawPb?.discount_amount || 0);
+
+    const computedTotal = roomTotal + optionTotal + surchargeTotal + additionalFee - discountAmount;
+    if (computedTotal > 0) return computedTotal;
+    return roomTotal;
+  }
+
+  // 3. reservation.total_amount 폴백
+  const reservationAmount = getReservationStoredAmount({
+    total_amount: service?.reservation_total_amount
+      ?? service?.reservationTotalAmount
+      ?? service?.reservation?.total_amount,
+    price_breakdown: service?.reservation_price_breakdown
+      ?? service?.reservation?.price_breakdown
+      ?? null,
+  });
+  if (reservationAmount > 0) return reservationAmount;
 
   return Number(service?.totalPrice || service?.total_amount || 0);
 };
@@ -162,6 +183,27 @@ const getAmountSummaryLines = (service: any, type: string): string[] => {
       formatLinePrice('엑스트라', extraBedUnit, extraBedCount, '개'),
       formatLinePrice('싱글', singleUnit, singleCount, '명'),
     ].filter(Boolean) as string[];
+    // 선택 옵션 (price_breakdown.options)
+    const rawPb = getServicePriceBreakdown(service);
+    const pbOptions = Array.isArray(rawPb?.options) ? rawPb.options : [];
+    for (const opt of pbOptions) {
+      const qty = Number(opt?.quantity) || 1;
+      const price = Number(opt?.price) || 0;
+      const total = Number(opt?.total) || price * qty;
+      const name = String(opt?.name || '').trim();
+      if (name && (total > 0 || price > 0)) {
+        lines.push(qty > 1 ? `${name} ${formatMoney(price)} × ${qty}개` : `${name} +${formatMoney(price)}`);
+      }
+    }
+    // 성수기/공휴일 추가요금
+    const surchargeTotal = Number(rawPb?.surcharge_total || 0);
+    if (surchargeTotal > 0) lines.push(`성수기/공휴일 추가요금 +${formatMoney(surchargeTotal)}`);
+    // 할인요금
+    const discountAmount = Number(rawPb?.discount_amount || 0);
+    if (discountAmount > 0) {
+      const discountRate = Number(rawPb?.discount_rate || 0);
+      lines.push(`할인요금${discountRate > 0 ? ` (${discountRate}%)` : ''} -${formatMoney(discountAmount)}`);
+    }
     const cruiseDisplayTotal = getCruiseDisplayTotal(service);
     if (lines.length === 0 && cruiseDisplayTotal > 0) {
       return [`총액 ${formatMoney(cruiseDisplayTotal)}`];
@@ -488,6 +530,11 @@ function ServiceCard({
   const amountSummaryLines = getAmountSummaryLines(service, type);
   const manualAdditionalFee = getManualAdditionalFee(service);
   const manualAdditionalFeeDetail = getManualAdditionalFeeDetail(service);
+  const additionalFeeItems = (() => {
+    const pb = getServicePriceBreakdown(service);
+    return (Array.isArray(pb?.additional_fee_items) ? pb.additional_fee_items : [])
+      .filter((item: any) => Number(item?.amount || 0) !== 0);
+  })();
   const isPackageService = !!service?.isPackageService;
   const shtCategory = String(service?.category || '').toLowerCase();
   const isShtDropoff = type === 'sht' && (
@@ -664,16 +711,30 @@ function ServiceCard({
         </div>
       )}
 
-      {!isPackageService && !isShtDropoff && (manualAdditionalFee !== 0 || manualAdditionalFeeDetail) && (
+      {!isPackageService && !isShtDropoff && (additionalFeeItems.length > 0 || manualAdditionalFee !== 0 || manualAdditionalFeeDetail) && (
         <div className="mt-2 rounded bg-rose-50/70 p-2 text-[11px]">
-          {manualAdditionalFee !== 0 && (
-            <div className="flex items-center justify-between">
-              <span className="whitespace-nowrap font-semibold text-blue-700">추가/차감</span>
-              <span className="font-semibold text-rose-700">{formatSignedAmount(manualAdditionalFee)}</span>
+          <div className="mb-1 text-[11px] font-semibold text-blue-700 whitespace-nowrap">추가/차감</div>
+          {additionalFeeItems.length > 0 ? (
+            <div className="space-y-0.5">
+              {additionalFeeItems.map((item: any, idx: number) => (
+                <div key={idx} className="flex items-center justify-between">
+                  <span className="text-rose-800">{item?.name || '추가내역'}</span>
+                  <span className="font-semibold text-rose-700">{formatSignedAmount(Number(item?.amount || 0))}</span>
+                </div>
+              ))}
             </div>
-          )}
-          {manualAdditionalFeeDetail && (
-            <div className="mt-1 whitespace-pre-line text-rose-700"><span className="font-semibold text-blue-700">내역: </span>{manualAdditionalFeeDetail}</div>
+          ) : (
+            <>
+              {manualAdditionalFee !== 0 && (
+                <div className="flex items-center justify-between">
+                  <span className="text-rose-800">{manualAdditionalFeeDetail || '합계'}</span>
+                  <span className="font-semibold text-rose-700">{formatSignedAmount(manualAdditionalFee)}</span>
+                </div>
+              )}
+              {manualAdditionalFeeDetail && manualAdditionalFee === 0 && (
+                <div className="whitespace-pre-line text-rose-700">{manualAdditionalFeeDetail}</div>
+              )}
+            </>
           )}
         </div>
       )}
