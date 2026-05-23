@@ -351,9 +351,57 @@ async function runCron() {
       });
       pushSent += result.sentCount;
       pushFailed += result.failCount;
+
+      const nowIso = new Date().toISOString();
+      await serviceSupabase.from('notifications').insert({
+        type: 'system',
+        category: 'reservation',
+        subcategory: candidate.eventKey,
+        title: `${candidate.serviceLabel} 정보 확인 필요`,
+        message: body,
+        target_table: 'reservation',
+        target_id: candidate.reservationId,
+        priority: 'high',
+        status: 'unread',
+        metadata: {
+          eventKey: candidate.eventKey,
+          usageDate: candidate.usageDate,
+          missingFields: candidate.missingFields,
+          dedupeKey: candidate.dedupeKey,
+          sentCount: result.sentCount,
+          failCount: result.failCount,
+          allowedApps: result.allowedAppNames,
+        },
+        created_at: nowIso,
+        updated_at: nowIso,
+      });
     } catch (err) {
       console.warn('[service-missing-fields-notifications] push 발송 실패(로그는 저장됨):', err);
       pushFailed += 1;
+
+      const nowIso = new Date().toISOString();
+      await serviceSupabase.from('notifications').insert({
+        type: 'system',
+        category: 'reservation',
+        subcategory: candidate.eventKey,
+        title: `${candidate.serviceLabel} 정보 확인 필요`,
+        message: body,
+        target_table: 'reservation',
+        target_id: candidate.reservationId,
+        priority: 'high',
+        status: 'unread',
+        metadata: {
+          eventKey: candidate.eventKey,
+          usageDate: candidate.usageDate,
+          missingFields: candidate.missingFields,
+          dedupeKey: candidate.dedupeKey,
+          sentCount: 0,
+          failCount: 1,
+          dispatchError: err instanceof Error ? err.message : String(err),
+        },
+        created_at: nowIso,
+        updated_at: nowIso,
+      });
     }
   }
 

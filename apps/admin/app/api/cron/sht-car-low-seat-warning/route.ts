@@ -1,17 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import webpush from 'web-push';
 import serviceSupabase from '@/lib/serviceSupabase';
+import { dispatchPushNotification } from '@/lib/notificationDispatcher';
 
 const EVENT_KEY = 'sht_car_low_seat_warning';
 const REQUESTED_APP_NAMES = ['manager', 'manager1', 'mobile'];
-
-const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || '';
-const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || '';
-const VAPID_EMAIL = process.env.VAPID_EMAIL || 'mailto:admin@stayhalong.com';
-
-if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
-  webpush.setVapidDetails(VAPID_EMAIL, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
-}
 
 type SeatRow = {
   reservation_id: string | null;
@@ -30,47 +22,6 @@ type VehicleAggregate = {
   emails: string[];
   bookers: Array<{ name: string; email: string }>;
 };
-
-type AppRouteConfig = {
-  baseUrl: string;
-  defaultPath: string;
-};
-
-const APP_ROUTE_CONFIG: Record<string, AppRouteConfig> = {
-  manager: { baseUrl: 'https://manager.stayhalong.com', defaultPath: '/manager/reservations' },
-  manager1: { baseUrl: 'https://manag.staryhalong.com', defaultPath: '/manager/reservations' },
-  mobile: { baseUrl: 'https://newmobile.stayhalong.com', defaultPath: '/manager/reservations' },
-};
-
-function normalizeBaseUrl(url: string) {
-  return url.replace(/\/$/, '');
-}
-
-function buildUrlForApp(appName: string | null | undefined, rawUrl?: string) {
-  const appConfig = APP_ROUTE_CONFIG[appName || ''] || APP_ROUTE_CONFIG.manager;
-  const baseUrl = normalizeBaseUrl(appConfig.baseUrl);
-
-  if (typeof rawUrl !== 'string' || !rawUrl.trim()) {
-    return `${baseUrl}${appConfig.defaultPath}`;
-  }
-
-  const trimmed = rawUrl.trim();
-  if (trimmed.startsWith('/')) {
-    return `${baseUrl}${trimmed}`;
-  }
-
-  try {
-    const parsed = new URL(trimmed);
-    return `${baseUrl}${parsed.pathname}${parsed.search}${parsed.hash}`;
-  } catch {
-    return `${baseUrl}${appConfig.defaultPath}`;
-  }
-}
-
-function buildIconForApp(appName: string | null | undefined) {
-  const appConfig = APP_ROUTE_CONFIG[appName || ''] || APP_ROUTE_CONFIG.manager;
-  return `${normalizeBaseUrl(appConfig.baseUrl)}/icon-192.png`;
-}
 
 function getKstDate(offsetDays: number) {
   const nowUtc = new Date();
@@ -101,57 +52,6 @@ function splitSeatNumbers(seatText: string | null | undefined) {
     .filter(Boolean);
 }
 
-async function resolveAllowedAppNames(notificationType: string, requestedAppNames: string[]) {
-  if (!serviceSupabase) {
-    return { appNames: requestedAppNames, policyApplied: false, warning: 'service client unavailable' };
-  }
-
-  const [appsResult, eventResult, settingsResult] = await Promise.all([
-    serviceSupabase.from('notification_apps').select('app_name, enabled'),
-    serviceSupabase
-      .from('notification_event_types')
-      .select('event_key, is_active')
-      .eq('event_key', notificationType)
-      .maybeSingle(),
-    serviceSupabase
-      .from('notification_app_event_settings')
-      .select('app_name, enabled')
-      .eq('event_key', notificationType)
-      .eq('enabled', true),
-  ]);
-
-  if (appsResult.error || eventResult.error || settingsResult.error) {
-    return {
-      appNames: requestedAppNames,
-      policyApplied: false,
-      warning: 'notification_app_settings_unavailable',
-    };
-  }
-
-  if (!eventResult.data || eventResult.data.is_active === false) {
-    return { appNames: [], policyApplied: true, warning: 'notification_type_disabled' };
-  }
-
-  const enabledApps = new Set(
-    (appsResult.data || [])
-      .filter((app) => app.enabled !== false)
-      .map((app) => app.app_name)
-  );
-
-  const eventAllowedApps = new Set(
-    (settingsResult.data || [])
-      .filter((setting) => setting.enabled !== false)
-      .map((setting) => setting.app_name)
-  );
-
-  const policyAllowedApps = Array.from(enabledApps).filter((appName) => eventAllowedApps.has(appName));
-  const appNames = requestedAppNames.length > 0
-    ? requestedAppNames.filter((appName) => policyAllowedApps.includes(appName))
-    : policyAllowedApps;
-
-  return { appNames, policyApplied: true };
-}
-
 function buildBody(candidate: VehicleAggregate) {
   const previewEmails = candidate.emails.slice(0, 3).join(', ');
   const extra = candidate.emails.length > 3 ? ` 외 ${candidate.emails.length - 3}건` : '';
@@ -175,10 +75,6 @@ function buildBody(candidate: VehicleAggregate) {
 async function runCron() {
   if (!serviceSupabase) {
     return NextResponse.json({ error: 'Service role client unavailable' }, { status: 500 });
-  }
-
-  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
-    return NextResponse.json({ error: 'VAPID keys are missing' }, { status: 503 });
   }
 
   const targetPickupDate = getKstDate(5);
@@ -328,57 +224,13 @@ async function runCron() {
     });
   }
 
-  const allowedAppPolicy = await resolveAllowedAppNames(EVENT_KEY, REQUESTED_APP_NAMES);
-
-  if (allowedAppPolicy.policyApplied && allowedAppPolicy.appNames.length === 0) {
-    return NextResponse.json({
-      ok: true,
-      eventKey: EVENT_KEY,
-      pickupDate: targetPickupDate,
-      candidates: candidates.length,
-      sent: 0,
-      skipped: candidates.length,
-      message: '알림유형 비활성 또는 허용 앱 없음',
-      warning: allowedAppPolicy.warning,
-    });
-  }
-
-  const { data: subscriptions, error: subError } = await serviceSupabase
-    .from('push_subscriptions')
-    .select('id, endpoint, p256dh, auth, user_id, app_name, user_agent, last_used_at, created_at')
-    .eq('is_active', true)
-    .in('app_name', allowedAppPolicy.appNames);
-
-  if (subError) {
-    console.error('[sht-car-low-seat-warning] push_subscriptions 조회 실패:', subError);
-    return NextResponse.json({ error: 'push_subscriptions query failed' }, { status: 500 });
-  }
-
-  const dedupedMap = new Map<string, (typeof subscriptions)[number]>();
-
-  for (const sub of subscriptions || []) {
-    const key = sub.user_id && sub.app_name && sub.user_agent
-      ? `${sub.user_id}::${sub.app_name}::${sub.user_agent}`
-      : `__raw__::${sub.id}`;
-
-    const existing = dedupedMap.get(key);
-    if (!existing) {
-      dedupedMap.set(key, sub);
-      continue;
-    }
-
-    const existingTime = new Date(existing.last_used_at || existing.created_at || 0).getTime();
-    const currentTime = new Date(sub.last_used_at || sub.created_at || 0).getTime();
-    if (currentTime > existingTime) {
-      dedupedMap.set(key, sub);
-    }
-  }
-
-  const targetSubscriptions = Array.from(dedupedMap.values());
-
   let sent = 0;
   let skipped = 0;
   let failed = 0;
+  let pushSent = 0;
+  let pushFailed = 0;
+  const pushWarnings = new Set<string>();
+  const allowedApps = new Set<string>();
 
   for (const candidate of candidates) {
     const dedupeKey = `${candidate.pickupDate}:${candidate.vehicleNumber}`;
@@ -411,56 +263,40 @@ async function runCron() {
       continue;
     }
 
-    const results = await Promise.allSettled(
-      targetSubscriptions.map(async (sub) => {
-        try {
-          const targetUrl = buildUrlForApp(sub.app_name, '/manager/reservations');
-          const targetIcon = buildIconForApp(sub.app_name);
-          const payload = JSON.stringify({
-            title: '스하차량 취소 위험 알림',
-            body: buildBody(candidate),
-            icon: targetIcon,
-            badge: targetIcon,
-            tag: `sht-car-low-seat:${dedupeKey}`,
-            url: targetUrl,
-            requireInteraction: true,
-            notificationType: EVENT_KEY,
-            appName: sub.app_name || null,
-          });
+    const body = buildBody(candidate);
+    let sentCount = 0;
+    let failCount = 0;
+    let warning: string | undefined;
+    let eventAllowedApps: string[] = [];
 
-          await webpush.sendNotification(
-            {
-              endpoint: sub.endpoint,
-              keys: { p256dh: sub.p256dh, auth: sub.auth },
-            },
-            payload,
-            {
-              urgency: 'high',
-              TTL: 86400,
-            }
-          );
+    try {
+      const result = await dispatchPushNotification({
+        eventKey: EVENT_KEY,
+        title: '스하차량 취소 위험 알림',
+        body,
+        requestedAppNames: REQUESTED_APP_NAMES,
+        url: '/manager/reservations',
+        tag: `sht-car-low-seat:${dedupeKey}`,
+        priority: 'high',
+        requireInteraction: true,
+      });
 
-          await serviceSupabase
-            .from('push_subscriptions')
-            .update({ last_used_at: new Date().toISOString() })
-            .eq('id', sub.id);
+      sentCount = result.sentCount;
+      failCount = result.failCount;
+      warning = result.warning;
+      eventAllowedApps = result.allowedAppNames || [];
+      pushSent += result.sentCount;
+      pushFailed += result.failCount;
+      if (warning) pushWarnings.add(warning);
+      eventAllowedApps.forEach((app) => allowedApps.add(app));
+    } catch (err) {
+      failCount = 1;
+      pushFailed += 1;
+      warning = err instanceof Error ? err.message : String(err);
+      pushWarnings.add(warning);
+    }
 
-          return { success: true };
-        } catch (err: unknown) {
-          const statusCode = (err as { statusCode?: number })?.statusCode;
-          if (statusCode === 410 || statusCode === 404) {
-            await serviceSupabase
-              .from('push_subscriptions')
-              .update({ is_active: false })
-              .eq('id', sub.id);
-          }
-          return { success: false };
-        }
-      })
-    );
-
-    const okCount = results.filter((r) => r.status === 'fulfilled' && r.value.success).length;
-    if (okCount > 0) {
+    if (sentCount > 0) {
       sent += 1;
     } else {
       failed += 1;
@@ -471,7 +307,7 @@ async function runCron() {
       category: 'reservation',
       subcategory: '스하차량 취소 알림',
       title: '스하차량 취소 위험 알림',
-      message: buildBody(candidate),
+      message: body,
       target_table: 'reservation_car_sht',
       target_id: dedupeKey,
       priority: 'high',
@@ -484,6 +320,10 @@ async function runCron() {
         seatList: candidate.seatList,
         emails: candidate.emails,
         bookers: candidate.bookers,
+        sentCount,
+        failCount,
+        allowedApps: eventAllowedApps,
+        warning,
       },
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -498,9 +338,10 @@ async function runCron() {
     sent,
     skipped,
     failed,
-    subscriptions: targetSubscriptions.length,
-    allowedApps: allowedAppPolicy.appNames,
-    warning: allowedAppPolicy.warning,
+    pushSent,
+    pushFailed,
+    allowedApps: Array.from(allowedApps),
+    warning: Array.from(pushWarnings),
   });
 }
 

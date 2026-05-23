@@ -332,6 +332,44 @@ export async function POST(req: NextRequest) {
     const sentCount = results.filter(r => r.status === 'fulfilled' && (r.value as any).success).length;
     const failCount = results.length - sentCount;
 
+    const nowIso = new Date().toISOString();
+    const targetPath = (() => {
+      if (typeof url !== 'string' || !url.trim()) return null;
+      const trimmed = url.trim();
+      if (trimmed.startsWith('/')) return trimmed;
+      try {
+        const parsed = new URL(trimmed);
+        return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+      } catch {
+        return null;
+      }
+    })();
+
+    await serviceSupabase.from('notifications').insert({
+      type: 'system',
+      category: 'push',
+      subcategory: resolvedNotificationType,
+      title,
+      message: body,
+      target_table: 'push_subscriptions',
+      target_id: targetPath,
+      priority: priority || 'normal',
+      status: 'unread',
+      created_by: authData.user.id,
+      metadata: {
+        notificationType: resolvedNotificationType,
+        appNames: allowedAppPolicy.appNames,
+        sentCount,
+        failCount,
+        total: results.length,
+        inputUrl: typeof url === 'string' ? url : null,
+        tag: typeof tag === 'string' ? tag : null,
+        requireInteraction: Boolean(requireInteraction || (priority === 'urgent')),
+      },
+      created_at: nowIso,
+      updated_at: nowIso,
+    });
+
     console.log(`[send-notification] 발송 완료: ${sentCount}/${results.length}`);
     return jsonResponse({
       success: true,

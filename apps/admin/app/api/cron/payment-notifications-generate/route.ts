@@ -110,25 +110,76 @@ async function runCron() {
   let pushSent = 0;
   let pushFailed = 0;
   const pushWarnings: string[] = [];
+  let notificationsInserted = 0;
   for (const r of toInsert) {
     const total = Number(r.total_amount || 0);
     const paid = Number(r.paid_amount || 0);
     const remain = total - paid;
+    const title = '결제 예정 알림';
+    const body = `[${r.re_type || '예약'}] 미결제 잔액 ${remain.toLocaleString()}원 확인이 필요합니다.`;
+
+    let sentCount = 0;
+    let failCount = 0;
+    let allowedAppNames: string[] = [];
+    let warning: string | undefined;
+    let dispatchError: string | undefined;
+
     try {
       const result = await dispatchPushNotification({
         eventKey: EVENT_KEY,
-        title: '결제 예정 알림',
-        body: `[${r.re_type || '예약'}] 미결제 잔액 ${remain.toLocaleString()}원 확인이 필요합니다.`,
+        title,
+        body,
         userId: r.re_user_id || null,
         url: 'https://staycruise.kr/mypage/payment',
         priority: 'high',
       });
       pushSent += result.sentCount;
       pushFailed += result.failCount;
+      sentCount = result.sentCount;
+      failCount = result.failCount;
+      allowedAppNames = result.allowedAppNames || [];
+      warning = result.warning;
       if (result.warning) pushWarnings.push(result.warning);
     } catch (err) {
       console.warn('[payment-notifications-generate] push 발송 실패(저장은 계속):', err);
       pushFailed += 1;
+      failCount = 1;
+      dispatchError = err instanceof Error ? err.message : String(err);
+    }
+
+    const nowIso = new Date().toISOString();
+    const { error: notiErr } = await serviceSupabase
+      .from('notifications')
+      .insert({
+        type: 'payment',
+        category: 'payment_due',
+        subcategory: EVENT_KEY,
+        title,
+        message: body,
+        target_table: 'reservation',
+        target_id: r.re_id,
+        priority: 'high',
+        status: 'unread',
+        metadata: {
+          eventKey: EVENT_KEY,
+          reservationId: r.re_id,
+          reservationType: r.re_type || null,
+          notificationDate: today,
+          remainAmount: remain,
+          sentCount,
+          failCount,
+          allowedAppNames,
+          warning,
+          dispatchError,
+        },
+        created_at: nowIso,
+        updated_at: nowIso,
+      });
+
+    if (notiErr) {
+      console.warn('[payment-notifications-generate] notifications insert 실패(푸시는 계속):', notiErr);
+    } else {
+      notificationsInserted += 1;
     }
   }
 
@@ -137,6 +188,7 @@ async function runCron() {
     today,
     candidates: candidates.length,
     inserted: count ?? rows.length,
+    notificationsInserted,
     pushSent,
     pushFailed,
     pushWarnings: Array.from(new Set(pushWarnings)),

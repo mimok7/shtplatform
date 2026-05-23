@@ -279,8 +279,8 @@ export default function MobileNotificationsPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
-  const [activeTab, setActiveTab] = useState<'all' | 'sht-car' | 'customer'>('sht-car');
-  const [statusFilter, setStatusFilter] = useState<'unread' | 'all'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'sht-car' | 'customer'>('all');
+  const [statusFilter, setStatusFilter] = useState<'unread' | 'all'>('unread');
   const [markingId, setMarkingId] = useState<string | null>(null);
   const [markingAll, setMarkingAll] = useState(false);
   const [hideOld, setHideOld] = useState(false); // 오늘 이전 알림 표시

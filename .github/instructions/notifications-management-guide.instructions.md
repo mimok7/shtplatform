@@ -963,6 +963,66 @@ export async function POST(req: NextRequest) {
 
 ### 정책 기반 발송 (Dispatcher Pattern)
 
+## 🔒 알림 누락 방지 강제 규칙 (2026.05.23)
+
+### 핵심 원칙: 모든 알림은 반드시 이중 처리
+- 모든 알림 이벤트(신규/기존)는 아래 2가지를 모두 수행해야 함.
+- 1) `notifications` 테이블 저장 (앱 내 알림관리 목록 표시용)
+- 2) 웹푸시 발송 (`push_subscriptions` 대상)
+- 한쪽만 수행하는 구현은 금지.
+
+### 필수 처리 순서 (표준)
+1. `notifications`에 먼저 INSERT (최소: type, category, title, message, status='unread', priority)
+2. 정책 기반 대상 앱 계산 (`notification_app_event_settings`)
+3. 해당 앱 구독자에게 웹푸시 발송
+4. 발송 통계(`sentCount`, `failCount`, 대상 앱, eventKey)를 `notifications.metadata`에 기록
+
+### 구현 강제 규칙
+- `webpush.sendNotification` 직접 호출 금지 (예외: 중앙 dispatcher 내부만 허용)
+- 신규 알림 경로는 반드시 중앙 발송 경로를 사용
+- 기존 알림 경로도 동일 기준으로 보강 (레거시 경로 포함)
+- 푸시 실패 시에도 `notifications` 저장은 유지하고, 실패 통계만 metadata에 남김
+
+### 기존 경로 적용 범위 (의무)
+- `apps/admin/app/api/send-notification/route.ts`
+- `apps/admin/lib/notificationDispatcher.ts`
+- `apps/admin/app/api/cron/payment-notifications-generate/route.ts`
+- `apps/admin/app/api/cron/service-missing-fields-notifications/route.ts`
+- `apps/admin/app/api/cron/sht-car-low-seat-warning/route.ts`
+- 그 외 Cron/API에서 알림 발송 로직을 추가할 때 동일 규칙 필수 적용
+
+### 신규 알림 추가 체크리스트 (필수)
+- [ ] `notification_event_types`에 event_key 등록
+- [ ] `notification_app_event_settings`에 앱별 enable 정책 등록
+- [ ] 알림 생성 시 `notifications` INSERT 구현
+- [ ] 동일 이벤트에서 웹푸시 발송 구현
+- [ ] 발송 결과를 `notifications.metadata`에 기록
+- [ ] 모바일/매니저/매니저1 알림관리 페이지에서 목록 노출 확인
+
+### 운영 점검 쿼리 (권장)
+```sql
+-- 최근 7일 알림 생성 수
+select date_trunc('day', created_at) as day, count(*) as notifications_count
+from notifications
+where created_at >= now() - interval '7 days'
+group by 1
+order by 1 desc;
+
+-- 최근 7일 푸시 발송 성공 통계 (metadata 기준)
+select date_trunc('day', created_at) as day,
+       coalesce(sum((metadata->>'sentCount')::int), 0) as push_sent,
+       coalesce(sum((metadata->>'failCount')::int), 0) as push_failed
+from notifications
+where created_at >= now() - interval '7 days'
+group by 1
+order by 1 desc;
+```
+
+### 금지 패턴
+- 푸시만 발송하고 `notifications`를 저장하지 않는 구현
+- `notifications`만 저장하고 푸시 발송을 누락하는 구현
+- 앱별 URL 라우팅 없이 단일 고정 URL로 모든 앱에 발송하는 구현
+
 #### 설정 테이블 (`sql/081-notification-app-settings.sql`)
 
 **테이블 1: notification_apps** (발송 대상 앱)
