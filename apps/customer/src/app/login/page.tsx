@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import supabase from '@/lib/supabase';
-import { setCachedUser, clearCachedUser } from '@/lib/authCache';
+import { setCachedUser } from '@/lib/authCache';
 import { primeAuthCache } from '@/hooks/useAuth';
 import { clearInvalidSession, isInvalidRefreshTokenError } from '@/lib/authRecovery';
 
@@ -83,59 +83,6 @@ export default function LoginPage() {
     }
   };
 
-  const performSiteDataClear = async () => {
-    try {
-      await fetch('/api/clear-site-data', { method: 'POST', cache: 'no-store' });
-      clearCachedUser();
-      try { await supabase.auth.signOut({ scope: 'local' }); } catch { }
-      try { localStorage.clear(); } catch { }
-      try { sessionStorage.clear(); } catch { }
-
-      // IndexedDB/Cache/ServiceWorker 정리
-      try {
-        if ('indexedDB' in window && indexedDB.databases) {
-          const dbs = await indexedDB.databases();
-          await Promise.all((dbs || []).map((db) => {
-            if (!db.name) return Promise.resolve();
-            return new Promise<void>((resolve) => {
-              const req = indexedDB.deleteDatabase(db.name as string);
-              req.onsuccess = () => resolve();
-              req.onerror = () => resolve();
-              req.onblocked = () => resolve();
-            });
-          }));
-        }
-      } catch { }
-      try {
-        if ('caches' in window) {
-          const keys = await caches.keys();
-          await Promise.all(keys.map((k) => caches.delete(k)));
-        }
-      } catch { }
-      try {
-        if ('serviceWorker' in navigator) {
-          const regs = await navigator.serviceWorker.getRegistrations();
-          await Promise.all(regs.map((reg) => reg.unregister()));
-        }
-      } catch { }
-
-      alert('초기화가 완료되었습니다. 페이지를 다시 로드합니다.');
-      window.location.href = '/';
-    } catch (err) {
-      console.error('사이트 데이터 초기화 오류:', err);
-      alert('초기화 중 오류가 발생했습니다. 다시 시도해주세요.');
-    }
-  };
-
-  const handleClearSiteData = async () => {
-    const ok = window.confirm(
-      'stayhalong 관련 쿠키/세션/저장소를 초기화합니다.\n진행하시겠습니까?'
-    );
-    if (!ok) return;
-
-    await performSiteDataClear();
-  };
-
   return (
     <div className="max-w-sm mx-auto mt-12 p-4 bg-white shadow rounded">
       <div className="flex justify-start mb-4">
@@ -188,16 +135,6 @@ export default function LoginPage() {
             신규예약
           </button>
         </p>
-      </div>
-
-      <div className="mt-6 pt-4 border-t border-gray-200">
-        <button
-          type="button"
-          onClick={handleClearSiteData}
-          className="w-full py-2 rounded bg-gray-100 text-gray-700 hover:bg-gray-200 transition text-sm"
-        >
-          stayhalong 데이터 초기화 (쿠키/세션/캐시)
-        </button>
       </div>
     </div>
   );

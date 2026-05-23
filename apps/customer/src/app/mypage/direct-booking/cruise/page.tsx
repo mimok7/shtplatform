@@ -1094,7 +1094,7 @@ function DirectBookingCruiseContent() {
 
                         <div className="bg-blue-50 rounded-lg p-4 mb-4 border border-blue-200">
                             <p className="text-blue-700 text-sm">
-                                체크인 날짜와 일정을 선택한 뒤, 크루즈와 객실을 선택하면 인원별 가격이 자동 계산됩니다.
+                                체크인 날짜, 일정, 크루즈 선택 객실선택 순서대로 입력해주세요
                             </p>
                         </div>
 
@@ -1150,17 +1150,14 @@ function DirectBookingCruiseContent() {
                                 <div className="border border-blue-200 rounded-lg p-4 bg-blue-50/50 space-y-4">
                                     <div className="flex items-center justify-between">
                                         <h3 className="text-lg font-semibold text-gray-800">{isDayCruise ? '🎯 기본 옵션' : '🛏 객실 구성'}</h3>
-                                        {!isDayCruise && (
-                                            <button
-                                                type="button"
-                                                onClick={addRoomSelection}
-                                                disabled={roomSelections.length >= 6}
-                                                className="px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
-                                            >
-                                                + 객실 추가
-                                            </button>
-                                        )}
                                     </div>
+
+                                    {!isDayCruise && (
+                                        <div className="rounded-md border border-yellow-300 bg-yellow-50 px-3 py-2 text-xs text-yellow-800 space-y-1">
+                                            <p>같은 객실을 여러개 예약시 총 객실수를 표시해 주세요</p>
+                                            <p>객실명이 다른 객실 예약시 객실명이 다른 객실추가 선택하여 예약해 주세요</p>
+                                        </div>
+                                    )}
 
                                     {isDolphinDayCruise && (
                                         <p className="text-xs text-blue-700 bg-blue-100 border border-blue-200 rounded-md px-3 py-2">
@@ -1173,7 +1170,18 @@ function DirectBookingCruiseContent() {
                                         return (
                                             <div key={room.local_id} className="border border-blue-300 rounded-lg bg-white p-4 space-y-3">
                                                 <div className="flex items-center justify-between">
-                                                    <h4 className="font-semibold text-gray-800">{isDayCruise ? `옵션 ${idx + 1}` : `객실 ${idx + 1}`}</h4>
+                                                    <h4 className="font-semibold text-gray-800">
+                                                        {isDayCruise ? (
+                                                            `옵션 ${idx + 1}`
+                                                        ) : (
+                                                            <>
+                                                                객실 {idx + 1}
+                                                                <span className="ml-1 rounded bg-yellow-50 px-1.5 py-0.5 text-xs text-yellow-800 border border-yellow-200">
+                                                                    (객실명과 총객실수 총 인원수을 선택해 주세요)
+                                                                </span>
+                                                            </>
+                                                        )}
+                                                    </h4>
                                                     {!isDayCruise && roomSelections.length > 1 && (
                                                         <button
                                                             type="button"
@@ -1186,7 +1194,7 @@ function DirectBookingCruiseContent() {
                                                 </div>
 
                                                 <div>
-                                                    <label className="block text-xs font-medium text-gray-600 mb-1">{isDayCruise ? '기본 옵션' : '객실 타입'}</label>
+                                                    <label className="block text-xs font-medium text-gray-600 mb-1">{isDayCruise ? '기본 옵션' : '객실명'}</label>
                                                     <select
                                                         value={room.rate_card_id}
                                                         onChange={(e) => {
@@ -1200,7 +1208,7 @@ function DirectBookingCruiseContent() {
                                                         className="w-full border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                                         disabled={isDolphinDayCruise}
                                                     >
-                                                        <option value="">{isDayCruise ? '옵션 선택' : '객실 타입 선택'}</option>
+                                                        <option value="">{isDayCruise ? '옵션 선택' : '객실명 선택'}</option>
                                                         {roomTypeCards.map((card) => (
                                                             <option key={card.id} value={card.id}>
                                                                 {isDayCruise
@@ -1213,6 +1221,19 @@ function DirectBookingCruiseContent() {
 
                                                 {roomCard && (
                                                     <>
+                                                        {!isDayCruise && !isCatherineHorizonCruise && (
+                                                            <div className="mt-2 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                                                                <label className="text-sm font-medium text-gray-700">객실명의 총 객실수 선택</label>
+                                                                <StepperNumberInput
+                                                                    min={1}
+                                                                    max={20}
+                                                                    value={room.room_count}
+                                                                    onChange={(value) => updateRoomSelection(room.local_id, { room_count: Math.max(1, value) })}
+                                                                    className="w-full max-w-[220px] sm:w-44"
+                                                                />
+                                                            </div>
+                                                        )}
+
                                                         <div className="space-y-2">
                                                             <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                                                                 <label className="text-sm font-medium text-gray-700">성인({formatVND(roomCard.price_adult)}/인)</label>
@@ -1307,24 +1328,24 @@ function DirectBookingCruiseContent() {
                                                                 </div>
                                                             )}
                                                         </div>
-
-                                                        {!isDayCruise && !isCatherineHorizonCruise && (
-                                                            <div className="mt-2 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-                                                                <label className="text-sm font-medium text-gray-700">해당 타입 객실 수</label>
-                                                                <StepperNumberInput
-                                                                    min={1}
-                                                                    max={20}
-                                                                    value={room.room_count}
-                                                                    onChange={(value) => updateRoomSelection(room.local_id, { room_count: Math.max(1, value) })}
-                                                                    className="w-full max-w-[220px] sm:w-44"
-                                                                />
-                                                            </div>
-                                                        )}
                                                     </>
                                                 )}
                                             </div>
                                         );
                                     })}
+
+                                    {!isDayCruise && (
+                                        <div className="pt-1 flex justify-end">
+                                            <button
+                                                type="button"
+                                                onClick={addRoomSelection}
+                                                disabled={roomSelections.length >= 6}
+                                                className="px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
+                                            >
+                                                객실명이 다른 객실추가
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             )}
 
@@ -1455,7 +1476,9 @@ function DirectBookingCruiseContent() {
                                 {(form.schedule === '1박2일' || form.schedule === '2박3일') && (
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-2">생일 이벤트</label>
-                                        <p className="text-xs text-gray-600 mb-3">* 100만동의 유료 서비스 입니다.</p>
+                                        <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg mb-3">
+                                            <p className="text-xs text-yellow-800">* 100만동의 유료 서비스 입니다.</p>
+                                        </div>
                                         <div className="flex gap-3 mb-3">
                                             <button
                                                 type="button"
@@ -1538,6 +1561,10 @@ function DirectBookingCruiseContent() {
                                         placeholder="객실 관련 요청사항을 입력하세요..."
                                     />
                                 </div>
+
+                                <p className="text-sm text-sky-700 bg-sky-50 border border-sky-200 rounded-lg px-4 py-3 text-center">
+                                    🚗 크루즈 선착장 이동 전용차량 예약시 <strong>차량 선택</strong>을 클릭 하세요 ^^
+                                </p>
                             </div>
 
                         </div>
@@ -1569,9 +1596,6 @@ function DirectBookingCruiseContent() {
                                 {loading ? '저장 중...' : '차량 선택 →'}
                             </button>
                         </div>
-                        <p className="mt-3 text-sm text-sky-700 bg-sky-50 border border-sky-200 rounded-lg px-4 py-3 text-center">
-                            🚗 크루즈 선착장 이동 전용차량 예약시 <strong>차량 선택</strong>을 클릭 하세요 ^^
-                        </p>
                     </form>
                 </div>
             </div>
