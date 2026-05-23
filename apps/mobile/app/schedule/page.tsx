@@ -993,7 +993,8 @@ export default function SchedulePage() {
           ...d,
           boardingDate: d.usage_date || '',
           usageDate: d.usage_date || d.pickup_datetime || '',
-          serviceType: d.service_type || d.sht_category || normalizedServiceType,
+          // serviceType은 항상 스하차량으로 고정하고, 픽업/샌딩 구분은 category로 처리
+          serviceType: 'sht',
           category: d.sht_category || d.category || '',
           vehicleNumber: d.vehicle_number || '',
           seatNumber: d.seat_number || '',
