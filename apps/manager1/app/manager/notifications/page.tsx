@@ -281,7 +281,7 @@ export default function NotificationManagement() {
 
   // 필터 상태
   const [activeTab, setActiveTab] = useState<'business' | 'customer' | 'request' | 'sht-car' | 'all'>('all');
-  const [statusFilter, setStatusFilter] = useState<string>('unread');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
   const [hideOldNotifications, setHideOldNotifications] = useState<boolean>(true); // 오늘 이전 알림 숨기기
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all'); // 카테고리 필터 추가

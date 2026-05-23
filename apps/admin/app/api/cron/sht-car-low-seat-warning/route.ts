@@ -31,6 +31,47 @@ type VehicleAggregate = {
   bookers: Array<{ name: string; email: string }>;
 };
 
+type AppRouteConfig = {
+  baseUrl: string;
+  defaultPath: string;
+};
+
+const APP_ROUTE_CONFIG: Record<string, AppRouteConfig> = {
+  manager: { baseUrl: 'https://manager.stayhalong.com', defaultPath: '/manager/reservations' },
+  manager1: { baseUrl: 'https://manag.staryhalong.com', defaultPath: '/manager/reservations' },
+  mobile: { baseUrl: 'https://newmobile.stayhalong.com', defaultPath: '/manager/reservations' },
+};
+
+function normalizeBaseUrl(url: string) {
+  return url.replace(/\/$/, '');
+}
+
+function buildUrlForApp(appName: string | null | undefined, rawUrl?: string) {
+  const appConfig = APP_ROUTE_CONFIG[appName || ''] || APP_ROUTE_CONFIG.manager;
+  const baseUrl = normalizeBaseUrl(appConfig.baseUrl);
+
+  if (typeof rawUrl !== 'string' || !rawUrl.trim()) {
+    return `${baseUrl}${appConfig.defaultPath}`;
+  }
+
+  const trimmed = rawUrl.trim();
+  if (trimmed.startsWith('/')) {
+    return `${baseUrl}${trimmed}`;
+  }
+
+  try {
+    const parsed = new URL(trimmed);
+    return `${baseUrl}${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    return `${baseUrl}${appConfig.defaultPath}`;
+  }
+}
+
+function buildIconForApp(appName: string | null | undefined) {
+  const appConfig = APP_ROUTE_CONFIG[appName || ''] || APP_ROUTE_CONFIG.manager;
+  return `${normalizeBaseUrl(appConfig.baseUrl)}/icon-192.png`;
+}
+
 function getKstDate(offsetDays: number) {
   const nowUtc = new Date();
   const kstNow = new Date(nowUtc.getTime() + 9 * 60 * 60 * 1000);
@@ -370,20 +411,23 @@ async function runCron() {
       continue;
     }
 
-    const payload = JSON.stringify({
-      title: '스하차량 취소 위험 알림',
-      body: buildBody(candidate),
-      icon: 'https://staycruise.kr/icon-192.png',
-      badge: 'https://staycruise.kr/icon-192.png',
-      tag: `sht-car-low-seat:${dedupeKey}`,
-      url: 'https://manager.staycruise.kr/manager/reservations',
-      requireInteraction: true,
-      notificationType: EVENT_KEY,
-    });
-
     const results = await Promise.allSettled(
       targetSubscriptions.map(async (sub) => {
         try {
+          const targetUrl = buildUrlForApp(sub.app_name, '/manager/reservations');
+          const targetIcon = buildIconForApp(sub.app_name);
+          const payload = JSON.stringify({
+            title: '스하차량 취소 위험 알림',
+            body: buildBody(candidate),
+            icon: targetIcon,
+            badge: targetIcon,
+            tag: `sht-car-low-seat:${dedupeKey}`,
+            url: targetUrl,
+            requireInteraction: true,
+            notificationType: EVENT_KEY,
+            appName: sub.app_name || null,
+          });
+
           await webpush.sendNotification(
             {
               endpoint: sub.endpoint,

@@ -8,6 +8,55 @@ const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || '';
 const VAPID_EMAIL = process.env.VAPID_EMAIL || 'mailto:admin@stayhalong.com';
 const DEFAULT_NOTIFICATION_TYPE = 'manual_customer';
 
+type AppRouteConfig = {
+  baseUrl: string;
+  defaultPath: string;
+};
+
+const APP_ROUTE_CONFIG: Record<string, AppRouteConfig> = {
+  admin: { baseUrl: 'https://admin.stayhalong.com', defaultPath: '/admin' },
+  customer: { baseUrl: 'https://staycruise.kr', defaultPath: '/' },
+  customer1: { baseUrl: 'https://legacy.staycruise.kr', defaultPath: '/' },
+  manager: { baseUrl: 'https://manager.stayhalong.com', defaultPath: '/manager/dashboard' },
+  manager1: { baseUrl: 'https://manag.staryhalong.com', defaultPath: '/manager/dashboard' },
+  mobile: { baseUrl: 'https://newmobile.stayhalong.com', defaultPath: '/manager/dashboard' },
+  partner: { baseUrl: 'https://partner.stayhalong.com', defaultPath: '/partner/dashboard' },
+  quote: { baseUrl: 'https://quote.stayhalong.com', defaultPath: '/' },
+};
+
+function normalizeBaseUrl(url: string) {
+  return url.replace(/\/$/, '');
+}
+
+function buildUrlForApp(appName: string | null | undefined, rawUrl?: string) {
+  const appConfig = APP_ROUTE_CONFIG[appName || ''] || APP_ROUTE_CONFIG.customer;
+  const baseUrl = normalizeBaseUrl(appConfig.baseUrl);
+
+  if (typeof rawUrl !== 'string' || !rawUrl.trim()) {
+    return `${baseUrl}${appConfig.defaultPath}`;
+  }
+
+  const trimmed = rawUrl.trim();
+  if (trimmed.startsWith('/')) {
+    return `${baseUrl}${trimmed}`;
+  }
+
+  try {
+    const parsed = new URL(trimmed);
+    return `${baseUrl}${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    return `${baseUrl}${appConfig.defaultPath}`;
+  }
+}
+
+function buildIconForApp(appName: string | null | undefined, rawIcon?: string) {
+  if (typeof rawIcon === 'string' && rawIcon.trim()) {
+    return rawIcon.trim();
+  }
+  const appConfig = APP_ROUTE_CONFIG[appName || ''] || APP_ROUTE_CONFIG.customer;
+  return `${normalizeBaseUrl(appConfig.baseUrl)}/icon-192.png`;
+}
+
 if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
   webpush.setVapidDetails(VAPID_EMAIL, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
 }
@@ -15,6 +64,10 @@ if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
 // CORS — manager/manager1/mobile/customer 등 다른 앱에서 직접 호출할 수 있도록 허용
 const ALLOWED_ORIGINS = [
   'https://staycruise.kr',
+  'https://admin.stayhalong.com',
+  'https://manager.stayhalong.com',
+  'https://manag.staryhalong.com',
+  'https://partner.stayhalong.com',
   'https://manager.staycruise.kr',
   'https://quick.manager.staycruise.kr',
   'https://newmobile.stayhalong.com',
@@ -229,21 +282,23 @@ export async function POST(req: NextRequest) {
     }
     const targetSubscriptions = Array.from(dedupedMap.values());
 
-    // 알림 payload 구성
-    const payload = JSON.stringify({
-      title,
-      body,
-      icon: icon || 'https://staycruise.kr/icon-192.png',
-      badge: 'https://staycruise.kr/icon-192.png',
-      tag: tag || 'sht-notification',
-      url: url || 'https://staycruise.kr',
-      requireInteraction: requireInteraction || (priority === 'urgent'),
-      notificationType: resolvedNotificationType,
-    });
-
     const results = await Promise.allSettled(
       targetSubscriptions.map(async (sub) => {
         try {
+          const targetUrl = buildUrlForApp(sub.app_name, url);
+          const targetIcon = buildIconForApp(sub.app_name, icon);
+          const payload = JSON.stringify({
+            title,
+            body,
+            icon: targetIcon,
+            badge: targetIcon,
+            tag: tag || 'sht-notification',
+            url: targetUrl,
+            requireInteraction: requireInteraction || (priority === 'urgent'),
+            notificationType: resolvedNotificationType,
+            appName: sub.app_name || null,
+          });
+
           await webpush.sendNotification(
             {
               endpoint: sub.endpoint,

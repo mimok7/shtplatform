@@ -146,7 +146,42 @@ export default function PushNotificationManager() {
     }
   };
 
-  // 고객 앱에서는 앱 설치 권장 배너 표시하지 않음
-  return null;
+  if (isStandalone || isDismissed) return null;
+
+  const installButtonText = '설치 이동';
+
+  return (
+    <div className="fixed bottom-4 left-1/2 z-[120] w-[calc(100%-1.5rem)] max-w-md -translate-x-1/2 rounded-2xl border border-blue-100 bg-white/95 p-4 shadow-xl backdrop-blur">
+      <p className="text-sm font-semibold text-slate-900">앱 설치를 권장합니다</p>
+      <p className="mt-1 text-xs leading-relaxed text-slate-600">
+        푸시 알림을 안정적으로 받으려면 앱을 설치해 주세요.
+        {!deferredPrompt ? ' 이 기기에서는 자동 설치 창이 제한될 수 있습니다.' : ''}
+      </p>
+      <div className="mt-3 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={handleInstallClick}
+          className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700"
+        >
+          {installButtonText}
+        </button>
+        <button
+          type="button"
+          onClick={() => setIsDismissed(true)}
+          className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50"
+        >
+          나중에
+        </button>
+      </div>
+      {showManualGuide ? (
+        <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-[11px] leading-relaxed text-slate-600">
+          <p className="font-semibold text-slate-700">수동 설치 안내</p>
+          <p className="mt-1">1. 브라우저 메뉴(⋮ 또는 공유) 열기</p>
+          <p>2. "홈 화면에 추가" 또는 "앱 설치" 선택</p>
+          <p>3. 추가/설치 버튼을 눌러 완료</p>
+        </div>
+      ) : null}
+    </div>
+  );
 }
 

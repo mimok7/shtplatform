@@ -21,6 +21,55 @@ function ensureVapid() {
   return Boolean(VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY);
 }
 
+type AppRouteConfig = {
+  baseUrl: string;
+  defaultPath: string;
+};
+
+const APP_ROUTE_CONFIG: Record<string, AppRouteConfig> = {
+  admin: { baseUrl: 'https://admin.stayhalong.com', defaultPath: '/admin' },
+  customer: { baseUrl: 'https://staycruise.kr', defaultPath: '/' },
+  customer1: { baseUrl: 'https://legacy.staycruise.kr', defaultPath: '/' },
+  manager: { baseUrl: 'https://manager.stayhalong.com', defaultPath: '/manager/dashboard' },
+  manager1: { baseUrl: 'https://manag.staryhalong.com', defaultPath: '/manager/dashboard' },
+  mobile: { baseUrl: 'https://newmobile.stayhalong.com', defaultPath: '/manager/dashboard' },
+  partner: { baseUrl: 'https://partner.stayhalong.com', defaultPath: '/partner/dashboard' },
+  quote: { baseUrl: 'https://quote.stayhalong.com', defaultPath: '/' },
+};
+
+function normalizeBaseUrl(url: string) {
+  return url.replace(/\/$/, '');
+}
+
+function buildUrlForApp(appName: string | null | undefined, rawUrl?: string) {
+  const appConfig = APP_ROUTE_CONFIG[appName || ''] || APP_ROUTE_CONFIG.customer;
+  const baseUrl = normalizeBaseUrl(appConfig.baseUrl);
+
+  if (typeof rawUrl !== 'string' || !rawUrl.trim()) {
+    return `${baseUrl}${appConfig.defaultPath}`;
+  }
+
+  const trimmed = rawUrl.trim();
+  if (trimmed.startsWith('/')) {
+    return `${baseUrl}${trimmed}`;
+  }
+
+  try {
+    const parsed = new URL(trimmed);
+    return `${baseUrl}${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    return `${baseUrl}${appConfig.defaultPath}`;
+  }
+}
+
+function buildIconForApp(appName: string | null | undefined, rawIcon?: string) {
+  if (typeof rawIcon === 'string' && rawIcon.trim()) {
+    return rawIcon.trim();
+  }
+  const appConfig = APP_ROUTE_CONFIG[appName || ''] || APP_ROUTE_CONFIG.customer;
+  return `${normalizeBaseUrl(appConfig.baseUrl)}/icon-192.png`;
+}
+
 export interface DispatchOptions {
   eventKey: string;
   title: string;
@@ -170,20 +219,24 @@ export async function dispatchPushNotification(options: DispatchOptions): Promis
   }
   const targets = Array.from(dedupedMap.values());
 
-  const payload = JSON.stringify({
-    title,
-    body,
-    icon: icon || 'https://staycruise.kr/icon-192.png',
-    badge: badge || 'https://staycruise.kr/icon-192.png',
-    tag: tag || `sht-${eventKey}`,
-    url: url || 'https://staycruise.kr',
-    requireInteraction: requireInteraction ?? (priority === 'urgent'),
-    notificationType: eventKey,
-  });
-
   const results = await Promise.allSettled(
     targets.map(async (sub) => {
       try {
+        const targetUrl = buildUrlForApp(sub.app_name, url);
+        const targetIcon = buildIconForApp(sub.app_name, icon);
+        const targetBadge = typeof badge === 'string' && badge.trim() ? badge.trim() : targetIcon;
+        const payload = JSON.stringify({
+          title,
+          body,
+          icon: targetIcon,
+          badge: targetBadge,
+          tag: tag || `sht-${eventKey}`,
+          url: targetUrl,
+          requireInteraction: requireInteraction ?? (priority === 'urgent'),
+          notificationType: eventKey,
+          appName: sub.app_name || null,
+        });
+
         await webpush.sendNotification(
           { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
           payload,
