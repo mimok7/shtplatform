@@ -5,7 +5,6 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import supabase from '@/lib/supabase';
 import { getSessionUser, refreshAuthBeforeSubmit } from '@/lib/authHelpers';
 import { useLoadingTimeout } from '@/hooks/useLoadingTimeout';
-import { hasInvalidLocationChars, normalizeLocationEnglishUpper } from '@/lib/locationInput';
 import PageWrapper from '@/components/PageWrapper';
 import SectionBox from '@/components/SectionBox';
 
@@ -41,13 +40,10 @@ function TicketBookingContent() {
         ticket_details: '',        // 상세 내용 (기타만)
         special_requests: ''       // 요청사항
     });
-    const [locationInputError, setLocationInputError] = useState('');
 
-    const handleLocationInput = (field: 'pickup_location' | 'dropoff_location', value: string) => {
-        const sanitized = normalizeLocationEnglishUpper(value);
-        setFormData(prev => ({ ...prev, [field]: sanitized }));
-        setLocationInputError(hasInvalidLocationChars(value) ? '영문으로 입력해 주세요 ^^' : '');
-    };
+    // 드래곤펄 메인 메뉴 선택 (인원수)
+    const [menuSelections, setMenuSelections] = useState<{ lobster: number; fish: number }>({ lobster: 0, fish: 0 });
+    const menuTotal = menuSelections.lobster + menuSelections.fish;
 
     // 드래곤펄 투어 목록 로드
     const loadDragonPearlTours = useCallback(async () => {
@@ -154,7 +150,17 @@ function TicketBookingContent() {
             } else {
                 // 드래곤펄 투어인 경우
                 setTicketType('dragon');
-                parsedData.special_requests = requestNote;
+                // 메인메뉴 선택 파싱 (program_selection: "랍스터:2, 생선요리:3")
+                const menuStr = sourceRow.program_selection || '';
+                const lobsterMatch = menuStr.match(/랍스터:?(\d+)/);
+                const fishMatch = menuStr.match(/생선요리:?(\d+)/);
+                if (lobsterMatch || fishMatch) {
+                    setMenuSelections({
+                        lobster: lobsterMatch ? parseInt(lobsterMatch[1]) : 0,
+                        fish: fishMatch ? parseInt(fishMatch[1]) : 0,
+                    });
+                }
+                parsedData.special_requests = requestNote.replace(/\[셔틀\].*?\n?/g, '').replace(/\[메인메뉴\].*?\n?/g, '').trim();
             }
 
             setFormData(parsedData);
@@ -228,8 +234,13 @@ function TicketBookingContent() {
             // request_note 생성
             let requestNote = '';
             if (ticketType === 'dragon') {
+                const menuNotes = [
+                    menuSelections.lobster > 0 ? `랍스터 ${menuSelections.lobster}명` : '',
+                    menuSelections.fish > 0 ? `생선요리 ${menuSelections.fish}명` : ''
+                ].filter(Boolean);
                 requestNote = [
                     `[셔틀] ${formData.shuttle_required ? '신청함' : '신청 안함'}`,
+                    menuNotes.length > 0 ? `[메인메뉴] ${menuNotes.join(', ')}` : '',
                     formData.special_requests
                 ].filter(Boolean).join('\n');
             } else {
@@ -243,16 +254,20 @@ function TicketBookingContent() {
 
             // 수정 모드
             if (isEditMode && existingReservationId) {
+                const menuProgramSelection = (menuSelections.lobster > 0 || menuSelections.fish > 0)
+                    ? `랍스터:${menuSelections.lobster}, 생선요리:${menuSelections.fish}`
+                    : null;
+
                 const ticketPayload = {
                     reservation_id: existingReservationId,
                     ticket_type: ticketType,
                     ticket_name: ticketType === 'dragon' ? formData.ticket_name || null : null,
-                    program_selection: ticketType === 'other' ? formData.program_selection || null : null,
+                    program_selection: ticketType === 'dragon' ? menuProgramSelection : (formData.program_selection || null),
                     ticket_quantity: formData.ticket_quantity,
                     usage_date: formData.ticket_date,
                     shuttle_required: ticketType === 'dragon' ? !!formData.shuttle_required : false,
-                    pickup_location: ticketType === 'dragon' ? formData.pickup_location || null : null,
-                    dropoff_location: ticketType === 'dragon' ? formData.dropoff_location || null : null,
+                    pickup_location: null,
+                    dropoff_location: null,
                     ticket_details: ticketType === 'other' ? formData.ticket_details || null : null,
                     special_requests: formData.special_requests || null,
                     unit_price: 0,
@@ -287,16 +302,20 @@ function TicketBookingContent() {
                 return;
             }
 
+            const menuProgramSelectionNew = (menuSelections.lobster > 0 || menuSelections.fish > 0)
+                ? `랍스터:${menuSelections.lobster}, 생선요리:${menuSelections.fish}`
+                : null;
+
             const { error: ticketReservationError } = await supabase
                 .from('reservation_ticket')
                 .insert({
                     reservation_id: reservationData.re_id,
                     ticket_type: ticketType,
                     ticket_name: ticketType === 'dragon' ? formData.ticket_name || null : null,
-                    program_selection: ticketType === 'other' ? formData.program_selection || null : null,
+                    program_selection: ticketType === 'dragon' ? menuProgramSelectionNew : (formData.program_selection || null),
                     ticket_quantity: formData.ticket_quantity,
-                    pickup_location: ticketType === 'dragon' ? formData.pickup_location || null : null,
-                    dropoff_location: ticketType === 'dragon' ? formData.dropoff_location || null : null,
+                    pickup_location: null,
+                    dropoff_location: null,
                     usage_date: formData.ticket_date,
                     shuttle_required: ticketType === 'dragon' ? !!formData.shuttle_required : false,
                     ticket_details: ticketType === 'other' ? formData.ticket_details || null : null,
@@ -322,7 +341,8 @@ function TicketBookingContent() {
         }
     };
 
-    const isFormValid = formData.ticket_date && (
+    const isMenuOverLimit = ticketType === 'dragon' && menuTotal > formData.ticket_quantity;
+    const isFormValid = formData.ticket_date && !isMenuOverLimit && (
         ticketType === 'dragon'
             ? formData.ticket_name
             : formData.program_selection
@@ -427,20 +447,6 @@ function TicketBookingContent() {
                                     </div>
                                 )}
 
-                                {/* 인원수 */}
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">👥 참가 인원 *</label>
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        max="50"
-                                        value={formData.ticket_quantity}
-                                        onChange={(e) => setFormData({ ...formData, ticket_quantity: parseInt(e.target.value) || 0 })}
-                                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                                        required
-                                    />
-                                </div>
-
                                 {/* 투어 날짜 */}
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">📅 투어 날짜 *</label>
@@ -453,15 +459,98 @@ function TicketBookingContent() {
                                     />
                                 </div>
 
+                                {/* 인원수 */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">👥 참가 인원 *</label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        max="50"
+                                        value={formData.ticket_quantity}
+                                        onChange={(e) => {
+                                            const qty = parseInt(e.target.value) || 0;
+                                            setFormData({ ...formData, ticket_quantity: qty });
+                                            // 인원 줄면 메뉴 수량도 자동 조정
+                                            setMenuSelections(prev => ({
+                                                lobster: Math.min(prev.lobster, qty),
+                                                fish: Math.min(prev.fish, Math.max(0, qty - Math.min(prev.lobster, qty)))
+                                            }));
+                                        }}
+                                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                                        required
+                                    />
+                                </div>
+
+                                {/* 메인 메뉴 선택 */}
+                                <div className="bg-amber-50 p-4 rounded-lg border border-amber-200">
+                                    <h4 className="text-sm font-semibold text-gray-800 mb-1">🍽️ 메인 메뉴 선택</h4>
+                                    <p className="text-xs text-gray-500 mb-3">
+                                        메뉴별 인원수를 선택하세요 (합계 <strong>{menuTotal}</strong>명 / 참가 인원 <strong>{formData.ticket_quantity}</strong>명)
+                                    </p>
+                                    {isMenuOverLimit && (
+                                        <p className="text-xs text-red-600 mb-2">⚠️ 메뉴 인원 합계가 참가 인원을 초과합니다.</p>
+                                    )}
+                                    <div className="space-y-3">
+                                        {/* 랍스터 */}
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <div className="font-medium text-gray-800 text-sm">🦞 랍스터</div>
+                                                <div className="text-xs text-gray-500">랍스터 구이 요리</div>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setMenuSelections(prev => ({ ...prev, lobster: Math.max(0, prev.lobster - 1) }))}
+                                                    className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center text-gray-600 hover:bg-gray-100 text-lg"
+                                                >−</button>
+                                                <span className="w-8 text-center font-semibold text-gray-800">{menuSelections.lobster}</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        if (menuTotal < formData.ticket_quantity) {
+                                                            setMenuSelections(prev => ({ ...prev, lobster: prev.lobster + 1 }));
+                                                        }
+                                                    }}
+                                                    disabled={menuTotal >= formData.ticket_quantity}
+                                                    className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed text-lg"
+                                                >+</button>
+                                            </div>
+                                        </div>
+                                        {/* 생선요리 */}
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <div className="font-medium text-gray-800 text-sm">🐟 생선요리</div>
+                                                <div className="text-xs text-gray-500">생선 구이/찜 요리</div>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setMenuSelections(prev => ({ ...prev, fish: Math.max(0, prev.fish - 1) }))}
+                                                    className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center text-gray-600 hover:bg-gray-100 text-lg"
+                                                >−</button>
+                                                <span className="w-8 text-center font-semibold text-gray-800">{menuSelections.fish}</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        if (menuTotal < formData.ticket_quantity) {
+                                                            setMenuSelections(prev => ({ ...prev, fish: prev.fish + 1 }));
+                                                        }
+                                                    }}
+                                                    disabled={menuTotal >= formData.ticket_quantity}
+                                                    className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed text-lg"
+                                                >+</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 {/* 셔틀 차량 추가 옵션 */}
                                 <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <h4 className="text-sm font-medium text-gray-800 mb-1">🚐 셔틀 차량 추가</h4>
-                                            <p className="text-xs text-gray-600">투어 시작지점까지 픽업/드롭 서비스</p>
-                                            <p className="text-sm font-semibold text-blue-600 mt-1">*1인당 25만동</p>
-                                        </div>
-                                        <div className="flex gap-2">
+                                    <div className="flex flex-col gap-3">
+                                        <h4 className="text-sm font-medium text-gray-800">🚐 셔틀 차량 추가</h4>
+                                        <p className="text-xs text-gray-600">하롱 국제 선착장에서 승/하차</p>
+                                        <p className="text-sm font-semibold text-blue-600">*1인당 25만동</p>
+                                        <div className="flex gap-2 justify-center">
                                             <button
                                                 type="button"
                                                 onClick={() => setFormData({ ...formData, shuttle_required: true })}
@@ -486,33 +575,6 @@ function TicketBookingContent() {
                                     </div>
                                 </div>
 
-                                {/* 픽업/하차 */}
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">📍 픽업 장소</label>
-                                        <input
-                                            type="text"
-                                            value={formData.pickup_location}
-                                            onChange={(e) => handleLocationInput('pickup_location', e.target.value)}
-                                            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                                            placeholder="영문 대문자로 입력해 주세요"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">📍 하차 장소</label>
-                                        <input
-                                            type="text"
-                                            value={formData.dropoff_location}
-                                            onChange={(e) => handleLocationInput('dropoff_location', e.target.value)}
-                                            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                                            placeholder="영문 대문자로 입력해 주세요"
-                                        />
-                                    </div>
-                                </div>
-
-                                {locationInputError && (
-                                    <p className="text-sm text-red-500">{locationInputError}</p>
-                                )}
                             </>
                         )}
 
@@ -608,6 +670,12 @@ function TicketBookingContent() {
                                         <>
                                             <div><strong>투어:</strong> {formData.ticket_name}</div>
                                             <div><strong>참가 인원:</strong> {formData.ticket_quantity}명</div>
+                                            {(menuSelections.lobster > 0 || menuSelections.fish > 0) && (
+                                                <div><strong>메인 메뉴:</strong> {[
+                                                    menuSelections.lobster > 0 ? `🦞 랍스터 ${menuSelections.lobster}명` : '',
+                                                    menuSelections.fish > 0 ? `🐟 생선요리 ${menuSelections.fish}명` : ''
+                                                ].filter(Boolean).join(', ')}</div>
+                                            )}
                                         </>
                                     )}
                                     {ticketType === 'other' && (

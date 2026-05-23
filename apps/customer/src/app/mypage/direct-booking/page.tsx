@@ -759,6 +759,42 @@ function DirectBookingContent() {
                                 <div>
                                     <p className="font-bold text-red-600 flex items-start gap-2 mb-2">
                                         <span>🚩</span>
+                                        <span>스테이하롱 셔틀 리무진 주의사항</span>
+                                    </p>
+                                    <ul className="space-y-1 ml-6 text-gray-700">
+                                        <li className="flex gap-2">
+                                            <span>∙</span>
+                                            <span>편도 이용은 불가합니다.</span>
+                                        </li>
+                                        <li className="flex gap-2">
+                                            <span>∙</span>
+                                            <span>이용하시는 일자, 승차 인원이 3인 이하인 경우 차량 운행이 취소되고, 추가금액 지불 후 크루즈 셔틀 리무진이나, 단독 차량으로 변경 진행됩니다.</span>
+                                        </li>
+                                        <li className="flex gap-2">
+                                            <span>∙</span>
+                                            <span>이용하시는 일자, 승차 인원이 4인인 경우 1인당 20만동의 추가 요금이 발생합니다.</span>
+                                        </li>
+                                        <li className="flex gap-2">
+                                            <span>∙</span>
+                                            <span>
+                                                스테이하롱 셔틀 리무진에 대한 자세한 사항은 아래 링크에서 확인하실 수 있습니다.
+                                                {' '}
+                                                <a
+                                                    href="https://cafe.naver.com/stayhalong/7150"
+                                                    target="_blank"
+                                                    rel="noreferrer"
+                                                    className="text-blue-600 underline"
+                                                >
+                                                    https://cafe.naver.com/stayhalong/7150
+                                                </a>
+                                            </span>
+                                        </li>
+                                    </ul>
+                                </div>
+
+                                <div>
+                                    <p className="font-bold text-red-600 flex items-start gap-2 mb-2">
+                                        <span>🚩</span>
                                         <span>예약 후 진행사항</span>
                                     </p>
                                     <ul className="space-y-1 ml-6 text-gray-700">

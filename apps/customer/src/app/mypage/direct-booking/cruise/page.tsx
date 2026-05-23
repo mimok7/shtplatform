@@ -1176,9 +1176,6 @@ function DirectBookingCruiseContent() {
                                                         ) : (
                                                             <>
                                                                 객실 {idx + 1}
-                                                                <span className="ml-1 rounded bg-yellow-50 px-1.5 py-0.5 text-xs text-yellow-800 border border-yellow-200">
-                                                                    (객실명과 총객실수 총 인원수을 선택해 주세요)
-                                                                </span>
                                                             </>
                                                         )}
                                                     </h4>
@@ -1223,7 +1220,7 @@ function DirectBookingCruiseContent() {
                                                     <>
                                                         {!isDayCruise && !isCatherineHorizonCruise && (
                                                             <div className="mt-2 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-                                                                <label className="text-sm font-medium text-gray-700">객실명의 총 객실수 선택</label>
+                                                                <label className="text-sm font-medium text-gray-700">위 객실의 총 객실 수</label>
                                                                 <StepperNumberInput
                                                                     min={1}
                                                                     max={20}
