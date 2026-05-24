@@ -9,6 +9,7 @@ import { hasInvalidLocationChars, normalizeLocationEnglishUpper } from '@/lib/lo
 import { toDbDateTimeKst, toInputDateTime } from '@/lib/kstDateTime';
 import PageWrapper from '../../../../components/PageWrapper';
 import SectionBox from '../../../../components/SectionBox';
+import StepperNumberInput from '../../../../components/StepperNumberInput';
 
 function DirectBookingAirportContent() {
     const router = useRouter();
@@ -877,24 +878,26 @@ function DirectBookingAirportContent() {
 
                         {/* 추가 정보 */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">승객 수</label>
-                                <input
-                                    type="number"
-                                    min="0"
+                            <div className="border border-gray-300 rounded-lg p-3 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                                <label className="text-sm font-medium text-gray-700">승객 수</label>
+                                <StepperNumberInput
                                     value={form.passengerCount}
-                                    onChange={(e) => setForm(prev => ({ ...prev, passengerCount: parseInt(e.target.value) || 0 }))}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                    min={0}
+                                    max={20}
+                                    onChange={(value) => setForm(prev => ({ ...prev, passengerCount: value }))}
+                                    className="w-full max-w-[160px]"
+                                    ariaLabel="승객 수"
                                 />
                             </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">수하물 개수</label>
-                                <input
-                                    type="number"
-                                    min="0"
+                            <div className="border border-gray-300 rounded-lg p-3 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                                <label className="text-sm font-medium text-gray-700">수하물 개수</label>
+                                <StepperNumberInput
                                     value={form.luggageCount}
-                                    onChange={(e) => setForm(prev => ({ ...prev, luggageCount: parseInt(e.target.value) || 0 }))}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                    min={0}
+                                    max={20}
+                                    onChange={(value) => setForm(prev => ({ ...prev, luggageCount: value }))}
+                                    className="w-full max-w-[160px]"
+                                    ariaLabel="수하물 개수"
                                 />
                             </div>
                         </div>

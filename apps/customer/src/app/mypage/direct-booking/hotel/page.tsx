@@ -7,6 +7,7 @@ import { refreshAuthBeforeSubmit } from '@/lib/authHelpers';
 import { useLoadingTimeout } from '@/hooks/useLoadingTimeout';
 import PageWrapper from '@/components/PageWrapper';
 import SectionBox from '@/components/SectionBox';
+import StepperNumberInput from '@/components/StepperNumberInput';
 
 function HotelDirectBookingContent() {
     const router = useRouter();
@@ -544,42 +545,46 @@ function HotelDirectBookingContent() {
 
                         {/* 객실 수 및 인원수 입력 */}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                            <div className="border border-gray-300 rounded-lg p-3 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                                <label className="text-sm font-medium text-gray-700">
                                     🔢 객실 수
                                 </label>
-                                <input
-                                    type="number"
-                                    min="1"
-                                    value={formData.room_count}
-                                    onChange={(e) => setFormData({ ...formData, room_count: e.target.value })}
-                                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                    required
+                                <StepperNumberInput
+                                    value={Number(formData.room_count || 1)}
+                                    min={1}
+                                    max={20}
+                                    onChange={(value) => setFormData({ ...formData, room_count: String(value) })}
+                                    className="w-full max-w-[160px]"
+                                    inputClassName="text-base"
+                                    ariaLabel="객실 수"
                                 />
                             </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                            <div className="border border-gray-300 rounded-lg p-3 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                                <label className="text-sm font-medium text-gray-700">
                                     👨 성인 수
                                 </label>
-                                <input
-                                    type="number"
-                                    min="1"
-                                    value={formData.adult_count}
-                                    onChange={(e) => setFormData({ ...formData, adult_count: e.target.value })}
-                                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                    required
+                                <StepperNumberInput
+                                    value={Number(formData.adult_count || 1)}
+                                    min={1}
+                                    max={20}
+                                    onChange={(value) => setFormData({ ...formData, adult_count: String(value) })}
+                                    className="w-full max-w-[160px]"
+                                    inputClassName="text-base"
+                                    ariaLabel="성인 수"
                                 />
                             </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                            <div className="border border-gray-300 rounded-lg p-3 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                                <label className="text-sm font-medium text-gray-700">
                                     👶 아동 수
                                 </label>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    value={formData.child_count}
-                                    onChange={(e) => setFormData({ ...formData, child_count: e.target.value })}
-                                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                <StepperNumberInput
+                                    value={Number(formData.child_count || 0)}
+                                    min={0}
+                                    max={20}
+                                    onChange={(value) => setFormData({ ...formData, child_count: String(value) })}
+                                    className="w-full max-w-[160px]"
+                                    inputClassName="text-base"
+                                    ariaLabel="아동 수"
                                 />
                             </div>
                         </div>

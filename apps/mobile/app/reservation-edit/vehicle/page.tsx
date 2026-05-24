@@ -7,6 +7,7 @@ import { saveAdditionalFeeTemplateFromInput } from '@/lib/additionalFeeTemplate'
 import { recordReservationChange } from '@/lib/reservationChangeTracker';
 import { calculateReservationPricing } from '@/lib/pricing';
 import ManagerLayout from '../_components/MobileReservationLayout';
+import StepperNumberInput from '../_components/StepperNumberInput';
 import {
     Save,
     ArrowLeft,
@@ -841,17 +842,19 @@ function CruiseCarReservationEditContent() {
                                             </div>
 
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                                        <Car className="inline w-4 h-4 mr-1" />
-                                                        차량 대수
-                                                    </label>
-                                                    <input
-                                                        type="number"
-                                                        value={item.car_count}
-                                                        onChange={(e) => updateVehicleFormWithAutoTotal(index, { car_count: parseInt(e.target.value, 10) || 0 })}
-                                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                                        min="0"
+<div className="border border-gray-300 rounded-lg p-3 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                                                    <label className="text-sm font-medium text-gray-700">
+                                        <Car className="inline w-4 h-4 mr-1" />
+                                        차량 대수
+                                    </label>
+                                    <StepperNumberInput
+                                        value={item.car_count}
+                                        min={0}
+                                        max={20}
+                                        onChange={(value) => updateVehicleFormWithAutoTotal(index, { car_count: value })}
+                                        className="w-full max-w-[160px]"
+                                                        inputClassName="text-sm"
+                                                        ariaLabel="차량 대수"
                                                     />
                                                 </div>
 
@@ -860,12 +863,14 @@ function CruiseCarReservationEditContent() {
                                                         <Users className="inline w-4 h-4 mr-1" />
                                                         승객 수
                                                     </label>
-                                                    <input
-                                                        type="number"
+                                                    <StepperNumberInput
                                                         value={item.passenger_count}
-                                                        onChange={(e) => updateVehicleFormWithAutoTotal(index, { passenger_count: parseInt(e.target.value, 10) || 0 })}
-                                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                                        min="0"
+                                                        min={0}
+                                                        max={20}
+                                                        onChange={(value) => updateVehicleFormWithAutoTotal(index, { passenger_count: value })}
+                                                        className="w-full"
+                                                        inputClassName="text-sm"
+                                                        ariaLabel="승객 수"
                                                     />
                                                 </div>
                                             </div>

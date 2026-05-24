@@ -7,6 +7,7 @@ import { getSessionUser } from '../../../../lib/authHelpers';
 import { useLoadingTimeout } from '../../../../hooks/useLoadingTimeout';
 import { createQuote } from '../../../../lib/quoteUtils';
 import { hasInvalidLocationChars, normalizeLocationEnglishUpper } from '../../../../lib/locationInput';
+import StepperNumberInput from '../../../../components/StepperNumberInput';
 
 function DirectBookingVehicleContent() {
     const router = useRouter();
@@ -414,15 +415,16 @@ function DirectBookingVehicleContent() {
                                         />
                                     </div>
 
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">👥 승객 수</label>
-                                        <input
-                                            type="number"
-                                            min="1"
+                                    <div className="border border-gray-300 rounded-lg p-3 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                                        <label className="text-sm font-medium text-gray-700">👥 승객 수</label>
+                                        <StepperNumberInput
                                             value={quoteForm.passenger_count}
-                                            onChange={e => setQuoteForm({ ...quoteForm, passenger_count: parseInt(e.target.value) || 1 })}
-                                            className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                                            required
+                                            min={1}
+                                            max={20}
+                                            onChange={value => setQuoteForm({ ...quoteForm, passenger_count: value })}
+                                            className="w-full max-w-[160px]"
+                                            inputClassName="text-base"
+                                            ariaLabel="승객 수"
                                         />
                                     </div>
 

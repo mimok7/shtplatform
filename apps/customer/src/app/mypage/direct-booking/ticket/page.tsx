@@ -462,23 +462,31 @@ function TicketBookingContent() {
                                 {/* 인원수 */}
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">👥 참가 인원 *</label>
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        max="50"
-                                        value={formData.ticket_quantity}
-                                        onChange={(e) => {
-                                            const qty = parseInt(e.target.value) || 0;
-                                            setFormData({ ...formData, ticket_quantity: qty });
-                                            // 인원 줄면 메뉴 수량도 자동 조정
-                                            setMenuSelections(prev => ({
-                                                lobster: Math.min(prev.lobster, qty),
-                                                fish: Math.min(prev.fish, Math.max(0, qty - Math.min(prev.lobster, qty)))
-                                            }));
-                                        }}
-                                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                                        required
-                                    />
+                                    <div className="flex items-center justify-center gap-3 rounded-lg border border-gray-300 p-2 bg-white">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const qty = Math.max(0, formData.ticket_quantity - 1);
+                                                setFormData({ ...formData, ticket_quantity: qty });
+                                                setMenuSelections(prev => ({
+                                                    lobster: Math.min(prev.lobster, qty),
+                                                    fish: Math.min(prev.fish, Math.max(0, qty - Math.min(prev.lobster, qty)))
+                                                }));
+                                            }}
+                                            className="w-9 h-9 rounded-full border border-gray-300 flex items-center justify-center text-gray-600 hover:bg-gray-100 text-lg"
+                                            aria-label="참가 인원 감소"
+                                        >−</button>
+                                        <span className="w-10 text-center font-semibold text-gray-800">{formData.ticket_quantity}</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const qty = Math.min(50, formData.ticket_quantity + 1);
+                                                setFormData({ ...formData, ticket_quantity: qty });
+                                            }}
+                                            className="w-9 h-9 rounded-full border border-gray-300 flex items-center justify-center text-gray-600 hover:bg-gray-100 text-lg"
+                                            aria-label="참가 인원 증가"
+                                        >+</button>
+                                    </div>
                                 </div>
 
                                 {/* 메인 메뉴 선택 */}
@@ -636,15 +644,21 @@ function TicketBookingContent() {
                                 {/* 수량 */}
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">👥 수량 (매) *</label>
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        max="50"
-                                        value={formData.ticket_quantity}
-                                        onChange={(e) => setFormData({ ...formData, ticket_quantity: parseInt(e.target.value) || 0 })}
-                                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                                        required
-                                    />
+                                    <div className="flex items-center justify-center gap-3 rounded-lg border border-gray-300 p-2 bg-white">
+                                        <button
+                                            type="button"
+                                            onClick={() => setFormData({ ...formData, ticket_quantity: Math.max(0, formData.ticket_quantity - 1) })}
+                                            className="w-9 h-9 rounded-full border border-gray-300 flex items-center justify-center text-gray-600 hover:bg-gray-100 text-lg"
+                                            aria-label="수량 감소"
+                                        >−</button>
+                                        <span className="w-10 text-center font-semibold text-gray-800">{formData.ticket_quantity}</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => setFormData({ ...formData, ticket_quantity: Math.min(50, formData.ticket_quantity + 1) })}
+                                            className="w-9 h-9 rounded-full border border-gray-300 flex items-center justify-center text-gray-600 hover:bg-gray-100 text-lg"
+                                            aria-label="수량 증가"
+                                        >+</button>
+                                    </div>
                                 </div>
                             </>
                         )}

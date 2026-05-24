@@ -9,6 +9,7 @@ import { toDbDateTimeKst, toInputDateTime } from '@/lib/kstDateTime';
 import { normalizeLocationEnglishUpper } from '@/lib/locationInput';
 import PageWrapper from '@/components/PageWrapper';
 import SectionBox from '@/components/SectionBox';
+import StepperNumberInput from '@/components/StepperNumberInput';
 
 interface VehicleData {
     id: number;
@@ -515,13 +516,15 @@ function RentcarDirectBookingContent() {
                                             </button>
                                         ))}
                                     </div>
-                                </div>
-
-                                {/* 편도 방향 선택 */}
-                                {vehicle.wayType === '편도' && (
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">📍 편도 방향 *</label>
-                                        <div className="grid grid-cols-2 gap-2">
+                                                <StepperNumberInput
+                                                    value={quoteForm.passenger_count}
+                                                    min={1}
+                                                    max={20}
+                                                    onChange={value => setQuoteForm({ ...quoteForm, passenger_count: value })}
+                                                    className="w-full"
+                                                    inputClassName="text-base"
+                                                    ariaLabel="승객 수"
+                                                />
                                             <button
                                                 type="button"
                                                 onClick={() => handlePyondoDirectionChange(index, 'pickup')}
@@ -749,34 +752,40 @@ function RentcarDirectBookingContent() {
                                         <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
                                             <h4 className="font-semibold text-gray-700 mb-3">📋 기타 정보</h4>
                                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-2">승객 수</label>
-                                                    <input
-                                                        type="number"
-                                                        min="1"
+                                                <div className="border border-gray-300 rounded-lg p-3 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                                                    <label className="text-sm font-medium text-gray-700">승객 수</label>
+                                                    <StepperNumberInput
                                                         value={vehicle.passenger_count}
-                                                        onChange={(e) => updateVehicleField(index, 'passenger_count', parseInt(e.target.value))}
-                                                        className="w-full p-3 border border-gray-300 rounded-lg"
+                                                        min={1}
+                                                        max={20}
+                                                        onChange={(value) => updateVehicleField(index, 'passenger_count', value)}
+                                                        className="w-full max-w-[160px]"
+                                                        inputClassName="text-base"
+                                                        ariaLabel="승객 수"
                                                     />
                                                 </div>
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-2">차량 수</label>
-                                                    <input
-                                                        type="number"
-                                                        min="1"
+                                                <div className="border border-gray-300 rounded-lg p-3 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                                                    <label className="text-sm font-medium text-gray-700">차량 수</label>
+                                                    <StepperNumberInput
                                                         value={vehicle.car_count}
-                                                        onChange={(e) => updateVehicleField(index, 'car_count', parseInt(e.target.value))}
-                                                        className="w-full p-3 border border-gray-300 rounded-lg"
+                                                        min={1}
+                                                        max={20}
+                                                        onChange={(value) => updateVehicleField(index, 'car_count', value)}
+                                                        className="w-full max-w-[160px]"
+                                                        inputClassName="text-base"
+                                                        ariaLabel="차량 수"
                                                     />
                                                 </div>
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-2">짐 개수</label>
-                                                    <input
-                                                        type="number"
-                                                        min="0"
+                                                <div className="border border-gray-300 rounded-lg p-3 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                                                    <label className="text-sm font-medium text-gray-700">짐 개수</label>
+                                                    <StepperNumberInput
                                                         value={vehicle.luggage_count}
-                                                        onChange={(e) => updateVehicleField(index, 'luggage_count', parseInt(e.target.value))}
-                                                        className="w-full p-3 border border-gray-300 rounded-lg"
+                                                        min={0}
+                                                        max={20}
+                                                        onChange={(value) => updateVehicleField(index, 'luggage_count', value)}
+                                                        className="w-full max-w-[160px]"
+                                                        inputClassName="text-base"
+                                                        ariaLabel="짐 개수"
                                                     />
                                                 </div>
                                             </div>

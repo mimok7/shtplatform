@@ -7,6 +7,7 @@ import { saveAdditionalFeeTemplateFromInput } from '@/lib/additionalFeeTemplate'
 import { recordReservationChange } from '@/lib/reservationChangeTracker';
 import { calculateReservationPricing } from '@/lib/pricing';
 import ManagerLayout from '../_components/MobileReservationLayout';
+import StepperNumberInput from '../_components/StepperNumberInput';
 import {
     Save,
     ArrowLeft,
@@ -486,20 +487,21 @@ function HotelReservationEditContent() {
                                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                         />
                                     </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    <div className="border border-gray-300 rounded-lg p-3 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                                        <label className="text-sm font-medium text-gray-700">
                                             객실 수
                                         </label>
-                                        <input
-                                            type="number"
-                                            min="1"
-                                            max="20"
+                                        <StepperNumberInput
                                             value={formData.room_count}
-                                            onChange={(e) => setFormData(prev => ({
+                                            min={1}
+                                            max={20}
+                                            onChange={(value) => setFormData(prev => ({
                                                 ...prev,
-                                                room_count: parseInt(e.target.value) || 1
+                                                room_count: value
                                             }))}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                            className="w-full max-w-[160px]"
+                                            inputClassName="text-sm"
+                                            ariaLabel="객실 수"
                                         />
                                     </div>
                                 </div>
@@ -515,21 +517,22 @@ function HotelReservationEditContent() {
                                     </div>
                                 )}
 
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                <div className="border border-gray-300 rounded-lg p-3 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                                    <label className="text-sm font-medium text-gray-700">
                                         <Users className="inline w-4 h-4 mr-1" />
                                         투숙객 수
                                     </label>
-                                    <input
-                                        type="number"
-                                        min="1"
-                                        max="10"
+                                    <StepperNumberInput
                                         value={formData.guest_count}
-                                        onChange={(e) => setFormData(prev => ({
+                                        min={1}
+                                        max={10}
+                                        onChange={(value) => setFormData(prev => ({
                                             ...prev,
-                                            guest_count: parseInt(e.target.value) || 0
+                                            guest_count: value
                                         }))}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                        className="w-full max-w-[160px]"
+                                        inputClassName="text-sm"
+                                        ariaLabel="투숙객 수"
                                     />
                                 </div>
 

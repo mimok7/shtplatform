@@ -6,6 +6,7 @@ import supabase from '@/lib/supabase';
 import { saveAdditionalFeeTemplateFromInput } from '@/lib/additionalFeeTemplate';
 import { recordReservationChange } from '@/lib/reservationChangeTracker';
 import ManagerLayout from '../_components/MobileReservationLayout';
+import StepperNumberInput from '../_components/StepperNumberInput';
 import {
     Save,
     ArrowLeft,
@@ -2061,34 +2062,17 @@ function CruiseReservationEditContent() {
                                                 </div>
 
                                                 {!isCatherineHorizonCruise && (
-                                                    <div>
-                                                        <label className="block text-xs font-medium text-gray-700 mb-1">객실 수 *</label>
-                                                        <div className="flex items-center gap-2">
-                                                            <button
-                                                                type="button"
-                                                                className="sm:hidden h-8 w-8 rounded border border-gray-300 bg-white text-base font-bold text-gray-700"
-                                                                onClick={() => handleRoomCountChange(roomIndex, Math.max(1, (room.room_count || 1) - 1))}
-                                                                aria-label="객실 수 감소"
-                                                            >
-                                                                -
-                                                            </button>
-                                                            <input
-                                                                type="number"
-                                                                min="1"
-                                                                max="20"
-                                                                value={room.room_count}
-                                                                onChange={(e) => handleRoomCountChange(roomIndex, parseInt(e.target.value) || 1)}
-                                                                className="show-number-spinner w-full px-2 py-1 border border-gray-300 rounded text-sm text-center sm:text-left"
-                                                            />
-                                                            <button
-                                                                type="button"
-                                                                className="sm:hidden h-8 w-8 rounded border border-gray-300 bg-white text-base font-bold text-gray-700"
-                                                                onClick={() => handleRoomCountChange(roomIndex, Math.min(20, (room.room_count || 1) + 1))}
-                                                                aria-label="객실 수 증가"
-                                                            >
-                                                                +
-                                                            </button>
-                                                        </div>
+                                                    <div className="border border-gray-300 rounded-lg p-3 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                                                        <label className="text-sm font-medium text-gray-700">객실 수 *</label>
+                                                        <StepperNumberInput
+                                                            value={room.room_count}
+                                                            min={1}
+                                                            max={20}
+                                                            onChange={(value) => handleRoomCountChange(roomIndex, value)}
+                                                            className="w-full max-w-[160px]"
+                                                            inputClassName="text-sm"
+                                                            ariaLabel="객실 수"
+                                                        />
                                                     </div>
                                                 )}
 
@@ -2106,13 +2090,14 @@ function CruiseReservationEditContent() {
                                                         ].map(({ key, label }) => (
                                                             <div key={key}>
                                                                 <label className="block text-xs text-gray-700 mb-1">{label}</label>
-                                                                <input
-                                                                    type="number"
-                                                                    min="0"
-                                                                    max="20"
-                                                                    value={(room as any)[key]}
-                                                                    onChange={(e) => handleRoomGuestFieldChange(roomIndex, key as keyof CruiseRoomForm, parseInt(e.target.value) || 0)}
-                                                                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm text-center"
+                                                                <StepperNumberInput
+                                                                    value={Number((room as any)[key] || 0)}
+                                                                    min={0}
+                                                                    max={20}
+                                                                    onChange={(value) => handleRoomGuestFieldChange(roomIndex, key as keyof CruiseRoomForm, value)}
+                                                                    className="w-full"
+                                                                    inputClassName="text-sm"
+                                                                    ariaLabel={label}
                                                                 />
                                                             </div>
                                                         ))}
