@@ -82,7 +82,7 @@ function TourDirectBookingContent() {
                 supabase.from('tour_payment_pricing').select('*').eq('tour_id', tourId).eq('is_active', true),
                 supabase.from('tour_inclusions').select('*').eq('tour_id', tourId).order('order_seq'),
                 supabase.from('tour_cruise_integration').select('*').eq('tour_id', tourId).eq('is_active', true),
-                supabase.from('tour_addon_options').select('*').eq('tour_id', tourId).eq('is_active', true)
+                supabase.from('tour_addon_options').select('*').eq('tour_id', tourId)
             ]);
 
             setPricingData(pricingRes.data || []);

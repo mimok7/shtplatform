@@ -291,7 +291,13 @@ function DirectBookingAirportContent() {
 
             const rows = (data as any[]) || [];
             const names: string[] = [...new Set(rows.map(item => String(item.airport_name || '')))].filter(Boolean);
-            setAirportLocationOptions(names);
+            
+            // 국제선을 위에, 국내선을 아래에 정렬
+            const international = names.filter(name => name.includes('국제선')).sort();
+            const domestic = names.filter(name => name.includes('국내선')).sort();
+            const sorted = [...international, ...domestic];
+            
+            setAirportLocationOptions(sorted);
         } catch (error) {
             console.error('공항 위치 옵션 로드 오류:', error);
         }
