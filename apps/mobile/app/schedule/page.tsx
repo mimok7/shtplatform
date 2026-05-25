@@ -81,6 +81,65 @@ const normalizeWayType = (value: string | null | undefined) => {
   return value || '';
 };
 
+const inferShtDirectionLabel = (item: any): string => {
+  const raw = String(item?.category || item?.serviceType || item?.way_type || item?.sht_category || '')
+    .trim()
+    .toLowerCase();
+
+  if (raw) {
+    if (raw.includes('pickup') || raw.includes('pick up') || raw.includes('픽업') || raw.includes('승차')) return '픽업';
+    if (
+      raw.includes('dropoff') ||
+      raw.includes('drop off') ||
+      raw.includes('drop') ||
+      raw.includes('샌딩') ||
+      raw.includes('드롭') ||
+      raw.includes('하차') ||
+      raw.includes('도착')
+    ) {
+      return '드롭';
+    }
+  }
+
+  const hasPickup = !!String(item?.pickupLocation || '').trim();
+  const hasDropoff = !!String(item?.dropoffLocation || '').trim();
+  if (hasPickup && !hasDropoff) return '픽업';
+  if (!hasPickup && hasDropoff) return '드롭';
+  if (hasPickup && hasDropoff) return '픽업/드롭';
+
+  // 데이터가 불완전해도 배지는 항상 노출
+  return '픽업/드롭';
+};
+
+const inferAirportDirectionLabel = (item: any): string => {
+  const candidates = [item?.category, item?.tripType, item?.wayType, item?.way_type, item?.division]
+    .map((v: any) => String(v || '').trim())
+    .filter(Boolean);
+
+  for (const candidate of candidates) {
+    const raw = candidate.toLowerCase();
+    if (raw.includes('pickup') || raw.includes('픽업') || raw.includes('arrival') || raw.includes('도착')) {
+      return '픽업';
+    }
+    if (
+      raw.includes('sending') ||
+      raw.includes('dropoff') ||
+      raw.includes('drop off') ||
+      raw.includes('샌딩') ||
+      raw.includes('출발')
+    ) {
+      return '샌딩';
+    }
+  }
+
+  // 구 sh_p 데이터(category)가 비어도 위치 정보로 안전 추론
+  const hasPickup = !!String(item?.pickupLocation || '').trim();
+  const hasDropoff = !!String(item?.dropoffLocation || '').trim();
+  if (hasPickup && hasDropoff) return '픽업/샌딩';
+
+  return '';
+};
+
 const getKstDateTimeParts = (value: string | null | undefined) => toKstDateTimeParts(value);
 
 /* ── DB 조회(전체 행) ─────────────────────────── */
@@ -1159,12 +1218,9 @@ export default function SchedulePage() {
     if (type === 'car' || type === 'rentcar') {
       directionLabel = item.segmentType === 'return' ? '드롭' : '픽업';
     } else if (type === 'airport') {
-      directionLabel = item.tripType || item.wayType || '';
+      directionLabel = inferAirportDirectionLabel(item);
     } else if (type === 'vehicle' || type === 'sht') {
-      const raw = (item.category || item.serviceType || item.way_type || '').trim().toLowerCase();
-      if (raw === '픽업' || raw === 'pickup') directionLabel = '픽업';
-      else if (raw === '샌딩' || raw === 'sending' || raw === 'dropoff') directionLabel = '샌딩';
-      else if (raw === '드롭' || raw === '도롭' || raw === 'drop' || raw === 'dropoff') directionLabel = '드롭';
+      directionLabel = inferShtDirectionLabel(item);
     }
     const directionColor = directionLabel === '픽업'
       ? 'bg-blue-100 text-blue-700'
@@ -1277,6 +1333,8 @@ export default function SchedulePage() {
               <Row label="투어" value={item.tourName} bold />
               <DateRow dateLabel={dateLabel} />
               <Row label="인원" value={`${item.participants || item.tourCapacity || 0}명`} />
+              {item.pickupLocation && <Row label="픽업장소" value={item.pickupLocation} />}
+              {item.dropoffLocation && <Row label="드롭장소" value={item.dropoffLocation} />}
             </>
           )}
           {type === 'ticket' && (

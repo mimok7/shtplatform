@@ -573,6 +573,57 @@ const getAirportSortOrder = (service: any) => {
   return 9;
 };
 
+const getShtSortOrder = (service: any) => {
+  const value = String(service?.category || service?.sht_category || '').toLowerCase();
+  if (value.includes('pickup') || value.includes('픽업')) return 0;
+  if (value.includes('drop') || value.includes('드롭') || value.includes('도롭') || value.includes('샌딩')) return 1;
+  return 9;
+};
+
+const formatNonZeroCount = (value: any, suffix: string): string | null => {
+  const count = Number(value ?? 0);
+  if (!Number.isFinite(count) || count <= 0) return null;
+  return `${count}${suffix}`;
+};
+
+const getAirportDirectionBadge = (service: any): string | null => {
+  const value = String(service?.category || service?.way_type || service?.tripType || '').toLowerCase();
+  if (value.includes('pickup') || value.includes('픽업')) return '픽업';
+  if (value.includes('sending') || value.includes('샌딩')) return '샌딩';
+  return null;
+};
+
+const getShtDirectionBadge = (service: any): string | null => {
+  const value = String(service?.category || service?.sht_category || '').toLowerCase();
+  if (value.includes('pickup') || value.includes('픽업')) return '픽업';
+  if (value.includes('drop') || value.includes('드롭') || value.includes('도롭') || value.includes('샌딩')) return '드롭';
+  return null;
+};
+
+const getDirectionBadgeClassName = (badge: string | null): string => {
+  if (badge === '픽업') return 'bg-emerald-100 text-emerald-700';
+  if (badge === '드롭') return 'bg-orange-100 text-orange-700';
+  if (badge === '샌딩') return 'bg-violet-100 text-violet-700';
+  return 'bg-sky-100 text-sky-700';
+};
+
+const shouldHideDuplicateShuttleVehicle = (service: any): boolean => {
+  const type = String(service?.serviceType || '').toLowerCase();
+  if (type !== 'vehicle' && type !== 'car') return false;
+  const carType = String(service?.carType || service?.vehicle_type || '').toLowerCase();
+  return carType.includes('스테이하롱 셔틀 리무진') || carType.includes('스테이하롱 셔툴 리무진');
+};
+
+const formatCompactDatetime = (value: any): string => {
+  if (!value) return '-';
+  const raw = String(value).trim();
+  if (!raw) return '-';
+  const normalized = raw.replace('T', ' ');
+  const match = normalized.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);
+  if (match) return `${match[1]}-${match[2]}-${match[3]} ${match[4]}:${match[5]}`;
+  return raw;
+};
+
 const compareServices = (a: any, b: any) => {
   const dateA = getDateStr(a) || '9999-99-99';
   const dateB = getDateStr(b) || '9999-99-99';
@@ -581,6 +632,9 @@ const compareServices = (a: any, b: any) => {
   const isAirportA = a?.serviceType === 'airport';
   const isAirportB = b?.serviceType === 'airport';
   if (isAirportA && isAirportB) return getAirportSortOrder(a) - getAirportSortOrder(b);
+  const isShtA = a?.serviceType === 'sht';
+  const isShtB = b?.serviceType === 'sht';
+  if (isShtA && isShtB) return getShtSortOrder(a) - getShtSortOrder(b);
   return 0;
 };
 
@@ -605,6 +659,9 @@ function ServiceCard({
 }) {
   const type = String(service?.serviceType || '').toLowerCase();
   const reservationId = String(service?.reservation_id || service?.reservationId || service?.re_id || '').trim();
+  const airportDirectionBadge = type === 'airport' ? getAirportDirectionBadge(service) : null;
+  const shtDirectionBadge = type === 'sht' ? getShtDirectionBadge(service) : null;
+  const titleBadge = airportDirectionBadge || shtDirectionBadge;
   const canDelete = !!onDeleteService && !!reservationId;
   const isDeleting = !!deletingReservationId && deletingReservationId === reservationId;
   const amountSummaryLines = type === 'cruise' ? [] : getAmountSummaryLines(service, type);
@@ -631,6 +688,11 @@ function ServiceCard({
         <div className="flex min-w-0 items-center gap-1.5">
           {getServiceIcon(type)}
           <span className="truncate whitespace-nowrap text-sm font-semibold text-gray-800">{getServiceLabel(type)}</span>
+          {titleBadge && (
+            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium whitespace-nowrap ${getDirectionBadgeClassName(titleBadge)}`}>
+              {titleBadge}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-1.5">
           {getStatusBadge(String(service?.status || ''))}
@@ -656,57 +718,60 @@ function ServiceCard({
 
       {type === 'cruise' && (
         <div className="space-y-0.5">
+          <DetailLine label="체크인" value={service.checkin || '-'} />
           <DetailLine label="크루즈명" value={service.cruiseName || service.cruise || '-'} />
           <DetailLine label="객실타입" value={service.roomType || '-'} />
-          <DetailLine label="객실수" value={`${Number(service.room_count || service.roomCount || 0)}실`} />
-          <DetailLine label="체크인" value={service.checkin || '-'} />
-          <DetailLine label="결제방식" value={service.paymentMethod || service.payment_method || '-'} />
-          <DetailLine label="성인" value={`${Number(service.adult ?? service.adult_count ?? 0)}명`} />
-          <DetailLine label="아동" value={`${Number(service.child ?? service.child_count ?? 0)}명`} />
-          <DetailLine label="유아" value={`${Number(service.infant ?? service.infant_count ?? service.toddler ?? 0)}명`} />
+          <DetailLine label="구분" value={service.category || '-'} />
+          <DetailLine label="객실수" value={formatNonZeroCount(service.room_count || service.roomCount, '실')} />
+          <DetailLine label="성인" value={formatNonZeroCount(service.adult ?? service.adult_count, '명')} />
+          <DetailLine label="아동" value={formatNonZeroCount(service.child ?? service.child_count, '명')} />
+          <DetailLine label="유아" value={formatNonZeroCount(service.infant ?? service.infant_count ?? service.toddler, '명')} />
           <DetailLine label="총 금액" value={<span className="font-bold text-blue-700">{formatMoney(getCruiseDisplayTotal(service))}</span>} />
         </div>
       )}
 
       {(type === 'vehicle' || type === 'car') && (
         <div className="space-y-0.5">
-          <DetailLine label="구분" value={service.carCategory || service.sht_category || service.category || '-'} />
+          <DetailLine label="일시" value={service.pickupDatetime ? formatDateOnlyKst(service.pickupDatetime) : '-'} />
           <DetailLine label="차량타입" value={service.carType || '-'} />
-          <DetailLine label="경로" value={service.route || '-'} />
-          <DetailLine label="총인원수" value={`${Number(service.passengerCount || 0)}명`} />
-          <DetailLine label="픽업일시" value={service.pickupDatetime ? formatDatetimeOffset(service.pickupDatetime) : '-'} />
+          <DetailLine label="총인원수" value={formatNonZeroCount(service.passengerCount, '명')} />
+          <DetailLine label="차량수" value={formatNonZeroCount(service.car_count || service.carCount, '대')} />
           <DetailLine label="픽업위치" value={service.pickupLocation || '-'} />
           <DetailLine label="드랍위치" value={service.dropoffLocation || service.destination || '-'} />
-          <DetailLine label="차량번호" value={service.vehicleNumber || service.vehicle_number || '-'} />
           <DetailLine label="총 금액" value={<span className="font-bold text-blue-700">{formatMoney(Number(service.totalPrice || service.car_total_price || 0))}</span>} />
         </div>
       )}
 
       {type === 'airport' && (
         <div className="space-y-0.5">
-          <DetailLine label="구분" value={service.category || service.way_type || service.tripType || '-'} />
-          <DetailLine label="경로" value={service.route || '-'} />
-          <DetailLine label="차량" value={service.carType || service.vehicleType || service.vehicle_type || '-'} />
-          <DetailLine label="일시" value={service.ra_datetime ? formatDatetimeOffset(service.ra_datetime) : `${service.date || '-'} ${service.time || ''}`.trim()} />
-          <DetailLine label="항공편" value={service.flightNumber || service.ra_flight_number || '-'} />
-          <DetailLine label="공항" value={service.ra_airport_location || service.airportName || '-'} />
-          <DetailLine label="픽업위치" value={service.pickupLocation || service.pickup_location || service.placeName || service.accommodation_info || '-'} />
-          <DetailLine label="드롭위치" value={service.dropoffLocation || service.dropoff_location || service.placeName || service.accommodation_info || '-'} />
-          <DetailLine label="하차/승차" value={service.accommodation_info || service.placeName || service.pickupLocation || service.dropoffLocation || '-'} />
-          <DetailLine label="경유지" value={service.stopover || service.ra_stopover_location || '-'} />
-          <DetailLine label="인원" value={`${Number(service.passengerCount ?? service.ra_passenger_count ?? 0)}명`} />
-          <DetailLine label="차량수" value={`${Number(service.carCount ?? service.ra_car_count ?? 0)}대`} />
-          <DetailLine label="총 금액" value={<span className="font-bold text-blue-700">{formatMoney(Number(service.totalPrice || service.total_price || 0))}</span>} />
+          {(() => {
+            const airportName = service.ra_airport_location || service.airportName || '-';
+            const cityName = service.placeName || service.location_name || service.accommodation_info || service.pickupLocation || service.dropoffLocation || '-';
+            const directionBadge = getAirportDirectionBadge(service);
+            return (
+              <>
+                <DetailLine label="일시" value={service.ra_datetime ? formatCompactDatetime(service.ra_datetime) : `${service.date || '-'} ${service.time || ''}`.trim()} />
+                <DetailLine label="공항" value={airportName} />
+                <DetailLine label="항공편" value={service.flightNumber || service.ra_flight_number || '-'} />
+                <DetailLine label="경로" value={service.route || '-'} />
+                <DetailLine label="차량" value={service.carType || service.vehicleType || service.vehicle_type || '-'} />
+                <DetailLine label="인원" value={formatNonZeroCount(service.passengerCount ?? service.ra_passenger_count, '명')} />
+                <DetailLine label="차량수" value={formatNonZeroCount(service.carCount ?? service.ra_car_count, '대')} />
+                <DetailLine label={directionBadge === '샌딩' ? '샌딩위치' : '픽업위치'} value={cityName} />
+                <DetailLine label="총 금액" value={<span className="font-bold text-blue-700">{formatMoney(Number(service.totalPrice || service.total_price || 0))}</span>} />
+              </>
+            );
+          })()}
         </div>
       )}
 
       {type === 'hotel' && (
         <div className="space-y-0.5">
-          <DetailLine label="호텔명" value={service.hotelName || service.hotel_name || service.hotel_category || '-'} />
-          <DetailLine label="객실타입" value={service.roomType || service.room_type || '-'} />
           <DetailLine label="체크인" value={service.checkinDate || service.checkin_date || '-'} />
           <DetailLine label="숙박일정" value={(service.nights || service.days) ? `${Number(service.nights || service.days)}박 ${Number(service.nights || service.days) + 1}일` : '-'} />
-          <DetailLine label="인원" value={`${Number(service.guestCount ?? service.guest_count ?? 0)}명`} />
+          <DetailLine label="호텔명" value={service.hotelName || service.hotel_name || service.hotel_category || '-'} />
+          <DetailLine label="객실명" value={service.roomName || service.room_name || null} />
+          <DetailLine label="인원" value={formatNonZeroCount(service.guestCount ?? service.guest_count, '명')} />
           <DetailLine label="총 금액" value={<span className="font-bold text-blue-700">{formatMoney(Number(service.totalPrice || service.total_price || 0))}</span>} />
         </div>
       )}
@@ -714,11 +779,13 @@ function ServiceCard({
       {type === 'tour' && (
         <div className="space-y-0.5">
           <DetailLine label="투어명" value={service.tourName || service.tour_name || '-'} />
-          <DetailLine label="투어일자" value={service.tourDate || service.usage_date || service.startDate || '-'} />
-          <DetailLine label="인원수" value={`${Number(service.tourCapacity ?? service.tour_capacity ?? service.participants ?? 0)}명`} />
-          <DetailLine label="차량" value={service.carCount ? `${Number(service.carCount)}대` : '-'} />
-          <DetailLine label="픽업장소" value={service.pickupLocation || service.pickup_location || '-'} />
-          <DetailLine label="드랍장소" value={service.dropoffLocation || service.dropoff_location || '-'} />
+          <DetailLine label="종류" value={service.tourType || service.tour_type || '-'} />
+          <DetailLine label="시작일" value={service.startDate || service.tourDate || service.usage_date || '-'} />
+          <DetailLine label="종료일" value={service.endDate || service.startDate || service.tourDate || service.usage_date || '-'} />
+          <DetailLine label="인원수" value={formatNonZeroCount(service.tourCapacity ?? service.tour_capacity ?? service.participants, '명')} />
+          <DetailLine label="픽업" value={service.pickupLocation || service.pickup_location || '-'} />
+          <DetailLine label="드롭" value={service.dropoffLocation || service.dropoff_location || '-'} />
+          <DetailLine label="메모" value={service.memo || service.note || service.request_note || '-'} />
           <DetailLine label="총 금액" value={<span className="font-bold text-blue-700">{formatMoney(Number(service.totalPrice || service.total_price || 0))}</span>} />
         </div>
       )}
@@ -761,8 +828,7 @@ function ServiceCard({
 
       {type === 'sht' && (
         <div className="space-y-0.5">
-          <DetailLine label="사용일" value={service.usageDate ? formatDatetimeOffset(service.usageDate) : '-'} />
-          <DetailLine label="구분" value={service.category || service.sht_category || '-'} />
+          <DetailLine label="승차일" value={service.usageDate ? formatDateOnlyKst(service.usageDate) : '-'} />
           <DetailLine label="차량번호" value={service.vehicleNumber || service.vehicle_number || '-'} />
           <DetailLine label="좌석" value={service.seatNumber || service.seat_number || '-'} />
           <DetailLine label="픽업장소" value={service.pickupLocation || service.pickup_location || '-'} />
@@ -880,6 +946,11 @@ export default function ReservationDetailModal({
     return base.map((s: any) => ({ ...s, serviceType: getServiceType(s) }));
   }, [item, items]);
 
+  const visibleServices = useMemo(
+    () => (enrichedServices || []).filter((service) => !shouldHideDuplicateShuttleVehicle(service)),
+    [enrichedServices],
+  );
+
   useEffect(() => {
     if (!isOpen || groupedItems.length === 0) {
       setEnrichedServices(groupedItems);
@@ -916,7 +987,7 @@ export default function ReservationDetailModal({
           airportCodes.length > 0 ? supabase.from('airport_price').select('airport_code, service_type, route, vehicle_type').in('airport_code', airportCodes) : Promise.resolve({ data: [] }),
           hotelCodes.length > 0 ? supabase.from('hotel_price').select('hotel_price_code, hotel_name, room_type, room_name').in('hotel_price_code', hotelCodes) : Promise.resolve({ data: [] }),
           rentCodes.length > 0 ? supabase.from('rentcar_price').select('rent_code, vehicle_type, way_type, route, price, capacity').in('rent_code', rentCodes) : Promise.resolve({ data: [] }),
-          tourCodes.length > 0 ? supabase.from('tour_pricing').select('pricing_id, price_per_person, vehicle_type, tour:tour_id(tour_name, tour_code)').in('pricing_id', tourCodes) : Promise.resolve({ data: [] }),
+          tourCodes.length > 0 ? supabase.from('tour_pricing').select('pricing_id, price_per_person, vehicle_type, min_guests, max_guests, tour:tour_id(tour_name, tour_code)').in('pricing_id', tourCodes) : Promise.resolve({ data: [] }),
           reservationIds.length > 0 ? supabase.from('reservation').select('re_id, total_amount, manual_additional_fee, manual_additional_fee_detail, price_breakdown').in('re_id', reservationIds) : Promise.resolve({ data: [] }),
           reservationIds.length > 0
             ? supabase
@@ -1101,9 +1172,12 @@ export default function ReservationDetailModal({
 
           if (baseService.serviceType === 'hotel') {
             const priceInfo: any = hotelPriceMap.get(baseService.hotel_price_code);
+            const rawHotelName = String(baseService.hotelName || baseService.hotel_name || '').trim() || null;
             return {
               ...baseService,
               hotelName: priceInfo?.hotel_name || baseService.hotelName || baseService.hotel_name || baseService.hotel_category || '-',
+              hotelNameRaw: rawHotelName,
+              roomName: priceInfo?.room_name || baseService.roomName || baseService.room_name || null,
               roomType: priceInfo?.room_name || priceInfo?.room_type || baseService.roomType || baseService.room_type || '-',
               checkinDate: baseService.checkinDate || baseService.checkin_date || '-',
               guestCount: Number(baseService.guestCount ?? baseService.guest_count ?? 0),
@@ -1114,10 +1188,22 @@ export default function ReservationDetailModal({
 
           if (baseService.serviceType === 'tour') {
             const priceInfo: any = tourPriceMap.get(baseService.tour_price_code);
+            const enrichedTourType = (() => {
+              if (baseService.tourType && !/^[0-9a-f-]{36}$/i.test(String(baseService.tourType))) return baseService.tourType;
+              if (!priceInfo) return baseService.tourType || null;
+              const vt = String(priceInfo.vehicle_type || '').trim();
+              const min = Number(priceInfo.min_guests || 0);
+              const max = Number(priceInfo.max_guests || 0);
+              if (vt && min > 0) return `${vt} (${min}~${max}인)`;
+              if (vt) return vt;
+              if (min > 0) return `${min}~${max}인`;
+              return null;
+            })();
             return {
               ...baseService,
               carType: priceInfo?.vehicle_type || baseService.carType || baseService.vehicle_type || '-',
               tourName: priceInfo?.tour?.tour_name || baseService.tourName || baseService.tour_name || '-',
+              tourType: enrichedTourType,
               tourDate: baseService.tourDate || baseService.usage_date || baseService.usageDate || '-',
               tourCapacity: Number(baseService.tourCapacity ?? baseService.tour_capacity ?? 0),
               pickupLocation: baseService.pickupLocation || baseService.pickup_location || '-',
@@ -1173,7 +1259,7 @@ export default function ReservationDetailModal({
     : `견적ID ${item?.quoteId || item?.re_quote_id || item?.quote_id || '-'}`;
 
   const sortedGroups = (() => {
-    const list = enrichedServices || [];
+    const list = visibleServices;
     if (sortMode === 'date') {
       const groups: Record<string, any[]> = {};
       list.forEach((service) => {
@@ -1216,7 +1302,7 @@ export default function ReservationDetailModal({
     const reservationTotals = new Map<string, number>();
     let rowFallbackTotal = 0;
 
-    for (const current of enrichedServices || []) {
+    for (const current of visibleServices) {
       const reservationId = String(current?.reservation_id || current?.reservationId || '').trim();
       const serviceType = String(current?.serviceType || '').toLowerCase();
 
@@ -1278,7 +1364,7 @@ export default function ReservationDetailModal({
                 <h2 className="truncate text-base font-semibold text-gray-900">예약 통합 상세</h2>
                 {item.source === 'sh' && <span className="rounded-full bg-gray-200 px-2 py-0.5 text-[11px] font-medium text-gray-700">Old</span>}
                 {item.source === 'new' && <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700">New</span>}
-                <span className="text-xs text-gray-500">연결 서비스 {enrichedServices.length}건</span>
+                <span className="text-xs text-gray-500">연결 서비스 {visibleServices.length}건</span>
               </div>
             </div>
             <button onClick={onClose} className="rounded-lg p-1.5 hover:bg-gray-100">

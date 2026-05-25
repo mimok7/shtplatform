@@ -1287,6 +1287,7 @@ sh_h,order_id,text,NULL 가능,null,3
 sh_h,hotel_code,text,NULL 가능,null,4
 sh_h,hotel_name,text,NULL 가능,null,5
 sh_h,room_name,text,NULL 가능,null,6
+
 sh_h,room_type,text,NULL 가능,null,7
 sh_h,room_count,text,NULL 가능,null,8
 sh_h,schedule,text,NULL 가능,null,9

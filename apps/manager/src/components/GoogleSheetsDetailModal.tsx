@@ -74,6 +74,80 @@ export default function GoogleSheetsDetailModal({
         return String(value || '').trim();
     };
 
+    const getAirportDirectionLabel = (service: any) => {
+        const rawValues = [
+            service?.category,
+            service?.tripType,
+            service?.division,
+            service?.wayType,
+            service?.way_type,
+            service?.service_type,
+        ]
+            .map((v) => String(v || '').trim().toLowerCase())
+            .filter(Boolean);
+
+        for (const raw of rawValues) {
+            if (raw.includes('pickup') || raw.includes('픽업') || raw.includes('arrival')) return '픽업';
+            if (raw.includes('sending') || raw.includes('dropoff') || raw.includes('drop off') || raw.includes('샌딩') || raw.includes('departure')) return '샌딩';
+        }
+
+        return '';
+    };
+
+    const getServiceSortPriority = (serviceType: string) => {
+        switch (serviceType) {
+            case 'cruise':
+                return 10;
+            case 'car':
+            case 'cruise_car':
+                return 20;
+            case 'vehicle':
+            case 'sht':
+                return 30;
+            case 'airport':
+                return 40;
+            case 'tour':
+                return 50;
+            case 'hotel':
+                return 60;
+            case 'rentcar':
+                return 70;
+            case 'sapa':
+                return 80;
+            case 'price':
+                return 90;
+            default:
+                return 999;
+        }
+    };
+
+    const sortedOrderServices = React.useMemo(() => {
+        return (allOrderServices || [])
+            .map((service, index) => ({ ...service, __originIndex: index }))
+            .sort((a, b) => {
+                const priorityDiff = getServiceSortPriority(a.serviceType) - getServiceSortPriority(b.serviceType);
+                if (priorityDiff !== 0) return priorityDiff;
+
+                if (a.serviceType === 'vehicle' || a.serviceType === 'sht') {
+                    const aDir = getShtDirectionLabel(a.category || a.division || a.sht_category);
+                    const bDir = getShtDirectionLabel(b.category || b.division || b.sht_category);
+                    const aRank = aDir === '픽업' ? 0 : aDir === '드롭' ? 1 : 2;
+                    const bRank = bDir === '픽업' ? 0 : bDir === '드롭' ? 1 : 2;
+                    if (aRank !== bRank) return aRank - bRank;
+                }
+
+                if (a.serviceType === 'airport') {
+                    const aDir = getAirportDirectionLabel(a);
+                    const bDir = getAirportDirectionLabel(b);
+                    const aRank = aDir === '픽업' ? 0 : aDir === '샌딩' ? 1 : 2;
+                    const bRank = bDir === '픽업' ? 0 : bDir === '샌딩' ? 1 : 2;
+                    if (aRank !== bRank) return aRank - bRank;
+                }
+
+                return a.__originIndex - b.__originIndex;
+            });
+    }, [allOrderServices]);
+
     const getServiceIcon = (serviceType: string) => {
         switch (serviceType) {
             case 'cruise':
@@ -159,10 +233,10 @@ export default function GoogleSheetsDetailModal({
         if (serviceType === 'cruise') {
             return (
                 <div className="space-y-1 text-sm">
-                    <div><span className="font-semibold text-gray-600">크루즈:</span> {service.cruise}</div>
-                    <div><span className="font-semibold text-gray-600">구분:</span> {service.category}</div>
-                    <div><span className="font-semibold text-gray-600">객실:</span> {service.roomType}</div>
                     <div><span className="font-semibold text-gray-600">체크인:</span> {service.checkin} {service.time}</div>
+                    <div><span className="font-semibold text-gray-600">크루즈:</span> {service.cruise}</div>
+                    <div><span className="font-semibold text-gray-600">객실:</span> {service.roomType}</div>
+                    <div><span className="font-semibold text-gray-600">구분:</span> {service.category}</div>
                     <div><span className="font-semibold text-gray-600">인원:</span> 성인 {service.adult}명, 아동 {service.child}명, 유아 {service.toddler}명</div>
                     {service.memo && <div><span className="font-semibold text-gray-600">메모:</span> {service.memo}</div>}
                 </div>
@@ -172,37 +246,31 @@ export default function GoogleSheetsDetailModal({
         if (serviceType === 'vehicle') {
             return (
                 <div className="space-y-1 text-sm">
-                    <div><span className="font-semibold text-gray-600">구분:</span> {service.division}</div>
-                    <div><span className="font-semibold text-gray-600">분류:</span> {service.category}</div>
-                    <div><span className="font-semibold text-gray-600">픽업장소:</span> {service.pickupLocation || '-'}</div>
-                    <div><span className="font-semibold text-gray-600">드롭장소:</span> {service.dropoffLocation || '-'}</div>
                     <div><span className="font-semibold text-gray-600">승차일:</span> {service.boardingDate}</div>
                     <div><span className="font-semibold text-gray-600">차량번호:</span> {service.vehicleNumber}</div>
                     {service.seatNumber && <div><span className="font-semibold text-gray-600">좌석:</span> {service.seatNumber}</div>}
+                    <div><span className="font-semibold text-gray-600">픽업장소:</span> {service.pickupLocation || '-'}</div>
+                    <div><span className="font-semibold text-gray-600">드롭장소:</span> {service.dropoffLocation || '-'}</div>
                     {service.memo && <div><span className="font-semibold text-gray-600">메모:</span> {service.memo}</div>}
                 </div>
             );
         }
 
         if (serviceType === 'airport') {
-            const tripTypeRaw = String(service.tripType || service.division || '').toLowerCase();
-            const isPickup = tripTypeRaw.includes('pickup') || tripTypeRaw.includes('픽업');
             const airportLocation = service.airportName || service.ra_airport_location || '-';
-            const cityLocation = service.placeName || service.accommodation_info || service.location_name || '-';
-            const pickupLocation = isPickup ? airportLocation : cityLocation;
-            const sendingLocation = isPickup ? cityLocation : airportLocation;
+            const pickupLocation = service.placeName || service.location_name || service.accommodation_info || service.pickupLocation || '-';
+            const sendingLocation = service.airportName || service.ra_airport_location || service.dropoffLocation || '-';
 
             return (
                 <div className="space-y-1 text-sm">
-                    <div><span className="font-semibold text-gray-600">구분:</span> {service.tripType} - {service.category}</div>
+                    <div><span className="font-semibold text-gray-600">일시:</span> {service.date} {service.time}</div>
+                    <div><span className="font-semibold text-gray-600">공항:</span> {airportLocation}</div>
+                    {service.flightNumber && <div><span className="font-semibold text-gray-600">항공편:</span> {service.flightNumber}</div>}
                     <div><span className="font-semibold text-gray-600">경로:</span> {service.route}</div>
                     <div><span className="font-semibold text-gray-600">차량타입:</span> {service.vehicle_type || service.vehicleType || service.carType || '-'}</div>
-                    <div><span className="font-semibold text-gray-600">일시:</span> {service.date} {service.time}</div>
-                    <div><span className="font-semibold text-gray-600">공항:</span> {service.airportName}</div>
+                    <div><span className="font-semibold text-gray-600">인원:</span> {service.passengerCount}명</div>
                     <div><span className="font-semibold text-gray-600">픽업위치:</span> {pickupLocation}</div>
                     <div><span className="font-semibold text-gray-600">샌딩위치:</span> {sendingLocation}</div>
-                    {service.flightNumber && <div><span className="font-semibold text-gray-600">항공편:</span> {service.flightNumber}</div>}
-                    <div><span className="font-semibold text-gray-600">인원:</span> {service.passengerCount}명</div>
                     {service.memo && <div><span className="font-semibold text-gray-600">메모:</span> {service.memo}</div>}
                 </div>
             );
@@ -223,12 +291,13 @@ export default function GoogleSheetsDetailModal({
         }
 
         if (serviceType === 'tour') {
+            const endDate = service.endDate || service.startDate || '-';
             return (
                 <div className="space-y-1 text-sm">
                     <div><span className="font-semibold text-gray-600">투어:</span> {service.tourName}</div>
                     <div><span className="font-semibold text-gray-600">종류:</span> {service.tourType}</div>
                     <div><span className="font-semibold text-gray-600">시작일:</span> {service.startDate}</div>
-                    {service.endDate && <div><span className="font-semibold text-gray-600">종료일:</span> {service.endDate}</div>}
+                    <div><span className="font-semibold text-gray-600">종료일:</span> {endDate}</div>
                     <div><span className="font-semibold text-gray-600">인원:</span> {service.participants}명</div>
                     {service.pickupLocation && <div><span className="font-semibold text-gray-600">픽업:</span> {service.pickupLocation}</div>}
                     {service.dropoffLocation && <div><span className="font-semibold text-gray-600">드롭:</span> {service.dropoffLocation}</div>}
@@ -254,12 +323,12 @@ export default function GoogleSheetsDetailModal({
         if (serviceType === 'car') {
             return (
                 <div className="space-y-1 text-sm">
-                    <div><span className="font-semibold text-gray-600">차량:</span> {service.carType}</div>
                     <div><span className="font-semibold text-gray-600">일시:</span> {service.pickupDatetime}</div>
-                    <div><span className="font-semibold text-gray-600">승차:</span> {service.pickupLocation}</div>
-                    <div><span className="font-semibold text-gray-600">하차:</span> {service.dropoffLocation}</div>
+                    <div><span className="font-semibold text-gray-600">차량:</span> {service.carType}</div>
                     <div><span className="font-semibold text-gray-600">인원:</span> {service.passengerCount}명</div>
                     <div><span className="font-semibold text-gray-600">차량수:</span> {service.carCount}대</div>
+                    <div><span className="font-semibold text-gray-600">승차:</span> {service.pickupLocation}</div>
+                    <div><span className="font-semibold text-gray-600">하차:</span> {service.dropoffLocation}</div>
                     {service.memo && <div><span className="font-semibold text-gray-600">메모:</span> {service.memo}</div>}
                 </div>
             );
@@ -522,7 +591,7 @@ export default function GoogleSheetsDetailModal({
                             </div>
                         ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {allOrderServices.map((service, index) => (
+                                {sortedOrderServices.map((service, index) => (
                                     <div
                                         key={`${service.serviceType}-${index}`}
                                         className={`border rounded-lg p-4 ${getServiceColor(service.serviceType)}`}
@@ -535,6 +604,11 @@ export default function GoogleSheetsDetailModal({
                                             {(service.serviceType === 'vehicle' || service.serviceType === 'sht') && getShtDirectionLabel(service.category || service.division) && (
                                                 <span className="ml-1 inline-flex items-center rounded-full bg-white/80 px-2 py-0.5 text-xs font-semibold text-purple-700 border border-purple-300">
                                                     {getShtDirectionLabel(service.category || service.division)}
+                                                </span>
+                                            )}
+                                            {service.serviceType === 'airport' && getAirportDirectionLabel(service) && (
+                                                <span className="ml-1 inline-flex items-center rounded-full bg-white/80 px-2 py-0.5 text-xs font-semibold text-green-700 border border-green-300">
+                                                    {getAirportDirectionLabel(service)}
                                                 </span>
                                             )}
                                         </div>
