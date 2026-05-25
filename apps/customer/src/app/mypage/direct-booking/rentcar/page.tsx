@@ -516,15 +516,10 @@ function RentcarDirectBookingContent() {
                                             </button>
                                         ))}
                                     </div>
-                                                <StepperNumberInput
-                                                    value={quoteForm.passenger_count}
-                                                    min={1}
-                                                    max={20}
-                                                    onChange={value => setQuoteForm({ ...quoteForm, passenger_count: value })}
-                                                    className="w-full"
-                                                    inputClassName="text-base"
-                                                    ariaLabel="승객 수"
-                                                />
+
+                                    {/* 편도 방향 선택 (픽업/드롭) */}
+                                    {vehicle.wayType === '편도' && (
+                                        <div className="grid grid-cols-2 gap-2 mt-3">
                                             <button
                                                 type="button"
                                                 onClick={() => handlePyondoDirectionChange(index, 'pickup')}
@@ -546,8 +541,8 @@ function RentcarDirectBookingContent() {
                                                 드롭 (출발지 → 공항/호텔)
                                             </button>
                                         </div>
-                                    </div>
-                                )}
+                                    )}
+                                </div>
 
                                 {/* 경로 선택 */}
                                 {vehicle.wayType && (vehicle.wayType !== '편도' || vehicle.pyondoDirection) && (
