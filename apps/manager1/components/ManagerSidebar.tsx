@@ -59,6 +59,7 @@ export default function ManagerSidebar({ activeTab, userEmail, onLogout, userRol
     if (pathname.startsWith('/manager/quotes')) return 'quotes';
     if (pathname.startsWith('/manager/customers')) return 'customers';
     if (pathname.startsWith('/manager/quote-bulk-delete')) return 'quote-bulk-delete';
+    if (pathname.startsWith('/manager/settings')) return 'settings';
     return null;
   })();
 
@@ -169,6 +170,13 @@ export default function ManagerSidebar({ activeTab, userEmail, onLogout, userRol
               path="/manager/notifications"
               isActive={isActiveTab('notifications')}
               onClick={() => handleNavigation('/manager/notifications')}
+            />
+            <NavItem
+              icon="📲"
+              label="앱 설정"
+              path="/manager/settings"
+              isActive={isActiveTab('settings')}
+              onClick={() => handleNavigation('/manager/settings')}
             />
             </div>
           </div>

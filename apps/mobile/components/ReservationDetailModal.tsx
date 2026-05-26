@@ -63,6 +63,20 @@ const CHANGE_CHILDREN_BY_RETYPE: Record<string, string[]> = {
 const formatMoney = (value: number): string => `${Number(value || 0).toLocaleString('ko-KR')}동`;
 const formatSignedAmount = (amount: number): string => `${amount > 0 ? '+' : ''}${Number(amount || 0).toLocaleString()}동`;
 
+const formatCruiseScheduleLabel = (value: any): string => {
+  const raw = String(value ?? '').trim();
+  if (!raw) return '-';
+
+  const normalized = raw.toUpperCase();
+  const match = normalized.match(/^(\d+)N(\d+)D$/);
+  if (match) return `${match[1]}박 ${match[2]}일`;
+  if (/^\d+$/.test(raw)) {
+    const nights = Number(raw);
+    if (Number.isFinite(nights) && nights > 0) return `${nights}박 ${nights + 1}일`;
+  }
+  return raw;
+};
+
 const calcUnitPrice = (total: any, qty: any): number => {
   const t = Number(total || 0);
   const q = Number(qty || 0);
@@ -719,6 +733,7 @@ function ServiceCard({
       {type === 'cruise' && (
         <div className="space-y-0.5">
           <DetailLine label="체크인" value={service.checkin || '-'} />
+          <DetailLine label="일정" value={formatCruiseScheduleLabel(service.scheduleType || service.schedule_type || service.schedule_days || service.days || service.nights)} />
           <DetailLine label="크루즈명" value={service.cruiseName || service.cruise || '-'} />
           <DetailLine label="객실타입" value={service.roomType || '-'} />
           <DetailLine label="구분" value={service.category || '-'} />
@@ -733,6 +748,7 @@ function ServiceCard({
       {(type === 'vehicle' || type === 'car') && (
         <div className="space-y-0.5">
           <DetailLine label="일시" value={service.pickupDatetime ? formatDateOnlyKst(service.pickupDatetime) : '-'} />
+          <DetailLine label="구분" value={service.carCategory || service.way_type || service.category || '-'} />
           <DetailLine label="차량타입" value={service.carType || '-'} />
           <DetailLine label="총인원수" value={formatNonZeroCount(service.passengerCount, '명')} />
           <DetailLine label="차량수" value={formatNonZeroCount(service.car_count || service.carCount, '대')} />
@@ -981,7 +997,7 @@ export default function ReservationDetailModal({
           cruiseCodes.length > 0
             ? supabase
               .from('cruise_rate_card')
-              .select('id, cruise_name, room_type, price_adult, price_child, price_child_older, price_child_extra_bed, price_infant, price_extra_bed, price_single')
+              .select('id, cruise_name, room_type, schedule_type, price_adult, price_child, price_child_older, price_child_extra_bed, price_infant, price_extra_bed, price_single')
               .in('id', cruiseCodes)
             : Promise.resolve({ data: [] }),
           airportCodes.length > 0 ? supabase.from('airport_price').select('airport_code, service_type, route, vehicle_type').in('airport_code', airportCodes) : Promise.resolve({ data: [] }),
@@ -1124,6 +1140,7 @@ export default function ReservationDetailModal({
               cruiseName: roomInfo?.cruise_name || baseService.cruiseName || baseService.cruise || '-',
               cruise: roomInfo?.cruise_name || baseService.cruise || '-',
               roomType: roomInfo?.room_type || baseService.roomType || baseService.room_price_code || '-',
+              scheduleType: baseService.scheduleType || baseService.schedule_type || roomInfo?.schedule_type || baseService.schedule_days || baseService.days || baseService.nights || '',
               paymentMethod: baseService.paymentMethod || baseService.payment_method || baseService.reservation?.payment_method || '-',
               priceAdult: Number(baseService.priceAdult ?? baseService.price_adult ?? roomInfo?.price_adult ?? 0),
               priceChild: Number(baseService.priceChild ?? baseService.price_child ?? roomInfo?.price_child ?? 0),

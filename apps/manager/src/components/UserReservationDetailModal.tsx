@@ -52,6 +52,20 @@ function formatDatetimeOffset(value: any): string {
     });
 }
 
+function formatCruiseScheduleLabel(value: any): string {
+    const raw = String(value ?? '').trim();
+    if (!raw) return '-';
+
+    const normalized = raw.toUpperCase();
+    const match = normalized.match(/^(\d+)N(\d+)D$/);
+    if (match) return `${match[1]}박 ${match[2]}일`;
+    if (/^\d+$/.test(raw)) {
+        const nights = Number(raw);
+        if (Number.isFinite(nights) && nights > 0) return `${nights}박 ${nights + 1}일`;
+    }
+    return raw;
+}
+
 const isInfantSurchargeText = (text: string): boolean => {
     return /유아|infant|2세\s*미만|3번째|2인째/i.test(text || '');
 };
@@ -371,7 +385,7 @@ export default function UserReservationDetailModal({
                 // 2. 가격 테이블 조회
                 const [cruiseRates, airportPrices, hotelPrices, rentPrices, tourPrices, reservationRows, changeRequests] = await Promise.all([
                     cruiseCodes.length > 0
-                        ? supabase.from('cruise_rate_card').select('id, cruise_name, room_type, price_adult, price_child, price_child_older, price_child_extra_bed, price_infant, price_extra_bed, price_single').in('id', cruiseCodes)
+                        ? supabase.from('cruise_rate_card').select('id, cruise_name, room_type, schedule_type, price_adult, price_child, price_child_older, price_child_extra_bed, price_infant, price_extra_bed, price_single').in('id', cruiseCodes)
                         : Promise.resolve({ data: [] }),
                     airportCodes.length > 0
                         ? supabase.from('airport_price').select('airport_code, service_type, route, vehicle_type').in('airport_code', airportCodes)
@@ -538,6 +552,7 @@ export default function UserReservationDetailModal({
                             cruiseName: roomInfo?.cruise_name || baseService.cruiseName || baseService.cruise || '-',
                             cruise: roomInfo?.cruise_name || baseService.cruise || '-',
                             roomType: roomInfo?.room_type || baseService.roomType || baseService.room_price_code || '-',
+                            scheduleType: baseService.scheduleType || baseService.schedule_type || roomInfo?.schedule_type || baseService.schedule_days || baseService.days || baseService.nights || '',
                             paymentMethod: baseService.paymentMethod || baseService.payment_method || baseService.reservation?.payment_method || '-',
                             priceAdult: Number(baseService.priceAdult ?? roomInfo?.price_adult ?? 0),
                             priceChild: Number(baseService.priceChild ?? roomInfo?.price_child ?? 0),
@@ -884,6 +899,7 @@ export default function UserReservationDetailModal({
                                             <div><strong>객실타입:</strong> {service.roomType}</div>
                                             <div><strong>객실수:</strong> {service.room_count || service.roomCount || 0}실</div>
                                             <div><strong>체크인:</strong> {service.checkin}</div>
+                                            <div><strong>일정:</strong> {formatCruiseScheduleLabel(service.scheduleType || service.schedule_type || service.schedule_days || service.days || service.nights)}</div>
                                             <div><strong>결제방식:</strong> {service.paymentMethod}</div>
                                             <div><strong>성인:</strong> {adultCount}명</div>
                                             <div><strong>아동:</strong> {childCount}명</div>
@@ -972,7 +988,7 @@ export default function UserReservationDetailModal({
                 )}
                 {(type === 'vehicle' || type === 'car') && (
                     <>
-                        <div>구분: {service.carCategory || '-'}</div>
+                        <div>구분: {service.carCategory || service.way_type || service.category || '-'}</div>
                         <div>차량타입: {service.carType || '-'}</div>
                         <div>경로: {service.route || '-'}</div>
                         <div>총인원수: {service.passengerCount || 0}명</div>

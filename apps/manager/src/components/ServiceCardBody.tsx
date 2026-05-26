@@ -149,6 +149,27 @@ const inferTourName = (row: any, requestNote: any): string => {
     return '패키지 투어';
 };
 
+const formatCruiseScheduleLabel = (value: any): string => {
+    const raw = String(value ?? '').trim();
+    if (!raw) return '';
+
+    const normalized = raw.toUpperCase();
+    const match = normalized.match(/^(\d+)N(\d+)D$/);
+    if (match) {
+        const nights = Number(match[1]);
+        const days = Number(match[2]);
+        if (Number.isFinite(nights) && Number.isFinite(days)) {
+            return `${nights}박 ${days}일`;
+        }
+    }
+
+    if (/^\d+$/.test(raw)) {
+        return `${raw}박`;
+    }
+
+    return raw;
+};
+
 /** 서비스 타입 정규화 */
 const normalizeType = (type: string): string => {
     let t = type || '';
@@ -222,6 +243,9 @@ export default function ServiceCardBody({
         const cruiseInfo = row?._cruise_info || row?.cruise_info || {};
         const noteRoomText = extractBracketValue(requestNote, '객실');
         const parsedRoomInfo = extractCruiseInfo(noteRoomText || row?.accommodation_info);
+        const cruiseSchedule = formatCruiseScheduleLabel(
+            row?.schedule_type || cruiseInfo?.schedule_type || row?.nights || ''
+        );
         const cruise = cruiseInfo?.cruise || row?.cruise_name || row?.cruise || parsedRoomInfo.cruise || '-';
         const roomName = cruiseInfo?.room_type || row?.room_type || row?.room_name || cruiseInfo?.room_name || row?.room_category || parsedRoomInfo.room || '-';
         const roomCategory = row?.room_category || row?.category || '';
@@ -244,6 +268,12 @@ export default function ServiceCardBody({
                     <Calendar className="w-4 h-4 text-gray-400" />
                     <span className="text-sm font-medium">{getDateDisplay()}</span>
                 </div>
+                {cruiseSchedule && (
+                    <div className="flex items-center gap-2">
+                        <span className="font-semibold text-green-700 text-xs">일정</span>
+                        <span className="text-sm">{cruiseSchedule}</span>
+                    </div>
+                )}
                 <div className="flex items-center gap-2">
                     <span className="font-semibold text-green-700 text-xs">인원</span>
                     <span className="text-sm">{formatPeople(adult, child, infant)}</span>
@@ -517,6 +547,7 @@ export default function ServiceCardBody({
     if (type === 'cruise_car') {
         const cruiseName = row?._rentcar_info?.cruise || row?.cruise_name || row?.cruise || row?.accommodation_info || '-';
         const vehicleName = row?.carType || row?._rentcar_info?.vehicle_type || row?.vehicle_type || '-';
+        const wayType = row?.way_type || row?._rentcar_info?.way_type || row?.category || '';
         const cruiseCarPhase = row?._cruise_car_phase || '';
         const showPickupBlock = cruiseCarPhase !== 'return';
         const showDropBlock = cruiseCarPhase === 'return';
@@ -532,6 +563,12 @@ export default function ServiceCardBody({
                     <span className="font-semibold text-green-700 text-xs mt-0.5">차량명</span>
                     <span className="text-sm break-words">{vehicleName}</span>
                 </div>
+                {wayType && (
+                    <div className="flex items-start gap-2">
+                        <span className="font-semibold text-green-700 text-xs mt-0.5">구분</span>
+                        <span className="text-sm break-words">{wayType}</span>
+                    </div>
+                )}
                 <div className="flex items-center gap-2 mt-1">
                     <Calendar className="w-4 h-4 text-gray-400" />
                     <span className="text-sm font-medium">{getDateDisplay()}</span>

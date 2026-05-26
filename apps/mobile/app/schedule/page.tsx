@@ -554,11 +554,13 @@ export default function SchedulePage() {
             category: r.division,
             roomType: r.room_type,
             roomCount: parseInt(r.room_count) || 0,
+            days: parseInt(r.schedule_days) || 0,
             checkin: r.checkin_date,
             adult: parseInt(r.adult) || 0,
             child: parseInt(r.child) || 0,
             toddler: parseInt(r.toddler) || 0,
             discount: r.room_discount,
+            scheduleType: r.schedule_days || '',
             requestNote: r.connecting_room,
             email: u?.email || r.email,
           };
@@ -803,6 +805,7 @@ export default function SchedulePage() {
               cruise: cruiseRate?.cruise_name || d.cruise_name || '신규 크루즈',
               cruiseName: cruiseRate?.cruise_name || d.cruise_name || '신규 크루즈',
               roomType: cruiseRate?.room_type || d.room_price_code || '',
+              scheduleType: cruiseRate?.schedule_type || '',
               roomCount: Number(d.room_count || 0),
               checkin: d.checkin || '',
               adult: Number(d.adult_count || 0),
@@ -1204,6 +1207,16 @@ export default function SchedulePage() {
     );
   };
 
+  const formatCruiseSchedule = (value: any) => {
+    const raw = String(value ?? '').trim();
+    if (!raw) return '';
+    const normalized = raw.toUpperCase();
+    const match = normalized.match(/^(\d+)N(\d+)D$/);
+    if (match) return `${match[1]}박 ${match[2]}일`;
+    if (/^\d+$/.test(raw)) return `${raw}박`;
+    return raw;
+  };
+
   /* ── 카드 렌더링 ─── */
   const renderCard = (item: any, idx: number) => {
     const type = getServiceType(item);
@@ -1279,6 +1292,9 @@ export default function SchedulePage() {
               <Row label="크루즈" value={item.cruise} bold />
               <Row label="객실" value={`${item.roomType || ''} ${item.category ? `(${item.category})` : ''}`} />
               <DateRow dateLabel={dateLabel} />
+              {formatCruiseSchedule(item.scheduleType || item.days || item.nights) && (
+                <Row label="일정" value={formatCruiseSchedule(item.scheduleType || item.days || item.nights)} />
+              )}
               <Row label="인원" value={formatGuests(item)} />
               <Row label="객실수" value={`${item.roomCount}개`} />
             </>
@@ -1286,6 +1302,7 @@ export default function SchedulePage() {
           {type === 'car' && (
             <>
               <Row label="차종" value={item.carType} bold />
+              <Row label="구분" value={item.carCategory || item.way_type || item.category || '-'} />
               <DateRow dateLabel={dateLabel} />
               {item.pickupLocation && <Row label="픽업장소" value={item.pickupLocation} />}
               {item.dropoffLocation && <Row label="드롭장소" value={item.dropoffLocation} />}

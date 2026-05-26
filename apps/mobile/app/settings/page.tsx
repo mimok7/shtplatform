@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Bell, Lock, UserRound, ArrowLeft, Home } from 'lucide-react';
+import { Bell, Lock, UserRound, ArrowLeft, Home, Download } from 'lucide-react';
 import supabase from '@/lib/supabase';
 
 const APP_NAME = 'mobile';
@@ -15,6 +15,11 @@ type ProfileState = {
   role: string;
   name: string;
   phone: string;
+};
+
+type BeforeInstallPromptEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
 };
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
@@ -119,6 +124,9 @@ export default function MobileSettingsPage() {
 
   const [permission, setPermission] = useState<NotificationPermission>('default');
   const [isSubscribed, setIsSubscribed] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [isStandalone, setIsStandalone] = useState(true);
+  const [showInstallGuide, setShowInstallGuide] = useState(false);
 
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -190,6 +198,38 @@ export default function MobileSettingsPage() {
   useEffect(() => {
     void loadProfile();
     void refreshSubscriptionState();
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const checkStandalone = () => {
+      const isPwa =
+        window.matchMedia('(display-mode: standalone)').matches ||
+        (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
+      setIsStandalone(isPwa);
+    };
+
+    const onBeforeInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      setDeferredPrompt(event as BeforeInstallPromptEvent);
+      setIsStandalone(false);
+    };
+
+    const onAppInstalled = () => {
+      setDeferredPrompt(null);
+      setIsStandalone(true);
+      setShowInstallGuide(false);
+    };
+
+    checkStandalone();
+    window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt);
+    window.addEventListener('appinstalled', onAppInstalled);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', onAppInstalled);
+    };
   }, []);
 
   const getSessionToken = async (): Promise<string> => {
@@ -345,6 +385,25 @@ export default function MobileSettingsPage() {
     }
   };
 
+  const handleInstallApp = async () => {
+    if (isStandalone) {
+      alert('이미 앱이 설치되어 있습니다.');
+      return;
+    }
+
+    if (!deferredPrompt) {
+      setShowInstallGuide(true);
+      return;
+    }
+
+    try {
+      await deferredPrompt.prompt();
+      await deferredPrompt.userChoice;
+    } finally {
+      setDeferredPrompt(null);
+    }
+  };
+
   const handleSaveProfile = async (e: FormEvent) => {
     e.preventDefault();
     if (!profile.userId) return;
@@ -453,6 +512,36 @@ export default function MobileSettingsPage() {
               {notificationBusy ? '처리 중...' : '알림 차단'}
             </button>
           </div>
+        </section>
+
+        <section className="rounded-2xl bg-white p-3 shadow-sm">
+          <div className="mb-2 flex items-center gap-2">
+            <Download className="h-4 w-4 text-indigo-600" />
+            <h2 className="text-sm font-semibold text-slate-900">앱 설치</h2>
+          </div>
+
+          <div className="space-y-1 text-xs text-slate-600">
+            <p>설치 상태: <span className="font-semibold text-slate-800">{isStandalone ? '설치됨' : '미설치'}</span></p>
+            <p>설치 권장 팝업은 제거되었습니다. 필요할 때 여기서 설치를 진행하세요.</p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => void handleInstallApp()}
+            disabled={isStandalone}
+            className="mt-3 w-full rounded-xl bg-indigo-600 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+          >
+            {isStandalone ? '이미 설치됨' : '앱 설치'}
+          </button>
+
+          {showInstallGuide && !isStandalone && (
+            <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-[11px] leading-relaxed text-slate-600">
+              <p className="font-semibold text-slate-700">수동 설치 안내</p>
+              <p className="mt-1">1. 브라우저 메뉴(⋮ 또는 공유) 열기</p>
+              <p>2. "홈 화면에 추가" 또는 "앱 설치" 선택</p>
+              <p>3. 추가/설치 버튼을 눌러 완료</p>
+            </div>
+          )}
         </section>
 
         <section className="rounded-2xl bg-white p-3 shadow-sm">

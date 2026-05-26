@@ -2009,10 +2009,10 @@ export default function ManagerSchedulePage() {
 
       const [rpByIdRes, rpByTypeRes, tpDataRes, airportPriceRes, hotelPriceRes, rentPriceRes] = await Promise.all([
         cruiseCodesUuid.length > 0
-          ? fetchInChunked('cruise_rate_card', 'id, cruise_name, room_type', 'id', cruiseCodesUuid)
+          ? fetchInChunked('cruise_rate_card', 'id, cruise_name, room_type, schedule_type', 'id', cruiseCodesUuid)
           : Promise.resolve({ data: [] as any[] }),
         cruiseCodes.length > 0
-          ? fetchInChunked('cruise_rate_card', 'id, cruise_name, room_type', 'room_type', cruiseCodes)
+          ? fetchInChunked('cruise_rate_card', 'id, cruise_name, room_type, schedule_type', 'room_type', cruiseCodes)
           : Promise.resolve({ data: [] as any[] }),
         tourCodes.length > 0
           ? supabase.from('tour_pricing').select('pricing_id, tour_id, vehicle_type').in('pricing_id', tourCodes)
@@ -2092,6 +2092,7 @@ export default function ManagerSchedulePage() {
           cruise: rp.cruise_name || undefined,
           room_type: rp.room_type || undefined,
           room_name: ciData?.room_name || undefined,
+          schedule_type: rp.schedule_type || undefined,
           room_category: undefined
         };
         if (idCode) {
