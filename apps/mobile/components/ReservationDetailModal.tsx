@@ -247,7 +247,13 @@ const getAmountSummaryLines = (service: any, type: string): string[] => {
     const guests = Number(service.guest_count || service.guestCount || 0);
     const qty = rooms > 0 ? rooms : guests;
     const unit = Number(service.unit_price || service.unitPrice || calcUnitPrice(service.total_price || service.totalPrice, qty));
-    const line = formatLinePrice('호텔', unit, qty, rooms > 0 ? '객실' : '명');
+    const scheduleRaw = String(service.schedule || '').trim();
+    const scheduleNights = Number.parseInt(scheduleRaw, 10);
+    const nights = Number.isFinite(scheduleNights)
+      ? scheduleNights
+      : Number(service.nights || service.days || 0);
+    const baseLine = formatLinePrice('호텔', unit, qty, rooms > 0 ? '객실' : '명');
+    const line = baseLine && nights > 0 ? `${baseLine} × ${nights}박` : baseLine;
     return line ? [line] : (Number(service.total_price || service.totalPrice || 0) > 0 ? [`총액 ${formatMoney(Number(service.total_price || service.totalPrice || 0))}`] : []);
   }
 
@@ -783,12 +789,24 @@ function ServiceCard({
 
       {type === 'hotel' && (
         <div className="space-y-0.5">
+          {(() => {
+            const scheduleRaw = String(service.schedule || '').trim();
+            const parsedNights = Number.parseInt(scheduleRaw, 10);
+            const nights = Number.isFinite(parsedNights)
+              ? parsedNights
+              : Number(service.nights || service.days || 0);
+            return (
+              <>
           <DetailLine label="체크인" value={service.checkinDate || service.checkin_date || '-'} />
-          <DetailLine label="숙박일정" value={(service.nights || service.days) ? `${Number(service.nights || service.days)}박 ${Number(service.nights || service.days) + 1}일` : '-'} />
+          <DetailLine label="숙박일정" value={nights > 0 ? `${nights}박 ${nights + 1}일` : '-'} />
           <DetailLine label="호텔명" value={service.hotelName || service.hotel_name || service.hotel_category || '-'} />
           <DetailLine label="객실명" value={service.roomName || service.room_name || null} />
+          <DetailLine label="객실수" value={formatNonZeroCount(service.roomCount ?? service.room_count, '실')} />
           <DetailLine label="인원" value={formatNonZeroCount(service.guestCount ?? service.guest_count, '명')} />
           <DetailLine label="총 금액" value={<span className="font-bold text-blue-700">{formatMoney(Number(service.totalPrice || service.total_price || 0))}</span>} />
+              </>
+            );
+          })()}
         </div>
       )}
 
@@ -1190,6 +1208,11 @@ export default function ReservationDetailModal({
           if (baseService.serviceType === 'hotel') {
             const priceInfo: any = hotelPriceMap.get(baseService.hotel_price_code);
             const rawHotelName = String(baseService.hotelName || baseService.hotel_name || '').trim() || null;
+            const scheduleRaw = String(baseService.schedule ?? '').trim();
+            const scheduleNights = Number.parseInt(scheduleRaw, 10);
+            const normalizedNights = Number.isFinite(scheduleNights)
+              ? scheduleNights
+              : Number(baseService.nights ?? baseService.days ?? baseService.room_count ?? 0);
             return {
               ...baseService,
               hotelName: priceInfo?.hotel_name || baseService.hotelName || baseService.hotel_name || baseService.hotel_category || '-',
@@ -1197,6 +1220,9 @@ export default function ReservationDetailModal({
               roomName: priceInfo?.room_name || baseService.roomName || baseService.room_name || null,
               roomType: priceInfo?.room_name || priceInfo?.room_type || baseService.roomType || baseService.room_type || '-',
               checkinDate: baseService.checkinDate || baseService.checkin_date || '-',
+              schedule: scheduleRaw,
+              days: normalizedNights,
+              nights: normalizedNights,
               guestCount: Number(baseService.guestCount ?? baseService.guest_count ?? 0),
               roomCount: Number(baseService.roomCount ?? baseService.room_count ?? 0),
               totalPrice: Number(baseService.totalPrice ?? baseService.total_price ?? 0),

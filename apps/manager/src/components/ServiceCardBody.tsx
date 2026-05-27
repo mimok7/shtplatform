@@ -280,7 +280,7 @@ export default function ServiceCardBody({
                 </div>
                 <div className="flex items-center gap-2">
                     <span className="font-semibold text-green-700 text-xs">객실수</span>
-                    <span className="text-sm">{row?.room_count || 1}개</span>
+                    <span className="text-sm">{row?.room_count || row?.roomCount || 1}개</span>
                 </div>
                 {renderNote()}
             </div>
@@ -348,7 +348,10 @@ export default function ServiceCardBody({
     if (type === 'hotel') {
         const hotelInfo = row?._hotel_info || {};
         const checkinText = row?.checkin_date ? safeDate(`${row.checkin_date}T00:00:00`) : (dateText || '-');
-        const nights = row?.nights || row?.room_count || 0;
+        const parsedScheduleNights = Number.parseInt(String(row?.schedule ?? ''), 10);
+        const nights = Number.isFinite(parsedScheduleNights)
+            ? parsedScheduleNights
+            : (row?.nights || row?.days || row?.room_count || 0);
         const adult = Number(row?.adult_count ?? row?.guest_count ?? 0);
         const child = Number(row?.child_count ?? 0);
         const infant = Number(row?.infant_count ?? 0);
@@ -371,6 +374,10 @@ export default function ServiceCardBody({
                 <div className="flex items-center gap-2 mt-1">
                     <Calendar className="w-4 h-4 text-gray-400" />
                     <span className="text-sm font-medium">{checkinText}{Number(nights) > 0 ? ` (${nights}박)` : ''}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                    <span className="font-semibold text-green-700 text-xs">일정</span>
+                    <span className="text-sm">{row?.schedule || (Number(nights) > 0 ? `${nights}박` : '-')}</span>
                 </div>
                 <div className="flex items-center gap-2">
                     <span className="font-semibold text-green-700 text-xs">인원</span>

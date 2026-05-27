@@ -1113,7 +1113,7 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                                     <div className="text-center mb-6 border-b-2 border-blue-600 pb-4">
                                         <div className="flex justify-between items-center mb-2">
                                             <div className="text-left">
-                                                <img src="/logo2.png" alt="StayHalong Logo" className="h-10 object-contain" />
+                                                <img src="/logo.png" alt="StayHalong Logo" className="h-10 object-contain" />
                                             </div>
                                             <div className="text-right">
                                                 <div className="text-xs text-gray-500">확인서 번호</div>
@@ -1317,7 +1317,6 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                                                                             <div><span className="text-gray-500">호텔명:</span> <span className="font-bold text-gray-900">{reservation.priceDetail?.hotel_name || '-'}</span></div>
                                                                             <div><span className="text-gray-500">객실명:</span> <span className="font-bold text-gray-900">{reservation.priceDetail?.room_name || '-'}</span></div>
                                                                             <div><span className="text-gray-500">객실수:</span> <span className="font-bold text-gray-900">{(reservation.service_details as any).room_count || 0}실</span></div>
-                                                                            <div><span className="text-gray-500">스케줄:</span> <span className="font-bold text-gray-900">{(reservation.service_details as any).schedule || '-'}</span></div>
                                                                             <div><span className="text-gray-500">투숙인원:</span> <span className="font-bold text-gray-900">{(reservation.service_details as any).guest_count || 0}명</span></div>
                                                                             <div><span className="text-gray-500">인원구성:</span> <span className="font-bold text-gray-900">{(() => {
                                                                                 const d = reservation.service_details as any;
@@ -1661,7 +1660,8 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                                                                 if (hotelName || roomName) descLines.push(`🏨 ${[hotelName, roomName].filter(Boolean).join(' / ')}`);
                                                                 const hotelUnitPrice = p?.base_price || 0;
                                                                 const rooms = d?.room_count || 1;
-                                                                const nights = d?.nights || 1;
+                                                                const scheduleNights = Number.parseInt(String(d?.schedule ?? ''), 10);
+                                                                const nights = Number.isFinite(scheduleNights) ? scheduleNights : (d?.nights || 1);
                                                                 const totalPrice = rooms * nights * hotelUnitPrice;
                                                                 calcLines.push(`${rooms}실 × ${nights}박 × ${hotelUnitPrice.toLocaleString()}동 = ${totalPrice.toLocaleString()}동`);
                                                                 break;
@@ -1743,7 +1743,8 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                                                             if (r.service_type !== 'hotel') return null;
                                                             const hotelUnitPrice = p?.base_price || 0;
                                                             const rooms = d?.room_count || 1;
-                                                            const nights = d?.nights || 1;
+                                                            const scheduleNights = Number.parseInt(String(d?.schedule ?? ''), 10);
+                                                            const nights = Number.isFinite(scheduleNights) ? scheduleNights : (d?.nights || 1);
                                                             return rooms * nights * hotelUnitPrice;
                                                         })();
 

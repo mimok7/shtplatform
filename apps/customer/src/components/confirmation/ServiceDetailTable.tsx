@@ -362,8 +362,9 @@ export const ServiceDetailTable = ({ reservations, totalPrice }: ServiceDetailTa
                                     if (season) descLines.push(`🏨 시즌: ${season}`);
                                     const hotelUnitPrice = p?.base_price || 0;
                                     const rooms = d?.room_count || 1;
-                                    const nights = d?.nights || 1;
-                                    calcLines.push(`${rooms}실 / ${nights}박 × ${hotelUnitPrice.toLocaleString()}동`);
+                                    const scheduleNights = Number.parseInt(String(d?.schedule ?? ''), 10);
+                                    const nights = Number.isFinite(scheduleNights) ? scheduleNights : (d?.nights || 1);
+                                    calcLines.push(`${rooms}실 × ${nights}박 × ${hotelUnitPrice.toLocaleString()}동`);
                                     break;
                                 }
                                 case 'rentcar': {

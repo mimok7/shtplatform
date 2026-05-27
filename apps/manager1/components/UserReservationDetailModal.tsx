@@ -623,11 +623,19 @@ export default function UserReservationDetailModal({
                     }
                     if (baseService.serviceType === 'hotel') {
                         const priceInfo: any = hotelPriceMap.get(baseService.hotel_price_code);
+                        const scheduleRaw = String(baseService.schedule ?? '').trim();
+                        const scheduleNights = Number.parseInt(scheduleRaw, 10);
+                        const normalizedNights = Number.isFinite(scheduleNights)
+                            ? scheduleNights
+                            : Number(baseService.nights ?? baseService.days ?? baseService.room_count ?? 0);
                         return {
                             ...baseService,
                             hotelName: priceInfo?.hotel_name || baseService.hotelName || baseService.hotel_name || baseService.hotel_category || '-',
                             roomType: priceInfo?.room_name || priceInfo?.room_type || baseService.roomType || baseService.room_type || '-',
                             checkinDate: baseService.checkinDate || baseService.checkin_date || '-',
+                            schedule: scheduleRaw,
+                            days: normalizedNights,
+                            nights: normalizedNights,
                             guestCount: Number(baseService.guestCount ?? baseService.guest_count ?? 0),
                             roomCount: Number(baseService.roomCount ?? baseService.room_count ?? 0),
                             adultCount: Number(baseService.adultCount ?? baseService.adult_count ?? 0),
@@ -1090,21 +1098,28 @@ export default function UserReservationDetailModal({
                 )}
                 {type === 'hotel' && (
                     <>
+                        {(() => {
+                            const scheduleRaw = String(service.schedule || '').trim();
+                            const parsedNights = Number.parseInt(scheduleRaw, 10);
+                            const nights = Number.isFinite(parsedNights)
+                                ? parsedNights
+                                : Number(service.nights || service.days || 0);
+                            return (
                         <div className="bg-orange-50 rounded-lg p-3 mb-2 border border-orange-100">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
                                 <div><strong>호텔명:</strong> <span className="font-semibold text-orange-800">{service.hotelName}</span></div>
                                 <div><strong>객실타입:</strong> {service.roomType}</div>
                                 <div><strong>체크인:</strong> {service.checkinDate}</div>
-                                {service.checkinDate && service.nights ? (
+                                <div><strong>객실수:</strong> {Number(service.roomCount ?? service.room_count ?? 0)}실</div>
+                                {service.checkinDate && nights > 0 ? (
                                     <>
                                         <div><strong>체크아웃:</strong> {(() => {
                                             const checkin = new Date(service.checkinDate);
                                             const checkout = new Date(checkin);
-                                            checkout.setDate(checkout.getDate() + (service.nights || 0));
+                                            checkout.setDate(checkout.getDate() + nights);
                                             return checkout.toISOString().split('T')[0];
                                         })()}</div>
                                         <div><strong>숙박일정:</strong> {(() => {
-                                            const nights = service.nights || 0;
                                             return `${nights}박 ${nights + 1}일`;
                                         })()}</div>
                                     </>
@@ -1112,6 +1127,8 @@ export default function UserReservationDetailModal({
                                 <div><strong>인원:</strong> {service.guestCount}명</div>
                             </div>
                         </div>
+                            );
+                        })()}
                         {renderServiceNote(service.note)}
                     </>
                 )}

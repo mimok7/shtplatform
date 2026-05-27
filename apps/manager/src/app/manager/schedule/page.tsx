@@ -509,6 +509,8 @@ export default function ManagerSchedulePage() {
         })),
         ...(hotelRes.data || []).map(r => {
           const info = hotelPriceMap.get(r.hotel_price_code);
+          const scheduleNights = Number.parseInt(String(r.schedule ?? ''), 10);
+          const normalizedNights = Number.isFinite(scheduleNights) ? scheduleNights : 0;
           return {
             ...r,
             serviceType: 'hotel',
@@ -516,7 +518,10 @@ export default function ManagerSchedulePage() {
             hotelName: info?.hotel_info?.hotel_name || r.hotel_category,
             roomType: info?.room_type?.room_name || r.hotel_price_code,
             checkinDate: r.checkin_date,
-            nights: r.room_count,
+            schedule: r.schedule || '',
+            days: normalizedNights,
+            nights: normalizedNights,
+            roomCount: Number(r.room_count || 0),
             guestCount: r.guest_count,
             note: r.request_note,
             unitPrice: info?.base_price || r.unit_price,

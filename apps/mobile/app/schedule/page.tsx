@@ -924,24 +924,29 @@ export default function SchedulePage() {
 
         if (r.re_type === 'hotel') {
           const rows = hotelByRid.get(r.re_id) || [{}];
-          return rows.map((d: any) => ({
-            ...base,
-            ...d,
-            hotelName: d.hotel_category || '신규 호텔',
-            roomName: d.hotel_price_code || '',
-            roomType: d.hotel_price_code || '',
-            roomCount: Number(d.room_count || 0),
-            days: Number(d.nights || 0),
-            nights: Number(d.nights || 0),
-            checkinDate: d.checkin_date || '',
-            guestCount: Number(d.guest_count || 0),
-            adult: Number(d.guest_count || 0),
-            child: 0,
-            toddler: 0,
-            unitPrice: Number(d.unit_price || 0),
-            totalPrice: Number(d.total_price || 0),
-            requestNote: d.request_note || '',
-          }));
+          return rows.map((d: any) => {
+            const scheduleNights = Number.parseInt(String(d.schedule ?? ''), 10);
+            const normalizedNights = Number.isFinite(scheduleNights) ? scheduleNights : 0;
+            return {
+              ...base,
+              ...d,
+              hotelName: d.hotel_category || '신규 호텔',
+              roomName: d.hotel_price_code || '',
+              roomType: d.hotel_price_code || '',
+              roomCount: Number(d.room_count || 0),
+              schedule: d.schedule || '',
+              days: normalizedNights,
+              nights: normalizedNights,
+              checkinDate: d.checkin_date || '',
+              guestCount: Number(d.guest_count || 0),
+              adult: Number(d.guest_count || 0),
+              child: 0,
+              toddler: 0,
+              unitPrice: Number(d.unit_price || 0),
+              totalPrice: Number(d.total_price || 0),
+              requestNote: d.request_note || '',
+            };
+          });
         }
 
         if (r.re_type === 'tour') {
