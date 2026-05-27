@@ -363,6 +363,7 @@ export default function UserReservationDetailModal({
         || allUserServices?.[0]?.reservation?.re_created_at
         || allUserServices?.[0]?.re_created_at
         || null;
+    const modalTitle = userInfo?.modal_title || '예약 통합 상세';
     const reservationDateText = formatDateOnlyKst(reservationDateSource);
 
     // 서비스 데이터 보강 (가격 테이블 정보 추가)
@@ -1338,7 +1339,7 @@ export default function UserReservationDetailModal({
                 <div className="bg-white border-b border-gray-100 px-6 py-4 shrink-0">
                     <div className="flex justify-between items-start">
                         <div className="flex-1">
-                            <h2 className="text-2xl font-bold text-gray-900">예약 통합 상세</h2>
+                            <h2 className="text-2xl font-bold text-gray-900">{modalTitle}</h2>
 
                             {/* 예약자 정보 카드 */}
                             {userInfo && (

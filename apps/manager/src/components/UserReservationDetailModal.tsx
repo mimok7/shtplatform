@@ -787,6 +787,7 @@ export default function UserReservationDetailModal({
     };
 
     const sortedGroups = getSortedGroups();
+    const modalTitle = userInfo?.modal_title || '예약 통합 상세';
     const childBirthDates = Array.isArray(userInfo?.child_birth_dates)
         ? userInfo.child_birth_dates.filter((date: unknown): date is string => typeof date === 'string' && date.trim().length > 0)
         : [];
@@ -1300,7 +1301,7 @@ export default function UserReservationDetailModal({
                 <div className="bg-white border-b border-gray-100 px-6 py-4 shrink-0">
                     <div className="flex justify-between items-start">
                         <div className="flex-1">
-                            <h2 className="text-2xl font-bold text-gray-900">예약 통합 상세</h2>
+                            <h2 className="text-2xl font-bold text-gray-900">{modalTitle}</h2>
 
                             {/* 예약자 정보 카드 */}
                             {userInfo && (

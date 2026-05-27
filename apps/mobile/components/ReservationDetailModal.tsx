@@ -956,6 +956,7 @@ export default function ReservationDetailModal({
   processLoading,
   item,
   items,
+  modalTitle,
 }: {
   isOpen: boolean;
   onClose: () => void;
@@ -968,6 +969,7 @@ export default function ReservationDetailModal({
   processLoading?: boolean;
   item: any;
   items?: any[];
+  modalTitle?: string;
 }) {
   const [sortMode, setSortMode] = useState<SortMode>('type');
   const [enrichedServices, setEnrichedServices] = useState<any[]>([]);
@@ -1404,7 +1406,7 @@ export default function ReservationDetailModal({
           <div className="mb-2 flex items-start justify-between gap-2">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5 whitespace-nowrap">
-                <h2 className="truncate text-base font-semibold text-gray-900">예약 통합 상세</h2>
+                <h2 className="truncate text-base font-semibold text-gray-900">{modalTitle || '예약 통합 상세'}</h2>
                 {item.source === 'sh' && <span className="rounded-full bg-gray-200 px-2 py-0.5 text-[11px] font-medium text-gray-700">Old</span>}
                 {item.source === 'new' && <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700">New</span>}
                 <span className="text-xs text-gray-500">연결 서비스 {visibleServices.length}건</span>

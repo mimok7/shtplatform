@@ -134,6 +134,7 @@ function BulkReservationContent() {
     const [showBulkActionPanel, setShowBulkActionPanel] = useState(false);
     const [sortType, setSortType] = useState<SortType>('date'); // 정렬 타입
     const [userEmail, setUserEmail] = useState<string | null>(null); // 현재 사용자 이메일
+    const [emailReservationCountMap, setEmailReservationCountMap] = useState<Record<string, number>>({});
     const [pendingDetailUserInfo, setPendingDetailUserInfo] = useState<any>(null);
     const [reservationDetails, setReservationDetails] = useState<any>(null);
 
@@ -243,6 +244,39 @@ function BulkReservationContent() {
                 usersData = results.flat();
             }
 
+            // 카드에 "지난예약" 버튼 노출 여부 판단용: 이메일별 전체 예약 건수(상태 무관)
+            const reservationCountByEmail: Record<string, number> = {};
+            if (userIds.length > 0) {
+                try {
+                    const CHUNK_SIZE = 100;
+                    const countByUserId: Record<string, number> = {};
+                    for (let i = 0; i < userIds.length; i += CHUNK_SIZE) {
+                        const chunk = userIds.slice(i, i + CHUNK_SIZE);
+                        const { data: allReservations } = await supabase
+                            .from('reservation')
+                            .select('re_id, re_user_id')
+                            .in('re_user_id', chunk)
+                            .neq('re_type', 'car_sht');
+
+                        (allReservations || []).forEach((row: any) => {
+                            const uid = String(row.re_user_id || '');
+                            if (!uid) return;
+                            countByUserId[uid] = (countByUserId[uid] || 0) + 1;
+                        });
+                    }
+
+                    (usersData || []).forEach((u: any) => {
+                        const email = String(u?.email || '').trim().toLowerCase();
+                        if (!email) return;
+                        const uid = String(u?.id || '');
+                        reservationCountByEmail[email] = (reservationCountByEmail[email] || 0) + (countByUserId[uid] || 0);
+                    });
+                } catch (countErr) {
+                    console.warn('이메일별 전체 예약 건수 조회 실패:', countErr);
+                }
+            }
+            setEmailReservationCountMap(reservationCountByEmail);
+
             // robust userMap
             const userMap = new Map<string, { id: string; name: string; email: string; phone_number: string; english_name?: string; child_birth_dates?: string[] | null }>();
             usersData.forEach((u: any) => {
@@ -342,7 +376,10 @@ function BulkReservationContent() {
             const groupedByUser: Record<string, ReservationItem> = {};
 
             rawList.forEach((r: any) => {
-                const groupKey = r.re_quote_id || r.re_id; // 예약 견적 ID별로 그룹화, 없으면 예약 ID 사용
+                const normalizedEmail = (r.users?.email || '').trim().toLowerCase();
+                const groupKey = normalizedEmail
+                    ? `email:${normalizedEmail}`
+                    : (r.re_quote_id ? `quote:${r.re_quote_id}` : `res:${r.re_id}`);
 
                 if (!groupedByUser[groupKey]) {
                     // 새로운 그룹 생성
@@ -359,6 +396,19 @@ function BulkReservationContent() {
                     const cur = groupedByUser[groupKey].re_update_at || '';
                     const inc = r.re_update_at || '';
                     if (inc > cur) groupedByUser[groupKey].re_update_at = inc;
+
+                    if (!groupedByUser[groupKey].users && r.users) {
+                        groupedByUser[groupKey].users = r.users;
+                    }
+
+                    if (
+                        groupedByUser[groupKey].re_quote_id &&
+                        r.re_quote_id &&
+                        groupedByUser[groupKey].re_quote_id !== r.re_quote_id
+                    ) {
+                        groupedByUser[groupKey].re_quote_id = null;
+                        groupedByUser[groupKey].quote = null;
+                    }
                 }
 
                 // 서비스 추가
@@ -973,6 +1023,103 @@ function BulkReservationContent() {
             setPendingDetailUserInfo(null);
         } finally {
             updateCentralReservationDetailModal({ loading: false });
+        }
+    };
+
+    const handleViewPastReservations = async (reservation: ReservationItem) => {
+        const normalizedEmail = String(reservation.users?.email || '').trim().toLowerCase();
+        if (!normalizedEmail) {
+            alert('이메일 정보가 없어 지난 예약을 조회할 수 없습니다.');
+            return;
+        }
+
+        try {
+            const { data: emailUsers, error: userErr } = await supabase
+                .from('users')
+                .select('id, name, email, phone_number, english_name, child_birth_dates')
+                .ilike('email', normalizedEmail);
+            if (userErr) throw userErr;
+
+            const userIds = (emailUsers || []).map((u: any) => u.id).filter(Boolean);
+            if (userIds.length === 0) {
+                alert('이메일로 연결된 지난 예약이 없습니다.');
+                return;
+            }
+
+            const { data: reservationsByEmail, error: reservationErr } = await supabase
+                .from('reservation')
+                .select('re_id, re_user_id, re_quote_id, re_type, re_status, re_created_at, total_amount, price_breakdown, re_adult_count, re_child_count, re_infant_count')
+                .in('re_user_id', userIds)
+                .neq('re_type', 'car_sht')
+                .order('re_created_at', { ascending: false });
+            if (reservationErr) throw reservationErr;
+
+            const excludeIds = new Set((reservation.services || []).map((s: ServiceReservation) => s.re_id));
+            const pastReservations = (reservationsByEmail || []).filter((r: any) => !excludeIds.has(r.re_id));
+            if (pastReservations.length === 0) {
+                alert('지난 예약이 없습니다.');
+                return;
+            }
+
+            const reservationIds = pastReservations.map((r: any) => r.re_id);
+            const reservationMap = new Map(pastReservations.map((r: any) => [r.re_id, r]));
+            const toItems = (rows: any[] | null | undefined, serviceType: string) =>
+                (rows || []).map((row: any) => ({
+                    ...row,
+                    serviceType,
+                    reservation_id: row.reservation_id,
+                    reservation: reservationMap.get(row.reservation_id) || null,
+                }));
+
+            const [
+                cruiseRes,
+                airportRes,
+                hotelRes,
+                rentcarRes,
+                tourRes,
+                ticketRes,
+                cruiseCarRes,
+                shtRes,
+            ] = await Promise.all([
+                supabase.from('reservation_cruise').select('*').in('reservation_id', reservationIds),
+                supabase.from('reservation_airport').select('*').in('reservation_id', reservationIds),
+                supabase.from('reservation_hotel').select('*').in('reservation_id', reservationIds),
+                supabase.from('reservation_rentcar').select('*').in('reservation_id', reservationIds),
+                supabase.from('reservation_tour').select('*').in('reservation_id', reservationIds),
+                supabase.from('reservation_ticket').select('*').in('reservation_id', reservationIds),
+                supabase.from('reservation_cruise_car').select('*').in('reservation_id', reservationIds),
+                supabase.from('reservation_car_sht').select('*').in('reservation_id', reservationIds),
+            ]);
+
+            const allUserServices = [
+                ...toItems(cruiseRes.data, 'cruise'),
+                ...toItems(airportRes.data, 'airport'),
+                ...toItems(hotelRes.data, 'hotel'),
+                ...toItems(rentcarRes.data, 'rentcar'),
+                ...toItems(tourRes.data, 'tour'),
+                ...toItems(ticketRes.data, 'ticket'),
+                ...toItems(cruiseCarRes.data, 'vehicle'),
+                ...toItems(shtRes.data, 'sht'),
+            ].sort((a: any, b: any) => {
+                const aTime = new Date(a?.reservation?.re_created_at || 0).getTime();
+                const bTime = new Date(b?.reservation?.re_created_at || 0).getTime();
+                return bTime - aTime;
+            });
+
+            const baseUser = (emailUsers || [])[0] || {};
+            openCentralReservationDetailModal({
+                userInfo: {
+                    ...baseUser,
+                    phone_number: baseUser.phone_number || reservation.users?.phone || '',
+                    phone: baseUser.phone_number || reservation.users?.phone || '',
+                    modal_title: '지난 예약 통합 상세',
+                },
+                allUserServices,
+                loading: false,
+            });
+        } catch (err) {
+            console.error('지난 예약 조회 실패:', err);
+            alert('지난 예약 조회 중 오류가 발생했습니다.');
         }
     };
 
@@ -1964,6 +2111,9 @@ function BulkReservationContent() {
                                                 {dateItems.map((reservation) => {
                                                     const allServiceIds = reservation.services.map(s => s.re_id);
                                                     const isSelected = allServiceIds.some(id => selectedItems.has(id));
+                                                    const normalizedEmail = String(reservation.users?.email || '').trim().toLowerCase();
+                                                    const totalByEmail = normalizedEmail ? (emailReservationCountMap[normalizedEmail] || 0) : 0;
+                                                    const hasPastReservations = totalByEmail > reservation.services.length;
                                                     return (
                                                         <div
                                                             key={reservation.re_quote_id || reservation.services[0]?.re_id}
@@ -2034,12 +2184,31 @@ function BulkReservationContent() {
                                                                                 <Eye className="w-4 h-4 text-blue-600" />
                                                                             </button>
                                                                             <button
-                                                                                onClick={() => router.push(`/manager/reservation-edit?quote_id=${reservation.re_quote_id}`)}
+                                                                                onClick={() => {
+                                                                                    if (reservation.re_quote_id) {
+                                                                                        router.push(`/manager/reservation-edit?quote_id=${reservation.re_quote_id}`);
+                                                                                        return;
+                                                                                    }
+                                                                                    if (reservation.users?.id) {
+                                                                                        router.push(`/manager/reservation-edit?user_id=${reservation.users.id}`);
+                                                                                        return;
+                                                                                    }
+                                                                                    router.push('/manager/reservation-edit');
+                                                                                }}
                                                                                 className="p-1.5 hover:bg-green-50 rounded-full transition-colors"
                                                                                 title="수정하기"
                                                                             >
                                                                                 <Edit className="w-4 h-4 text-green-600" />
                                                                             </button>
+                                                                            {hasPastReservations && (
+                                                                                <button
+                                                                                    onClick={() => handleViewPastReservations(reservation)}
+                                                                                    className="px-2 py-1 text-[11px] rounded-full bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors whitespace-nowrap"
+                                                                                    title="이메일 기준 지난 예약 보기"
+                                                                                >
+                                                                                    지난예약 {Math.max(totalByEmail - reservation.services.length, 0)}건
+                                                                                </button>
+                                                                            )}
                                                                         </div>
                                                                     </div>
                                                                 </div>

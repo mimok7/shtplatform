@@ -51,12 +51,14 @@ export default function ReservationsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchTrigger, setSearchTrigger] = useState(0);
   const [sortType, setSortType] = useState<SortType>('date');
+  const [emailReservationCountMap, setEmailReservationCountMap] = useState<Record<string, number>>({});
 
   // 상세보기 모달
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailItem, setDetailItem] = useState<ReservationItem | null>(null);
   const [detailModalItem, setDetailModalItem] = useState<any | null>(null);
   const [detailModalItems, setDetailModalItems] = useState<any[]>([]);
+  const [detailModalTitle, setDetailModalTitle] = useState('예약 통합 상세');
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailProcessing, setDetailProcessing] = useState(false);
 
@@ -114,6 +116,38 @@ export default function ReservationsPage() {
       }
       const userMap = new Map(usersData.map(u => [u.id, u]));
 
+      const reservationCountByEmail: Record<string, number> = {};
+      if (userIds.length > 0) {
+        try {
+          const CHUNK = 100;
+          const countByUserId: Record<string, number> = {};
+          for (let i = 0; i < userIds.length; i += CHUNK) {
+            const chunk = userIds.slice(i, i + CHUNK);
+            const { data: allReservations } = await supabase
+              .from('reservation')
+              .select('re_id, re_user_id')
+              .in('re_user_id', chunk)
+              .neq('re_type', 'car_sht');
+
+            (allReservations || []).forEach((row: any) => {
+              const uid = String(row.re_user_id || '');
+              if (!uid) return;
+              countByUserId[uid] = (countByUserId[uid] || 0) + 1;
+            });
+          }
+
+          (usersData || []).forEach((u: any) => {
+            const email = String(u?.email || '').trim().toLowerCase();
+            if (!email) return;
+            const uid = String(u?.id || '');
+            reservationCountByEmail[email] = (reservationCountByEmail[email] || 0) + (countByUserId[uid] || 0);
+          });
+        } catch (countErr) {
+          console.warn('이메일별 전체 예약 건수 조회 실패:', countErr);
+        }
+      }
+      setEmailReservationCountMap(reservationCountByEmail);
+
       // 견적 정보
       const quoteIds = [...new Set(allRows.map(r => r.re_quote_id).filter(Boolean))];
       let quotesData: any[] = [];
@@ -127,11 +161,15 @@ export default function ReservationsPage() {
       }
       const quoteMap = new Map(quotesData.map(q => [q.id, q]));
 
-      // 그룹화
+      // 그룹화: 이메일이 있으면 이메일 기준으로 묶고, 없으면 견적/예약 ID 기준으로 묶음
       const grouped: Record<string, ReservationItem> = {};
       allRows.forEach(r => {
-        const key = r.re_quote_id || r.re_id;
         const user = r.re_user_id ? userMap.get(r.re_user_id) : null;
+        const normalizedEmail = (user?.email || '').trim().toLowerCase();
+        const key = normalizedEmail
+          ? `email:${normalizedEmail}`
+          : (r.re_quote_id ? `quote:${r.re_quote_id}` : `res:${r.re_id}`);
+
         if (!grouped[key]) {
           grouped[key] = {
             re_quote_id: r.re_quote_id,
@@ -146,7 +184,27 @@ export default function ReservationsPage() {
             quote: r.re_quote_id ? quoteMap.get(r.re_quote_id) || null : null,
             services: [],
           };
+        } else {
+          if (!grouped[key].users && user) {
+            grouped[key].users = {
+              id: user.id,
+              name: user.name || user.email?.split('@')[0] || '알 수 없음',
+              email: user.email || '',
+              phone: user.phone_number || '',
+              english_name: user.english_name,
+            };
+          }
+
+          if (
+            grouped[key].re_quote_id &&
+            r.re_quote_id &&
+            grouped[key].re_quote_id !== r.re_quote_id
+          ) {
+            grouped[key].re_quote_id = null;
+            grouped[key].quote = null;
+          }
         }
+
         grouped[key].services.push({ re_id: r.re_id, re_type: r.re_type, re_status: r.re_status });
       });
 
@@ -353,27 +411,33 @@ export default function ReservationsPage() {
   };
 
   /* ── 상세보기 ──────────────────────────── */
-  const handleViewDetail = async (reservation: ReservationItem) => {
+  const handleViewDetail = async (
+    reservation: ReservationItem,
+    targetServices?: ServiceReservation[],
+    modalTitle: string = '예약 통합 상세'
+  ) => {
     setDetailItem(reservation);
+    setDetailModalTitle(modalTitle);
     setDetailLoading(true);
     setDetailModalItems([]);
     setDetailModalItem(null);
 
     try {
-      const serviceIds = reservation.services.map(s => s.re_id).filter(Boolean);
+      const serviceRows = targetServices && targetServices.length > 0 ? targetServices : reservation.services;
+      const serviceIds = serviceRows.map(s => s.re_id).filter(Boolean);
       if (serviceIds.length === 0) {
         setDetailOpen(true);
         return;
       }
 
-      const cruiseIds = reservation.services.filter(s => s.re_type === 'cruise').map(s => s.re_id);
-      const carIds = reservation.services.filter(s => ['car', 'cruise'].includes(s.re_type)).map(s => s.re_id);
-      const airportIds = reservation.services.filter(s => s.re_type === 'airport').map(s => s.re_id);
-      const hotelIds = reservation.services.filter(s => s.re_type === 'hotel').map(s => s.re_id);
-      const tourIds = reservation.services.filter(s => s.re_type === 'tour').map(s => s.re_id);
-      const ticketIds = reservation.services.filter(s => s.re_type === 'ticket').map(s => s.re_id);
-      const rentcarIds = reservation.services.filter(s => s.re_type === 'rentcar').map(s => s.re_id);
-      const shtIds = reservation.services.filter(s => ['sht', 'car_sht'].includes(s.re_type)).map(s => s.re_id);
+      const cruiseIds = serviceRows.filter(s => s.re_type === 'cruise').map(s => s.re_id);
+      const carIds = serviceRows.filter(s => ['car', 'cruise'].includes(s.re_type)).map(s => s.re_id);
+      const airportIds = serviceRows.filter(s => s.re_type === 'airport').map(s => s.re_id);
+      const hotelIds = serviceRows.filter(s => s.re_type === 'hotel').map(s => s.re_id);
+      const tourIds = serviceRows.filter(s => s.re_type === 'tour').map(s => s.re_id);
+      const ticketIds = serviceRows.filter(s => s.re_type === 'ticket').map(s => s.re_id);
+      const rentcarIds = serviceRows.filter(s => s.re_type === 'rentcar').map(s => s.re_id);
+      const shtIds = serviceRows.filter(s => ['sht', 'car_sht'].includes(s.re_type)).map(s => s.re_id);
 
       // 서비스 상세 데이터만 조회 (가격 테이블은 모달 내부 enrich에서 처리)
       const [cruiseRes, cruiseCarRes, airportRes, hotelRes, tourRes, ticketRes, rentcarRes, shtRes] = await Promise.all([
@@ -387,8 +451,8 @@ export default function ReservationsPage() {
         shtIds.length > 0 ? supabase.from('reservation_car_sht').select('*').in('reservation_id', shtIds) : { data: [] },
       ]);
 
-      const statusMap = new Map(reservation.services.map(s => [s.re_id, s.re_status]));
-      const typeMap = new Map(reservation.services.map(s => [s.re_id, s.re_type]));
+      const statusMap = new Map(serviceRows.map(s => [s.re_id, s.re_status]));
+      const typeMap = new Map(serviceRows.map(s => [s.re_id, s.re_type]));
 
       const baseHeader = {
         source: 'new',
@@ -399,6 +463,7 @@ export default function ReservationsPage() {
         email: reservation.users?.email || '',
         phone: reservation.users?.phone || '',
         re_created_at: reservation.re_created_at,
+        modal_title: modalTitle,
       };
 
       const modalItems: any[] = [];
@@ -494,8 +559,8 @@ export default function ReservationsPage() {
       setDetailModalItems(modalItems);
       setDetailModalItem(modalItems[0] || {
         ...baseHeader,
-        reservationId: reservation.services[0]?.re_id || '',
-        re_id: reservation.services[0]?.re_id || '',
+        reservationId: serviceRows[0]?.re_id || '',
+        re_id: serviceRows[0]?.re_id || '',
       });
       setDetailOpen(true);
     } catch (err) {
@@ -503,6 +568,55 @@ export default function ReservationsPage() {
       setDetailOpen(true);
     } finally {
       setDetailLoading(false);
+    }
+  };
+
+  const handleViewPastReservations = async (reservation: ReservationItem) => {
+    const normalizedEmail = String(reservation.users?.email || '').trim().toLowerCase();
+    if (!normalizedEmail) {
+      alert('이메일 정보가 없어 지난 예약을 조회할 수 없습니다.');
+      return;
+    }
+
+    try {
+      const { data: emailUsers, error: userErr } = await supabase
+        .from('users')
+        .select('id')
+        .ilike('email', normalizedEmail);
+      if (userErr) throw userErr;
+
+      const userIds = (emailUsers || []).map((u: any) => u.id).filter(Boolean);
+      if (userIds.length === 0) {
+        alert('이메일로 연결된 지난 예약이 없습니다.');
+        return;
+      }
+
+      const { data: rows, error: reservationErr } = await supabase
+        .from('reservation')
+        .select('re_id, re_type, re_status, re_created_at')
+        .in('re_user_id', userIds)
+        .neq('re_type', 'car_sht')
+        .order('re_created_at', { ascending: false });
+      if (reservationErr) throw reservationErr;
+
+      const excludeIds = new Set((reservation.services || []).map((s: ServiceReservation) => s.re_id));
+      const pastServices: ServiceReservation[] = (rows || [])
+        .filter((r: any) => !excludeIds.has(r.re_id))
+        .map((r: any) => ({ re_id: r.re_id, re_type: r.re_type, re_status: r.re_status }));
+
+      if (pastServices.length === 0) {
+        alert('지난 예약이 없습니다.');
+        return;
+      }
+
+      const pseudoReservation: ReservationItem = {
+        ...reservation,
+        services: pastServices,
+      };
+      await handleViewDetail(pseudoReservation, pastServices, '지난 예약 통합 상세');
+    } catch (err) {
+      console.error('지난 예약 조회 실패:', err);
+      alert('지난 예약 조회 중 오류가 발생했습니다.');
     }
   };
 
@@ -677,6 +791,9 @@ export default function ReservationsPage() {
               {reservations.map(reservation => {
                 const allIds = reservation.services.map(s => s.re_id);
                 const isSelected = allIds.some(id => selectedItems.has(id));
+                const normalizedEmail = String(reservation.users?.email || '').trim().toLowerCase();
+                const totalByEmail = normalizedEmail ? (emailReservationCountMap[normalizedEmail] || 0) : 0;
+                const hasPastReservations = totalByEmail > reservation.services.length;
 
                 return (
                   <div
@@ -732,7 +849,20 @@ export default function ReservationsPage() {
                           <span className="text-xs text-gray-400">
                             {new Date(reservation.re_created_at).toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' })}
                           </span>
-                          <span className="text-xs text-gray-400">{reservation.services.length}개 서비스</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-gray-400">{reservation.services.length}개 서비스</span>
+                            {hasPastReservations && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  void handleViewPastReservations(reservation);
+                                }}
+                                className="px-2 py-0.5 rounded-full text-[11px] bg-amber-50 text-amber-700 border border-amber-200 whitespace-nowrap"
+                              >
+                                지난예약 {Math.max(totalByEmail - reservation.services.length, 0)}건
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -754,6 +884,7 @@ export default function ReservationsPage() {
         processLabel={`${detailProcessInfo.label} (${detailProcessInfo.count})`}
         item={detailModalItem}
         items={detailModalItems}
+        modalTitle={detailModalTitle}
       />
     </div>
   );
