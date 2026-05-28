@@ -914,6 +914,9 @@ export default function ProfilePage() {
                 </div>
                 <SectionBox title="🔒 비밀번호 변경">
                     <div className="space-y-4">
+                        <p className="text-xs text-gray-500 rounded bg-blue-50 border border-blue-100 px-3 py-2">
+                            임시 비밀번호로 로그인하셨다면, 기존 비밀번호 란에 <strong>발급받은 임시 비밀번호</strong>를 입력하고 새 비밀번호를 설정해 주세요.
+                        </p>
                         {pwError && (
                             <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                                 {pwError}
