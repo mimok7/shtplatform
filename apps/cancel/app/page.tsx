@@ -1,13 +1,13 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { Suspense, useEffect, useState } from 'react';
 import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getBrowserSupabase } from '@/lib/supabase';
 
 type Mode = 'lookup' | 'login';
 
-export default function HomePage() {
+function HomeContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const [mode, setMode] = useState<Mode>('login');
@@ -355,6 +355,18 @@ export default function HomePage() {
                 )}
             </section>
         </div>
+    );
+}
+
+export default function HomePage() {
+    return (
+        <Suspense fallback={
+            <div className="flex h-72 items-center justify-center">
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500" />
+            </div>
+        }>
+            <HomeContent />
+        </Suspense>
     );
 }
 

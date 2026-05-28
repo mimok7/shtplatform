@@ -8,6 +8,7 @@ export const dynamic = 'force-dynamic';
 type Payload = {
     token: string;
     reservationId: string;
+    additionalReservationIds?: string[];
     cancellationType: 'full' | 'partial';
     reasonCategory: 'natural_disaster' | 'change_of_mind' | 'other';
     reasonDetail?: string | null;
@@ -69,6 +70,46 @@ export async function POST(req: NextRequest) {
                 result_status: 'requested',
             });
         if (insErr) throw insErr;
+
+        // 연결된 추가 예약 취소 신청
+        if (body.additionalReservationIds && body.additionalReservationIds.length > 0) {
+            const { data: primaryData } = await supabase
+                .from('reservation')
+                .select('re_quote_id')
+                .eq('re_id', rid)
+                .maybeSingle();
+
+            if (primaryData?.re_quote_id) {
+                const { data: addlResvs } = await supabase
+                    .from('reservation')
+                    .select('re_id')
+                    .in('re_id', body.additionalReservationIds)
+                    .eq('re_quote_id', primaryData.re_quote_id);
+
+                for (const addl of addlResvs || []) {
+                    const { data: existingPending } = await supabase
+                        .from('reservation_cancellation_request')
+                        .select('id')
+                        .eq('reservation_id', addl.re_id)
+                        .eq('status', 'pending')
+                        .maybeSingle();
+                    if (existingPending) continue;
+
+                    await supabase.from('reservation_cancellation_request').insert({
+                        reservation_id: addl.re_id,
+                        requester_user_id: null,
+                        requester_email: body.requesterEmail || null,
+                        requester_phone: body.requesterPhone || null,
+                        cancellation_type: body.cancellationType,
+                        cancel_reason_category: body.reasonCategory,
+                        cancel_reason_detail: body.reasonDetail || null,
+                        cancel_targets: body.cancellationType === 'partial' ? body.cancelTargets : null,
+                        status: 'pending',
+                        result_status: 'requested',
+                    });
+                }
+            }
+        }
 
         const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || null;
         await supabase

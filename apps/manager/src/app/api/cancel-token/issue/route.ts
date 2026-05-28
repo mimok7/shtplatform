@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import serviceSupabase from '../../../../../lib/serviceSupabase';
+import serviceSupabase from '../../../../lib/serviceSupabase';
 import { randomBytes, createHmac } from 'crypto';
 
 export const runtime = 'nodejs';
