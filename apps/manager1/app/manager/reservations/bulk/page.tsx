@@ -2206,7 +2206,7 @@ function BulkReservationContent() {
                                                                                     className="px-2 py-1 text-[11px] rounded-full bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors whitespace-nowrap"
                                                                                     title="이메일 기준 지난 예약 보기"
                                                                                 >
-                                                                                    지난예약 {Math.max(totalByEmail - reservation.services.length, 0)}건
+                                                                                    기존 예약 {Math.max(totalByEmail - reservation.services.length, 0)}건
                                                                                 </button>
                                                                             )}
                                                                         </div>

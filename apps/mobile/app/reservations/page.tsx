@@ -859,7 +859,7 @@ export default function ReservationsPage() {
                                 }}
                                 className="px-2 py-0.5 rounded-full text-[11px] bg-amber-50 text-amber-700 border border-amber-200 whitespace-nowrap"
                               >
-                                지난예약 {Math.max(totalByEmail - reservation.services.length, 0)}건
+                                기존 예약 {Math.max(totalByEmail - reservation.services.length, 0)}건
                               </button>
                             )}
                           </div>
