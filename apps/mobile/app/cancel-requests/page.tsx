@@ -48,13 +48,39 @@ export default function MobileCancelRequestsPage() {
         try {
             let q = supabase
                 .from('reservation_cancellation_request')
-                .select('id, reservation_id, cancellation_type, cancel_reason_category, cancel_reason_detail, cancel_targets, status, result_status, manager_note, submitted_at, requester_email, requester:requester_user_id ( id, name, email ), reservation:reservation_id ( re_id, re_status )')
+                .select('id, reservation_id, requester_user_id, requester_email, cancellation_type, cancel_reason_category, cancel_reason_detail, cancel_targets, status, result_status, manager_note, submitted_at')
                 .order('submitted_at', { ascending: false })
                 .limit(100);
             if (statusFilter !== 'all') q = q.eq('status', statusFilter);
             const { data, error } = await q;
             if (error) throw error;
-            setRows(data || []);
+
+            const baseRows = data || [];
+            const reservationIds = Array.from(new Set(baseRows.map((row: any) => row.reservation_id).filter(Boolean)));
+            const requesterIds = Array.from(new Set(baseRows.map((row: any) => row.requester_user_id).filter(Boolean)));
+
+            const [reservationRes, requesterRes] = await Promise.all([
+                reservationIds.length
+                    ? supabase.from('reservation').select('re_id, re_status').in('re_id', reservationIds)
+                    : Promise.resolve({ data: [], error: null } as any),
+                requesterIds.length
+                    ? supabase.from('users').select('id, name, email').in('id', requesterIds)
+                    : Promise.resolve({ data: [], error: null } as any),
+            ]);
+
+            if (reservationRes.error) throw reservationRes.error;
+            if (requesterRes.error) throw requesterRes.error;
+
+            const reservationMap = new Map((reservationRes.data || []).map((item: any) => [item.re_id, item]));
+            const requesterMap = new Map((requesterRes.data || []).map((item: any) => [item.id, item]));
+
+            const merged = baseRows.map((row: any) => ({
+                ...row,
+                reservation: row.reservation_id ? reservationMap.get(row.reservation_id) || null : null,
+                requester: row.requester_user_id ? requesterMap.get(row.requester_user_id) || null : null,
+            }));
+
+            setRows(merged);
         } catch (err: any) {
             alert(err?.message || '목록 조회 실패');
         } finally {
@@ -149,7 +175,7 @@ export default function MobileCancelRequestsPage() {
     return (
         <div className="min-h-screen bg-gray-50 pb-20">
             <header className="sticky top-0 z-10 flex items-center gap-2 border-b bg-white p-3">
-                <Link href="/manager" className="text-gray-500"><ArrowLeft className="h-5 w-5" /></Link>
+                <Link href="/" className="text-gray-500"><ArrowLeft className="h-5 w-5" /></Link>
                 <h1 className="text-base font-bold">취소 요청 처리</h1>
             </header>
 

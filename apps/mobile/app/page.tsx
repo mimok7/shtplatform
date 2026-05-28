@@ -44,6 +44,7 @@ const FAVORITES: MenuItem[] = [
   { href: 'https://partner.stayhalong.com/partner/admin/reservations', label: '제휴업체', desc: '제휴업체 예약 관리', icon: Handshake, iconColor: 'text-orange-600', bg: 'bg-orange-100', external: true },
   { href: '/quotes',                label: '견적 목록',  desc: '견적 조회 / 수정',              icon: FileText,      iconColor: 'text-indigo-600', bg: 'bg-indigo-100' },
   { href: '/quotes/cruise',         label: '견적 입력',  desc: '크루즈 견적 신규 입력',         icon: FilePenLine,   iconColor: 'text-purple-600', bg: 'bg-purple-100' },
+  { href: '/cancel-requests',       label: '취소요청',  desc: '취소 신청 승인/반려 처리',      icon: Home,          iconColor: 'text-red-600',    bg: 'bg-red-100' },
   { href: '/notifications',         label: '알림 관리',  desc: '읽지 않은 알림 확인',           icon: Bell,          iconColor: 'text-rose-600',   bg: 'bg-rose-100' },
 ];
 

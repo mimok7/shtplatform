@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import PageWrapper from '@/components/PageWrapper';
+import ManagerLayout from '@/components/ManagerLayout';
 import SectionBox from '@/components/SectionBox';
-import { supabase } from '@/lib/supabase';
+import supabase from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { logStatusChange } from '@/lib/statusLog';
 
@@ -53,11 +53,13 @@ const REASON_LABEL: Record<string, string> = {
 };
 
 export default function ManagerCancelRequestsPage() {
-    const { user, profile, loading: authLoading } = useAuth();
+    const { user, loading: authLoading } = useAuth();
+    const [mounted, setMounted] = useState(false);
     const [rows, setRows] = useState<CancelRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [statusFilter, setStatusFilter] = useState<RequestStatus | 'all'>('pending');
     const [reasonFilter, setReasonFilter] = useState<'all' | CancelRow['cancel_reason_category']>('all');
+    const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
     const [processingId, setProcessingId] = useState<string | null>(null);
     const [noteDraft, setNoteDraft] = useState<Record<string, string>>({});
     const [linkModalOpen, setLinkModalOpen] = useState(false);
@@ -66,8 +68,6 @@ export default function ManagerCancelRequestsPage() {
     const [linkLoading, setLinkLoading] = useState(false);
     const [linkCopied, setLinkCopied] = useState(false);
     const [linkError, setLinkError] = useState<string | null>(null);
-
-    const isManager = profile?.role === 'manager' || profile?.role === 'admin';
 
     const fetchRows = async () => {
         setLoading(true);
@@ -78,9 +78,7 @@ export default function ManagerCancelRequestsPage() {
                     id, reservation_id, requester_user_id, requester_email,
                     cancellation_type, cancel_reason_category, cancel_reason_detail,
                     cancel_targets, status, result_status, manager_note,
-                    submitted_at, reviewed_at, executed_at,
-                    reservation:reservation_id ( re_id, re_status, re_user_id ),
-                    requester:requester_user_id ( id, name, email )
+                    submitted_at, reviewed_at, executed_at
                 `)
                 .order('submitted_at', { ascending: false })
                 .limit(200);
@@ -90,7 +88,33 @@ export default function ManagerCancelRequestsPage() {
 
             const { data, error } = await query;
             if (error) throw error;
-            setRows((data || []) as unknown as CancelRow[]);
+
+            const baseRows = (data || []) as CancelRow[];
+            const reservationIds = Array.from(new Set(baseRows.map((row) => row.reservation_id).filter(Boolean)));
+            const requesterIds = Array.from(new Set(baseRows.map((row) => row.requester_user_id).filter(Boolean))) as string[];
+
+            const [reservationRes, requesterRes] = await Promise.all([
+                reservationIds.length
+                    ? supabase.from('reservation').select('re_id, re_status, re_user_id').in('re_id', reservationIds)
+                    : Promise.resolve({ data: [], error: null } as any),
+                requesterIds.length
+                    ? supabase.from('users').select('id, name, email').in('id', requesterIds)
+                    : Promise.resolve({ data: [], error: null } as any),
+            ]);
+
+            if (reservationRes.error) throw reservationRes.error;
+            if (requesterRes.error) throw requesterRes.error;
+
+            const reservationMap = new Map((reservationRes.data || []).map((item: any) => [item.re_id, item]));
+            const requesterMap = new Map((requesterRes.data || []).map((item: any) => [item.id, item]));
+
+            const merged = baseRows.map((row) => ({
+                ...row,
+                reservation: row.reservation_id ? (reservationMap.get(row.reservation_id) as any) || null : null,
+                requester: row.requester_user_id ? (requesterMap.get(row.requester_user_id) as any) || null : null,
+            }));
+
+            setRows(merged as CancelRow[]);
         } catch (err: any) {
             console.error('[cancel-requests] 조회 실패', err);
             alert(err?.message || '취소 요청 목록을 불러오지 못했습니다.');
@@ -100,11 +124,14 @@ export default function ManagerCancelRequestsPage() {
     };
 
     useEffect(() => {
-        if (authLoading) return;
-        if (!isManager) return;
+        setMounted(true);
+    }, []);
+
+    useEffect(() => {
+        if (!mounted || authLoading) return;
         void fetchRows();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [authLoading, isManager, statusFilter, reasonFilter]);
+    }, [mounted, authLoading, statusFilter, reasonFilter]);
 
     const applyApprove = async (row: CancelRow) => {
         if (!user?.id) return;
@@ -296,52 +323,95 @@ export default function ManagerCancelRequestsPage() {
         return counts;
     }, [rows]);
 
-    if (authLoading) return <PageWrapper><div className="p-6 text-sm text-gray-600">권한 확인 중...</div></PageWrapper>;
-    if (!isManager) return <PageWrapper><div className="p-6 text-sm text-red-600">매니저 권한이 필요합니다.</div></PageWrapper>;
+    const selectedRow = useMemo(
+        () => rows.find((row) => row.id === selectedRowId) || null,
+        [rows, selectedRowId]
+    );
+
+    useEffect(() => {
+        if (!rows.length) {
+            setSelectedRowId(null);
+            return;
+        }
+        if (!selectedRowId || !rows.some((row) => row.id === selectedRowId)) {
+            setSelectedRowId(rows[0].id);
+        }
+    }, [rows, selectedRowId]);
+
+    if (!mounted || authLoading) {
+        return (
+            <ManagerLayout title="예약 취소 요청 관리" activeTab="cancel-requests">
+                <div className="p-6 text-sm text-gray-600">권한 확인 중...</div>
+            </ManagerLayout>
+        );
+    }
 
     return (
-        <PageWrapper>
-            <div className="p-4 md:p-6 space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                        <h1 className="text-xl font-bold">예약 취소 요청 관리</h1>
-                        <p className="text-xs text-gray-500">대기 {summary.pending} · 승인 {summary.approved} · 반려 {summary.rejected} · 전체 {summary.total}</p>
+        <ManagerLayout title="예약 취소 요청 관리" activeTab="cancel-requests">
+            <div className="p-3 md:p-4 space-y-2">
+                <p className="text-xs text-gray-600">대기 {summary.pending} · 승인 {summary.approved} · 반려 {summary.rejected} · 전체 {summary.total}</p>
+
+                <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+                    <div className="rounded-lg border bg-white p-2">
+                        <p className="mb-1 text-xs font-semibold text-gray-700">상태 그룹</p>
+                        <div className="flex flex-wrap gap-1">
+                            {([
+                                { key: 'pending', label: '대기' },
+                                { key: 'approved', label: '승인' },
+                                { key: 'rejected', label: '반려' },
+                                { key: 'cancelled', label: '취소됨' },
+                                { key: 'all', label: '전체' },
+                            ] as const).map((item) => (
+                                <button
+                                    key={item.key}
+                                    type="button"
+                                    onClick={() => setStatusFilter(item.key as RequestStatus | 'all')}
+                                    className={`inline-flex w-fit min-w-0 whitespace-nowrap rounded-md border px-2 py-1 text-[11px] leading-none ${statusFilter === item.key ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 bg-gray-50 text-gray-700 hover:bg-white'}`}
+                                >
+                                    {item.label}
+                                </button>
+                            ))}
+                        </div>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                        <select
-                            value={statusFilter}
-                            onChange={(e) => setStatusFilter(e.target.value as RequestStatus | 'all')}
-                            className="rounded border px-2 py-1 text-sm"
-                        >
-                            <option value="all">전체 상태</option>
-                            <option value="pending">대기</option>
-                            <option value="approved">승인완료</option>
-                            <option value="rejected">반려</option>
-                            <option value="cancelled">취소됨</option>
-                        </select>
-                        <select
-                            value={reasonFilter}
-                            onChange={(e) => setReasonFilter(e.target.value as any)}
-                            className="rounded border px-2 py-1 text-sm"
-                        >
-                            <option value="all">전체 사유</option>
-                            <option value="natural_disaster">자연재해</option>
-                            <option value="change_of_mind">단순변심</option>
-                            <option value="other">기타</option>
-                        </select>
-                        <button onClick={fetchRows} className="rounded bg-gray-100 px-3 py-1 text-sm">새로고침</button>
-                        <button
-                            onClick={() => {
-                                setLinkModalForm({ reservationId: '', email: '', ttlMinutes: '30' });
-                                setLinkResult(null);
-                                setLinkError(null);
-                                setLinkCopied(false);
-                                setLinkModalOpen(true);
-                            }}
-                            className="rounded bg-purple-600 px-3 py-1 text-sm text-white"
-                        >
-                            단회 취소링크 발급
-                        </button>
+
+                    <div className="rounded-lg border bg-white p-2">
+                        <p className="mb-1 text-xs font-semibold text-gray-700">사유 그룹</p>
+                        <div className="flex flex-wrap gap-1">
+                            {([
+                                { key: 'all', label: '전체 사유' },
+                                { key: 'natural_disaster', label: '자연재해' },
+                                { key: 'change_of_mind', label: '단순변심' },
+                                { key: 'other', label: '기타' },
+                            ] as const).map((item) => (
+                                <button
+                                    key={item.key}
+                                    type="button"
+                                    onClick={() => setReasonFilter(item.key as 'all' | CancelRow['cancel_reason_category'])}
+                                    className={`inline-flex w-fit min-w-0 whitespace-nowrap rounded-md border px-2 py-1 text-[11px] leading-none ${reasonFilter === item.key ? 'border-purple-500 bg-purple-50 text-purple-700' : 'border-gray-200 bg-gray-50 text-gray-700 hover:bg-white'}`}
+                                >
+                                    {item.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="rounded-lg border bg-white p-2">
+                        <p className="mb-1 text-xs font-semibold text-gray-700">작업 그룹</p>
+                        <div className="flex flex-wrap gap-1">
+                            <button onClick={fetchRows} className="inline-flex w-fit min-w-0 whitespace-nowrap rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-[11px] leading-none text-gray-800 hover:bg-white">새로고침</button>
+                            <button
+                                onClick={() => {
+                                    setLinkModalForm({ reservationId: '', email: '', ttlMinutes: '30' });
+                                    setLinkResult(null);
+                                    setLinkError(null);
+                                    setLinkCopied(false);
+                                    setLinkModalOpen(true);
+                                }}
+                                className="inline-flex w-fit min-w-0 whitespace-nowrap rounded-md border border-purple-200 bg-purple-50 px-2 py-1 text-[11px] leading-none text-purple-700 hover:bg-purple-100"
+                            >
+                                단회 취소링크 발급
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -351,32 +421,55 @@ export default function ManagerCancelRequestsPage() {
                     ) : rows.length === 0 ? (
                         <p className="p-4 text-sm text-gray-500">조건에 맞는 취소 요청이 없습니다.</p>
                     ) : (
-                        <div className="space-y-3">
-                            {rows.map((row) => {
-                                const targets = Array.isArray(row.cancel_targets) ? row.cancel_targets : [];
-                                return (
-                                    <div key={row.id} className="rounded border p-3 text-sm space-y-2">
+                        <div className="space-y-4">
+                            <div className="grid gap-2 md:grid-cols-2">
+                                {rows.map((row) => (
+                                    <button
+                                        key={row.id}
+                                        type="button"
+                                        onClick={() => setSelectedRowId(row.id)}
+                                        className={`w-full rounded border px-3 py-2 text-left text-sm transition ${selectedRowId === row.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:bg-gray-50'}`}
+                                    >
                                         <div className="flex flex-wrap items-center gap-2">
                                             <span className={`rounded px-2 py-0.5 text-xs ${row.status === 'pending' ? 'bg-yellow-100 text-yellow-800' : row.status === 'approved' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-700'}`}>
-                                                {STATUS_LABEL[row.status]} / {row.result_status}
+                                                {STATUS_LABEL[row.status]}
                                             </span>
                                             <span className="rounded bg-purple-100 px-2 py-0.5 text-xs text-purple-800">
-                                                사유: {REASON_LABEL[row.cancel_reason_category]}
+                                                {REASON_LABEL[row.cancel_reason_category]}
                                             </span>
-                                            <span className="text-xs text-gray-500">신청: {new Date(row.submitted_at).toLocaleString('ko-KR')}</span>
-                                            <span className="text-xs text-gray-500">유형: {row.cancellation_type === 'full' ? '전체' : '부분'}</span>
+                                            <span className="ml-auto text-xs text-gray-500">{new Date(row.submitted_at).toLocaleString('ko-KR')}</span>
+                                        </div>
+                                        <div className="mt-1 text-xs text-gray-700">
+                                            예약: {row.reservation_id} / 신청자: {row.requester?.name || row.requester?.email || row.requester_email || '-'}
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+
+                            {selectedRow && (() => {
+                                const targets = Array.isArray(selectedRow.cancel_targets) ? selectedRow.cancel_targets : [];
+                                return (
+                                    <div className="rounded border p-3 text-sm space-y-2">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <span className={`rounded px-2 py-0.5 text-xs ${selectedRow.status === 'pending' ? 'bg-yellow-100 text-yellow-800' : selectedRow.status === 'approved' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-700'}`}>
+                                                {STATUS_LABEL[selectedRow.status]} / {selectedRow.result_status}
+                                            </span>
+                                            <span className="rounded bg-purple-100 px-2 py-0.5 text-xs text-purple-800">
+                                                사유: {REASON_LABEL[selectedRow.cancel_reason_category]}
+                                            </span>
+                                            <span className="text-xs text-gray-500">유형: {selectedRow.cancellation_type === 'full' ? '전체' : '부분'}</span>
                                         </div>
                                         <div>
-                                            <strong>예약 ID:</strong> {row.reservation_id}
-                                            <span className="ml-2 text-gray-500">(현재 상태: {row.reservation?.re_status || '-'})</span>
+                                            <strong>예약 ID:</strong> {selectedRow.reservation_id}
+                                            <span className="ml-2 text-gray-500">(현재 상태: {selectedRow.reservation?.re_status || '-'})</span>
                                         </div>
                                         <div>
-                                            <strong>신청자:</strong> {row.requester?.name || '-'} ({row.requester?.email || row.requester_email || '-'})
+                                            <strong>신청자:</strong> {selectedRow.requester?.name || '-'} ({selectedRow.requester?.email || selectedRow.requester_email || '-'})
                                         </div>
                                         <div>
-                                            <strong>상세 사유:</strong> {row.cancel_reason_detail || '-'}
+                                            <strong>상세 사유:</strong> {selectedRow.cancel_reason_detail || '-'}
                                         </div>
-                                        {row.cancellation_type === 'partial' && (
+                                        {selectedRow.cancellation_type === 'partial' && (
                                             <div>
                                                 <strong>대상:</strong>
                                                 <ul className="ml-4 list-disc">
@@ -387,39 +480,39 @@ export default function ManagerCancelRequestsPage() {
                                             </div>
                                         )}
                                         <div>
-                                            <label className="block text-xs text-gray-500">매니저 메모(저장됨: {row.manager_note || '-'})</label>
+                                            <label className="block text-xs text-gray-500">매니저 메모(저장됨: {selectedRow.manager_note || '-'})</label>
                                             <textarea
                                                 className="mt-1 w-full rounded border p-2 text-sm"
                                                 rows={2}
                                                 placeholder="승인/반려 시 기록할 메모"
-                                                value={noteDraft[row.id] ?? ''}
-                                                onChange={(e) => setNoteDraft((prev) => ({ ...prev, [row.id]: e.target.value }))}
+                                                value={noteDraft[selectedRow.id] ?? ''}
+                                                onChange={(e) => setNoteDraft((prev) => ({ ...prev, [selectedRow.id]: e.target.value }))}
                                             />
                                         </div>
-                                        {row.status === 'pending' && (
+                                        {selectedRow.status === 'pending' && (
                                             <div className="flex gap-2">
                                                 <button
-                                                    onClick={() => applyApprove(row)}
-                                                    disabled={processingId === row.id}
+                                                    onClick={() => applyApprove(selectedRow)}
+                                                    disabled={processingId === selectedRow.id}
                                                     className="rounded bg-blue-600 px-3 py-1 text-sm text-white disabled:opacity-50"
                                                 >
                                                     승인 (취소 실행)
                                                 </button>
                                                 <button
-                                                    onClick={() => applyReject(row)}
-                                                    disabled={processingId === row.id}
+                                                    onClick={() => applyReject(selectedRow)}
+                                                    disabled={processingId === selectedRow.id}
                                                     className="rounded bg-gray-600 px-3 py-1 text-sm text-white disabled:opacity-50"
                                                 >
                                                     반려
                                                 </button>
                                             </div>
                                         )}
-                                        {row.execution_summary && (
-                                            <pre className="rounded bg-gray-50 p-2 text-xs text-gray-700">{JSON.stringify(row.execution_summary, null, 2)}</pre>
+                                        {selectedRow.execution_summary && (
+                                            <pre className="rounded bg-gray-50 p-2 text-xs text-gray-700">{JSON.stringify(selectedRow.execution_summary, null, 2)}</pre>
                                         )}
                                     </div>
                                 );
-                            })}
+                            })()}
                         </div>
                     )}
                 </SectionBox>
@@ -493,6 +586,6 @@ export default function ManagerCancelRequestsPage() {
                     </div>
                 </div>
             )}
-        </PageWrapper>
+        </ManagerLayout>
     );
 }
