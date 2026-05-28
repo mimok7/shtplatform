@@ -25,11 +25,13 @@ export async function POST(req: NextRequest) {
             .ilike('email', trimmedEmail);
         if (userErr) throw userErr;
 
-        const matched = (users || []).filter(
-            (u: any) => (u.name || '').trim() === trimmedName,
-        );
-        if (matched.length === 0) {
-            return NextResponse.json({ error: '이름과 이메일이 일치하는 회원을 찾지 못했습니다.' }, { status: 404 });
+        let matched = (users || []);
+        // 이름이 주어지면 이름으로 필터링, 없으면 이메일로만 조회 허용
+        if (trimmedName) {
+            matched = matched.filter((u: any) => (u.name || '').trim() === trimmedName);
+            if (matched.length === 0) {
+                return NextResponse.json({ error: '이름과 이메일이 일치하는 회원을 찾지 못했습니다.' }, { status: 404 });
+            }
         }
         const userIds = matched.map((u: any) => u.id);
 
