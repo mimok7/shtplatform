@@ -523,7 +523,7 @@ export default function ManagerCancelRequestsPage() {
         const suggestedTotal = suggestedAmounts.reduce((acc, cur) => acc + cur, 0);
         const input = refundGroupDraft[group.key] ?? '';
         const targetTotal = input ? Number(input.replace(/[,\s]/g, '')) : suggestedTotal;
-        if (!Number.isFinite(targetTotal) || targetTotal < 0) {
+        if (!Number.isFinite(targetTotal) || targetTotal <= 0) {
             alert('합산 환불 금액이 올바르지 않습니다.');
             return;
         }
@@ -552,7 +552,12 @@ export default function ManagerCancelRequestsPage() {
         }
 
         let successCount = 0;
+        let skippedCount = 0;
         for (let i = 0; i < approvedRows.length; i += 1) {
+            if ((allocated[i] ?? 0) <= 0) {
+                skippedCount += 1;
+                continue;
+            }
             try {
                 await applyRefundComplete(approvedRows[i], {
                     confirmAction: false,
@@ -566,7 +571,7 @@ export default function ManagerCancelRequestsPage() {
             }
         }
         await fetchRows();
-        alert(`합산 환불 완료: ${successCount}/${approvedRows.length}건`);
+        alert(`합산 환불 완료: ${successCount}/${approvedRows.length}건${skippedCount > 0 ? ` (0원 ${skippedCount}건 제외)` : ''}`);
     };
 
     const applyReject = async (row: CancelRow) => {
@@ -636,8 +641,8 @@ export default function ManagerCancelRequestsPage() {
         if (refundAmount == null) {
             const input = refundDraft[row.id] ?? '';
             const parsed = Number(String(input).replace(/[,\s]/g, ''));
-            if (!Number.isFinite(parsed) || parsed < 0) {
-                alert('카드 내 환불 금액 입력칸에 유효한 금액을 입력해 주세요.');
+            if (!Number.isFinite(parsed) || parsed <= 0) {
+                alert('카드 내 환불 금액 입력칸에 1원 이상 금액을 입력해 주세요.');
                 return;
             }
             refundAmount = parsed;
@@ -647,22 +652,43 @@ export default function ManagerCancelRequestsPage() {
 
         setProcessingId(row.id);
         try {
-            // 1) reservation_payments 환불 행 INSERT
+            const basePaymentPayload = {
+                reservation_id: row.reservation_id,
+                payment_date: new Date().toISOString().slice(0, 10),
+                payment_status: 'completed',
+                payment_method: row.refund_bank_name ? 'bank_transfer' : null,
+                created_by: user.id,
+            };
+
+            let paymentInsertedId: string | null = null;
             const { data: paymentInserted, error: payErr } = await supabase
                 .from('reservation_payments')
                 .insert({
-                    reservation_id: row.reservation_id,
+                    ...basePaymentPayload,
                     payment_type: 'refund',
                     payment_amount: refundAmount,
-                    payment_date: new Date().toISOString().slice(0, 10),
-                    payment_status: 'completed',
-                    payment_method: row.refund_bank_name ? 'bank' : null,
                     notes: `[취소환불] ${REASON_LABEL[row.cancel_reason_category]} / 신청 ${row.id.slice(0, 8)}`,
-                    created_by: user.id,
                 })
                 .select('id')
                 .single();
-            if (payErr) throw payErr;
+
+            if (payErr) {
+                console.warn('[cancel-requests] refund 타입 INSERT 실패, final 음수 금액으로 재시도', payErr);
+                const { data: fallbackInserted, error: fallbackErr } = await supabase
+                    .from('reservation_payments')
+                    .insert({
+                        ...basePaymentPayload,
+                        payment_type: 'final',
+                        payment_amount: Math.abs(refundAmount),
+                        notes: `[취소환불-대체저장] ${REASON_LABEL[row.cancel_reason_category]} / 신청 ${row.id.slice(0, 8)}`,
+                    })
+                    .select('id')
+                    .single();
+                if (fallbackErr) throw fallbackErr;
+                paymentInsertedId = fallbackInserted?.id ?? null;
+            } else {
+                paymentInsertedId = paymentInserted?.id ?? null;
+            }
 
             // 2) reservation_cancellation_request 업데이트
             const { error: updErr } = await supabase
@@ -671,7 +697,7 @@ export default function ManagerCancelRequestsPage() {
                     status: 'completed',
                     result_status: 'refunded',
                     refund_amount: refundAmount,
-                    refund_payment_id: paymentInserted?.id ?? null,
+                    refund_payment_id: paymentInsertedId,
                     refund_completed_at: new Date().toISOString(),
                     refund_completed_by: user.id,
                 })
@@ -688,7 +714,7 @@ export default function ManagerCancelRequestsPage() {
                         title: '예약 취소 환불 완료',
                         message: `환불 ${refundAmount.toLocaleString('ko-KR')}원이 완료 처리되었습니다.`,
                         createdBy: user.id,
-                        metadata: { cancellationType: row.cancellation_type, refundAmount, paymentId: paymentInserted?.id ?? null },
+                        metadata: { cancellationType: row.cancellation_type, refundAmount, paymentId: paymentInsertedId },
                     }),
                 });
             } catch (notifyErr) { console.warn('[cancel-requests] refund notify 실패', notifyErr); }

@@ -429,29 +429,50 @@ export default function MobileCancelRequestsPage() {
         }
         const input = options?.refundAmountOverride != null ? String(options.refundAmountOverride) : (refundDraft[row.id] ?? '');
         const refundAmount = Number(String(input).replace(/[,\s]/g, ''));
-        if (!Number.isFinite(refundAmount) || refundAmount < 0) {
-            alert('카드 내 환불 금액 입력칸에 유효한 금액을 입력해 주세요.');
+        if (!Number.isFinite(refundAmount) || refundAmount <= 0) {
+            alert('카드 내 환불 금액 입력칸에 1원 이상 금액을 입력해 주세요.');
             return;
         }
         if (!confirm(`환불 ${refundAmount.toLocaleString('ko-KR')}원을 완료 처리합니까?`)) return;
 
         setProcessingId(row.id);
         try {
+            const basePaymentPayload = {
+                reservation_id: row.reservation_id,
+                payment_date: new Date().toISOString().slice(0, 10),
+                payment_status: 'completed',
+                payment_method: row.refund_bank_name ? 'bank_transfer' : null,
+                created_by: userId,
+            };
+
+            let paymentInsertedId: string | null = null;
             const { data: paymentInserted, error: payErr } = await supabase
                 .from('reservation_payments')
                 .insert({
-                    reservation_id: row.reservation_id,
+                    ...basePaymentPayload,
                     payment_type: 'refund',
                     payment_amount: refundAmount,
-                    payment_date: new Date().toISOString().slice(0, 10),
-                    payment_status: 'completed',
-                    payment_method: row.refund_bank_name ? 'bank' : null,
                     notes: `[취소환불] ${REASON_LABEL[row.cancel_reason_category] || ''} / 신청 ${row.id.slice(0, 8)}`,
-                    created_by: userId,
                 })
                 .select('id')
                 .single();
-            if (payErr) throw payErr;
+            if (payErr) {
+                console.warn('[cancel-requests] refund 타입 INSERT 실패, final 음수 금액으로 재시도', payErr);
+                const { data: fallbackInserted, error: fallbackErr } = await supabase
+                    .from('reservation_payments')
+                    .insert({
+                        ...basePaymentPayload,
+                        payment_type: 'final',
+                        payment_amount: Math.abs(refundAmount),
+                        notes: `[취소환불-대체저장] ${REASON_LABEL[row.cancel_reason_category] || ''} / 신청 ${row.id.slice(0, 8)}`,
+                    })
+                    .select('id')
+                    .single();
+                if (fallbackErr) throw fallbackErr;
+                paymentInsertedId = fallbackInserted?.id ?? null;
+            } else {
+                paymentInsertedId = paymentInserted?.id ?? null;
+            }
 
             const { error: updErr } = await supabase
                 .from('reservation_cancellation_request')
@@ -459,7 +480,7 @@ export default function MobileCancelRequestsPage() {
                     status: 'completed',
                     result_status: 'refunded',
                     refund_amount: refundAmount,
-                    refund_payment_id: paymentInserted?.id ?? null,
+                    refund_payment_id: paymentInsertedId,
                     refund_completed_at: new Date().toISOString(),
                     refund_completed_by: userId,
                 })
@@ -475,7 +496,7 @@ export default function MobileCancelRequestsPage() {
                         title: '예약 취소 환불 완료',
                         message: `환불 ${refundAmount.toLocaleString('ko-KR')}원이 완료 처리되었습니다.`,
                         createdBy: userId,
-                        metadata: { cancellationType: row.cancellation_type, refundAmount, paymentId: paymentInserted?.id ?? null },
+                        metadata: { cancellationType: row.cancellation_type, refundAmount, paymentId: paymentInsertedId },
                     }),
                 });
             } catch (e) { console.warn('refund notify 실패', e); }
