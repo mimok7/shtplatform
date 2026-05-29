@@ -75,6 +75,13 @@ const REASON_OPTIONS: { value: ReasonCategory; label: string; hint: string; icon
     { value: 'other',            label: '기타',               hint: '상세 사유 필수 입력',     icon: '📝' },
 ];
 
+const CHANGE_OF_MIND_PENALTY_NOTICE =
+    '단순변심 취소 위약금 안내\n\n'
+    + '- 이용일 21~30일 전: 위약금 15%\n'
+    + '- 이용일 17~20일 전: 위약금 50%\n'
+    + '- 이용일 16일 이내: 환불 불가\n\n'
+    + '실제 환불금은 매니저 검토 후 확정됩니다.';
+
 const RE_TYPE_LABEL: Record<string, string> = {
     cruise: '크루즈', hotel: '호텔', airport: '공항', car: '차량', tour: '투어', package: '패키지',
 };
@@ -154,6 +161,13 @@ function CancelDetailContent() {
     const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
     const [currentHistoryPage, setCurrentHistoryPage] = useState(1);
     const ITEMS_PER_PAGE = 5;
+
+    const handleReasonCategoryChange = (next: ReasonCategory) => {
+        setReasonCategory(next);
+        if (next === 'change_of_mind') {
+            window.alert(CHANGE_OF_MIND_PENALTY_NOTICE);
+        }
+    };
 
     useEffect(() => {
         const init = async () => {
@@ -550,7 +564,12 @@ function CancelDetailContent() {
                                     reasonCategory === opt.value ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
                                 }`}
                             >
-                                <input type="radio" className="sr-only" checked={reasonCategory === opt.value} onChange={() => setReasonCategory(opt.value)} />
+                                <input
+                                    type="radio"
+                                    className="sr-only"
+                                    checked={reasonCategory === opt.value}
+                                    onChange={() => handleReasonCategoryChange(opt.value)}
+                                />
                                 <span className="text-xl shrink-0">{opt.icon}</span>
                                 <div className="flex-1">
                                     <div className="font-semibold text-sm">{opt.label}</div>

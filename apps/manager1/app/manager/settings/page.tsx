@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Download } from 'lucide-react';
+import ManagerLayout from '@/components/ManagerLayout';
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -66,8 +67,8 @@ export default function ManagerSettingsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 p-3">
-      <div className="mx-auto w-full max-w-md space-y-3">
+    <ManagerLayout title="설정" activeTab="settings">
+      <div className="p-3 space-y-3">
         <div className="flex items-center gap-2">
           <Link
             href="/manager/schedule/new"
@@ -94,7 +95,7 @@ export default function ManagerSettingsPage() {
               type="button"
               onClick={() => void handleInstallClick()}
               disabled={isStandalone}
-              className="w-full rounded-xl bg-blue-600 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+              className="w-fit rounded-xl bg-blue-600 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
             >
               {isStandalone ? '이미 설치됨' : '앱 설치'}
             </button>
@@ -113,6 +114,6 @@ export default function ManagerSettingsPage() {
           )}
         </section>
       </div>
-    </div>
+    </ManagerLayout>
   );
 }

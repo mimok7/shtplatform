@@ -7,7 +7,7 @@ import supabase from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { logStatusChange } from '@/lib/statusLog';
 
-type RequestStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
+type RequestStatus = 'pending' | 'approved' | 'rejected' | 'cancelled' | 'completed';
 
 type CancelRow = {
     id: string;
@@ -29,6 +29,12 @@ type CancelRow = {
     reviewed_at: string | null;
     executed_at: string | null;
     execution_summary?: any;
+    refund_amount: number | null;
+    refund_payment_id: string | null;
+    refund_completed_at: string | null;
+    refund_completed_by: string | null;
+    total_paid: number | null;
+    service_checkin: string | null;
     reservation?: { re_id: string; re_status: string | null; re_user_id: string | null; re_quote_id: string | null; re_type: string | null } | null;
     requester?: { id: string; name: string | null; email: string | null } | null;
 };
@@ -48,6 +54,15 @@ const STATUS_LABEL: Record<RequestStatus, string> = {
     approved: '승인완료',
     rejected: '반려',
     cancelled: '취소됨',
+    completed: '환불완료',
+};
+
+const STATUS_BADGE: Record<RequestStatus, string> = {
+    pending: 'bg-yellow-100 text-yellow-800',
+    approved: 'bg-green-100 text-green-800',
+    rejected: 'bg-red-100 text-red-700',
+    cancelled: 'bg-gray-100 text-gray-700',
+    completed: 'bg-emerald-100 text-emerald-800',
 };
 
 const REASON_LABEL: Record<string, string> = {
@@ -56,7 +71,7 @@ const REASON_LABEL: Record<string, string> = {
     other: '기타',
 };
 
-const SERVICE_DISPLAY_ORDER = ['cruise', 'cruise_car', 'car_sht', 'airport', 'rentcar', 'tour', 'hotel', 'ticket'];
+const SERVICE_DISPLAY_ORDER = ['cruise', 'cruise_car', 'car_sht', 'airport', 'tour', 'rentcar', 'hotel', 'ticket'];
 
 const SERVICE_META: Record<string, { name: string; icon: string; bg: string; text: string }> = {
     cruise: { name: '크루즈', icon: '🚢', bg: 'bg-blue-100', text: 'text-blue-700' },
@@ -69,8 +84,71 @@ const SERVICE_META: Record<string, { name: string; icon: string; bg: string; tex
     ticket: { name: '티켓', icon: '🎫', bg: 'bg-purple-100', text: 'text-purple-700' },
 };
 
+const SERVICE_TYPE_ALIAS: Record<string, string> = {
+    car: 'cruise_car',
+};
+
+const normalizeServiceType = (value: string | null | undefined): string => {
+    if (!value) return '';
+    return SERVICE_TYPE_ALIAS[value] || value;
+};
+
+const serviceOrderIndex = (serviceType: string): number => {
+    const idx = SERVICE_DISPLAY_ORDER.indexOf(normalizeServiceType(serviceType));
+    return idx === -1 ? 999 : idx;
+};
+
+const formatAmountInput = (value: string): string => {
+    const digits = value.replace(/[^\d]/g, '');
+    if (!digits) return '';
+    return Number(digits).toLocaleString('ko-KR');
+};
+
+const getPrimaryServiceType = (row: CancelRow): string => {
+    if (row.cancellation_type === 'full') return normalizeServiceType(row.reservation?.re_type || '');
+    const targets: Array<{ service_type: string }> = Array.isArray(row.cancel_targets)
+        ? row.cancel_targets
+        : (typeof row.cancel_targets === 'string' ? (() => { try { return JSON.parse(row.cancel_targets); } catch { return []; } })() : []);
+    const types = Array.from(new Set(targets.map((t) => normalizeServiceType(t.service_type)).filter(Boolean)));
+    types.sort((a, b) => serviceOrderIndex(a) - serviceOrderIndex(b));
+    return types[0] || '';
+};
+
 const APPROVED_VISIBLE_DAYS = 7;
 const INITIAL_VISIBLE_GROUPS = 10;
+
+type PenaltyInfo = {
+    daysUntil: number | null;
+    penaltyRate: number;
+    refundRate: number;
+    penaltyAmount: number;
+    refundAmount: number;
+    label: string;
+    cannotCancel: boolean;
+};
+
+function calcCancelFee(
+    checkinDate: string | null | undefined,
+    totalPaid: number | null | undefined,
+    reasonCategory: CancelRow['cancel_reason_category'],
+): PenaltyInfo {
+    const paid = totalPaid ?? 0;
+    if (reasonCategory === 'natural_disaster') {
+        return { daysUntil: null, penaltyRate: 0, refundRate: 1, penaltyAmount: 0, refundAmount: paid, label: '자연재해: 위약금 없음 (전액 환불)', cannotCancel: false };
+    }
+    if (!checkinDate) return { daysUntil: null, penaltyRate: 0, refundRate: 1, penaltyAmount: 0, refundAmount: paid, label: '이용일 미확인', cannotCancel: false };
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const checkin = new Date(checkinDate); checkin.setHours(0, 0, 0, 0);
+    const daysUntil = Math.floor((checkin.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    let penaltyRate: number; let label: string; let cannotCancel = false;
+    if (daysUntil > 30) { penaltyRate = 0; label = '위약금 없음 (전액 환불)'; }
+    else if (daysUntil >= 21) { penaltyRate = 0.15; label = '위약금 15% (21일전단30일전)'; }
+    else if (daysUntil >= 17) { penaltyRate = 0.5; label = '위약금 50% (17일전단20일전)'; }
+    else { penaltyRate = 1; label = '환불 불가 (16일 이내)'; cannotCancel = true; }
+    const penaltyAmount = Math.round(paid * penaltyRate);
+    const refundAmount = paid - penaltyAmount;
+    return { daysUntil, penaltyRate, refundRate: 1 - penaltyRate, penaltyAmount, refundAmount, label, cannotCancel };
+}
 const LOAD_MORE_GROUPS = 10;
 
 export default function ManagerCancelRequestsPage() {
@@ -83,6 +161,8 @@ export default function ManagerCancelRequestsPage() {
     const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
     const [processingId, setProcessingId] = useState<string | null>(null);
     const [noteDraft, setNoteDraft] = useState<Record<string, string>>({});
+    const [refundDraft, setRefundDraft] = useState<Record<string, string>>({});
+    const [refundGroupDraft, setRefundGroupDraft] = useState<Record<string, string>>({});
     const [visibleGroupCount, setVisibleGroupCount] = useState(INITIAL_VISIBLE_GROUPS);
     const [linkModalOpen, setLinkModalOpen] = useState(false);
     const [linkModalForm, setLinkModalForm] = useState<{ reservationId: string; email: string; ttlMinutes: string }>({ reservationId: '', email: '', ttlMinutes: '30' });
@@ -111,7 +191,8 @@ export default function ManagerCancelRequestsPage() {
                     refund_bank_name, refund_account_number, refund_account_holder,
                     cancellation_type, cancel_reason_category, cancel_reason_detail,
                     cancel_targets, status, result_status, manager_note,
-                    submitted_at, reviewed_at, executed_at
+                    submitted_at, reviewed_at, executed_at,
+                    refund_amount, refund_payment_id, refund_completed_at, refund_completed_by
                 `)
                 .order('submitted_at', { ascending: false })
                 .limit(200);
@@ -126,17 +207,47 @@ export default function ManagerCancelRequestsPage() {
             const reservationIds = Array.from(new Set(baseRows.map((row) => row.reservation_id).filter(Boolean)));
             const requesterIds = Array.from(new Set(baseRows.map((row) => row.requester_user_id).filter(Boolean))) as string[];
 
-            const [reservationRes, requesterRes] = await Promise.all([
+            const [reservationRes, requesterRes, cruiseRes, cruiseCarRes, rentcarRes, carShtRes, airportRes, hotelRes] = await Promise.all([
                 reservationIds.length
-                    ? supabase.from('reservation').select('re_id, re_status, re_user_id, re_quote_id, re_type').in('re_id', reservationIds)
+                    ? supabase.from('reservation').select('re_id, re_status, re_user_id, re_quote_id, re_type, total_amount').in('re_id', reservationIds)
                     : Promise.resolve({ data: [], error: null } as any),
                 requesterIds.length
                     ? supabase.from('users').select('id, name, email').in('id', requesterIds)
+                    : Promise.resolve({ data: [], error: null } as any),
+                reservationIds.length
+                    ? supabase.from('reservation_cruise').select('reservation_id, checkin').in('reservation_id', reservationIds)
+                    : Promise.resolve({ data: [], error: null } as any),
+                reservationIds.length
+                    ? supabase.from('reservation_cruise_car').select('reservation_id, pickup_datetime').in('reservation_id', reservationIds)
+                    : Promise.resolve({ data: [], error: null } as any),
+                reservationIds.length
+                    ? supabase.from('reservation_rentcar').select('reservation_id, pickup_datetime').in('reservation_id', reservationIds)
+                    : Promise.resolve({ data: [], error: null } as any),
+                reservationIds.length
+                    ? supabase.from('reservation_car_sht').select('reservation_id, usage_date, pickup_datetime').in('reservation_id', reservationIds)
+                    : Promise.resolve({ data: [], error: null } as any),
+                reservationIds.length
+                    ? supabase.from('reservation_airport').select('reservation_id, ra_datetime').in('reservation_id', reservationIds)
+                    : Promise.resolve({ data: [], error: null } as any),
+                reservationIds.length
+                    ? supabase.from('reservation_hotel').select('reservation_id, checkin_date').in('reservation_id', reservationIds)
                     : Promise.resolve({ data: [], error: null } as any),
             ]);
 
             if (reservationRes.error) throw reservationRes.error;
             if (requesterRes.error) throw requesterRes.error;
+
+            // 이용일: 서비스별 날짜 컴하 통합
+            const checkinMap = new Map<string, string>();
+            const setCheckin = (reservation_id: string, dateVal: string | null | undefined) => {
+                if (!checkinMap.has(reservation_id) && dateVal) checkinMap.set(reservation_id, dateVal.slice(0, 10));
+            };
+            for (const c of (cruiseRes.data || [])) setCheckin(c.reservation_id, c.checkin);
+            for (const c of (cruiseCarRes.data || [])) setCheckin(c.reservation_id, c.pickup_datetime);
+            for (const r of (rentcarRes.data || [])) setCheckin(r.reservation_id, r.pickup_datetime);
+            for (const c of (carShtRes.data || [])) setCheckin(c.reservation_id, c.usage_date || c.pickup_datetime);
+            for (const a of (airportRes.data || [])) setCheckin(a.reservation_id, a.ra_datetime);
+            for (const h of (hotelRes.data || [])) setCheckin(h.reservation_id, h.checkin_date);
 
             const reservationMap = new Map((reservationRes.data || []).map((item: any) => [item.re_id, item]));
             const requesterMap = new Map((requesterRes.data || []).map((item: any) => [item.id, item]));
@@ -152,16 +263,21 @@ export default function ManagerCancelRequestsPage() {
                 : { data: [], error: null };
             const reservationUserMap = new Map(((reservationUserRes as any).data || []).map((item: any) => [item.id, item]));
 
-            const merged = baseRows.map((row) => ({
-                ...row,
-                reservation: row.reservation_id ? (reservationMap.get(row.reservation_id) as any) || null : null,
-                requester: row.requester_user_id
-                    ? (requesterMap.get(row.requester_user_id) as any) || null
-                    : (() => {
-                        const reUserId = row.reservation_id ? (reservationMap.get(row.reservation_id) as any)?.re_user_id : null;
-                        return reUserId ? (reservationUserMap.get(reUserId) as any) || null : null;
-                    })(),
-            }));
+            const merged = baseRows.map((row) => {
+                const res = row.reservation_id ? (reservationMap.get(row.reservation_id) as any) || null : null;
+                return {
+                    ...row,
+                    total_paid: res?.total_amount != null ? Number(res.total_amount) : null,
+                    service_checkin: checkinMap.get(row.reservation_id) ?? null,
+                    reservation: res,
+                    requester: row.requester_user_id
+                        ? (requesterMap.get(row.requester_user_id) as any) || null
+                        : (() => {
+                            const reUserId = res?.re_user_id ?? null;
+                            return reUserId ? (reservationUserMap.get(reUserId) as any) || null : null;
+                        })(),
+                };
+            });
 
             setRows(merged as CancelRow[]);
         } catch (err: any) {
@@ -280,11 +396,11 @@ export default function ManagerCancelRequestsPage() {
     };
 
     const filteredRows = useMemo(() => {
-        if (statusFilter !== 'approved') return rows;
+        if (statusFilter !== 'approved' && statusFilter !== 'completed') return rows;
         const now = Date.now();
         const limitMs = APPROVED_VISIBLE_DAYS * 24 * 60 * 60 * 1000;
         return rows.filter((row) => {
-            const baseDate = row.executed_at || row.reviewed_at || row.submitted_at;
+            const baseDate = row.refund_completed_at || row.executed_at || row.reviewed_at || row.submitted_at;
             if (!baseDate) return false;
             const ts = new Date(baseDate).getTime();
             if (Number.isNaN(ts)) return false;
@@ -333,7 +449,11 @@ export default function ManagerCancelRequestsPage() {
 
         return Array.from(map.values()).map((group) => ({
             ...group,
-            rows: group.rows.sort((a, b) => new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime()),
+            rows: group.rows.sort((a, b) => {
+                const orderDiff = serviceOrderIndex(getPrimaryServiceType(a)) - serviceOrderIndex(getPrimaryServiceType(b));
+                if (orderDiff !== 0) return orderDiff;
+                return new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime();
+            }),
         }));
     }, [filteredRows]);
 
@@ -344,7 +464,7 @@ export default function ManagerCancelRequestsPage() {
 
     const getServiceInfo = (row: CancelRow): Array<{ type: string; name: string; icon: string; bg: string; text: string }> => {
         if (row.cancellation_type === 'full') {
-            const reType = row.reservation?.re_type || null;
+            const reType = normalizeServiceType(row.reservation?.re_type || null);
             if (reType) {
                 const meta = SERVICE_META[reType] || { name: reType, icon: '📦', bg: 'bg-gray-100', text: 'text-gray-700' };
                 return [{ type: reType, ...meta }];
@@ -354,7 +474,7 @@ export default function ManagerCancelRequestsPage() {
         const targets: Array<{ service_type: string; row_id: string; label?: string }> = Array.isArray(row.cancel_targets)
             ? row.cancel_targets
             : (typeof row.cancel_targets === 'string' ? (() => { try { return JSON.parse(row.cancel_targets); } catch { return []; } })() : []);
-        const serviceTypes = Array.from(new Set(targets.map((t) => t.service_type).filter(Boolean)));
+        const serviceTypes = Array.from(new Set(targets.map((t) => normalizeServiceType(t.service_type)).filter(Boolean)));
         const orderedTypes = serviceTypes.sort((a, b) => SERVICE_DISPLAY_ORDER.indexOf(a) - SERVICE_DISPLAY_ORDER.indexOf(b));
         return orderedTypes.map((serviceType) => {
             const meta = SERVICE_META[serviceType] || { name: serviceType, icon: '📦', bg: 'bg-gray-100', text: 'text-gray-700' };
@@ -384,6 +504,69 @@ export default function ManagerCancelRequestsPage() {
         }
         await fetchRows();
         alert(`전체 승인 완료: ${successCount}/${pendingRows.length}건`);
+    };
+
+    const applyRefundCompleteByGroup = async (groupKey: string) => {
+        const group = groupedRows.find((item) => item.key === groupKey);
+        if (!group) return;
+        const approvedRows = group.rows.filter((row) => row.status === 'approved');
+        if (approvedRows.length === 0) {
+            alert('합산 환불 처리할 승인 건이 없습니다.');
+            return;
+        }
+
+        const suggestedAmounts = approvedRows.map((row) => {
+            const penalty = calcCancelFee(row.service_checkin, row.total_paid, row.cancel_reason_category);
+            if (penalty.cannotCancel || row.total_paid == null) return 0;
+            return penalty.refundAmount;
+        });
+        const suggestedTotal = suggestedAmounts.reduce((acc, cur) => acc + cur, 0);
+        const input = refundGroupDraft[group.key] ?? '';
+        const targetTotal = input ? Number(input.replace(/[,\s]/g, '')) : suggestedTotal;
+        if (!Number.isFinite(targetTotal) || targetTotal < 0) {
+            alert('합산 환불 금액이 올바르지 않습니다.');
+            return;
+        }
+        if (!confirm(`승인 ${approvedRows.length}건을 합산 환불 ${targetTotal.toLocaleString('ko-KR')}원으로 완료 처리합니까?`)) return;
+
+        const allocated: number[] = [];
+        if (suggestedTotal > 0) {
+            let running = 0;
+            approvedRows.forEach((_, idx) => {
+                if (idx === approvedRows.length - 1) {
+                    allocated.push(Math.max(0, targetTotal - running));
+                    return;
+                }
+                const amount = Math.round((suggestedAmounts[idx] / suggestedTotal) * targetTotal);
+                allocated.push(amount);
+                running += amount;
+            });
+        } else {
+            const base = Math.floor(targetTotal / approvedRows.length);
+            let remain = targetTotal - base * approvedRows.length;
+            approvedRows.forEach(() => {
+                const plus = remain > 0 ? 1 : 0;
+                allocated.push(base + plus);
+                if (remain > 0) remain -= 1;
+            });
+        }
+
+        let successCount = 0;
+        for (let i = 0; i < approvedRows.length; i += 1) {
+            try {
+                await applyRefundComplete(approvedRows[i], {
+                    confirmAction: false,
+                    refreshAfter: false,
+                    silent: true,
+                    refundAmountOverride: allocated[i],
+                });
+                successCount += 1;
+            } catch {
+                // 개별 실패는 applyRefundComplete 내부에서 알림
+            }
+        }
+        await fetchRows();
+        alert(`합산 환불 완료: ${successCount}/${approvedRows.length}건`);
     };
 
     const applyReject = async (row: CancelRow) => {
@@ -436,6 +619,91 @@ export default function ManagerCancelRequestsPage() {
         }
     };
 
+    const applyRefundComplete = async (
+        row: CancelRow,
+        options?: { confirmAction?: boolean; refreshAfter?: boolean; silent?: boolean; refundAmountOverride?: number },
+    ) => {
+        const confirmAction = options?.confirmAction ?? true;
+        const refreshAfter = options?.refreshAfter ?? true;
+        const silent = options?.silent ?? false;
+        if (!user?.id) return;
+        if (row.status !== 'approved') {
+            alert('승인 상태인 요청만 환불 완료 처리할 수 있습니다.');
+            return;
+        }
+
+        let refundAmount: number | null = options?.refundAmountOverride ?? null;
+        if (refundAmount == null) {
+            const input = refundDraft[row.id] ?? '';
+            const parsed = Number(String(input).replace(/[,\s]/g, ''));
+            if (!Number.isFinite(parsed) || parsed < 0) {
+                alert('카드 내 환불 금액 입력칸에 유효한 금액을 입력해 주세요.');
+                return;
+            }
+            refundAmount = parsed;
+        }
+
+        if (confirmAction && !confirm(`환불 ${refundAmount.toLocaleString('ko-KR')}원을 완료 처리합니까?`)) return;
+
+        setProcessingId(row.id);
+        try {
+            // 1) reservation_payments 환불 행 INSERT
+            const { data: paymentInserted, error: payErr } = await supabase
+                .from('reservation_payments')
+                .insert({
+                    reservation_id: row.reservation_id,
+                    payment_type: 'refund',
+                    payment_amount: refundAmount,
+                    payment_date: new Date().toISOString().slice(0, 10),
+                    payment_status: 'completed',
+                    payment_method: row.refund_bank_name ? 'bank' : null,
+                    notes: `[취소환불] ${REASON_LABEL[row.cancel_reason_category]} / 신청 ${row.id.slice(0, 8)}`,
+                    created_by: user.id,
+                })
+                .select('id')
+                .single();
+            if (payErr) throw payErr;
+
+            // 2) reservation_cancellation_request 업데이트
+            const { error: updErr } = await supabase
+                .from('reservation_cancellation_request')
+                .update({
+                    status: 'completed',
+                    result_status: 'refunded',
+                    refund_amount: refundAmount,
+                    refund_payment_id: paymentInserted?.id ?? null,
+                    refund_completed_at: new Date().toISOString(),
+                    refund_completed_by: user.id,
+                })
+                .eq('id', row.id);
+            if (updErr) throw updErr;
+
+            // 3) 알림 발송
+            try {
+                await fetch('/api/cancel-notify', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        subcategory: 'cancellation_refunded',
+                        reservationId: row.reservation_id,
+                        title: '예약 취소 환불 완료',
+                        message: `환불 ${refundAmount.toLocaleString('ko-KR')}원이 완료 처리되었습니다.`,
+                        createdBy: user.id,
+                        metadata: { cancellationType: row.cancellation_type, refundAmount, paymentId: paymentInserted?.id ?? null },
+                    }),
+                });
+            } catch (notifyErr) { console.warn('[cancel-requests] refund notify 실패', notifyErr); }
+
+            if (!silent) alert('환불 완료 처리했습니다.');
+            setRefundDraft((prev) => ({ ...prev, [row.id]: '' }));
+            if (refreshAfter) await fetchRows();
+        } catch (err: any) {
+            console.error('[cancel-requests] 환불 완료 실패', err);
+            alert(err?.message || '환불 완료 처리에 실패했습니다.');
+        } finally {
+            setProcessingId(null);
+        }
+    };
+
     const issueCancelLink = async () => {
         setLinkLoading(true);
         setLinkError(null);
@@ -480,7 +748,7 @@ export default function ManagerCancelRequestsPage() {
     };
 
     const summary = useMemo(() => {
-        const counts: Record<RequestStatus | 'total', number> = { pending: 0, approved: 0, rejected: 0, cancelled: 0, total: filteredRows.length };
+        const counts: Record<RequestStatus | 'total', number> = { pending: 0, approved: 0, rejected: 0, cancelled: 0, completed: 0, total: filteredRows.length };
         filteredRows.forEach((row) => { counts[row.status] = (counts[row.status] || 0) + 1; });
         return counts;
     }, [filteredRows]);
@@ -515,7 +783,7 @@ export default function ManagerCancelRequestsPage() {
     return (
         <ManagerLayout title="예약 취소 요청 관리" activeTab="cancel-requests">
             <div className="p-3 md:p-4 space-y-2">
-                <p className="text-xs text-gray-600">대기 {summary.pending} · 승인 {summary.approved} · 반려 {summary.rejected} · 전체 {summary.total}</p>
+                <p className="text-xs text-gray-600">대기 {summary.pending} · 승인 {summary.approved} · 환불완료 {summary.completed} · 반려 {summary.rejected} · 전체 {summary.total}</p>
 
                 <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
                     <div className="rounded-lg border bg-white p-2">
@@ -524,6 +792,7 @@ export default function ManagerCancelRequestsPage() {
                             {([
                                 { key: 'pending', label: '대기' },
                                 { key: 'approved', label: '승인' },
+                                { key: 'completed', label: '환불완료' },
                                 { key: 'rejected', label: '반려' },
                                 { key: 'cancelled', label: '취소됨' },
                                 { key: 'all', label: '전체' },
@@ -591,6 +860,17 @@ export default function ManagerCancelRequestsPage() {
                             <div className="space-y-2">
                                 {visibleGroupedRows.map((group) => {
                                     const pendingCount = group.rows.filter((row) => row.status === 'pending').length;
+                                    const approvedRows = group.rows.filter((row) => row.status === 'approved');
+                                    const groupTotalPaid = group.rows.reduce((acc, row) => acc + Number(row.total_paid || 0), 0);
+                                    const groupExpectedRefund = approvedRows.reduce((acc, row) => {
+                                        const penalty = calcCancelFee(row.service_checkin, row.total_paid, row.cancel_reason_category);
+                                        if (penalty.cannotCancel || row.total_paid == null) return acc;
+                                        return acc + penalty.refundAmount;
+                                    }, 0);
+                                    const groupCompletedRefund = group.rows.reduce((acc, row) => {
+                                        if (row.status !== 'completed') return acc;
+                                        return acc + Number(row.refund_amount || 0);
+                                    }, 0);
                                     return (
                                         <div key={group.key} className="rounded border border-blue-200 bg-blue-50 p-2">
                                             <div className="flex items-center justify-between gap-2">
@@ -603,26 +883,59 @@ export default function ManagerCancelRequestsPage() {
                                                 <p>환불은행: {group.refundBankName || '-'}</p>
                                                 <p>계좌번호: {group.refundAccountNumber || '-'}</p>
                                                 <p>예금주: {group.refundAccountHolder || '-'}</p>
+                                                <p>예약금액 합계: {groupTotalPaid.toLocaleString('ko-KR')}원</p>
+                                                <p className="text-blue-700 font-semibold">예상환불 합계(승인): {groupExpectedRefund.toLocaleString('ko-KR')}원</p>
+                                                <p className="text-emerald-700">완료환불 합계: {groupCompletedRefund.toLocaleString('ko-KR')}원</p>
                                             </div>
-                                            {pendingCount > 0 && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => applyApproveByRequester(group.key)}
-                                                    disabled={processingId !== null}
-                                                    className="mt-2 rounded bg-blue-600 px-3 py-1 text-xs text-white disabled:opacity-50"
-                                                >
-                                                    견적 전체 승인
-                                                </button>
-                                            )}
-                                            <div className="mt-2 grid gap-2 md:grid-cols-2">
+                                            <div className="mt-2 flex flex-wrap items-center gap-2">
+                                                {pendingCount > 0 && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => applyApproveByRequester(group.key)}
+                                                        disabled={processingId !== null}
+                                                        className="rounded bg-blue-600 px-3 py-1 text-xs text-white disabled:opacity-50"
+                                                    >
+                                                        견적 전체 승인
+                                                    </button>
+                                                )}
+                                                {approvedRows.length > 0 && (
+                                                    <>
+                                                        <input
+                                                            type="text"
+                                                            value={refundGroupDraft[group.key] ?? ''}
+                                                            onChange={(e) => setRefundGroupDraft((prev) => ({ ...prev, [group.key]: formatAmountInput(e.target.value) }))}
+                                                            placeholder="합산 환불금액"
+                                                            className="w-32 rounded border border-emerald-300 bg-white px-2 py-1 text-xs"
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setRefundGroupDraft((prev) => ({ ...prev, [group.key]: Number(groupExpectedRefund).toLocaleString('ko-KR') }))}
+                                                            disabled={processingId !== null}
+                                                            className="rounded border border-emerald-400 bg-white px-2 py-1 text-[11px] text-emerald-700 disabled:opacity-50"
+                                                        >
+                                                            합산 예상금액 가져오기
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => void applyRefundCompleteByGroup(group.key)}
+                                                            disabled={processingId !== null}
+                                                            className="rounded bg-emerald-600 px-3 py-1 text-xs text-white disabled:opacity-50"
+                                                        >
+                                                            합산 완료 처리
+                                                        </button>
+                                                    </>
+                                                )}
+                                            </div>
+                                            <div className="mt-2 grid gap-2 md:grid-cols-3">
                                                 {group.rows.map((row) => {
                                                     const serviceInfos = getServiceInfo(row);
+                                                    const canRefund = row.status === 'approved';
+                                                    const penalty = calcCancelFee(row.service_checkin, row.total_paid, row.cancel_reason_category);
                                                     return (
-                                                        <button
+                                                        <div
                                                             key={row.id}
-                                                            type="button"
                                                             onClick={() => setSelectedRowId(row.id)}
-                                                            className={`w-full rounded border px-3 py-2 text-left text-sm transition ${selectedRowId === row.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:bg-gray-50'}`}
+                                                            className={`w-full rounded border px-3 py-2 text-left text-sm transition cursor-pointer ${selectedRowId === row.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:bg-gray-50'}`}
                                                         >
                                                             {serviceInfos.length > 0 && (
                                                                 <div className="mb-1.5 flex flex-wrap gap-1">
@@ -635,7 +948,7 @@ export default function ManagerCancelRequestsPage() {
                                                                 </div>
                                                             )}
                                                             <div className="flex flex-wrap items-center gap-2">
-                                                                <span className={`rounded px-2 py-0.5 text-xs ${row.status === 'pending' ? 'bg-yellow-100 text-yellow-800' : row.status === 'approved' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-700'}`}>
+                                                                <span className={`rounded px-2 py-0.5 text-xs ${STATUS_BADGE[row.status]}`}>
                                                                     {STATUS_LABEL[row.status]}
                                                                 </span>
                                                                 <span className="rounded bg-purple-100 px-2 py-0.5 text-xs text-purple-800">
@@ -645,8 +958,65 @@ export default function ManagerCancelRequestsPage() {
                                                             </div>
                                                             <div className="mt-1 text-xs text-gray-700">
                                                                 유형: {row.cancellation_type === 'full' ? '전체' : '부분'}
+                                                                {row.status === 'completed' && row.refund_amount != null && (
+                                                                    <span className="ml-2 text-emerald-700 font-medium">· 환불: {Number(row.refund_amount).toLocaleString('ko-KR')}원</span>
+                                                                )}
                                                             </div>
-                                                        </button>
+                                                            <div className="mt-1.5 rounded bg-gray-50 px-2 py-1.5 text-xs space-y-0.5 border border-gray-100">
+                                                                <p className="text-gray-600">
+                                                                    이용일: {row.service_checkin || <span className="text-gray-400">미확인</span>}
+                                                                    {penalty.daysUntil != null && (
+                                                                        <span className={`ml-1 font-semibold ${penalty.daysUntil < 0 ? 'text-gray-400' : penalty.cannotCancel ? 'text-red-600' : penalty.penaltyRate > 0 ? 'text-orange-600' : 'text-green-700'}`}>
+                                                                            ({penalty.daysUntil < 0 ? `D+${Math.abs(penalty.daysUntil)}` : `D-${penalty.daysUntil}`})
+                                                                        </span>
+                                                                    )}
+                                                                </p>
+                                                                <p className="text-gray-700">예약금액: <span className="font-semibold">{row.total_paid != null ? row.total_paid.toLocaleString('ko-KR') + '원' : <span className="text-gray-400">미확인</span>}</span></p>
+                                                                <p className={penalty.cannotCancel ? 'text-red-600 font-semibold' : penalty.penaltyRate > 0 ? 'text-orange-600 font-medium' : 'text-green-700'}>
+                                                                    취소정책: {penalty.label}
+                                                                    {penalty.penaltyRate > 0 && !penalty.cannotCancel && row.total_paid != null && (
+                                                                        <span> (위약금 {penalty.penaltyAmount.toLocaleString('ko-KR')}원)</span>
+                                                                    )}
+                                                                </p>
+                                                                {!penalty.cannotCancel && row.total_paid != null && (
+                                                                    <p className="text-blue-700 font-semibold">환불예상: {penalty.refundAmount.toLocaleString('ko-KR')}원</p>
+                                                                )}
+                                                            </div>
+                                                            {canRefund && (
+                                                                <div className="mt-2 rounded border border-emerald-200 bg-emerald-50 p-2">
+                                                                    <div className="flex items-center gap-2 flex-nowrap">
+                                                                        <input
+                                                                            type="text"
+                                                                            value={refundDraft[row.id] ?? ''}
+                                                                            onClick={(e) => e.stopPropagation()}
+                                                                            onChange={(e) => setRefundDraft((prev) => ({ ...prev, [row.id]: formatAmountInput(e.target.value) }))}
+                                                                            placeholder={row.total_paid != null ? `예: ${penalty.refundAmount.toLocaleString('ko-KR')}` : '환불 금액 입력'}
+                                                                            className="w-28 rounded border border-emerald-300 bg-white px-2 py-1 text-xs"
+                                                                        />
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                if (row.total_paid == null) return;
+                                                                                setRefundDraft((prev) => ({ ...prev, [row.id]: Number(penalty.refundAmount).toLocaleString('ko-KR') }));
+                                                                            }}
+                                                                            disabled={row.total_paid == null || processingId !== null}
+                                                                            className="shrink-0 rounded border border-emerald-400 bg-white px-2 py-1 text-[11px] text-emerald-700 disabled:opacity-50"
+                                                                        >
+                                                                            예상금액 가져오기
+                                                                        </button>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={(e) => { e.stopPropagation(); void applyRefundComplete(row); }}
+                                                                            disabled={processingId !== null}
+                                                                            className="rounded bg-emerald-600 px-3 py-1 text-xs text-white disabled:opacity-50"
+                                                                        >
+                                                                            완료 처리
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                     );
                                                 })}
                                             </div>
@@ -665,86 +1035,6 @@ export default function ManagerCancelRequestsPage() {
                                     </div>
                                 )}
                             </div>
-
-                            {selectedRow && (() => {
-                                const targets = Array.isArray(selectedRow.cancel_targets) ? selectedRow.cancel_targets : [];
-                                return (
-                                    <div className="rounded border p-3 text-sm space-y-2">
-                                        <div className="flex flex-wrap items-center gap-2">
-                                            <span className={`rounded px-2 py-0.5 text-xs ${selectedRow.status === 'pending' ? 'bg-yellow-100 text-yellow-800' : selectedRow.status === 'approved' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-700'}`}>
-                                                {STATUS_LABEL[selectedRow.status]} / {selectedRow.result_status}
-                                            </span>
-                                            <span className="rounded bg-purple-100 px-2 py-0.5 text-xs text-purple-800">
-                                                사유: {REASON_LABEL[selectedRow.cancel_reason_category]}
-                                            </span>
-                                            <span className="text-xs text-gray-500">유형: {selectedRow.cancellation_type === 'full' ? '전체' : '부분'}</span>
-                                        </div>
-                                        <div>
-                                            <strong>예약 ID:</strong> {selectedRow.reservation_id}
-                                            <span className="ml-2 text-gray-500">(현재 상태: {selectedRow.reservation?.re_status || '-'})</span>
-                                        </div>
-                                        <div>
-                                            <strong>신청자:</strong> {selectedRow.requester?.name || '-'} ({selectedRow.requester?.email || selectedRow.requester_email || '-'})
-                                        </div>
-                                        <div>
-                                            <strong>신청자 연락처:</strong> {selectedRow.requester_phone || '-'}
-                                        </div>
-                                        <div>
-                                            <strong>환불 은행명:</strong> {selectedRow.refund_bank_name || '-'}
-                                        </div>
-                                        <div>
-                                            <strong>환불 계좌번호:</strong> {selectedRow.refund_account_number || '-'}
-                                        </div>
-                                        <div>
-                                            <strong>환불 예금주:</strong> {selectedRow.refund_account_holder || '-'}
-                                        </div>
-                                        <div>
-                                            <strong>상세 사유:</strong> {selectedRow.cancel_reason_detail || '-'}
-                                        </div>
-                                        {selectedRow.cancellation_type === 'partial' && (
-                                            <div>
-                                                <strong>대상:</strong>
-                                                <ul className="ml-4 list-disc">
-                                                    {targets.map((target: any, idx: number) => (
-                                                        <li key={idx}>[{target.service_type}] {target.label || target.row_id}</li>
-                                                    ))}
-                                                </ul>
-                                            </div>
-                                        )}
-                                        <div>
-                                            <label className="block text-xs text-gray-500">매니저 메모(저장됨: {selectedRow.manager_note || '-'})</label>
-                                            <textarea
-                                                className="mt-1 w-full rounded border p-2 text-sm"
-                                                rows={2}
-                                                placeholder="승인/반려 시 기록할 메모"
-                                                value={noteDraft[selectedRow.id] ?? ''}
-                                                onChange={(e) => setNoteDraft((prev) => ({ ...prev, [selectedRow.id]: e.target.value }))}
-                                            />
-                                        </div>
-                                        {selectedRow.status === 'pending' && (
-                                            <div className="flex gap-2">
-                                                <button
-                                                    onClick={() => applyApprove(selectedRow)}
-                                                    disabled={processingId === selectedRow.id}
-                                                    className="rounded bg-blue-600 px-3 py-1 text-sm text-white disabled:opacity-50"
-                                                >
-                                                    승인 (취소 실행)
-                                                </button>
-                                                <button
-                                                    onClick={() => applyReject(selectedRow)}
-                                                    disabled={processingId === selectedRow.id}
-                                                    className="rounded bg-gray-600 px-3 py-1 text-sm text-white disabled:opacity-50"
-                                                >
-                                                    반려
-                                                </button>
-                                            </div>
-                                        )}
-                                        {selectedRow.execution_summary && (
-                                            <pre className="rounded bg-gray-50 p-2 text-xs text-gray-700">{JSON.stringify(selectedRow.execution_summary, null, 2)}</pre>
-                                        )}
-                                    </div>
-                                );
-                            })()}
                         </div>
                     )}
                 </SectionBox>
