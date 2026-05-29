@@ -185,6 +185,8 @@ interface SHRCReservation {
   email: string;
 }
 
+const SCHEDULE_VISIBLE_STATUSES = ['approved', 'confirmed'] as const;
+
 export default function ManagerSchedulePage() {
   const [schedules, setSchedules] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1830,6 +1832,7 @@ export default function ManagerSchedulePage() {
           () => supabase
             .from('reservation')
             .select('re_id, re_type, re_status, re_user_id')
+            .in('re_status', [...SCHEDULE_VISIBLE_STATUSES])
             .neq('re_type', 'car_sht')
             .order('re_created_at', { ascending: false }),
           200000
@@ -2209,6 +2212,7 @@ export default function ManagerSchedulePage() {
           .from('reservation')
           .select('re_id, re_type, re_status, re_user_id')
           .in('re_id', chunk)
+          .in('re_status', [...SCHEDULE_VISIBLE_STATUSES])
           .neq('re_type', 'car_sht');
         if (error) {
           console.error('reservation 청크 조회 실패:', error);

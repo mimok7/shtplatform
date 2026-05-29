@@ -172,6 +172,13 @@ export default function ManagerSidebar({ activeTab, userEmail, onLogout, userRol
               onClick={() => handleNavigation('/manager/notifications')}
             />
             <NavItem
+              icon="🚫"
+              label="취소 요청"
+              path="/manager/cancel-requests"
+              isActive={isActiveTab('cancel-requests')}
+              onClick={() => handleNavigation('/manager/cancel-requests')}
+            />
+            <NavItem
               icon="📲"
               label="앱 설정"
               path="/manager/settings"

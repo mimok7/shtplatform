@@ -23,7 +23,6 @@ const SERVICE_TABLES: Record<string, ServiceConfig> = {
         getDate: (r) => r.checkin,
         toLabel: (r) => `크루즈 승선 ${fmt(r.checkin)} / ${r.room_price_code || '-'} / 성인 ${r.adult_count ?? r.guest_count ?? '-'}명`,
         toDetail: (r) => ({
-            '룸 코드': r.room_price_code || '-',
             '승선일': fmt(r.checkin),
             '성인': `${r.adult_count ?? r.guest_count ?? '-'}명`,
             '아동': r.child_count ? `${r.child_count}명` : '-',
@@ -76,7 +75,7 @@ const SERVICE_TABLES: Record<string, ServiceConfig> = {
         getDate: (r) => r.pickup_datetime,
         toLabel: (r) => `렌터카 ${fmt(r.pickup_datetime, 10)} ~ ${fmt(r.return_datetime, 10)} / ${r.pickup_location || '-'}`,
         toDetail: (r) => ({
-            '픽업일시': fmt(r.pickup_datetime, 16),
+            '픽업일': fmt(r.pickup_datetime, 10),
             '반납일': fmt(r.return_datetime, 10),
             '픽업장소': r.pickup_location || '-',
             '인원': r.passenger_count ? `${r.passenger_count}명` : '-',
@@ -110,6 +109,8 @@ const SERVICE_TABLES: Record<string, ServiceConfig> = {
         }),
     },
 };
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export async function POST(req: NextRequest) {
     try {
@@ -180,18 +181,106 @@ export async function POST(req: NextRequest) {
             }),
         );
 
+        const cruiseRows = (serviceResults.find((r) => r.serviceType === 'cruise')?.rows || []) as any[];
+        const cruiseCarRows = (serviceResults.find((r) => r.serviceType === 'cruise_car')?.rows || []) as any[];
+        const shtCarRows = (serviceResults.find((r) => r.serviceType === 'car_sht')?.rows || []) as any[];
+        const rentcarRows = (serviceResults.find((r) => r.serviceType === 'rentcar')?.rows || []) as any[];
+
+        const roomCodes = Array.from(new Set(cruiseRows.map((row: any) => String(row.room_price_code || '').trim()).filter(Boolean)));
+        const uuidRoomCodes = roomCodes.filter((code) => UUID_REGEX.test(code));
+
+        const vehicleCodes = Array.from(new Set([
+            ...cruiseCarRows.map((row: any) => String(row.car_price_code || '').trim()),
+            ...shtCarRows.map((row: any) => String(row.car_price_code || '').trim()),
+            ...rentcarRows.map((row: any) => String(row.rentcar_price_code || '').trim()),
+        ].filter(Boolean)));
+
+        const [roomByIdRes, roomByTypeRes, carPriceRes, rentcarPriceRes] = await Promise.all([
+            uuidRoomCodes.length > 0
+                ? supabase.from('cruise_rate_card').select('id, cruise_name, room_type').in('id', uuidRoomCodes)
+                : Promise.resolve({ data: [], error: null } as any),
+            roomCodes.length > 0
+                ? supabase.from('cruise_rate_card').select('id, cruise_name, room_type').in('room_type', roomCodes)
+                : Promise.resolve({ data: [], error: null } as any),
+            vehicleCodes.length > 0
+                ? supabase.from('car_price').select('car_code, car_type').in('car_code', vehicleCodes)
+                : Promise.resolve({ data: [], error: null } as any),
+            vehicleCodes.length > 0
+                ? supabase.from('rentcar_price').select('rent_code, vehicle_type').in('rent_code', vehicleCodes)
+                : Promise.resolve({ data: [], error: null } as any),
+        ]);
+
+        const roomInfoByCode = new Map<string, { cruiseName?: string; roomName?: string }>();
+        for (const row of ([...(roomByIdRes.data || []), ...(roomByTypeRes.data || [])] as any[])) {
+            const byId = String(row.id || '').trim();
+            const byRoomType = String(row.room_type || '').trim();
+            const info = {
+                cruiseName: row.cruise_name || undefined,
+                roomName: row.room_type || undefined,
+            };
+            if (byId && !roomInfoByCode.has(byId)) roomInfoByCode.set(byId, info);
+            if (byRoomType && !roomInfoByCode.has(byRoomType)) roomInfoByCode.set(byRoomType, info);
+        }
+
+        const vehicleNameByCode = new Map<string, string>();
+        for (const row of (rentcarPriceRes.data || []) as any[]) {
+            const code = String(row.rent_code || '').trim();
+            const name = String(row.vehicle_type || '').trim();
+            if (code && name && !vehicleNameByCode.has(code)) vehicleNameByCode.set(code, name);
+        }
+        for (const row of (carPriceRes.data || []) as any[]) {
+            const code = String(row.car_code || '').trim();
+            const name = String(row.car_type || '').trim();
+            if (code && name && !vehicleNameByCode.has(code)) vehicleNameByCode.set(code, name);
+        }
+
         // 예약 ID별 서비스 targets 매핑
         const targetsByResv: Record<string, any[]> = {};
         for (const { serviceType, config, rows } of serviceResults) {
             for (const row of rows) {
                 const resvId = row.reservation_id;
                 if (!targetsByResv[resvId]) targetsByResv[resvId] = [];
+
+                let label = config.toLabel(row);
+                let detail = config.toDetail(row);
+
+                if (serviceType === 'cruise') {
+                    const code = String(row.room_price_code || '').trim();
+                    const roomInfo = roomInfoByCode.get(code);
+                    const cruiseName = roomInfo?.cruiseName || '-';
+                    const roomName = roomInfo?.roomName || '-';
+                    label = `${cruiseName} / ${roomName} / 승선 ${fmt(row.checkin)}`;
+                    detail = {
+                        '크루즈명': cruiseName,
+                        '객실명': roomName,
+                        ...detail,
+                    };
+                }
+
+                if (serviceType === 'cruise_car' || serviceType === 'car_sht') {
+                    const code = String(row.car_price_code || '').trim();
+                    const vehicleName = vehicleNameByCode.get(code) || String(row.vehicle_type || '').trim() || '-';
+                    detail = {
+                        '차량명': vehicleName,
+                        ...detail,
+                    };
+                }
+
+                if (serviceType === 'rentcar') {
+                    const code = String(row.rentcar_price_code || '').trim();
+                    const vehicleName = vehicleNameByCode.get(code) || '-';
+                    detail = {
+                        '차량명': vehicleName,
+                        ...detail,
+                    };
+                }
+
                 targetsByResv[resvId].push({
                     serviceType,
                     rowId: row.id,
                     reservationId: resvId,
-                    label: config.toLabel(row),
-                    detail: config.toDetail(row),
+                    label,
+                    detail,
                     isPast: isDatePast(config.getDate(row)),
                 });
             }
@@ -219,7 +308,7 @@ export async function POST(req: NextRequest) {
         // 취소 신청 이력
         const { data: requests } = await supabase
             .from('reservation_cancellation_request')
-            .select('id, reservation_id, status, result_status, cancellation_type, cancel_reason_category, submitted_at')
+            .select('id, reservation_id, status, result_status, cancellation_type, cancel_reason_category, cancel_targets, submitted_at')
             .in('reservation_id', allIds)
             .order('submitted_at', { ascending: false })
             .limit(20);

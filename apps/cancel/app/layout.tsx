@@ -1,6 +1,7 @@
 import './../styles/globals.css';
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import HeaderLogoutIcon from '@/components/HeaderLogoutIcon';
 
 export const metadata: Metadata = {
     title: '예약 취소 신청 | Stay Halong',
@@ -10,14 +11,14 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
     return (
         <html lang="ko">
-            <body className="bg-background text-foreground antialiased flex flex-col min-h-screen">
+            <body suppressHydrationWarning className="bg-background text-foreground antialiased flex flex-col min-h-screen">
                 <header
                     className="w-full relative bg-[#0052cc] bg-cover bg-center"
                     style={{ backgroundImage: "url('/images/index_15.gif')" }}
                 >
                     <div className="w-full">
                         <div className="w-full max-w-[600px] mx-auto px-2 md:px-4 py-2">
-                            <div className="flex w-full items-center justify-start">
+                            <div className="flex w-full items-center justify-between gap-2">
                                 <Link href="/">
                                     <img
                                         src="/images/logo.png"
@@ -27,6 +28,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                                         className="block w-auto h-auto max-h-[40px] object-contain cursor-pointer"
                                     />
                                 </Link>
+                                <HeaderLogoutIcon />
                             </div>
                         </div>
                     </div>

@@ -15,6 +15,7 @@ import { toKstDateKey, toKstDateLabel, toKstDateTimeParts, toLocalDateKey } from
 /* ── 타입 정의 ──────────────────────────────── */
 type ViewMode = 'day' | 'week' | 'month';
 type SourceFilter = 'all' | 'old' | 'new';
+const SCHEDULE_VISIBLE_STATUSES = ['approved', 'confirmed'] as const;
 
 /* ── 날짜 유틸 ──────────────────────────────── */
 const parseDate = (dateStr: string | null | undefined): Date | null => {
@@ -326,7 +327,10 @@ export default function SchedulePage() {
         .select('re_id, re_type, re_status, re_user_id, re_created_at, re_quote_id, order_id')
         .eq('re_quote_id', quoteId);
 
-      const allReservations = (allReservationsRaw || []).filter((row: any) => !hasReservationOrderId(row));
+      const allReservations = (allReservationsRaw || []).filter((row: any) => {
+        if (hasReservationOrderId(row)) return false;
+        return SCHEDULE_VISIBLE_STATUSES.includes((row?.re_status || '') as any);
+      });
 
       if (!allReservations || allReservations.length === 0) return;
 
@@ -705,7 +709,11 @@ export default function SchedulePage() {
 
       const allowedTypes = ['cruise', 'car', 'airport', 'hotel', 'tour', 'ticket', 'rentcar', 'sht', 'car_sht', 'package'];
       const reservations = (reservationsRaw || []).filter((r: any) => {
-        return allowedTypes.includes(r.re_type) && !hasReservationOrderId(r);
+        return (
+          allowedTypes.includes(r.re_type)
+          && !hasReservationOrderId(r)
+          && SCHEDULE_VISIBLE_STATUSES.includes((r?.re_status || '') as any)
+        );
       });
       const reservationIds = Array.from(new Set(reservations.map((r: any) => r.re_id).filter(Boolean)));
       const userIds = Array.from(new Set(reservations.map((r: any) => r.re_user_id).filter(Boolean)));

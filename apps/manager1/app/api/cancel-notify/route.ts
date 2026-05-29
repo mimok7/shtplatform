@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServiceSupabase } from '@/lib/serviceSupabase';
+import serviceSupabase from '@/lib/serviceSupabase';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -19,7 +19,10 @@ export async function POST(req: NextRequest) {
         if (!body?.reservationId || !body?.subcategory) {
             return NextResponse.json({ error: 'invalid' }, { status: 400 });
         }
-        const supabase = getServiceSupabase();
+        if (!serviceSupabase) {
+            return NextResponse.json({ error: 'service_unavailable' }, { status: 500 });
+        }
+        const supabase = serviceSupabase;
 
         const { data: resvRow } = await supabase
             .from('reservation')

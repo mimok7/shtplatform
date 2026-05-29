@@ -15,7 +15,14 @@ type Payload = {
     cancelTargets?: Array<{ service_type: string; row_id: string; label?: string }>;
     requesterEmail?: string | null;
     requesterPhone?: string | null;
+    refundBankName?: string | null;
+    refundAccountNumber?: string | null;
+    refundAccountHolder?: string | null;
 };
+
+function normalizeAccountNumber(value: string): string {
+    return value.replace(/[^0-9]/g, '');
+}
 
 export async function POST(req: NextRequest) {
     try {
@@ -30,6 +37,16 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'targets_required' }, { status: 400 });
         }
 
+        const refundBankName = String(body.refundBankName || '').trim();
+        const refundAccountNumber = normalizeAccountNumber(String(body.refundAccountNumber || '').trim());
+        const refundAccountHolder = String(body.refundAccountHolder || '').trim();
+        if (!refundBankName || !refundAccountNumber || !refundAccountHolder) {
+            return NextResponse.json({ error: 'refund_account_required' }, { status: 400 });
+        }
+        if (refundAccountNumber.length < 10 || refundAccountNumber.length > 14) {
+            return NextResponse.json({ error: 'invalid_refund_account_number' }, { status: 400 });
+        }
+
         const supabase = getServiceSupabase();
         const tokenHash = hashToken(t);
 
@@ -41,19 +58,20 @@ export async function POST(req: NextRequest) {
             .maybeSingle();
         if (tokenErr) throw tokenErr;
         if (!tokenRow) return NextResponse.json({ error: 'not_found' }, { status: 404 });
-        if (tokenRow.used_at) return NextResponse.json({ error: 'used' }, { status: 410 });
-        if (new Date(tokenRow.expires_at).getTime() < Date.now()) {
-            return NextResponse.json({ error: 'expired' }, { status: 410 });
-        }
 
-        // 중복 pending 차단
+        // 이미 동일 예약 건이 pending이면 멱등 성공 처리한다.
         const { data: pending } = await supabase
             .from('reservation_cancellation_request')
             .select('id')
             .eq('reservation_id', rid)
             .eq('status', 'pending')
             .maybeSingle();
-        if (pending) return NextResponse.json({ error: 'already_pending' }, { status: 409 });
+        if (pending) return NextResponse.json({ ok: true, alreadyPending: true });
+
+        if (tokenRow.used_at) return NextResponse.json({ error: 'used' }, { status: 410 });
+        if (new Date(tokenRow.expires_at).getTime() < Date.now()) {
+            return NextResponse.json({ error: 'expired' }, { status: 410 });
+        }
 
         const { error: insErr } = await supabase
             .from('reservation_cancellation_request')
@@ -62,6 +80,9 @@ export async function POST(req: NextRequest) {
                 requester_user_id: null,
                 requester_email: body.requesterEmail || null,
                 requester_phone: body.requesterPhone || null,
+                refund_bank_name: refundBankName,
+                refund_account_number: refundAccountNumber,
+                refund_account_holder: refundAccountHolder,
                 cancellation_type: body.cancellationType,
                 cancel_reason_category: body.reasonCategory,
                 cancel_reason_detail: body.reasonDetail || null,
@@ -100,6 +121,9 @@ export async function POST(req: NextRequest) {
                         requester_user_id: null,
                         requester_email: body.requesterEmail || null,
                         requester_phone: body.requesterPhone || null,
+                        refund_bank_name: refundBankName,
+                        refund_account_number: refundAccountNumber,
+                        refund_account_holder: refundAccountHolder,
                         cancellation_type: body.cancellationType,
                         cancel_reason_category: body.reasonCategory,
                         cancel_reason_detail: body.reasonDetail || null,
@@ -157,6 +181,9 @@ export async function POST(req: NextRequest) {
                     reasonDetail: body.reasonDetail || null,
                     cancelTargets: body.cancellationType === 'partial' ? body.cancelTargets : null,
                     orderId: resvRow?.order_id || null,
+                    refundBankName,
+                    refundAccountNumber,
+                    refundAccountHolder,
                 },
                 created_at: nowIso,
                 updated_at: nowIso,

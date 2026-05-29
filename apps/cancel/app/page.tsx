@@ -5,24 +5,23 @@ import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getBrowserSupabase } from '@/lib/supabase';
 
-type Mode = 'lookup' | 'login';
+type Mode = 'lookup' | 'login' | 'menu';
 
 function HomeContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const [mode, setMode] = useState<Mode>('login');
-    const [name, setName] = useState('');
+    const [checkingSession, setCheckingSession] = useState(true);
+    const [sessionEmail, setSessionEmail] = useState('');
     const [email, setEmail] = useState('');
     const [loginEmail, setLoginEmail] = useState('');
     const [loginPassword, setLoginPassword] = useState('');
     const [showForgot, setShowForgot] = useState(false);
-    const [forgotName, setForgotName] = useState('');
     const [forgotEmail, setForgotEmail] = useState('');
     const [forgotLoading, setForgotLoading] = useState(false);
     const [forgotMessage, setForgotMessage] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState<string | null>(null);
-    const [candidates, setCandidates] = useState<Array<{ reservationId: string; orderId: string | null; reservationDate: string | null; status: string | null; token: string }>>([]);
 
     useEffect(() => {
         const modeParam = searchParams.get('mode');
@@ -39,40 +38,70 @@ function HomeContent() {
                 const { data } = await supabase.auth.getSession();
                 if (cancelled) return;
                 if (data.session?.user) {
-                    setMode('lookup');
-                    setLoginEmail(data.session.user.email || '');
+                    const emailValue = (data.session.user.email || '').trim();
+                    setSessionEmail(emailValue);
+                    setLoginEmail(emailValue);
+                    setMode('menu');
                 }
             } catch {
                 // noop
+            } finally {
+                if (!cancelled) setCheckingSession(false);
             }
         };
         void init();
         return () => { cancelled = true; };
     }, []);
 
-    const submitLookup = async () => {
+    const submitLookupByEmail = async (emailValue: string) => {
         setLoading(true);
         setMessage(null);
-        setCandidates([]);
         try {
             const res = await fetch('/api/cancel/lookup', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: name.trim(), email: email.trim() }),
+                body: JSON.stringify({ email: emailValue.trim() }),
             });
             const json = await res.json();
             if (!res.ok) throw new Error(json?.error || '요청 실패');
 
             if (json.reservations && json.reservations.length > 1) {
-                setCandidates(json.reservations);
-                setMessage('취소 가능한 예약이 여러 건 확인되었습니다. 아래에서 선택해 주세요.');
+                router.push('/cancel/select');
                 return;
             }
             if (json.token && json.reservationId) {
                 router.push(`/r/${json.reservationId}?t=${encodeURIComponent(json.token)}`);
                 return;
             }
-            setMessage('예약을 찾지 못했습니다. 이름과 이메일을 다시 확인해 주세요.');
+            setMessage('취소 가능한 예약을 찾지 못했습니다.');
+        } catch (err: any) {
+            setMessage(err?.message || '자동 조회 중 오류가 발생했습니다.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const submitLookup = async () => {
+        setLoading(true);
+        setMessage(null);
+        try {
+            const res = await fetch('/api/cancel/lookup', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: email.trim() }),
+            });
+            const json = await res.json();
+            if (!res.ok) throw new Error(json?.error || '요청 실패');
+
+            if (json.reservations && json.reservations.length > 1) {
+                router.push('/cancel/select');
+                return;
+            }
+            if (json.token && json.reservationId) {
+                router.push(`/r/${json.reservationId}?t=${encodeURIComponent(json.token)}`);
+                return;
+            }
+            setMessage('예약을 찾지 못했습니다. 이메일을 다시 확인해 주세요.');
         } catch (err: any) {
             setMessage(err?.message || '요청 실패');
         } finally {
@@ -87,12 +116,11 @@ function HomeContent() {
             const res = await fetch('/api/cancel/reset-password', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: forgotName.trim(), email: forgotEmail.trim() }),
+                body: JSON.stringify({ email: forgotEmail.trim() }),
             });
             const json = await res.json();
             if (!res.ok) throw new Error(json?.error || '요청 실패');
-            setForgotMessage('입력하신 정보로 이메일이 발송되었습니다. 받은 편지함을 확인해 주세요.\n(스팸 폴더도 확인 부탁드립니다.)');
-            setForgotName('');
+            setForgotMessage('입력하신 이메일로 이메일이 발송되었습니다. 받은 편지함을 확인해 주세요.\n(스팸 폴더도 확인 부탁드립니다.)');
             setForgotEmail('');
         } catch (err: any) {
             setForgotMessage(err?.message || '요청 실패');
@@ -104,7 +132,6 @@ function HomeContent() {
     const submitLogin = async () => {
         setLoading(true);
         setMessage(null);
-        setCandidates([]);
         try {
             const supabase = getBrowserSupabase();
             const { error } = await supabase.auth.signInWithPassword({
@@ -118,39 +145,9 @@ function HomeContent() {
                 }
                 throw error;
             }
-            setMessage('로그인되었습니다. 예약 취소 신청 페이지로 이동합니다.');
-            // 로그인 직후 별도 본인확인 페이지 없이 바로 취소 신청 흐름으로 이동
-            // 자동으로 서버에 본인(로그인된 이메일)에 대한 예약 조회를 요청합니다.
-            try {
-                const res = await fetch('/api/cancel/lookup', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name: '', email: loginEmail.trim() }),
-                });
-                const json = await res.json();
-                if (res.ok) {
-                    if (json.reservations && json.reservations.length > 1) {
-                        // 여러 예약이 있으면 후보 선택 UI로 이동(조회 모드)
-                        setCandidates(json.reservations);
-                        setMode('lookup');
-                        return;
-                    }
-                    if (json.token && json.reservationId) {
-                        router.push(`/r/${json.reservationId}?t=${encodeURIComponent(json.token)}`);
-                        return;
-                    }
-                    // 예약 없음
-                    setMode('lookup');
-                    setMessage('취소 가능한 예약을 찾지 못했습니다. 예약 목록에서 선택해 주세요.');
-                    return;
-                } else {
-                    throw new Error(json?.error || '예약 조회 실패');
-                }
-            } catch (err: any) {
-                // 실패 시에는 기존 lookup 모드로 전환하여 수동 본인확인 허용
-                setMode('lookup');
-                setMessage(err?.message || '자동 조회 중 오류가 발생했습니다. 아래에서 이름과 이메일로 직접 조회해 주세요.');
-            }
+            const emailValue = loginEmail.trim();
+            setSessionEmail(emailValue);
+            setMode('menu');
         } catch (err: any) {
             setMessage(err?.message || '로그인 실패');
         } finally {
@@ -168,8 +165,8 @@ function HomeContent() {
             return;
         }
 
-        if (!name.trim() || !email.trim()) {
-            setMessage('이름과 이메일을 모두 입력해 주세요.');
+        if (!email.trim()) {
+            setMessage('이메일을 입력해 주세요.');
             return;
         }
 
@@ -177,15 +174,11 @@ function HomeContent() {
     };
 
     const onSubmitForgot = () => {
-        if (!forgotName.trim() || !forgotEmail.trim()) {
-            setForgotMessage('이름과 이메일을 모두 입력해 주세요.');
+        if (!forgotEmail.trim()) {
+            setForgotMessage('이메일을 입력해 주세요.');
             return;
         }
         void submitReset();
-    };
-
-    const goCandidate = (reservationId: string, token: string) => {
-        router.push(`/r/${reservationId}?t=${encodeURIComponent(token)}`);
     };
 
     return (
@@ -204,7 +197,55 @@ function HomeContent() {
                 </div>
                 <h2 className="text-2xl font-bold mb-6 text-left">🔐 예약 취소 신청</h2>
 
-                {mode === 'login' ? (
+                {checkingSession ? (
+                    <div className="flex items-center justify-center py-10">
+                        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500" />
+                    </div>
+                ) : sessionEmail ? (
+                    <div className="space-y-4">
+                        <div className="rounded border bg-green-50 p-3 text-sm text-green-700">
+                            <span className="font-semibold">{sessionEmail}</span> 계정으로 로그인되었습니다.
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                            <button
+                                onClick={() => { setMode('lookup'); void submitLookupByEmail(sessionEmail); }}
+                                disabled={loading}
+                                className="rounded-lg bg-blue-600 text-white py-3 font-semibold hover:bg-blue-700 transition disabled:opacity-50 flex flex-col items-center justify-center gap-1"
+                            >
+                                <span className="text-lg">💬</span>
+                                <span className="text-sm">취소신청</span>
+                            </button>
+                            <button
+                                onClick={() => router.push('/history')}
+                                className="rounded-lg bg-purple-600 text-white py-3 font-semibold hover:bg-purple-700 transition flex flex-col items-center justify-center gap-1"
+                            >
+                                <span className="text-lg">📋</span>
+                                <span className="text-sm">취소이력</span>
+                            </button>
+                        </div>
+
+                        <button
+                            onClick={async () => {
+                                const supabase = getBrowserSupabase();
+                                await supabase.auth.signOut();
+                                setSessionEmail('');
+                                setMode('login');
+                            }}
+                            className="w-full rounded text-sm text-gray-500 hover:text-gray-700 underline"
+                        >
+                            로그아웃
+                        </button>
+
+                        {loading && (
+                            <div className="flex items-center justify-center py-6">
+                                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500" />
+                            </div>
+                        )}
+
+                        {message && <p className="rounded bg-gray-50 p-2 text-xs text-gray-700">{message}</p>}
+                    </div>
+                ) : mode === 'login' ? (
                     <>
                         <div className="space-y-4">
                             <input
@@ -261,17 +302,10 @@ function HomeContent() {
                             <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
                                 <h3 className="text-sm font-semibold text-gray-800 mb-2">임시 비밀번호 발송</h3>
                                 <p className="text-xs text-gray-600 mb-3">
-                                    예약 시 입력한 <strong>이름과 이메일</strong>을 입력하시면 임시 비밀번호를 보내드립니다.
+                                    예약 시 사용한 <strong>이메일</strong>을 입력하시면 임시 비밀번호를 보내드립니다.
                                     받으신 임시 비밀번호로 로그인 후 <strong>내 정보</strong>에서 새 비밀번호로 변경해 주세요.
                                 </p>
                                 <div className="space-y-2">
-                                    <input
-                                        type="text"
-                                        placeholder="이름 (예약 시 입력한 이름)"
-                                        className="w-full border p-2 rounded text-sm"
-                                        value={forgotName}
-                                        onChange={(e) => setForgotName(e.target.value)}
-                                    />
                                     <input
                                         type="email"
                                         placeholder="이메일 (예약 시 사용한 이메일)"
@@ -301,16 +335,6 @@ function HomeContent() {
                     <>
                         <div className="space-y-3">
                             <div>
-                                <label className="block text-sm font-medium">이름</label>
-                                <input
-                                    type="text"
-                                    className="mt-1 w-full rounded border p-2 text-sm"
-                                    placeholder="예약 시 입력한 이름"
-                                    value={name}
-                                    onChange={(e) => setName(e.target.value)}
-                                />
-                            </div>
-                            <div>
                                 <label className="block text-sm font-medium">이메일</label>
                                 <input
                                     type="email"
@@ -331,23 +355,6 @@ function HomeContent() {
                             </button>
 
                             {message && <p className="rounded bg-gray-50 p-2 text-xs text-gray-700">{message}</p>}
-
-                            {candidates.length > 0 && (
-                                <div className="mt-2 space-y-2 rounded border bg-gray-50 p-2 text-sm">
-                                    <p className="text-xs text-gray-500">취소 신청할 예약을 선택하세요. (링크는 30분간 1회 유효)</p>
-                                    {candidates.map((c) => (
-                                        <button
-                                            key={c.reservationId}
-                                            type="button"
-                                            onClick={() => goCandidate(c.reservationId, c.token)}
-                                            className="block w-full rounded border bg-white p-2 text-left hover:bg-blue-50"
-                                        >
-                                            <div className="font-medium">주문번호 {c.orderId || '-'}</div>
-                                            <div className="text-xs text-gray-500">예약일 {c.reservationDate || '-'} / 상태 {c.status || '-'}</div>
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
                         </div>
 
                         <p className="mt-3 text-xs text-gray-500">로그인된 계정의 예약만 취소 신청할 수 있습니다.</p>

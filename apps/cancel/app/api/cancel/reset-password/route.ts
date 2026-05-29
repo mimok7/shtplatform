@@ -15,7 +15,7 @@ function generateTempPassword(): string {
     return pw;
 }
 
-async function sendTempPasswordEmail(to: string, name: string, tempPassword: string) {
+async function sendTempPasswordEmail(to: string, displayName: string, tempPassword: string) {
     if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
         throw new Error('SMTP_USER / SMTP_PASS 환경변수가 설정되지 않았습니다.');
     }
@@ -32,7 +32,7 @@ async function sendTempPasswordEmail(to: string, name: string, tempPassword: str
     const html = `
         <div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto;">
             <h2 style="color: #d33;">[Stay Halong] 임시 비밀번호 안내</h2>
-            <p>${name} 님, 요청하신 임시 비밀번호를 안내드립니다.</p>
+            <p>${displayName} 님, 요청하신 임시 비밀번호를 안내드립니다.</p>
             <p style="background:#f4f4f4; padding: 16px; font-size: 18px; font-weight: bold; letter-spacing: 1px;">
                 ${tempPassword}
             </p>
@@ -58,23 +58,22 @@ async function sendTempPasswordEmail(to: string, name: string, tempPassword: str
 
 export async function POST(req: NextRequest) {
     try {
-        const { name, email } = await req.json();
-        const trimmedName = String(name || '').trim();
+        const { email } = await req.json();
         const trimmedEmail = String(email || '').trim().toLowerCase();
-        if (!trimmedName || !trimmedEmail) {
-            return NextResponse.json({ error: '이름과 이메일이 필요합니다.' }, { status: 400 });
+        if (!trimmedEmail) {
+            return NextResponse.json({ error: '이메일이 필요합니다.' }, { status: 400 });
         }
 
         const supabase = getServiceSupabase();
 
-        // 이름+이메일 매칭
+        // 이메일 매칭
         const { data: users, error: userErr } = await supabase
             .from('users')
             .select('id, name, email')
             .ilike('email', trimmedEmail);
         if (userErr) throw userErr;
 
-        const matched = (users || []).find((u: any) => (u.name || '').trim() === trimmedName);
+        const matched = (users || [])[0];
         if (!matched) {
             // 보안상 일치 여부 노출하지 않음
             return NextResponse.json({ ok: true });
@@ -88,7 +87,7 @@ export async function POST(req: NextRequest) {
         if (updErr) throw updErr;
 
         try {
-            await sendTempPasswordEmail(trimmedEmail, trimmedName, tempPassword);
+            await sendTempPasswordEmail(trimmedEmail, matched.name || trimmedEmail, tempPassword);
         } catch (mailErr: any) {
             console.error('[cancel/reset-password] 이메일 발송 실패', mailErr);
             return NextResponse.json({ error: '이메일 발송에 실패했습니다. 관리자에게 문의해 주세요.' }, { status: 500 });

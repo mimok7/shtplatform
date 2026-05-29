@@ -1,5 +1,5 @@
 module.exports = {
-  darkMode: false,
+  darkMode: 'media',
   content: [
     './app/**/*.{js,ts,jsx,tsx}',
     './components/**/*.{js,ts,jsx,tsx}',
