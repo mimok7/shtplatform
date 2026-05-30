@@ -34,6 +34,35 @@ const toVehicleDisplayType = (vehicleType?: string) => {
         : vehicleType;
 };
 
+const LYRA_GRANZER_VEHICLE_DISCOUNT_CODE = 'LYRA-GRANZER-1N2D-VOUCHER-2026-30';
+const GRAND_PIONEERS_VEHICLE_DISCOUNT_CODE = 'GP-VERANDA-UP-VEHICLE-50-2026-05-30';
+const VEHICLE_DISCOUNT_RATE = 0.5;
+
+const normalizeRoomTypeKey = (value?: string) => (value || '').toLowerCase().replace(/\s+/g, '');
+
+const isGrandPioneersVehicleDiscountRoom = (roomType?: string) => {
+    const key = normalizeRoomTypeKey(roomType);
+    if (!key) return false;
+    return [
+        'verandasuite',
+        'executivesuite',
+        'theessencesuite',
+        'essencesuite',
+        'oceaniasuite',
+        'theoceaniasuite',
+        'theownerssuite',
+        'theownssuite',
+        '베란다스위트',
+        '이그제큐티브스위트',
+        '더에센스스위트',
+        '에센스스위트',
+        '오세아니아스위트',
+        '더오셔니아스위트',
+        '더오너스스위트',
+        '오너스스위트',
+    ].some((eligibleKey) => key.includes(eligibleKey));
+};
+
 function CruiseVehicleContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -49,6 +78,7 @@ function CruiseVehicleContent() {
     const [schedule, setSchedule] = useState('');
     const [checkin, setCheckin] = useState('');
     const [selectedRoomType, setSelectedRoomType] = useState('');
+    const [selectedRoomTypes, setSelectedRoomTypes] = useState<string[]>([]);
     const [selectedRateCardPromotion, setSelectedRateCardPromotion] = useState(false);
     const [cruisePromotionCode, setCruisePromotionCode] = useState('');
 
@@ -101,6 +131,12 @@ function CruiseVehicleContent() {
         const isLegacyC = isLegacy && /C$/.test(roomType) && !roomType.includes('B');
         return isFullPromo || isLegacyC;
     }, [selectedRateCardPromotion, selectedRoomType, cruiseName]);
+
+    const grandPioneersVehicleDiscountEligible = useMemo(() => {
+        const isGrandPioneers = cruiseName.includes('그랜드 파이어니스') || cruiseName.toLowerCase().includes('grand pioneers');
+        const roomTypes = selectedRoomTypes.length > 0 ? selectedRoomTypes : [selectedRoomType];
+        return isGrandPioneers && roomTypes.some(isGrandPioneersVehicleDiscountRoom);
+    }, [cruiseName, selectedRoomType, selectedRoomTypes]);
 
     const hasShtSeatRequiredVehicle = useMemo(
         () => vehicleForm.some(v =>
@@ -326,7 +362,14 @@ function CruiseVehicleContent() {
                 }
 
                 if (reservation.reservation_date) setCheckin(reservation.reservation_date);
-                setCruisePromotionCode((reservation as any).price_breakdown?.promotion_code || '');
+                const priceBreakdown = (reservation as any).price_breakdown || {};
+                setCruisePromotionCode(priceBreakdown.promotion_code || '');
+                const breakdownRoomTypes: string[] = Array.isArray(priceBreakdown.room_selections)
+                    ? priceBreakdown.room_selections
+                        .map((room: any) => room?.room_type)
+                        .filter((roomType: unknown): roomType is string => typeof roomType === 'string' && roomType.trim().length > 0)
+                    : [];
+                setSelectedRoomTypes([...new Set<string>(breakdownRoomTypes)]);
 
                 // reservation_cruise 상세
                 const { data: cruiseData } = await supabase
@@ -349,6 +392,7 @@ function CruiseVehicleContent() {
                         setCruiseName(rateCard.cruise_name || '');
                         setSchedule(rateCard.schedule_type || '');
                         setSelectedRoomType(rateCard.room_type || '');
+                        setSelectedRoomTypes((prev) => [...new Set<string>([...prev, rateCard.room_type].filter((roomType): roomType is string => typeof roomType === 'string' && roomType.trim().length > 0))]);
                         setSelectedRateCardPromotion(!!rateCard.is_promotion);
                     }
                 }
@@ -608,12 +652,32 @@ function CruiseVehicleContent() {
             resolved.push({ row: v, carCode, priceData: carPriceData, isSht, isShuttle });
         }
 
-        const lyraVehicleDiscountRate = cruisePromotionCode === 'LYRA-GRANZER-1N2D-VOUCHER-2026-30' ? 0.5 : 0;
+        const getVehicleDiscountRate = (r: ResolvedVehicle) => {
+            if (cruisePromotionCode === LYRA_GRANZER_VEHICLE_DISCOUNT_CODE) return VEHICLE_DISCOUNT_RATE;
+            const vehicleType = [r.row.car_type, r.priceData?.vehicle_type, r.priceData?.rental_type].filter(Boolean).join(' ');
+            const eligibleGrandPioneersVehicle = r.isSht
+                || r.isShuttle
+                || vehicleType.includes('셔틀')
+                || vehicleType.includes('리무진')
+                || vehicleType.includes('단독')
+                || r.priceData?.rental_type === '단독대여';
+            return grandPioneersVehicleDiscountEligible && eligibleGrandPioneersVehicle ? VEHICLE_DISCOUNT_RATE : 0;
+        };
+
+        const getVehicleDiscountNote = (r: ResolvedVehicle) => {
+            const discountRate = getVehicleDiscountRate(r);
+            if (discountRate <= 0) return null;
+            return cruisePromotionCode === LYRA_GRANZER_VEHICLE_DISCOUNT_CODE
+                ? '라이라 그랜져 차량 50% 할인 적용'
+                : `${GRAND_PIONEERS_VEHICLE_DISCOUNT_CODE}: 그랜드 파이어니스 베란다 스위트 이상 차량 50% 지원 적용`;
+        };
+
         const getVehicleTotalPrice = (r: ResolvedVehicle, count: number) => {
             const customPrice = (r.row as any).custom_price;
             if (customPrice !== undefined) return customPrice;
             const originalTotal = (Number(r.priceData.price || 0)) * count;
-            return lyraVehicleDiscountRate > 0 ? Math.round(originalTotal * (1 - lyraVehicleDiscountRate)) : originalTotal;
+            const discountRate = getVehicleDiscountRate(r);
+            return discountRate > 0 ? Math.round(originalTotal * (1 - discountRate)) : originalTotal;
         };
 
         // 전체 차량 합계 가격
@@ -666,6 +730,7 @@ function CruiseVehicleContent() {
             const inputCount = r.row.count || 1;
             const totalPrice = getVehicleTotalPrice(r, inputCount);
             const unitPrice = Math.round(totalPrice / (inputCount || 1));
+            const discountNote = getVehicleDiscountNote(r);
 
             if (r.isSht) {
                 const pickupDate = checkin ? new Date(checkin) : null;
@@ -676,7 +741,8 @@ function CruiseVehicleContent() {
                     seat_number: selectedShtSeat?.seat || null,
                     car_price_code: r.priceData?.rent_code || r.carCode || 'C013',
                     passenger_count: inputCount,
-                    unit_price: unitPrice
+                    unit_price: unitPrice,
+                    request_note: discountNote
                 };
 
                 if (selectedCarCategory === '편도') {
@@ -742,7 +808,8 @@ function CruiseVehicleContent() {
                     dropoff_location: dropoffLocation || null,
                     return_datetime: returnDatetime,
                     unit_price: unitPrice,
-                    car_total_price: totalPrice
+                    car_total_price: totalPrice,
+                    request_note: discountNote
                 });
             }
         }
@@ -825,6 +892,14 @@ function CruiseVehicleContent() {
                                 크루즈 예약이 저장되었습니다. 추가로 필요한 차량을 선택해주세요. 차량이 필요 없으시면 "건너뛰기"를 누르세요.
                             </p>
                         </div>
+
+                        {grandPioneersVehicleDiscountEligible && (
+                            <div className="bg-emerald-50 rounded-lg p-4 mb-4 border border-emerald-200">
+                                <p className="text-emerald-700 text-sm">
+                                    그랜드 파이어니스 크루즈 베란다 스위트 이상 예약으로 크루즈 셔틀, 스하 셔틀 리무진, 단독차량 금액의 50% 지원이 적용됩니다.
+                                </p>
+                            </div>
+                        )}
 
                         <div className="space-y-4">
                             {/* 차량 자동 선택 안내 */}

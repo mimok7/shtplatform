@@ -127,6 +127,12 @@ function DirectBookingCruiseContent() {
     const searchParams = useSearchParams();
     const quoteId = searchParams.get('quoteId');
     const isEditMode = searchParams.get('edit') === 'true';
+    const safeQuoteId = useMemo(() => {
+        if (!quoteId) return null;
+        return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(quoteId)
+            ? quoteId
+            : null;
+    }, [quoteId]);
 
     // 기존 예약 데이터 (수정 모드용)
     const [existingReservationId, setExistingReservationId] = useState<string | null>(null);
@@ -529,9 +535,10 @@ function DirectBookingCruiseContent() {
         }
     }, [form.cruise_name]);
 
-    const calculatePrice = useCallback(async () => {
+    const calculatePrice = useCallback(async (cardsOverride?: CruiseRateCard[]) => {
         setPriceLoading(true);
         try {
+            const sourceCards = cardsOverride || roomTypeCards;
             const validSelections = roomSelections.filter((s) => s.rate_card_id && (isCatherineHorizonCruise || s.room_count > 0));
 
             if (validSelections.length === 0) {
@@ -541,7 +548,7 @@ function DirectBookingCruiseContent() {
 
             const roomResultsRaw = await Promise.all(
                 validSelections.map(async (selection) => {
-                    const rateCard = roomTypeCards.find((card) => card.id === selection.rate_card_id);
+                    const rateCard = sourceCards.find((card) => card.id === selection.rate_card_id);
                     if (!rateCard) return null;
 
                     const result = await calculator.calculate({
@@ -673,6 +680,57 @@ function DirectBookingCruiseContent() {
             setPriceLoading(false);
         }
     }, [form.cruise_name, form.schedule, form.checkin, roomSelections, roomTypeCards, selectedTourOptions, isCatherineHorizonCruise]);
+
+    const refreshRatesAfterPromotionSoldOut = useCallback(async () => {
+        const cards = await calculator.getRoomTypes({
+            schedule: form.schedule,
+            checkin_date: form.checkin,
+            cruise_name: form.cruise_name,
+        });
+        const sortedCards = [...cards].sort((a, b) => (a.price_adult || 0) - (b.price_adult || 0));
+        setRoomTypeCards(sortedCards);
+        await calculatePrice(sortedCards);
+        alert('프로모션 선착순이 마감되어 기본요금으로 전환되었습니다. 금액을 확인 후 다시 저장해 주세요.');
+    }, [form.schedule, form.checkin, form.cruise_name, calculatePrice]);
+
+    const claimPromotionForReservation = useCallback(async (
+        promotionCode: string,
+        reservationId: string,
+        metadata: Record<string, any>
+    ) => {
+        // 신선한 토큰 확보: getSession → 토큰 없으면 refreshSession 1회 시도.
+        // 토큰이 없어도 서버가 예약 소유자 기준으로 처리하므로 그대로 진행한다.
+        let accessToken: string | null = null;
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            accessToken = session?.access_token || null;
+            if (!accessToken) {
+                const { data } = await supabase.auth.refreshSession();
+                accessToken = data.session?.access_token || null;
+            }
+        } catch {
+            accessToken = null;
+        }
+
+        const response = await fetch('/api/cruise-promotion/claim', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+            },
+            body: JSON.stringify({
+                promotionCode,
+                reservationId,
+                metadata,
+            }),
+        });
+
+        const claim = await response.json().catch(() => null);
+        if (response.ok && claim?.claimed) {
+            return { ok: true, claim, claimError: null };
+        }
+        return { ok: false, claim, claimError: response.ok ? null : claim };
+    }, []);
 
     const updateRoomSelection = useCallback((localId: string, patch: Partial<RoomSelection>) => {
         setRoomSelections((prev) => prev.map((room) => room.local_id === localId ? { ...room, ...patch } : room));
@@ -910,21 +968,24 @@ function DirectBookingCruiseContent() {
                 if (insertCruiseError) throw insertCruiseError;
 
                 if (priceResult!.price_breakdown?.promotion_code) {
-                    const { data: claimData, error: claimError } = await (supabase as any).rpc('claim_cruise_promotion_usage', {
-                        p_promotion_code: priceResult!.price_breakdown.promotion_code,
-                        p_quote_id: quoteId,
-                        p_reservation_id: existingReservationId,
-                        p_metadata: {
+                    const { ok, claim, claimError } = await claimPromotionForReservation(
+                        priceResult!.price_breakdown.promotion_code,
+                        existingReservationId,
+                        {
                             source: 'customer_direct_booking_cruise_edit',
                             checkin: form.checkin,
                             schedule: form.schedule,
                             cruise_name: form.cruise_name,
                             total_price: finalTotalAmount,
-                        },
-                    });
-                    const claim = Array.isArray(claimData) ? claimData[0] : null;
-                    if (claimError || !claim?.claimed) {
-                        throw new Error('프로모션 선착순 수량이 마감되어 저장할 수 없습니다. 객실을 다시 선택해 주세요.');
+                        }
+                    );
+
+                    if (claim?.reason === 'quota_exhausted') {
+                        await refreshRatesAfterPromotionSoldOut();
+                        return;
+                    }
+                    if (!ok) {
+                        console.warn('프로모션 claim 실패(edit, 예약 저장은 계속):', { claimError, claim, reservationId: existingReservationId });
                     }
                 }
 
@@ -944,7 +1005,7 @@ function DirectBookingCruiseContent() {
                 .from('reservation')
                 .insert({
                     re_user_id: user.id,
-                    re_quote_id: quoteId,
+                    re_quote_id: safeQuoteId,
                     re_type: 'cruise',
                     re_status: 'pending',
                     re_created_at: new Date().toISOString(),
@@ -970,21 +1031,24 @@ function DirectBookingCruiseContent() {
             if (cruiseError) throw cruiseError;
 
             if (priceResult!.price_breakdown?.promotion_code) {
-                const { data: claimData, error: claimError } = await (supabase as any).rpc('claim_cruise_promotion_usage', {
-                    p_promotion_code: priceResult!.price_breakdown.promotion_code,
-                    p_quote_id: quoteId,
-                    p_reservation_id: newReservation.re_id,
-                    p_metadata: {
+                const { ok, claim, claimError } = await claimPromotionForReservation(
+                    priceResult!.price_breakdown.promotion_code,
+                    newReservation.re_id,
+                    {
                         source: 'customer_direct_booking_cruise',
                         checkin: form.checkin,
                         schedule: form.schedule,
                         cruise_name: form.cruise_name,
                         total_price: finalTotalAmount,
-                    },
-                });
-                const claim = Array.isArray(claimData) ? claimData[0] : null;
-                if (claimError || !claim?.claimed) {
-                    throw new Error('프로모션 선착순 수량이 마감되어 저장할 수 없습니다. 객실을 다시 선택해 주세요.');
+                    }
+                );
+
+                if (claim?.reason === 'quota_exhausted') {
+                    await refreshRatesAfterPromotionSoldOut();
+                    return;
+                }
+                if (!ok) {
+                    console.warn('프로모션 claim 실패(new, 예약 저장은 계속):', { claimError, claim, reservationId: newReservation.re_id });
                 }
             }
 
@@ -1220,8 +1284,9 @@ function DirectBookingCruiseContent() {
 
                                     {!isDayCruise && (
                                         <div className="rounded-md border border-yellow-300 bg-yellow-50 px-3 py-2 text-xs text-yellow-800 space-y-1">
-                                            <p>같은 객실을 여러개 예약시 총 객실수를 표시해 주세요</p>
-                                            <p>객실명이 다른 객실 예약시 객실명이 다른 객실추가 선택하여 예약해 주세요</p>
+                                            <p>같은 객실을 여러 개 예약할 경우 총 객실수를 입력해 주세요.</p>
+                                            <p>객실명이 다른 객실은 객실 추가로 선택해 주세요.</p>
+                                            <p>🎁 표시 객실은 프로모션 적용 가능 객실입니다.</p>
                                         </div>
                                     )}
 
@@ -1283,7 +1348,6 @@ function DirectBookingCruiseContent() {
                                                     {roomCard?.promotion_code && (
                                                         <div className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
                                                             <span className="font-semibold">🎁 {roomCard.promotion_name || '프로모션 적용'}</span>
-                                                            <span className="ml-2">{roomCard.promotion_code}</span>
                                                             <div className="mt-1 text-red-600">
                                                                 기존 요금은 참고용이며 계산은 프로모션 요금으로 적용됩니다.
                                                             </div>
@@ -1453,10 +1517,6 @@ function DirectBookingCruiseContent() {
 
                             {priceResult && (
                                 <div className="border border-green-200 rounded-lg p-4 bg-green-50">
-                                    <div className="flex justify-between text-sm font-medium">
-                                        <span>객실 소계</span>
-                                        <span>{formatVND(priceResult.subtotal)}</span>
-                                    </div>
                                     {priceResult.surcharge_total > 0 && (
                                         <div className="mt-1 flex justify-between text-sm text-orange-700">
                                             <span>추가요금</span>
@@ -1471,9 +1531,8 @@ function DirectBookingCruiseContent() {
                                     )}
                                     {selectedPromotionCode && (
                                         <div className="mt-3 rounded-lg border border-red-200 bg-white p-3 text-sm text-red-700">
-                                            <div className="flex items-center justify-between gap-2 font-semibold">
+                                            <div className="font-semibold">
                                                 <span>🎁 {selectedPromotionNames.join(', ') || '프로모션 적용'}</span>
-                                                <span>{selectedPromotionCode}</span>
                                             </div>
                                             {selectedPromotionSavings > 0 && selectedPromotionOriginalTotal > 0 && (
                                                 <div className="mt-2 space-y-1 text-xs">

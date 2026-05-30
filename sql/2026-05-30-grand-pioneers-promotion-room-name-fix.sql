@@ -18,7 +18,7 @@ INSERT INTO public.cruise_promotion (
 ) VALUES (
   'GP-VOUCHER-2026-100TEAMS',
   '그랜드 파이어니스 바우처 프로모션',
-  '그랜드 파이어니스',
+  '그랜드 파이어니스 크루즈',
   DATE '2026-05-23',
   NULL,
   DATE '2026-06-01',

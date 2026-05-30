@@ -7,6 +7,14 @@
     "googlesheets": {
       "command": "npx",
       "args": ["-y", "smithery", "run", "googlesheets"]
+    },
+    "github": {
+      "command": "npx",
+      "args": ["-y", "smithery", "run", "github"]
+    },
+    "vercel": {
+      "command": "npx",
+      "args": ["-y", "smithery", "run", "vercel"]
     }
   }
 }

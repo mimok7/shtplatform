@@ -21,10 +21,53 @@ const hasOriginalPrice = (currentPrice: number | null | undefined, originalPrice
     && originalPrice !== currentPrice;
 };
 
+const LYRA_GRANZER_VEHICLE_DISCOUNT_CODE = 'LYRA-GRANZER-1N2D-VOUCHER-2026-30';
+const GRAND_PIONEERS_VEHICLE_DISCOUNT_CODE = 'GP-VERANDA-UP-VEHICLE-50-2026-05-30';
+const VEHICLE_DISCOUNT_RATE = 0.5;
+
+const normalizeRoomTypeKey = (value?: string) => (value || '').toLowerCase().replace(/\s+/g, '');
+
+const isGrandPioneersVehicleDiscountRoom = (roomType?: string) => {
+  const key = normalizeRoomTypeKey(roomType);
+  if (!key) return false;
+  return [
+    'verandasuite',
+    'executivesuite',
+    'theessencesuite',
+    'essencesuite',
+    'oceaniasuite',
+    'theoceaniasuite',
+    'theownerssuite',
+    'theownssuite',
+    '베란다스위트',
+    '이그제큐티브스위트',
+    '더에센스스위트',
+    '에센스스위트',
+    '오세아니아스위트',
+    '더오셔니아스위트',
+    '더오너스스위트',
+    '오너스스위트',
+  ].some((eligibleKey) => key.includes(eligibleKey));
+};
+
+const isGrandPioneersVehicleDiscountVehicle = (vehicleType?: string, rentalType?: string) => {
+  const key = `${vehicleType || ''} ${rentalType || ''}`;
+  return key.includes('셔틀')
+    || key.includes('리무진')
+    || key.includes('단독')
+    || rentalType === '단독대여';
+};
+
 function CruiseQuoteNewContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const quoteId = searchParams.get('quoteId');
+  const safeQuoteId = useMemo(() => {
+    if (!quoteId) return null;
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(quoteId)
+      ? quoteId
+      : null;
+  }, [quoteId]);
 
   // ── 폼 상태 ──
   const [form, setForm] = useState({
@@ -229,6 +272,57 @@ function CruiseQuoteNewContent() {
   form.adult_count, form.child_count, form.child_extra_bed_count,
   form.infant_count, form.extra_bed_count, form.single_count, selectedTourOptions]);
 
+  const refreshRatesAfterPromotionSoldOut = useCallback(async () => {
+    const cards = await calculator.getRoomTypes({
+      schedule: form.schedule,
+      checkin_date: form.checkin,
+      cruise_name: form.cruise_name,
+    });
+    const sortedCards = [...cards].sort((a, b) => (a.price_adult || 0) - (b.price_adult || 0));
+    setRoomTypeCards(sortedCards);
+
+    const nextRoomType = sortedCards.some((card) => card.room_type === form.room_type)
+      ? form.room_type
+      : (sortedCards[0]?.room_type || '');
+
+    if (nextRoomType !== form.room_type) {
+      setForm((prev) => ({ ...prev, room_type: nextRoomType }));
+    }
+
+    if (nextRoomType) {
+      const result = await calculator.calculate({
+        cruise_name: form.cruise_name,
+        schedule: form.schedule,
+        room_type: nextRoomType,
+        checkin_date: form.checkin,
+        adult_count: form.adult_count,
+        child_count: form.child_count,
+        child_extra_bed_count: form.child_extra_bed_count,
+        infant_count: form.infant_count,
+        extra_bed_count: form.extra_bed_count,
+        single_count: form.single_count,
+        selected_options: selectedTourOptions,
+      });
+      setPriceResult(result);
+    } else {
+      setPriceResult(null);
+    }
+
+    alert('프로모션 선착순이 마감되어 기본요금으로 전환되었습니다. 금액을 확인 후 다시 저장해 주세요.');
+  }, [
+    form.schedule,
+    form.checkin,
+    form.cruise_name,
+    form.room_type,
+    form.adult_count,
+    form.child_count,
+    form.child_extra_bed_count,
+    form.infant_count,
+    form.extra_bed_count,
+    form.single_count,
+    selectedTourOptions,
+  ]);
+
   // 차량 관련 (rentcar_price 테이블 사용)
   const loadRouteOptions = useCallback(async (wayType: string) => {
     if (!wayType) return;
@@ -429,22 +523,44 @@ function CruiseQuoteNewContent() {
       // 1. 객실 데이터 저장 (cruise_rate_card 기반) - 모든 인원수 정보 저장
       if (priceResult && form.adult_count > 0) {
         if (priceResult.price_breakdown?.promotion_code) {
-          const { data: claimData, error: claimError } = await (supabase as any).rpc('claim_cruise_promotion_usage', {
-            p_promotion_code: priceResult.price_breakdown.promotion_code,
-            p_quote_id: quoteId,
-            p_metadata: {
+          let accessToken: string | null = null;
+          try {
+            const { data: { session } } = await supabase.auth.getSession();
+            accessToken = session?.access_token || null;
+            if (!accessToken) {
+              const { data } = await supabase.auth.refreshSession();
+              accessToken = data.session?.access_token || null;
+            }
+          } catch {
+            accessToken = null;
+          }
+          const claimResponse = await fetch('/api/cruise-promotion/claim', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+            },
+            body: JSON.stringify({
+              promotionCode: priceResult.price_breakdown.promotion_code,
+              quoteId: safeQuoteId,
+              metadata: {
               source: 'customer_quote_cruise',
               checkin: form.checkin,
               schedule: form.schedule,
               cruise_name: form.cruise_name,
               room_type: form.room_type,
               total_price: priceResult.grand_total,
-            },
+              },
+            }),
           });
 
-          const claim = Array.isArray(claimData) ? claimData[0] : null;
-          if (claimError || !claim?.claimed) {
-            throw new Error('프로모션 선착순 수량이 마감되어 저장할 수 없습니다. 객실을 다시 선택해 주세요.');
+          const claim = await claimResponse.json().catch(() => null);
+          if (claim?.reason === 'quota_exhausted') {
+            await refreshRatesAfterPromotionSoldOut();
+            return;
+          }
+          if (!claimResponse.ok || !claim?.claimed) {
+            console.warn('프로모션 claim 실패(견적 저장은 계속):', { claim, quoteId: safeQuoteId });
           }
         }
 
@@ -499,14 +615,23 @@ function CruiseQuoteNewContent() {
       }
 
       // 2. 차량 데이터 저장 (rentcar_price 기준 조회 후 크루즈 차량(service_type='car')로 저장)
-      const lyraVehicleDiscountRate = priceResult?.price_breakdown?.promotion_code === 'LYRA-GRANZER-1N2D-VOUCHER-2026-30' ? 0.5 : 0;
+      const grandPioneersVehicleDiscountEligible = (
+        form.cruise_name.includes('그랜드 파이어니스') || form.cruise_name.toLowerCase().includes('grand pioneers')
+      ) && isGrandPioneersVehicleDiscountRoom(form.room_type);
       for (const vehicle of vehicles) {
         if (vehicle.wayType && vehicle.route && vehicle.carType && vehicle.count > 0) {
           const rentPriceInfo = await getRentPriceInfo(vehicle.wayType, vehicle.route || '', vehicle.carType);
           if (!rentPriceInfo?.rent_code) continue;
           const originalUnitPrice = Number(rentPriceInfo.price || 0);
-          const vehicleUnitPrice = lyraVehicleDiscountRate > 0
-            ? Math.round(originalUnitPrice * (1 - lyraVehicleDiscountRate))
+          const isLyraVehicleDiscount = priceResult?.price_breakdown?.promotion_code === LYRA_GRANZER_VEHICLE_DISCOUNT_CODE;
+          const isGrandPioneersVehicleDiscount = grandPioneersVehicleDiscountEligible
+            && isGrandPioneersVehicleDiscountVehicle(vehicle.carType, rentPriceInfo.rental_type);
+          const vehicleDiscountRate = (isLyraVehicleDiscount || isGrandPioneersVehicleDiscount) ? VEHICLE_DISCOUNT_RATE : 0;
+          const vehicleDiscountCode = isLyraVehicleDiscount
+            ? LYRA_GRANZER_VEHICLE_DISCOUNT_CODE
+            : (isGrandPioneersVehicleDiscount ? GRAND_PIONEERS_VEHICLE_DISCOUNT_CODE : null);
+          const vehicleUnitPrice = vehicleDiscountRate > 0
+            ? Math.round(originalUnitPrice * (1 - vehicleDiscountRate))
             : originalUnitPrice;
 
           const { data: carData, error: carError } = await supabase
@@ -538,7 +663,11 @@ function CruiseQuoteNewContent() {
                 rental_type: rentPriceInfo.rental_type || '단독대여',
                 source_table: 'rentcar_price',
                 promotion_code: priceResult?.price_breakdown?.promotion_code || null,
-                promotion_vehicle_discount_rate: lyraVehicleDiscountRate,
+                promotion_vehicle_discount_rate: vehicleDiscountRate,
+                promotion_vehicle_discount_code: vehicleDiscountCode,
+                promotion_vehicle_discount_label: isGrandPioneersVehicleDiscount
+                  ? '그랜드 파이어니스 베란다 스위트 이상 차량 50% 지원'
+                  : null,
                 original_unit_price: originalUnitPrice,
               }
             });
@@ -1131,13 +1260,6 @@ function CruiseQuoteNewContent() {
                     ))}
                   </div>
 
-                  {priceResult.items.length > 0 && (
-                    <div className="flex justify-between text-sm font-medium border-t border-green-200 pt-2">
-                      <span>객실 소계</span>
-                      <span>{formatVND(priceResult.subtotal)}</span>
-                    </div>
-                  )}
-
                   {priceResult.surcharges.length > 0 && (
                     <div className="mt-3 border-t border-green-200 pt-2">
                       <h4 className="text-sm font-medium text-orange-700 mb-1">📅 공휴일 추가요금</h4>
@@ -1194,9 +1316,8 @@ function CruiseQuoteNewContent() {
 
                   {selectedPromotionCode && (
                     <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-                      <div className="flex items-center justify-between gap-2 font-semibold">
+                      <div className="font-semibold">
                         <span>🎁 {selectedPromotionName || '프로모션 적용'}</span>
-                        <span>{selectedPromotionCode}</span>
                       </div>
                       {selectedPromotionSavings > 0 && selectedPromotionOriginalTotal > 0 && (
                         <div className="mt-2 space-y-1 text-xs">

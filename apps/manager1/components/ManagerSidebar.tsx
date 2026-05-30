@@ -58,6 +58,7 @@ export default function ManagerSidebar({ activeTab, userEmail, onLogout, userRol
     if (pathname.startsWith('/manager/quotes/cruise')) return 'quotes-cruise';
     if (pathname.startsWith('/manager/quotes')) return 'quotes';
     if (pathname.startsWith('/manager/customers')) return 'customers';
+    if (pathname.startsWith('/manager/promotions')) return 'promotions';
     if (pathname.startsWith('/manager/quote-bulk-delete')) return 'quote-bulk-delete';
     if (pathname.startsWith('/manager/settings')) return 'settings';
     return null;
@@ -245,6 +246,13 @@ export default function ManagerSidebar({ activeTab, userEmail, onLogout, userRol
                 path="/manager/passport-management"
                 isActive={isActiveTab('passport-management')}
                 onClick={() => handleNavigation('/manager/passport-management')}
+              />
+              <NavItem
+                icon="🎁"
+                label="프로모션"
+                path="/manager/promotions"
+                isActive={isActiveTab('promotions')}
+                onClick={() => handleNavigation('/manager/promotions')}
               />
               <NavItem
                 icon="📅"
