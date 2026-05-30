@@ -811,7 +811,7 @@ export default function NotificationManagement() {
         .filter(n => n.table_info === 'payment_notifications')
         .map(n => n.id);
 
-      const updatePromises: Promise<any>[] = [];
+      const updatePromises: PromiseLike<any>[] = [];
       let errorMessages: string[] = [];
 
       // 1. notifications 테이블 업데이트

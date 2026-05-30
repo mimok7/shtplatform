@@ -1431,6 +1431,26 @@ function ManagerCruiseQuoteForm() {
 
             // 1. 객실 데이터 저장 (cruise_rate_card 기반 - sht-customer와 동일)
             if (priceResult && form.adult_count > 0) {
+                if (priceResult.price_breakdown?.promotion_code) {
+                    const { data: claimData, error: claimError } = await (supabase as any).rpc('claim_cruise_promotion_usage', {
+                        p_promotion_code: priceResult.price_breakdown.promotion_code,
+                        p_quote_id: effectiveQuoteId,
+                        p_metadata: {
+                            source: 'mobile_quote_cruise',
+                            checkin: form.checkin,
+                            schedule: form.schedule,
+                            cruise_name: form.cruise_name,
+                            room_type: form.room_type,
+                            total_price: priceResult.grand_total,
+                        },
+                    });
+
+                    const claim = Array.isArray(claimData) ? claimData[0] : null;
+                    if (claimError || !claim?.claimed) {
+                        throw new Error('프로모션 선착순 수량이 마감되어 저장할 수 없습니다. 객실을 다시 선택해 주세요.');
+                    }
+                }
+
                 const { data: roomData, error: roomError } = await supabase
                     .from('room')
                     .insert({
@@ -1485,6 +1505,7 @@ function ManagerCruiseQuoteForm() {
             }
 
             // 2. 차량 저장 (rentcar_price 기준)
+            const lyraVehicleDiscountRate = priceResult?.price_breakdown?.promotion_code === 'LYRA-GRANZER-1N2D-VOUCHER-2026-30' ? 0.5 : 0;
             for (const vehicle of vehicleForm) {
                 if (vehicle.car_code && vehicle.count > 0) {
                     const { data: carData, error: carError } = await supabase
@@ -1507,7 +1528,11 @@ function ManagerCruiseQuoteForm() {
                         console.warn('rentcar price lookup failed', pe);
                     }
 
-                    const totalPrice = unitPrice * (vehicle.count || 1);
+                    const originalUnitPrice = unitPrice;
+                    const discountedUnitPrice = lyraVehicleDiscountRate > 0
+                        ? Math.round(originalUnitPrice * (1 - lyraVehicleDiscountRate))
+                        : originalUnitPrice;
+                    const totalPrice = discountedUnitPrice * (vehicle.count || 1);
 
                     const { error: itemError } = await supabase
                         .from('quote_item')
@@ -1516,7 +1541,7 @@ function ManagerCruiseQuoteForm() {
                             service_type: 'car',
                             service_ref_id: carData.id,
                             quantity: vehicle.count,
-                            unit_price: unitPrice,
+                            unit_price: discountedUnitPrice,
                             total_price: totalPrice,
                             usage_date: form.checkin,
                             options: {
@@ -1525,6 +1550,9 @@ function ManagerCruiseQuoteForm() {
                                 vehicle_type: vehicle.car_type,
                                 rentcar_price_code: vehicle.car_code,
                                 source_table: 'rentcar_price',
+                                promotion_code: priceResult?.price_breakdown?.promotion_code || null,
+                                promotion_vehicle_discount_rate: lyraVehicleDiscountRate,
+                                original_unit_price: originalUnitPrice,
                             }
                         });
                     if (itemError) throw itemError;

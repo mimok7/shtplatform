@@ -50,6 +50,7 @@ function CruiseVehicleContent() {
     const [checkin, setCheckin] = useState('');
     const [selectedRoomType, setSelectedRoomType] = useState('');
     const [selectedRateCardPromotion, setSelectedRateCardPromotion] = useState(false);
+    const [cruisePromotionCode, setCruisePromotionCode] = useState('');
 
     // 기존 차량 예약 ID
     const [existingVehicleReservationId, setExistingVehicleReservationId] = useState<string | null>(null);
@@ -314,7 +315,7 @@ function CruiseVehicleContent() {
                 // 크루즈 예약 조회
                 const { data: reservation, error: resError } = await supabase
                     .from('reservation')
-                    .select('re_id, re_user_id, re_quote_id, re_type, reservation_date')
+                    .select('re_id, re_user_id, re_quote_id, re_type, reservation_date, price_breakdown')
                     .eq('re_id', reservationId)
                     .maybeSingle();
 
@@ -325,6 +326,7 @@ function CruiseVehicleContent() {
                 }
 
                 if (reservation.reservation_date) setCheckin(reservation.reservation_date);
+                setCruisePromotionCode((reservation as any).price_breakdown?.promotion_code || '');
 
                 // reservation_cruise 상세
                 const { data: cruiseData } = await supabase
@@ -606,10 +608,17 @@ function CruiseVehicleContent() {
             resolved.push({ row: v, carCode, priceData: carPriceData, isSht, isShuttle });
         }
 
+        const lyraVehicleDiscountRate = cruisePromotionCode === 'LYRA-GRANZER-1N2D-VOUCHER-2026-30' ? 0.5 : 0;
+        const getVehicleTotalPrice = (r: ResolvedVehicle, count: number) => {
+            const customPrice = (r.row as any).custom_price;
+            if (customPrice !== undefined) return customPrice;
+            const originalTotal = (Number(r.priceData.price || 0)) * count;
+            return lyraVehicleDiscountRate > 0 ? Math.round(originalTotal * (1 - lyraVehicleDiscountRate)) : originalTotal;
+        };
+
         // 전체 차량 합계 가격
         const grandTotal = resolved.reduce((sum, r) => {
-            const customPrice = (r.row as any).custom_price;
-            const total = customPrice !== undefined ? customPrice : ((r.priceData.price || 0) * (r.row.count || 1));
+            const total = getVehicleTotalPrice(r, r.row.count || 1);
             return sum + total;
         }, 0);
 
@@ -655,8 +664,8 @@ function CruiseVehicleContent() {
         // 각 차량별로 상세 행 삽입
         for (const r of resolved) {
             const inputCount = r.row.count || 1;
-            const customTotalPrice = (r.row as any).custom_price;
-            const totalPrice = customTotalPrice !== undefined ? customTotalPrice : ((r.priceData.price || 0) * inputCount);
+            const totalPrice = getVehicleTotalPrice(r, inputCount);
+            const unitPrice = Math.round(totalPrice / (inputCount || 1));
 
             if (r.isSht) {
                 const pickupDate = checkin ? new Date(checkin) : null;
@@ -667,7 +676,7 @@ function CruiseVehicleContent() {
                     seat_number: selectedShtSeat?.seat || null,
                     car_price_code: r.priceData?.rent_code || r.carCode || 'C013',
                     passenger_count: inputCount,
-                    unit_price: Math.round(totalPrice / (inputCount || 1))
+                    unit_price: unitPrice
                 };
 
                 if (selectedCarCategory === '편도') {
@@ -732,7 +741,7 @@ function CruiseVehicleContent() {
                     pickup_location: pickupLocation || null,
                     dropoff_location: dropoffLocation || null,
                     return_datetime: returnDatetime,
-                    unit_price: r.priceData.price || 0,
+                    unit_price: unitPrice,
                     car_total_price: totalPrice
                 });
             }

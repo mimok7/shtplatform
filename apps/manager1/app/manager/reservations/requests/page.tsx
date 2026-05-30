@@ -653,10 +653,8 @@ function ReservationRequestsContent() {
                             </span>
                           </div>
                           <div className="mt-3 space-y-1 text-xs text-gray-600">
-                            <div className="font-mono">{row.reservation_id}</div>
-                            <div>주문: {row.reservation?.order_id || '-'}</div>
-                            <div>인원 {row.guest_count ?? '-'}명{row.room_count ? ` / 객실 ${row.room_count}` : ''}</div>
                             <div className="flex items-center gap-1.5"><Ship className="h-3.5 w-3.5" />{row.rate?.cruise_name || '크루즈 미정'} / {row.rate?.room_type || row.room_price_code || '-'}</div>
+                            <div>인원 {row.guest_count ?? '-'}명{row.room_count ? ` / 객실 ${row.room_count}` : ''}</div>
                           </div>
                           <div className="mt-3 flex flex-wrap gap-1.5">
                             {tags.map((tag) => (

@@ -943,7 +943,7 @@ export default function ManagerPaymentsPage() {
         .from('reservation')
         .select('re_id, price_breakdown')
         .in('re_id', reservationIds);
-      const pbMap = new Map((resPbData || []).map((r: any) => [r.re_id, r.price_breakdown]));
+      const pbMap = new Map<string, any>((resPbData || []).map((r: any) => [r.re_id, r.price_breakdown] as [string, any]));
       const pbUsedIndex = new Map<string, Set<number>>();
 
       // 1. 크루즈 객실 서비스 조회 (카테고리별 분리)

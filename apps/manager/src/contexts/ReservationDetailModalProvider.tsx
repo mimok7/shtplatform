@@ -220,7 +220,7 @@ export function ReservationDetailModalProvider({ children }: { children: React.R
         return;
       }
 
-      const reservationMap = new Map(reservationRows.map((row: any) => [row.re_id, row]));
+      const reservationMap = new Map<string, any>(reservationRows.map((row: any) => [row.re_id, row] as [string, any]));
       const rows = await Promise.all([
         supabase.from('reservation_cruise').select('*').in('reservation_id', reservationIds),
         supabase.from('reservation_airport').select('*').in('reservation_id', reservationIds),

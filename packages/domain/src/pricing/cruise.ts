@@ -40,6 +40,16 @@ export interface CruiseRateCard {
   single_available: boolean;
   display_order: number;
   is_active: boolean;
+  promotion_code?: string | null;
+  promotion_name?: string | null;
+  promotion_quota_remaining?: number | null;
+  original_price_adult?: number | null;
+  original_price_child?: number | null;
+  original_price_infant?: number | null;
+  original_price_extra_bed?: number | null;
+  original_price_child_extra_bed?: number | null;
+  original_price_single?: number | null;
+  original_season_name?: string | null;
 }
 
 export interface CruiseHolidaySurcharge {
@@ -129,6 +139,7 @@ export interface CruiseFilterInput {
   schedule?: string;
   checkin_date?: string;
   cruise_name?: string;
+  room_type?: string;
 }
 
 function toScheduleType(schedule: string): string {
@@ -158,49 +169,120 @@ export class CruisePriceCalculator {
     this.supabase = supabase;
   }
 
-  async getCruiseNames(filter: CruiseFilterInput): Promise<string[]> {
+  private calculateSubtotal(input: CruisePriceInput, rateCard: CruiseRateCard): number {
+    const childCount = input.child_count || 0;
+    const childExtraBedCount = input.child_extra_bed_count || 0;
+    const infantCount = input.infant_count || 0;
+    const extraBedCount = input.extra_bed_count || 0;
+    const singleCount = input.single_count || 0;
+
+    return [
+      input.adult_count > 0 ? rateCard.price_adult * input.adult_count : 0,
+      childCount > 0 && rateCard.price_child != null ? rateCard.price_child * childCount : 0,
+      childExtraBedCount > 0 && rateCard.price_child_extra_bed != null
+        ? rateCard.price_child_extra_bed * childExtraBedCount
+        : 0,
+      infantCount > 0 && rateCard.price_infant != null
+        ? rateCard.price_infant * Math.max(0, infantCount - 1)
+        : 0,
+      extraBedCount > 0 && rateCard.price_extra_bed != null && rateCard.extra_bed_available
+        ? rateCard.price_extra_bed * extraBedCount
+        : 0,
+      singleCount > 0 && rateCard.price_single != null && rateCard.single_available
+        ? rateCard.price_single * singleCount
+        : 0,
+    ].reduce((sum, amount) => sum + amount, 0);
+  }
+
+  private async getBaseRateCards(filter: CruiseFilterInput): Promise<CruiseRateCard[]> {
     if (!filter.schedule || !filter.checkin_date) return [];
     const scheduleType = toScheduleType(filter.schedule);
     const year = getYear(filter.checkin_date);
     const checkinDate = filter.checkin_date;
 
-    const { data, error } = await this.supabase
-      .from('cruise_rate_card')
-      .select('cruise_name')
-      .eq('schedule_type', scheduleType)
-      .eq('valid_year', year)
-      .eq('is_active', true)
-      .or(
-        `and(valid_from.is.null,valid_to.is.null),and(valid_from.lte.${checkinDate},valid_to.gte.${checkinDate})`,
-      )
-      .order('cruise_name');
-
-    if (error || !data) return [];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return [...new Set((data as any[]).map((d) => d.cruise_name as string))];
-  }
-
-  async getRoomTypes(filter: CruiseFilterInput): Promise<CruiseRateCard[]> {
-    if (!filter.schedule || !filter.checkin_date || !filter.cruise_name) return [];
-    const scheduleType = toScheduleType(filter.schedule);
-    const year = getYear(filter.checkin_date);
-    const checkinDate = filter.checkin_date;
-
-    const { data, error } = await this.supabase
+    let query = this.supabase
       .from('cruise_rate_card')
       .select('*')
-      .eq('cruise_name', filter.cruise_name)
       .eq('schedule_type', scheduleType)
       .eq('valid_year', year)
       .eq('is_active', true)
       .or(
         `and(valid_from.is.null,valid_to.is.null),and(valid_from.lte.${checkinDate},valid_to.gte.${checkinDate})`,
-      )
+      );
+
+    if (filter.cruise_name) query = query.eq('cruise_name', filter.cruise_name);
+    if (filter.room_type) query = query.eq('room_type', filter.room_type);
+
+    const { data, error } = await query
+      .order('is_promotion', { ascending: false })
       .order('price_adult', { ascending: true })
       .order('display_order', { ascending: true });
 
     if (error || !data) return [];
     return data as CruiseRateCard[];
+  }
+
+  private async getApplicableRateCards(filter: CruiseFilterInput): Promise<CruiseRateCard[]> {
+    if (!filter.schedule || !filter.checkin_date) return [];
+    const scheduleType = toScheduleType(filter.schedule);
+
+    const { data, error } = await (this.supabase as any).rpc('get_applicable_cruise_rate_cards', {
+      p_schedule_type: scheduleType,
+      p_checkin_date: filter.checkin_date,
+      p_cruise_name: filter.cruise_name || null,
+      p_room_type: filter.room_type || null,
+      p_booking_date: new Date().toISOString().slice(0, 10),
+    });
+
+    if (!error && data) {
+      const applicableCards = data as CruiseRateCard[];
+      const baseCards = await this.getBaseRateCards(filter);
+
+      return applicableCards.map((card) => {
+        if (!card.promotion_code) return card;
+
+        const originalCard =
+          baseCards.find(
+            (candidate) =>
+              candidate.cruise_name === card.cruise_name &&
+              candidate.schedule_type === card.schedule_type &&
+              candidate.room_type === card.room_type &&
+              !candidate.promotion_code,
+          ) ||
+          baseCards.find(
+            (candidate) =>
+              candidate.cruise_name === card.cruise_name &&
+              candidate.schedule_type === card.schedule_type &&
+              candidate.room_type === card.room_type,
+          ) ||
+          null;
+
+        if (!originalCard) return card;
+
+        return {
+          ...card,
+          original_price_adult: originalCard.price_adult,
+          original_price_child: originalCard.price_child,
+          original_price_infant: originalCard.price_infant,
+          original_price_extra_bed: originalCard.price_extra_bed,
+          original_price_child_extra_bed: originalCard.price_child_extra_bed,
+          original_price_single: originalCard.price_single,
+          original_season_name: originalCard.season_name,
+        };
+      });
+    }
+    return this.getBaseRateCards(filter);
+  }
+
+  async getCruiseNames(filter: CruiseFilterInput): Promise<string[]> {
+    if (!filter.schedule || !filter.checkin_date) return [];
+    const cards = await this.getApplicableRateCards(filter);
+    return [...new Set(cards.map((d) => d.cruise_name as string))].sort();
+  }
+
+  async getRoomTypes(filter: CruiseFilterInput): Promise<CruiseRateCard[]> {
+    if (!filter.schedule || !filter.checkin_date || !filter.cruise_name) return [];
+    return this.getApplicableRateCards(filter);
   }
 
   async getRateCard(
@@ -209,26 +291,13 @@ export class CruisePriceCalculator {
     room_type: string,
     checkin_date: string,
   ): Promise<CruiseRateCard | null> {
-    const scheduleType = toScheduleType(schedule);
-    const year = getYear(checkin_date);
-
-    const { data, error } = await this.supabase
-      .from('cruise_rate_card')
-      .select('*')
-      .eq('cruise_name', cruise_name)
-      .eq('schedule_type', scheduleType)
-      .eq('room_type', room_type)
-      .eq('valid_year', year)
-      .eq('is_active', true)
-      .or(
-        `and(valid_from.is.null,valid_to.is.null),and(valid_from.lte.${checkin_date},valid_to.gte.${checkin_date})`,
-      )
-      .order('is_promotion', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (error || !data) return null;
-    return data as CruiseRateCard;
+    const cards = await this.getApplicableRateCards({
+      cruise_name,
+      schedule,
+      room_type,
+      checkin_date,
+    });
+    return cards[0] || null;
   }
 
   async getHolidaySurcharges(
@@ -401,6 +470,26 @@ export class CruisePriceCalculator {
 
     const grandTotal = subtotal + surchargeTotal + optionTotal;
 
+    let promotionOriginalSubtotal: number | null = null;
+    let promotionSavings = 0;
+    if (rateCard.promotion_code) {
+      const baseCards = await this.getBaseRateCards({
+        cruise_name: input.cruise_name,
+        schedule: input.schedule,
+        room_type: input.room_type,
+        checkin_date: input.checkin_date,
+      });
+      const baseRateCard =
+        baseCards.find((card) => card.id === rateCard.id) ||
+        baseCards.find((card) => card.room_type === rateCard.room_type && !card.promotion_code) ||
+        null;
+
+      if (baseRateCard) {
+        promotionOriginalSubtotal = this.calculateSubtotal(input, baseRateCard);
+        promotionSavings = Math.max(0, promotionOriginalSubtotal - subtotal);
+      }
+    }
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const priceBreakdown: Record<string, any> = {
       cruise_name: input.cruise_name,
@@ -410,6 +499,12 @@ export class CruisePriceCalculator {
       rate_card_id: rateCard.id,
       season_name: rateCard.season_name,
       is_promotion: rateCard.is_promotion,
+      promotion_code: rateCard.promotion_code || null,
+      promotion_name: rateCard.promotion_name || null,
+      promotion_quota_remaining: rateCard.promotion_quota_remaining ?? null,
+      promotion_original_subtotal: promotionOriginalSubtotal,
+      promotion_original_grand_total: promotionOriginalSubtotal != null ? promotionOriginalSubtotal + surchargeTotal + optionTotal : null,
+      promotion_savings: promotionSavings,
     };
 
     if (input.adult_count > 0) {

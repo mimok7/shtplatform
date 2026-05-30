@@ -38,20 +38,20 @@ export async function POST(req: NextRequest) {
             .ilike('requester_email', normalizedEmail);
 
         // 4. 조건 2: requester_user_id 일치
-        const { data: byUserId } = users?.id
-            ? await supabase
+        const { data: byUserId } = await (users?.id
+            ? supabase
                 .from('reservation_cancellation_request')
                 .select('*')
                 .eq('requester_user_id', users.id)
-            : Promise.resolve({ data: [] });
+            : Promise.resolve({ data: [] }));
 
         // 5. 조건 3: 예약의 re_user_id로 연결된 신청
-        const { data: byReservation } = reservationIds.length > 0
-            ? await supabase
+        const { data: byReservation } = await (reservationIds.length > 0
+            ? supabase
                 .from('reservation_cancellation_request')
                 .select('*')
                 .in('reservation_id', reservationIds)
-            : Promise.resolve({ data: [] });
+            : Promise.resolve({ data: [] }));
 
         // 중복 제거 후 최신순 정렬
         const allMap = new Map<string, any>();

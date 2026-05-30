@@ -6,6 +6,7 @@ import SectionBox from '@/components/SectionBox';
 import supabase from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { logStatusChange } from '@/lib/statusLog';
+import { openCentralReservationDetailModal } from '@/contexts/reservationDetailModalEvents';
 
 type RequestStatus = 'pending' | 'approved' | 'rejected' | 'cancelled' | 'completed';
 
@@ -181,6 +182,19 @@ export default function ManagerCancelRequestsPage() {
         return row.requester?.name || row.requester?.email || row.requester_email || row.refund_account_holder || '미상 신청자';
     };
 
+    const handleRowCardClick = (event: React.MouseEvent<HTMLElement>, row: CancelRow) => {
+        const target = event.target as HTMLElement;
+        if (target.closest('button, input, textarea, select, a, label')) return;
+
+        setSelectedRowId(row.id);
+        const userId = row.requester_user_id || row.reservation?.re_user_id;
+        if (!userId) {
+            alert('예약자 정보를 찾을 수 없어 통합 상세를 열 수 없습니다.');
+            return;
+        }
+        openCentralReservationDetailModal({ userId, mode: 'auto' });
+    };
+
     const fetchRows = async () => {
         setLoading(true);
         try {
@@ -326,7 +340,7 @@ export default function ManagerCancelRequestsPage() {
                 try {
                     await logStatusChange({
                         reservationId: row.reservation_id,
-                        oldStatus: row.reservation?.re_status || null,
+                        prevStatus: row.reservation?.re_status || undefined,
                         newStatus: 'cancelled',
                         changedBy: user.id,
                         note: `취소 요청 승인 (사유: ${REASON_LABEL[row.cancel_reason_category]})`,
@@ -960,7 +974,7 @@ export default function ManagerCancelRequestsPage() {
                                                     return (
                                                         <div
                                                             key={row.id}
-                                                            onClick={() => setSelectedRowId(row.id)}
+                                                            onClick={(event) => handleRowCardClick(event, row)}
                                                             className={`w-full rounded border px-3 py-2 text-left text-sm transition cursor-pointer ${selectedRowId === row.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:bg-gray-50'}`}
                                                         >
                                                             {serviceInfos.length > 0 && (

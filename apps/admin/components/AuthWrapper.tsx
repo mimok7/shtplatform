@@ -54,12 +54,15 @@ export function AuthWrapper({ children, requiredRole, allowedRoles }: AuthWrappe
   const [hasAccess, setHasAccess] = useState(false);
 
   useEffect(() => {
-    checkAuthAndPermission();
+    let cancelled = false;
+    checkAuthAndPermission(() => cancelled);
+    return () => { cancelled = true; };
   }, []);
 
-  const checkAuthAndPermission = async () => {
+  const checkAuthAndPermission = async (isCancelled: () => boolean = () => false) => {
     try {
       const { data: { user: authUser }, error } = await supabase.auth.getUser();
+      if (isCancelled()) return;
 
       if (error || !authUser) {
         // 로그인하지 않은 사용자
@@ -140,10 +143,11 @@ export function AuthWrapper({ children, requiredRole, allowedRoles }: AuthWrappe
       setHasAccess(true);
     } catch (error) {
       console.error('인증 확인 오류:', error);
+      if (isCancelled()) return;
       alert('인증 확인 중 오류가 발생했습니다.');
       router.push('/');
     } finally {
-      setLoading(false);
+      if (!isCancelled()) setLoading(false);
     }
   };
 
@@ -214,9 +218,11 @@ export function useUser() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
     const getUser = async () => {
       try {
         const { data: { user: authUser }, error } = await supabase.auth.getUser();
+        if (cancelled) return;
 
         if (error || !authUser) {
           setUser(null);
@@ -229,6 +235,7 @@ export function useUser() {
           .select('id, email, role, name')
           .eq('id', authUser.id)
           .single();
+        if (cancelled) return;
 
         console.log('🪝 useUser Hook - Profile 조회:', { profile, authUserId: authUser.id });
 
@@ -240,13 +247,15 @@ export function useUser() {
         });
       } catch (error) {
         console.error('사용자 정보 조회 오류:', error);
+        if (cancelled) return;
         setUser(null);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
     getUser();
+    return () => { cancelled = true; };
   }, []);
 
   return { user, loading };

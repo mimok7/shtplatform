@@ -316,6 +316,163 @@ export default function CustomerManagement() {
     return new Date(dateString).toLocaleDateString('ko-KR');
   };
 
+  const ROLE_LABELS: Record<string, string> = {
+    all: '전체',
+    member: '회원',
+    guest: '게스트',
+    manager: '매니저',
+    admin: '관리자',
+    partner: '파트너',
+    dispatcher: '배차',
+  };
+
+  const CUSTOMER_FIELD_LABELS: Record<string, string> = {
+    id: '고객 ID',
+    name: '이름',
+    english_name: '영문 이름',
+    email: '이메일',
+    phone: '전화번호',
+    phone_number: '전화번호',
+    role: '권한',
+    status: '상태',
+    display_status: '표시 상태',
+    show_status: '표시 상태',
+    nickname: '닉네임',
+    birthday: '생년월일',
+    birth_date: '생년월일',
+    birth: '생년월일',
+    child_birthday: '아동 생년월일',
+    child_birth_date: '아동 생년월일',
+    child_birth: '아동 생년월일',
+    child_birth_dates: '아동 생년월일',
+    avatar_url: '프로필 이미지',
+    created_at: '가입일',
+    updated_at: '수정일',
+    last_activity: '최근 활동',
+    last_sign_in_at: '최근 로그인',
+    confirmed_count: '확정 예약 수',
+    banned_until: '이용 제한 만료',
+  };
+
+  const HIDDEN_CUSTOMER_FIELDS = new Set([
+    'id',
+    'aud',
+    'email_confirmed_at',
+    'phone_confirmed_at',
+    'confirmation_token',
+    'recovery_token',
+    'email_change_token_new',
+    'email_change_token_current',
+    'reauthentication_token',
+    'is_anonymous',
+    'raw_app_meta_data',
+    'raw_user_meta_data',
+    'providers',
+    'identities',
+    'quotes',
+  ]);
+
+  const isCodeLikeField = (key: string) => {
+    const lowered = String(key || '').toLowerCase();
+    return (
+      lowered.endsWith('_id') ||
+      lowered.endsWith('_code') ||
+      lowered.includes('token') ||
+      lowered === 'code'
+    );
+  };
+
+  const visibleModalKeys = (customer: any) =>
+    Object.keys(customer || {})
+      .filter((key) => !HIDDEN_CUSTOMER_FIELDS.has(key) && !isCodeLikeField(key) && !!CUSTOMER_FIELD_LABELS[key])
+      .sort((a, b) => a.localeCompare(b));
+
+  const getFieldLabel = (key: string) => CUSTOMER_FIELD_LABELS[key] || '기타 정보';
+
+  const getRoleLabel = (role: string) => ROLE_LABELS[String(role || '').toLowerCase()] || role || '-';
+
+  const formatCardValue = (value: any) => {
+    if (value === null || value === undefined || value === '') return '-';
+    if (typeof value === 'number') return value.toLocaleString('ko-KR');
+    if (Array.isArray(value)) {
+      if (value.length === 0) return '-';
+      return value
+        .map((item) => {
+          if (item === null || item === undefined || item === '') return null;
+          if (typeof item === 'string') {
+            const dt = new Date(item);
+            if (!Number.isNaN(dt.getTime())) return dt.toLocaleDateString('ko-KR');
+            return item;
+          }
+          return String(item);
+        })
+        .filter(Boolean)
+        .join(', ');
+    }
+    if (typeof value === 'string') {
+      if (value.includes('T') && value.includes('-')) {
+        const dt = new Date(value);
+        if (!Number.isNaN(dt.getTime())) return dt.toLocaleString('ko-KR');
+      }
+      return value;
+    }
+    if (typeof value === 'object') {
+      try {
+        return JSON.stringify(value);
+      } catch {
+        return String(value);
+      }
+    }
+    return String(value);
+  };
+
+  const hasValue = (value: any) => value !== null && value !== undefined && String(value).trim() !== '';
+
+  const CARD_PRIMARY_KEYS = new Set(['name', 'email', 'phone_number', 'role']);
+  const CARD_ALWAYS_SHOW_KEYS = new Set(['last_activity', 'confirmed_count']);
+
+  const getCardFieldEntries = (customer: any) => {
+    const keys = Object.keys(customer || {}).sort((a, b) => a.localeCompare(b));
+    const orderedKeys = [
+      'english_name',
+      'birthday',
+      'birth_date',
+      'birth',
+      'child_birthday',
+      'child_birth_date',
+      'child_birth',
+      'child_birth_dates',
+      'status',
+      'display_status',
+      'show_status',
+      'nickname',
+      'created_at',
+      'updated_at',
+      'last_activity',
+      'last_sign_in_at',
+      'confirmed_count',
+      ...keys,
+    ];
+    const seen = new Set<string>();
+
+    return orderedKeys
+      .filter((key) => {
+        if (seen.has(key)) return false;
+        seen.add(key);
+        if (CARD_PRIMARY_KEYS.has(key)) return false;
+        if (HIDDEN_CUSTOMER_FIELDS.has(key)) return false;
+        if (isCodeLikeField(key)) return false;
+        if (!CUSTOMER_FIELD_LABELS[key]) return false;
+        if (CARD_ALWAYS_SHOW_KEYS.has(key)) return hasValue(customer?.[key]);
+        return hasValue(customer?.[key]);
+      })
+      .map((key) => ({
+        key,
+        label: getFieldLabel(key),
+        value: customer?.[key],
+      }));
+  };
+
   if (loading) {
     return <div className="min-h-screen bg-gray-50 flex items-center justify-center">
       <div className="text-lg text-gray-600">로딩 중...</div>
@@ -380,11 +537,11 @@ export default function CustomerManagement() {
             <div className="flex gap-2">
               {[
                 { label: '전체', value: 'all' },
-                { label: 'member', value: 'member' },
-                { label: 'guest', value: 'guest' },
-                { label: 'manager', value: 'manager' },
-                { label: 'partner', value: 'partner' },
-                { label: 'dispatcher', value: 'dispatcher' }
+                { label: '회원', value: 'member' },
+                { label: '게스트', value: 'guest' },
+                { label: '매니저', value: 'manager' },
+                { label: '파트너', value: 'partner' },
+                { label: '배차', value: 'dispatcher' }
               ].map(opt => (
                 <button
                   key={opt.value}
@@ -435,37 +592,32 @@ export default function CustomerManagement() {
 
         {/* 고객 목록 */}
         <div className="bg-white shadow overflow-hidden sm:rounded-md">
-          {customers.length === 0 ? (
+          {filteredCustomers.length === 0 ? (
             <div className="py-8 text-center text-gray-500">고객이 없습니다.</div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-              {customers
-                .filter((customer) => roleFilter === 'all' || customer.role === roleFilter)
-                .map((customer) => (
+              {filteredCustomers.map((customer) => (
                   <div key={customer.id} className="bg-gray-50 rounded-xl shadow-sm border border-gray-200 p-4 flex flex-col justify-between h-full">
                     <div className="mb-2">
-                      <div className="text-base font-semibold text-gray-900">{customer.name || '이름 없음'}</div>
-                      <div className="text-sm text-gray-500">{customer.email}</div>
-                      {customer.phone_number && (
-                        <div className="text-xs text-gray-400 mt-1">{customer.phone_number}</div>
-                      )}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-base font-semibold text-gray-900">{customer.name || '이름 없음'}</div>
+                        <span className="rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-700">
+                          {getRoleLabel(customer.role)}
+                        </span>
+                      </div>
+                      <div className="mt-1 text-xs text-gray-600">
+                        <span className="font-semibold text-blue-600">이메일:</span> {customer.email || '-'}
+                      </div>
+                      <div className="text-xs text-gray-600">
+                        <span className="font-semibold text-blue-600">전화번호:</span> {customer.phone_number || '-'}
+                      </div>
                     </div>
-                    <div className="text-xs text-gray-400 mb-2">
-                      {Object.keys(customer)
-                        .sort((a, b) => a.localeCompare(b))
-                        .map((key) => {
-                          const value = customer[key];
-                          const displayValue = value === null || value === undefined
-                            ? ''
-                            : typeof value === 'object'
-                              ? JSON.stringify(value)
-                              : String(value);
-                          return (
-                            <div key={key} className="mb-1">
-                              <span className="font-semibold text-green-800">{key}:</span> <span className="text-gray-700 break-all">{displayValue}</span>
-                            </div>
-                          );
-                        })}
+                    <div className="text-xs text-gray-500 mb-2 space-y-1">
+                      {getCardFieldEntries(customer).map((entry) => (
+                        <div key={entry.key}>
+                          <span className="font-semibold text-blue-600">{entry.label}:</span> {formatCardValue(entry.value)}
+                        </div>
+                      ))}
                     </div>
                     <div className="flex items-center justify-between mt-2 gap-2">
                       <button
@@ -483,7 +635,7 @@ export default function CustomerManagement() {
                       >상세보기</button>
                     </div>
                   </div>
-                ))}
+              ))}
             </div>
           )}
         </div>
@@ -505,8 +657,7 @@ export default function CustomerManagement() {
 
               <div className="space-y-4">
                 {Object.keys(selectedCustomer)
-                  .filter((key) => key !== 'quotes')
-                  .sort((a, b) => a.localeCompare(b))
+                  .filter((key) => visibleModalKeys(selectedCustomer).includes(key))
                   .map((key) => {
                     const originalValue = selectedCustomer[key];
                     const value = editValues[key] ?? '';
@@ -514,17 +665,17 @@ export default function CustomerManagement() {
                     if (key === 'role') {
                       return (
                         <div key={key}>
-                          <label className="block text-sm font-medium text-gray-700">{key}</label>
+                          <label className="block text-sm font-medium text-blue-600">{getFieldLabel(key)}</label>
                           <select
                             className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 bg-white"
                             value={value}
                             onChange={(e) => setEditValues((prev) => ({ ...prev, [key]: e.target.value }))}
                           >
-                            <option value="guest">guest</option>
-                            <option value="member">member</option>
-                            <option value="manager">manager</option>
-                            <option value="admin">admin</option>
-                            <option value="dispatcher">dispatcher</option>
+                            <option value="guest">게스트</option>
+                            <option value="member">회원</option>
+                            <option value="manager">매니저</option>
+                            <option value="admin">관리자</option>
+                            <option value="dispatcher">배차</option>
                             {!['guest', 'member', 'manager', 'admin', 'dispatcher'].includes(value) && (
                               <option value={value}>{value}</option>
                             )}
@@ -536,14 +687,14 @@ export default function CustomerManagement() {
                     if (typeof originalValue === 'boolean') {
                       return (
                         <div key={key}>
-                          <label className="block text-sm font-medium text-gray-700">{key}</label>
+                          <label className="block text-sm font-medium text-blue-600">{getFieldLabel(key)}</label>
                           <select
                             className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 bg-white"
                             value={value}
                             onChange={(e) => setEditValues((prev) => ({ ...prev, [key]: e.target.value }))}
                           >
-                            <option value="true">true</option>
-                            <option value="false">false</option>
+                            <option value="true">예</option>
+                            <option value="false">아니오</option>
                           </select>
                         </div>
                       );
@@ -552,7 +703,7 @@ export default function CustomerManagement() {
                     if (originalValue && typeof originalValue === 'object') {
                       return (
                         <div key={key}>
-                          <label className="block text-sm font-medium text-gray-700">{key}</label>
+                          <label className="block text-sm font-medium text-blue-600">{getFieldLabel(key)}</label>
                           <textarea
                             value={value}
                             onChange={(e) => setEditValues((prev) => ({ ...prev, [key]: e.target.value }))}
@@ -565,7 +716,7 @@ export default function CustomerManagement() {
 
                     return (
                       <div key={key}>
-                        <label className="block text-sm font-medium text-gray-700">{key}</label>
+                        <label className="block text-sm font-medium text-blue-600">{getFieldLabel(key)}</label>
                         <input
                           type="text"
                           value={value}
@@ -603,7 +754,7 @@ export default function CustomerManagement() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">견적 이력</label>
+                  <label className="block text-sm font-medium text-blue-600 mb-2">견적 이력</label>
                   <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-md">
                     {selectedCustomer.quotes?.length > 0 ? (
                       selectedCustomer.quotes.map((quote: any) => (

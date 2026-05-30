@@ -1106,7 +1106,7 @@ function BulkReservationContent() {
                 return bTime - aTime;
             });
 
-            const baseUser = (emailUsers || [])[0] || {};
+            const baseUser: any = (emailUsers || [])[0] || {};
             openCentralReservationDetailModal({
                 userInfo: {
                     ...baseUser,

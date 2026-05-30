@@ -14,6 +14,13 @@ import {
 
 const calculator = new CruisePriceCalculator(supabase);
 
+const hasOriginalPrice = (currentPrice: number | null | undefined, originalPrice: number | null | undefined) => {
+  return typeof currentPrice === 'number'
+    && typeof originalPrice === 'number'
+    && originalPrice > 0
+    && originalPrice !== currentPrice;
+};
+
 function CruiseQuoteNewContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -287,6 +294,17 @@ function CruiseQuoteNewContent() {
     return roomTypeCards.find(card => card.room_type === form.room_type) || null;
   }, [roomTypeCards, form.room_type]);
 
+  const selectedPromotionCode = priceResult?.price_breakdown?.promotion_code || priceResult?.rate_card?.promotion_code || null;
+  const selectedPromotionName = priceResult?.price_breakdown?.promotion_name || priceResult?.rate_card?.promotion_name || '';
+  const selectedPromotionSavings = Number(priceResult?.price_breakdown?.promotion_savings || 0);
+  const selectedPromotionOriginalTotal = Number(priceResult?.price_breakdown?.promotion_original_grand_total || 0);
+  const selectedRateHasOriginalAdult = hasOriginalPrice(selectedRateCard?.price_adult, selectedRateCard?.original_price_adult);
+  const selectedRateHasOriginalChild = hasOriginalPrice(selectedRateCard?.price_child, selectedRateCard?.original_price_child);
+  const selectedRateHasOriginalChildExtraBed = hasOriginalPrice(selectedRateCard?.price_child_extra_bed, selectedRateCard?.original_price_child_extra_bed);
+  const selectedRateHasOriginalInfant = hasOriginalPrice(selectedRateCard?.price_infant, selectedRateCard?.original_price_infant);
+  const selectedRateHasOriginalExtraBed = hasOriginalPrice(selectedRateCard?.price_extra_bed, selectedRateCard?.original_price_extra_bed);
+  const selectedRateHasOriginalSingle = hasOriginalPrice(selectedRateCard?.price_single, selectedRateCard?.original_price_single);
+
   // ── 객실별 cruise_info 매칭 (한글/영문 room_type 모두 지원) ──
   const getCruiseInfoForRoom = useCallback((roomType: string, roomTypeEn?: string) => {
     if (!cruiseInfoList.length) return null;
@@ -410,6 +428,26 @@ function CruiseQuoteNewContent() {
 
       // 1. 객실 데이터 저장 (cruise_rate_card 기반) - 모든 인원수 정보 저장
       if (priceResult && form.adult_count > 0) {
+        if (priceResult.price_breakdown?.promotion_code) {
+          const { data: claimData, error: claimError } = await (supabase as any).rpc('claim_cruise_promotion_usage', {
+            p_promotion_code: priceResult.price_breakdown.promotion_code,
+            p_quote_id: quoteId,
+            p_metadata: {
+              source: 'quote_app_cruise',
+              checkin: form.checkin,
+              schedule: form.schedule,
+              cruise_name: form.cruise_name,
+              room_type: form.room_type,
+              total_price: priceResult.grand_total,
+            },
+          });
+
+          const claim = Array.isArray(claimData) ? claimData[0] : null;
+          if (claimError || !claim?.claimed) {
+            throw new Error('프로모션 선착순 수량이 마감되어 저장할 수 없습니다. 객실을 다시 선택해 주세요.');
+          }
+        }
+
         const { data: roomData, error: roomError } = await supabase
           .from('room')
           .insert({
@@ -461,10 +499,15 @@ function CruiseQuoteNewContent() {
       }
 
       // 2. 차량 데이터 저장 (rentcar_price 기준 조회 후 크루즈 차량(service_type='car')로 저장)
+      const lyraVehicleDiscountRate = priceResult?.price_breakdown?.promotion_code === 'LYRA-GRANZER-1N2D-VOUCHER-2026-30' ? 0.5 : 0;
       for (const vehicle of vehicles) {
         if (vehicle.wayType && vehicle.route && vehicle.carType && vehicle.count > 0) {
           const rentPriceInfo = await getRentPriceInfo(vehicle.wayType, vehicle.route || '', vehicle.carType);
           if (!rentPriceInfo?.rent_code) continue;
+          const originalUnitPrice = Number(rentPriceInfo.price || 0);
+          const vehicleUnitPrice = lyraVehicleDiscountRate > 0
+            ? Math.round(originalUnitPrice * (1 - lyraVehicleDiscountRate))
+            : originalUnitPrice;
 
           const { data: carData, error: carError } = await supabase
             .from('car')
@@ -484,8 +527,8 @@ function CruiseQuoteNewContent() {
               service_type: 'car',
               service_ref_id: carData.id,
               quantity: vehicle.count,
-              unit_price: Number(rentPriceInfo.price || 0),
-              total_price: Number(rentPriceInfo.price || 0) * Number(vehicle.count || 0),
+              unit_price: vehicleUnitPrice,
+              total_price: vehicleUnitPrice * Number(vehicle.count || 0),
               usage_date: form.checkin,
               options: {
                 way_type: vehicle.wayType,
@@ -494,6 +537,9 @@ function CruiseQuoteNewContent() {
                 rentcar_price_code: rentPriceInfo.rent_code,
                 rental_type: rentPriceInfo.rental_type || '단독대여',
                 source_table: 'rentcar_price',
+                promotion_code: priceResult?.price_breakdown?.promotion_code || null,
+                promotion_vehicle_discount_rate: lyraVehicleDiscountRate,
+                original_unit_price: originalUnitPrice,
               }
             });
           if (itemError) throw itemError;
@@ -815,11 +861,21 @@ function CruiseQuoteNewContent() {
                             </div>
                           )}
                           <div className="mt-2 text-sm text-blue-600 font-medium">
-                            성인 {formatVND(card.price_adult)}/인
+                            {card.promotion_code ? '프로모션가 ' : ''}성인 {formatVND(card.price_adult)}/인
                           </div>
+                          {hasOriginalPrice(card.price_adult, card.original_price_adult) && (
+                            <div className="text-xs text-gray-400 line-through">
+                              기존 성인 {formatVND(card.original_price_adult)}/인
+                            </div>
+                          )}
                           {card.price_child != null && (
                             <div className="text-xs text-gray-500">
-                              아동 {formatVND(card.price_child)}/인
+                              {card.promotion_code ? '프로모션가 ' : ''}아동 {formatVND(card.price_child)}/인
+                            </div>
+                          )}
+                          {hasOriginalPrice(card.price_child, card.original_price_child) && (
+                            <div className="text-xs text-gray-400 line-through">
+                              기존 아동 {formatVND(card.original_price_child)}/인
                             </div>
                           )}
                           {card.season_name && (
@@ -827,10 +883,13 @@ function CruiseQuoteNewContent() {
                               {card.season_name}
                             </span>
                           )}
-                          {card.is_promotion && (
+                          {(card.is_promotion || card.promotion_code) && (
                             <span className="inline-block mt-1 ml-1 px-2 py-0.5 bg-red-100 text-red-600 text-xs rounded-full">
-                              프로모션
+                              🎁 프로모션
                             </span>
+                          )}
+                          {card.promotion_name && (
+                            <div className="mt-1 text-xs font-medium text-red-600">{card.promotion_name}</div>
                           )}
                         </button>
                       );
@@ -848,6 +907,11 @@ function CruiseQuoteNewContent() {
                       <label className="block text-xs font-medium text-gray-600 mb-1">
                         성인 ({formatVND(selectedRateCard.price_adult)}/인)
                       </label>
+                      {selectedRateHasOriginalAdult && (
+                        <div className="mb-1 text-[11px] text-gray-400 line-through">
+                          기존 {formatVND(selectedRateCard.original_price_adult)}/인
+                        </div>
+                      )}
                       <input
                         type="number" min="0" max="20"
                         value={form.adult_count || ''}
@@ -862,6 +926,11 @@ function CruiseQuoteNewContent() {
                         <label className="block text-xs font-medium text-gray-600 mb-1">
                           아동 5~11세 ({formatVND(selectedRateCard.price_child)}/인)
                         </label>
+                        {selectedRateHasOriginalChild && (
+                          <div className="mb-1 text-[11px] text-gray-400 line-through">
+                            기존 {formatVND(selectedRateCard.original_price_child)}/인
+                          </div>
+                        )}
                         <input
                           type="number" min="0" max="10"
                           value={form.child_count || ''}
@@ -877,6 +946,11 @@ function CruiseQuoteNewContent() {
                         <label className="block text-xs font-medium text-gray-600 mb-1">
                           아동 엑스트라베드 ({formatVND(selectedRateCard.price_child_extra_bed)}/인)
                         </label>
+                        {selectedRateHasOriginalChildExtraBed && (
+                          <div className="mb-1 text-[11px] text-gray-400 line-through">
+                            기존 {formatVND(selectedRateCard.original_price_child_extra_bed)}/인
+                          </div>
+                        )}
                         <input
                           type="number" min="0" max="5"
                           value={form.child_extra_bed_count || ''}
@@ -892,6 +966,11 @@ function CruiseQuoteNewContent() {
                         <label className="block text-xs font-medium text-gray-600 mb-1">
                           유아 0~4세 ({formatVND(selectedRateCard.price_infant)}/인)
                         </label>
+                        {selectedRateHasOriginalInfant && (
+                          <div className="mb-1 text-[11px] text-gray-400 line-through">
+                            기존 {formatVND(selectedRateCard.original_price_infant)}/인
+                          </div>
+                        )}
                         <input
                           type="number" min="0" max="5"
                           value={form.infant_count || ''}
@@ -907,6 +986,11 @@ function CruiseQuoteNewContent() {
                         <label className="block text-xs font-medium text-gray-600 mb-1">
                           엑스트라베드 ({formatVND(selectedRateCard.price_extra_bed)}/인)
                         </label>
+                        {selectedRateHasOriginalExtraBed && (
+                          <div className="mb-1 text-[11px] text-gray-400 line-through">
+                            기존 {formatVND(selectedRateCard.original_price_extra_bed)}/인
+                          </div>
+                        )}
                         <input
                           type="number" min="0" max="5"
                           value={form.extra_bed_count || ''}
@@ -922,6 +1006,11 @@ function CruiseQuoteNewContent() {
                         <label className="block text-xs font-medium text-gray-600 mb-1">
                           싱글차지 ({formatVND(selectedRateCard.price_single)}/인)
                         </label>
+                        {selectedRateHasOriginalSingle && (
+                          <div className="mb-1 text-[11px] text-gray-400 line-through">
+                            기존 {formatVND(selectedRateCard.original_price_single)}/인
+                          </div>
+                        )}
                         <input
                           type="number" min="0" max="5"
                           value={form.single_count || ''}
@@ -1099,7 +1188,31 @@ function CruiseQuoteNewContent() {
                   {priceResult.rate_card.season_name && (
                     <div className="mt-2 text-xs text-gray-500">
                       🏷️ 적용 시즌: {priceResult.rate_card.season_name}
-                      {priceResult.rate_card.is_promotion && ' (프로모션)'}
+                      {selectedPromotionCode && ' (프로모션)'}
+                    </div>
+                  )}
+
+                  {selectedPromotionCode && (
+                    <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                      <div className="flex items-center justify-between gap-2 font-semibold">
+                        <span>🎁 {selectedPromotionName || '프로모션 적용'}</span>
+                        <span>{selectedPromotionCode}</span>
+                      </div>
+                      {selectedPromotionSavings > 0 && selectedPromotionOriginalTotal > 0 && (
+                        <div className="mt-2 space-y-1 text-xs">
+                          <div className="flex justify-between text-red-500">
+                            <span>정상가 기준</span>
+                            <span className="line-through">{formatVND(selectedPromotionOriginalTotal)}</span>
+                          </div>
+                          <div className="flex justify-between font-semibold text-red-700">
+                            <span>프로모션 차액</span>
+                            <span>-{formatVND(selectedPromotionSavings)}</span>
+                          </div>
+                        </div>
+                      )}
+                      {priceResult.price_breakdown?.promotion_quota_remaining != null && (
+                        <p className="mt-1 text-xs text-red-600">잔여 수량: {priceResult.price_breakdown.promotion_quota_remaining}건</p>
+                      )}
                     </div>
                   )}
 

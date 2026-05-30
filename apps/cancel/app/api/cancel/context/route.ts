@@ -177,7 +177,7 @@ export async function POST(req: NextRequest) {
                     .from(config.table)
                     .select(config.select)
                     .in('reservation_id', allIds);
-                return { serviceType, config, rows: data || [] };
+                return { serviceType, config, rows: (data || []) as any[] };
             }),
         );
 

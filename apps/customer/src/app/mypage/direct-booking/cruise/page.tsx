@@ -15,6 +15,13 @@ import {
 
 const calculator = new CruisePriceCalculator(supabase);
 
+const hasOriginalPrice = (currentPrice: number | null | undefined, originalPrice: number | null | undefined) => {
+    return typeof currentPrice === 'number'
+        && typeof originalPrice === 'number'
+        && originalPrice > 0
+        && originalPrice !== currentPrice;
+};
+
 type RoomSelection = {
     local_id: string;
     rate_card_id: string;
@@ -32,6 +39,7 @@ type MultiRoomPriceResult = {
     room_results: Array<{
         selection: RoomSelection;
         rate_card: CruiseRateCard;
+        price_breakdown: Record<string, any>;
         subtotal: number;
         surcharge_total: number;
         room_multiplier: number;
@@ -549,6 +557,7 @@ function DirectBookingCruiseContent() {
                         single_count: selection.single_count,
                         selected_options: [],
                     });
+                    if (!result) return null;
 
                     // 객실수는 인원/가격 계산과 무관하게 메타데이터로만 저장한다.
                     // 입력된 인원수가 곧 총 인원수이며, 가격은 인원 기준 1회만 합산한다.
@@ -556,7 +565,8 @@ function DirectBookingCruiseContent() {
 
                     return {
                         selection,
-                        rate_card: rateCard,
+                        rate_card: result.rate_card,
+                        price_breakdown: result.price_breakdown,
                         subtotal: result.subtotal,
                         surcharge_total: result.surcharge_total,
                         room_multiplier: 1,
@@ -575,6 +585,8 @@ function DirectBookingCruiseContent() {
             const surcharge_total = room_results.reduce((sum, r) => sum + r.surcharge_total, 0);
             const option_total = selectedTourOptions.reduce((sum, opt) => sum + (opt.unit_price * opt.quantity), 0);
             const grand_total = subtotal + surcharge_total + option_total;
+            const promotion_savings = room_results.reduce((sum, r) => sum + Number(r.price_breakdown?.promotion_savings || 0), 0);
+            const promotion_original_grand_total = promotion_savings > 0 ? grand_total + promotion_savings : null;
 
             const total_room_count = isCatherineHorizonCruise
                 ? 0
@@ -586,6 +598,11 @@ function DirectBookingCruiseContent() {
             const total_infant_count = room_results.reduce((sum, r) => sum + r.selection.infant_count, 0);
             const total_extra_bed_count = room_results.reduce((sum, r) => sum + r.selection.extra_bed_count, 0);
             const total_single_count = room_results.reduce((sum, r) => sum + r.selection.single_count, 0);
+            const appliedPromotions = Array.from(new Set(
+                room_results
+                    .map((r) => r.rate_card.promotion_code)
+                    .filter(Boolean)
+            ));
 
             const total_effective_adult_count = total_adult_count + total_extra_bed_count;
             const total_effective_child_count = total_child_count + total_child_extra_bed_count;
@@ -606,6 +623,13 @@ function DirectBookingCruiseContent() {
                     subtotal_per_room: r.subtotal,
                     surcharge_per_room: r.surcharge_total,
                     total_for_selection: r.total,
+                    is_promotion: r.rate_card.is_promotion,
+                    promotion_code: r.rate_card.promotion_code || null,
+                    promotion_name: r.rate_card.promotion_name || null,
+                    promotion_quota_remaining: r.rate_card.promotion_quota_remaining ?? null,
+                    promotion_original_subtotal: r.price_breakdown?.promotion_original_subtotal ?? null,
+                    promotion_original_grand_total: r.price_breakdown?.promotion_original_grand_total ?? null,
+                    promotion_savings: r.price_breakdown?.promotion_savings || 0,
                 })),
                 selected_options: selectedTourOptions,
                 subtotal,
@@ -617,6 +641,10 @@ function DirectBookingCruiseContent() {
                 total_effective_adult_count,
                 total_effective_child_count,
                 total_infant_count,
+                promotion_code: appliedPromotions[0] || null,
+                applied_promotions: appliedPromotions,
+                promotion_savings,
+                promotion_original_grand_total,
             };
 
             setPriceResult({
@@ -675,6 +703,14 @@ function DirectBookingCruiseContent() {
         if (!first) return null;
         return roomTypeCards.find((card) => card.id === first.rate_card_id) || null;
     }, [roomSelections, roomTypeCards]);
+
+    const selectedPromotionCode = priceResult?.price_breakdown?.promotion_code || null;
+    const selectedPromotionSavings = Number(priceResult?.price_breakdown?.promotion_savings || 0);
+    const selectedPromotionOriginalTotal = Number(priceResult?.price_breakdown?.promotion_original_grand_total || 0);
+    const selectedPromotionNames = useMemo(() => {
+        if (!priceResult) return [];
+        return Array.from(new Set(priceResult.room_results.map((r) => r.rate_card.promotion_name).filter(Boolean))) as string[];
+    }, [priceResult]);
 
     // ── 객실별 cruise_info 매칭 (한글/영문 room_type 모두 지원) ──
     const getCruiseInfoForRoom = useCallback((roomType: string, roomTypeEn?: string) => {
@@ -873,6 +909,25 @@ function DirectBookingCruiseContent() {
                     .insert(cruiseRows);
                 if (insertCruiseError) throw insertCruiseError;
 
+                if (priceResult!.price_breakdown?.promotion_code) {
+                    const { data: claimData, error: claimError } = await (supabase as any).rpc('claim_cruise_promotion_usage', {
+                        p_promotion_code: priceResult!.price_breakdown.promotion_code,
+                        p_quote_id: quoteId,
+                        p_reservation_id: existingReservationId,
+                        p_metadata: {
+                            source: 'customer_direct_booking_cruise_edit',
+                            checkin: form.checkin,
+                            schedule: form.schedule,
+                            cruise_name: form.cruise_name,
+                            total_price: finalTotalAmount,
+                        },
+                    });
+                    const claim = Array.isArray(claimData) ? claimData[0] : null;
+                    if (claimError || !claim?.claimed) {
+                        throw new Error('프로모션 선착순 수량이 마감되어 저장할 수 없습니다. 객실을 다시 선택해 주세요.');
+                    }
+                }
+
                 // ── 차량 예약은 별도 페이지(/cruise/vehicle)에서 처리 ──
 
                 if (mode === 'continue') {
@@ -913,6 +968,25 @@ function DirectBookingCruiseContent() {
                 .insert(cruiseRows);
 
             if (cruiseError) throw cruiseError;
+
+            if (priceResult!.price_breakdown?.promotion_code) {
+                const { data: claimData, error: claimError } = await (supabase as any).rpc('claim_cruise_promotion_usage', {
+                    p_promotion_code: priceResult!.price_breakdown.promotion_code,
+                    p_quote_id: quoteId,
+                    p_reservation_id: newReservation.re_id,
+                    p_metadata: {
+                        source: 'customer_direct_booking_cruise',
+                        checkin: form.checkin,
+                        schedule: form.schedule,
+                        cruise_name: form.cruise_name,
+                        total_price: finalTotalAmount,
+                    },
+                });
+                const claim = Array.isArray(claimData) ? claimData[0] : null;
+                if (claimError || !claim?.claimed) {
+                    throw new Error('프로모션 선착순 수량이 마감되어 저장할 수 없습니다. 객실을 다시 선택해 주세요.');
+                }
+            }
 
             // 크루즈 선착장 정보 조회 (참고용 - 차량 페이지에서 사용)
             // 차량 예약 저장은 별도 페이지(/cruise/vehicle)에서 처리
@@ -1201,11 +1275,20 @@ function DirectBookingCruiseContent() {
                                                         {roomTypeCards.map((card) => (
                                                             <option key={card.id} value={card.id}>
                                                                 {isDayCruise
-                                                                    ? `${card.season_name || card.room_type}${card.season_name && card.room_type && card.season_name !== card.room_type ? ` (${card.room_type})` : ''}`
-                                                                    : card.room_type}
+                                                                    ? `${card.season_name || card.room_type}${card.season_name && card.room_type && card.season_name !== card.room_type ? ` (${card.room_type})` : ''}${card.promotion_code ? ' 🎁' : ''}`
+                                                                    : `${card.room_type}${card.promotion_code ? ' 🎁' : ''}`}
                                                             </option>
                                                         ))}
                                                     </select>
+                                                    {roomCard?.promotion_code && (
+                                                        <div className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                                                            <span className="font-semibold">🎁 {roomCard.promotion_name || '프로모션 적용'}</span>
+                                                            <span className="ml-2">{roomCard.promotion_code}</span>
+                                                            <div className="mt-1 text-red-600">
+                                                                기존 요금은 참고용이며 계산은 프로모션 요금으로 적용됩니다.
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                 </div>
 
                                                 {roomCard && (
@@ -1225,7 +1308,12 @@ function DirectBookingCruiseContent() {
 
                                                         <div className="space-y-3">
                                                             <div className="border border-gray-300 rounded-lg p-3 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-                                                                <label className="text-sm font-medium text-gray-700">성인({formatVND(roomCard.price_adult)}/인)</label>
+                                                                <div>
+                                                                    <label className="text-sm font-medium text-gray-700">성인({formatVND(roomCard.price_adult)}/인)</label>
+                                                                    {hasOriginalPrice(roomCard.price_adult, roomCard.original_price_adult) && (
+                                                                        <div className="text-xs text-gray-400 line-through">기존 {formatVND(roomCard.original_price_adult)}/인</div>
+                                                                    )}
+                                                                </div>
                                                                 <StepperNumberInput
                                                                     min={0}
                                                                     max={20}
@@ -1237,7 +1325,12 @@ function DirectBookingCruiseContent() {
 
                                                             {roomCard.price_child != null && (
                                                                 <div className="border border-gray-300 rounded-lg p-3 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-                                                                    <label className="text-sm font-medium text-gray-700">아동 5~11세({formatVND(roomCard.price_child)}/인)</label>
+                                                                    <div>
+                                                                        <label className="text-sm font-medium text-gray-700">아동 5~11세({formatVND(roomCard.price_child)}/인)</label>
+                                                                        {hasOriginalPrice(roomCard.price_child, roomCard.original_price_child) && (
+                                                                            <div className="text-xs text-gray-400 line-through">기존 {formatVND(roomCard.original_price_child)}/인</div>
+                                                                        )}
+                                                                    </div>
                                                                     <StepperNumberInput
                                                                         min={0}
                                                                         max={10}
@@ -1253,7 +1346,12 @@ function DirectBookingCruiseContent() {
 
                                                             {roomCard.price_child_extra_bed != null && roomCard.extra_bed_available && (
                                                                 <div className="border border-gray-300 rounded-lg p-3 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-                                                                    <label className="text-sm font-medium text-gray-700">아동 엑스트라베드({formatVND(roomCard.price_child_extra_bed)}/인)</label>
+                                                                    <div>
+                                                                        <label className="text-sm font-medium text-gray-700">아동 엑스트라베드({formatVND(roomCard.price_child_extra_bed)}/인)</label>
+                                                                        {hasOriginalPrice(roomCard.price_child_extra_bed, roomCard.original_price_child_extra_bed) && (
+                                                                            <div className="text-xs text-gray-400 line-through">기존 {formatVND(roomCard.original_price_child_extra_bed)}/인</div>
+                                                                        )}
+                                                                    </div>
                                                                     <StepperNumberInput
                                                                         min={0}
                                                                         max={5}
@@ -1273,7 +1371,12 @@ function DirectBookingCruiseContent() {
 
                                                             {roomCard.price_infant != null && (
                                                                 <div className="border border-gray-300 rounded-lg p-3 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-                                                                    <label className="text-sm font-medium text-gray-700">유아 0~4세({formatVND(roomCard.price_infant)}/인)</label>
+                                                                    <div>
+                                                                        <label className="text-sm font-medium text-gray-700">유아 0~4세({formatVND(roomCard.price_infant)}/인)</label>
+                                                                        {hasOriginalPrice(roomCard.price_infant, roomCard.original_price_infant) && (
+                                                                            <div className="text-xs text-gray-400 line-through">기존 {formatVND(roomCard.original_price_infant)}/인</div>
+                                                                        )}
+                                                                    </div>
                                                                     <StepperNumberInput
                                                                         min={0}
                                                                         max={5}
@@ -1293,7 +1396,12 @@ function DirectBookingCruiseContent() {
 
                                                             {roomCard.price_extra_bed != null && roomCard.extra_bed_available && (
                                                                 <div className="border border-gray-300 rounded-lg p-3 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-                                                                    <label className="text-sm font-medium text-gray-700">엑스트라베드({formatVND(roomCard.price_extra_bed)}/인)</label>
+                                                                    <div>
+                                                                        <label className="text-sm font-medium text-gray-700">엑스트라베드({formatVND(roomCard.price_extra_bed)}/인)</label>
+                                                                        {hasOriginalPrice(roomCard.price_extra_bed, roomCard.original_price_extra_bed) && (
+                                                                            <div className="text-xs text-gray-400 line-through">기존 {formatVND(roomCard.original_price_extra_bed)}/인</div>
+                                                                        )}
+                                                                    </div>
                                                                     <StepperNumberInput
                                                                         min={0}
                                                                         max={5}
@@ -1306,7 +1414,12 @@ function DirectBookingCruiseContent() {
 
                                                             {roomCard.price_single != null && roomCard.single_available && (
                                                                 <div className="border border-gray-300 rounded-lg p-3 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-                                                                    <label className="text-sm font-medium text-gray-700">싱글차지({formatVND(roomCard.price_single)}/인)</label>
+                                                                    <div>
+                                                                        <label className="text-sm font-medium text-gray-700">싱글차지({formatVND(roomCard.price_single)}/인)</label>
+                                                                        {hasOriginalPrice(roomCard.price_single, roomCard.original_price_single) && (
+                                                                            <div className="text-xs text-gray-400 line-through">기존 {formatVND(roomCard.original_price_single)}/인</div>
+                                                                        )}
+                                                                    </div>
                                                                     <StepperNumberInput
                                                                         min={0}
                                                                         max={5}
@@ -1335,6 +1448,51 @@ function DirectBookingCruiseContent() {
                                             </button>
                                         </div>
                                     )}
+                                </div>
+                            )}
+
+                            {priceResult && (
+                                <div className="border border-green-200 rounded-lg p-4 bg-green-50">
+                                    <div className="flex justify-between text-sm font-medium">
+                                        <span>객실 소계</span>
+                                        <span>{formatVND(priceResult.subtotal)}</span>
+                                    </div>
+                                    {priceResult.surcharge_total > 0 && (
+                                        <div className="mt-1 flex justify-between text-sm text-orange-700">
+                                            <span>추가요금</span>
+                                            <span>{formatVND(priceResult.surcharge_total)}</span>
+                                        </div>
+                                    )}
+                                    {priceResult.option_total > 0 && (
+                                        <div className="mt-1 flex justify-between text-sm text-purple-700">
+                                            <span>옵션</span>
+                                            <span>{formatVND(priceResult.option_total)}</span>
+                                        </div>
+                                    )}
+                                    {selectedPromotionCode && (
+                                        <div className="mt-3 rounded-lg border border-red-200 bg-white p-3 text-sm text-red-700">
+                                            <div className="flex items-center justify-between gap-2 font-semibold">
+                                                <span>🎁 {selectedPromotionNames.join(', ') || '프로모션 적용'}</span>
+                                                <span>{selectedPromotionCode}</span>
+                                            </div>
+                                            {selectedPromotionSavings > 0 && selectedPromotionOriginalTotal > 0 && (
+                                                <div className="mt-2 space-y-1 text-xs">
+                                                    <div className="flex justify-between text-red-500">
+                                                        <span>정상가 기준</span>
+                                                        <span className="line-through">{formatVND(selectedPromotionOriginalTotal)}</span>
+                                                    </div>
+                                                    <div className="flex justify-between font-semibold text-red-700">
+                                                        <span>프로모션 차액</span>
+                                                        <span>-{formatVND(selectedPromotionSavings)}</span>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                    <div className="mt-3 flex justify-between border-t-2 border-green-300 pt-3 text-lg font-bold">
+                                        <span>총 예상 금액</span>
+                                        <span className="text-green-700">{formatVND(priceResult.grand_total)}</span>
+                                    </div>
                                 </div>
                             )}
 

@@ -179,6 +179,16 @@ const normalizeType = (type: string): string => {
     return t;
 };
 
+const extractPromotionInfo = (row: any) => {
+    const breakdown = row?._reservation_price_breakdown || row?.price_breakdown || row?.priceBreakdown || {};
+    const roomSelections = Array.isArray(breakdown?.room_selections) ? breakdown.room_selections : [];
+    const firstRoomPromotion = roomSelections.find((item: any) => item?.promotion_code);
+    const code = breakdown?.promotion_code || row?.promotion_code || firstRoomPromotion?.promotion_code || null;
+    const name = breakdown?.promotion_name || row?.promotion_name || firstRoomPromotion?.promotion_name || '';
+    const sequence = Number(breakdown?.promotion_sequence) || null;
+    return code ? { code, name, sequence } : null;
+};
+
 export default function ServiceCardBody({
     serviceType,
     data,
@@ -238,6 +248,24 @@ export default function ServiceCardBody({
         );
     };
 
+    const promotionInfo = extractPromotionInfo(row);
+    const renderPromotionBadge = () => {
+        if (!promotionInfo) return null;
+        return (
+            <div className="flex flex-wrap items-center gap-1.5 mb-0.5">
+                <span className="inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700 border border-red-100">
+                    🎁 프로모션
+                </span>
+                {promotionInfo.sequence ? (
+                    <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-800 border border-amber-200">
+                        {promotionInfo.sequence}번째 예약
+                    </span>
+                ) : null}
+                <span className="text-[11px] font-medium text-red-600">{promotionInfo.name || promotionInfo.code}</span>
+            </div>
+        );
+    };
+
     // ========== CRUISE ==========
     if (type === 'cruise') {
         const cruiseInfo = row?._cruise_info || row?.cruise_info || {};
@@ -256,6 +284,7 @@ export default function ServiceCardBody({
         return (
             <div className="flex flex-col gap-1 text-sm text-gray-700 mt-1">
                 {renderCustomer()}
+                {renderPromotionBadge()}
                 <div className="flex flex-wrap items-center gap-1.5 mb-0.5">
                     {toBool(row?.connecting_room) && (
                         <span className="inline-flex items-center rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-700 border border-indigo-100">

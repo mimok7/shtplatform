@@ -1,5 +1,9 @@
 {
   "mcpServers": {
+    "supabase": {
+      "type": "http",
+      "url": "https://mcp.supabase.com/mcp"
+    },
     "googlesheets": {
       "command": "npx",
       "args": ["-y", "smithery", "run", "googlesheets"]

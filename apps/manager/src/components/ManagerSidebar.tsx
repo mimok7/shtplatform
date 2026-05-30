@@ -52,6 +52,7 @@ export default function ManagerSidebar({ activeTab, userEmail, onLogout, userRol
         if (pathname === '/manager/payments') return 'payments';
         if (pathname === '/manager/confirmation') return 'confirmation';
         if (pathname.startsWith('/manager/cancel-requests')) return 'cancel-requests';
+        if (pathname.startsWith('/manager/promotions')) return 'promotions';
         if (pathname.startsWith('/manager/settings')) return 'settings';
         return null;
     })();
@@ -70,7 +71,7 @@ export default function ManagerSidebar({ activeTab, userEmail, onLogout, userRol
         if (path.startsWith('/manager/payment')) return 'payments';
         if (path.startsWith('/manager/cancel-requests')) return 'payments';
         if (path.startsWith('/manager/dispatch') || path.startsWith('/manager/boarding-code') || path.startsWith('/manager/assignment-codes') || path.startsWith('/manager/cruise-car-dates') || path.startsWith('/manager/schedule/sheet-edit')) return 'edits';
-        if (path.startsWith('/manager/notifications') || path.startsWith('/manager/customers') || path.startsWith('/manager/exchange-rate') || path.startsWith('/manager/additional-fee-management') || path.startsWith('/manager/cruise-info') || path.startsWith('/manager/cruise-room') || path.startsWith('/manager/quote-bulk-delete') || path.startsWith('/manager/settings')) return 'tools';
+        if (path.startsWith('/manager/notifications') || path.startsWith('/manager/customers') || path.startsWith('/manager/promotions') || path.startsWith('/manager/exchange-rate') || path.startsWith('/manager/additional-fee-management') || path.startsWith('/manager/cruise-info') || path.startsWith('/manager/cruise-room') || path.startsWith('/manager/quote-bulk-delete') || path.startsWith('/manager/settings')) return 'tools';
         if (path.startsWith('/manager/schedule') || path.startsWith('/manager/service-tables') || path.startsWith('/manager/reservation-details') || path.startsWith('/manager/sht-car')) return 'reservations';
         if (path.startsWith('/manager/confirmation')) return 'payments';
         if (path.startsWith('/manager/passport')) return 'edits';
@@ -456,6 +457,13 @@ export default function ManagerSidebar({ activeTab, userEmail, onLogout, userRol
                                     path="/manager/customers"
                                     isActive={activeTab === 'customers'}
                                     onClick={() => handleNavigation('/manager/customers')}
+                                />
+                                <NavItem
+                                    icon="🎟️"
+                                    label="프로모션"
+                                    path="/manager/promotions"
+                                    isActive={isActiveTab('promotions')}
+                                    onClick={() => handleNavigation('/manager/promotions')}
                                 />
                                 <NavItem
                                     icon="💱"

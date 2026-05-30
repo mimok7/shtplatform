@@ -5,6 +5,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import ManagerLayout from '@/components/ManagerLayout';
 import supabase from '@/lib/supabase';
 import ServiceCardBody from '@/components/ServiceCardBody';
+import { fetchPromotionSequenceMap, hasPromotionBreakdown } from '@/lib/promotionSequence';
 import {
   closeCentralReservationDetailModal,
   openCentralGoogleSheetsDetailModal,
@@ -542,7 +543,7 @@ export default function ManagerSchedulePage() {
 
       const { data: reservations, error: reservationError } = await supabase
         .from('reservation')
-        .select('re_id, re_user_id, re_quote_id, re_type, re_status, re_created_at')
+        .select('re_id, re_user_id, re_quote_id, re_type, re_status, re_created_at, price_breakdown')
         .in('re_user_id', userIds)
         .neq('re_type', 'car_sht')
         .order('re_created_at', { ascending: false });
@@ -1836,7 +1837,7 @@ export default function ManagerSchedulePage() {
         const allReservations = await fetchReservationsPaged(
           () => supabase
             .from('reservation')
-            .select('re_id, re_type, re_status, re_user_id')
+            .select('re_id, re_type, re_status, re_user_id, price_breakdown')
             .in('re_status', [...SCHEDULE_VISIBLE_STATUSES])
             .neq('re_type', 'car_sht')
             .order('re_created_at', { ascending: false }),
@@ -2215,7 +2216,7 @@ export default function ManagerSchedulePage() {
         const chunk = reservationIds.slice(i, i + CHUNK_SIZE);
         const { data, error } = await supabase
           .from('reservation')
-          .select('re_id, re_type, re_status, re_user_id')
+          .select('re_id, re_type, re_status, re_user_id, price_breakdown')
           .in('re_id', chunk)
           .in('re_status', [...SCHEDULE_VISIBLE_STATUSES])
           .neq('re_type', 'car_sht');
@@ -2380,6 +2381,7 @@ export default function ManagerSchedulePage() {
               re_id: reservationAny.re_id,
               re_type: type,
               re_status: reservationAny.re_status,
+              price_breakdown: reservationAny.price_breakdown || null,
               users: usersById.get(reservationAny.re_user_id) || null,
               schedule_date: scheduleDate,
               schedule_time: scheduleTime,
@@ -2403,6 +2405,7 @@ export default function ManagerSchedulePage() {
                 re_id: reservationAny.re_id,
                 re_type: type,
                 re_status: reservationAny.re_status,
+                price_breakdown: reservationAny.price_breakdown || null,
                 users: usersById.get(reservationAny.re_user_id) || null,
                 schedule_date: rentcarReturnDate,
                 schedule_time: toKstTimeStr(rentcarReturnDate),
@@ -2467,6 +2470,7 @@ export default function ManagerSchedulePage() {
                 re_id: reservationAny.re_id,
                 re_type: type,
                 re_status: reservationAny.re_status,
+                price_breakdown: reservationAny.price_breakdown || null,
                 users: usersById.get(reservationAny.re_user_id) || null,
                 schedule_date: pickupDate,
                 schedule_time: '09:00',
@@ -2491,6 +2495,7 @@ export default function ManagerSchedulePage() {
                   re_id: reservationAny.re_id,
                   re_type: type,
                   re_status: reservationAny.re_status,
+                  price_breakdown: reservationAny.price_breakdown || null,
                   users: usersById.get(reservationAny.re_user_id) || null,
                   schedule_date: returnDate,
                   schedule_time: '09:00',
@@ -2544,6 +2549,7 @@ export default function ManagerSchedulePage() {
             re_id: reservationAny.re_id,
             re_type: type,
             re_status: reservationAny.re_status,
+            price_breakdown: reservationAny.price_breakdown || null,
             users: usersById.get(reservationAny.re_user_id) || null,
             schedule_date: scheduleDate,
             schedule_time: scheduleTime,
@@ -2559,6 +2565,23 @@ export default function ManagerSchedulePage() {
       // 타입 필터는 렌더에서 적용하되, 여기서는 날짜 범위 내 결과만 세팅
       // 최신순 정렬 (시간 기준)
       result.sort((a, b) => a.schedule_date.getTime() - b.schedule_date.getTime());
+
+      // 프로모션 카운터(몇 번째 예약) 주입
+      try {
+        const promoReIds = result.filter((s) => hasPromotionBreakdown(s.price_breakdown)).map((s) => s.re_id);
+        if (promoReIds.length > 0) {
+          const seqMap = await fetchPromotionSequenceMap(promoReIds);
+          if (seqMap.size > 0) {
+            for (const s of result) {
+              const seq = s.re_id ? seqMap.get(s.re_id) : undefined;
+              if (seq) s.price_breakdown = { ...(s.price_breakdown || {}), promotion_sequence: seq };
+            }
+          }
+        }
+      } catch (seqErr) {
+        console.warn('프로모션 순번 주입 실패:', seqErr);
+      }
+
       setSchedules(result);
     } catch (error) {
       // 에러 무시
@@ -2643,19 +2666,20 @@ export default function ManagerSchedulePage() {
     const serviceType = schedule?.service_table || schedule?.re_type || '';
     const cardData = (() => {
       if (serviceType === 'reservation_rentcar' || serviceType === 'rentcar') {
-        return { ...row, _rentcar_phase: schedule?.rentcar_phase || '' };
+        return { ...row, _rentcar_phase: schedule?.rentcar_phase || '', _reservation_price_breakdown: schedule?.price_breakdown || null };
       }
       if (serviceType === 'reservation_cruise_car' || serviceType === 'cruise_car') {
-        return { ...row, _cruise_car_phase: schedule?.segment_type || '' };
+        return { ...row, _cruise_car_phase: schedule?.segment_type || '', _reservation_price_breakdown: schedule?.price_breakdown || null };
       }
       if (serviceType === 'reservation_cruise' || serviceType === 'cruise') {
         return {
           ...row,
           _cruise_info: row?._cruise_info || schedule?.cruise_info || null,
           cruise_info: row?.cruise_info || schedule?.cruise_info || null,
+          _reservation_price_breakdown: schedule?.price_breakdown || null,
         };
       }
-      return row;
+      return { ...row, _reservation_price_breakdown: schedule?.price_breakdown || null };
     })();
     const shouldShowTime =
       serviceType === 'reservation_airport' ||

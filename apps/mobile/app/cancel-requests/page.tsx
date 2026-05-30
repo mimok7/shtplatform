@@ -5,6 +5,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import supabase from '@/lib/supabase';
 import { ArrowLeft, Home } from 'lucide-react';
+import ReservationDetailModal from '@/components/ReservationDetailModal';
 
 type RequestStatus = 'pending' | 'approved' | 'rejected' | 'cancelled' | 'completed';
 
@@ -148,6 +149,9 @@ export default function MobileCancelRequestsPage() {
     const [noteDraft, setNoteDraft] = useState<Record<string, string>>({});
     const [refundDraft, setRefundDraft] = useState<Record<string, string>>({});
     const [visibleGroupCount, setVisibleGroupCount] = useState(INITIAL_VISIBLE_GROUPS);
+    const [detailModalOpen, setDetailModalOpen] = useState(false);
+    const [selectedItem, setSelectedItem] = useState<any | null>(null);
+    const [selectedItems, setSelectedItems] = useState<any[]>([]);
 
     const requesterKeyOf = (row: CancelRow) => {
         if (row.requester_user_id) return `uid:${row.requester_user_id}`;
@@ -157,6 +161,183 @@ export default function MobileCancelRequestsPage() {
 
     const requesterLabelOf = (row: CancelRow) => {
         return row.requester?.name || row.requester?.email || row.requester_email || row.refund_account_holder || '미상 신청자';
+    };
+
+    const openReservationDetail = async (row: CancelRow) => {
+        const quoteId = row.reservation?.re_quote_id || null;
+        const seedItem = {
+            source: 'new',
+            quoteId,
+            re_quote_id: quoteId,
+            re_user_id: row.requester_user_id || row.reservation?.re_user_id || null,
+            reservation_id: row.reservation_id,
+            reservationId: row.reservation_id,
+            re_id: row.reservation_id,
+            customerName: row.requester?.name || row.refund_account_holder || '',
+            email: row.requester?.email || row.requester_email || '',
+            phone: row.requester_phone || '',
+            serviceType: getPrimaryServiceType(row) || normalizeServiceType(row.reservation?.re_type || ''),
+            re_type: normalizeServiceType(row.reservation?.re_type || ''),
+            status: row.reservation?.re_status || row.status,
+            note: row.cancel_reason_detail || '',
+        };
+
+        setSelectedItem(seedItem);
+        setSelectedItems([seedItem]);
+        setDetailModalOpen(true);
+
+        if (!quoteId) return;
+
+        try {
+            const { data: allReservations } = await supabase
+                .from('reservation')
+                .select('re_id, re_type, re_status, re_user_id, re_created_at, re_quote_id')
+                .eq('re_quote_id', quoteId);
+
+            if (!allReservations || allReservations.length === 0) return;
+
+            const detailUserId = row.requester_user_id || row.reservation?.re_user_id || allReservations[0]?.re_user_id;
+            let userData: any = null;
+            if (detailUserId) {
+                const { data } = await supabase
+                    .from('users')
+                    .select('name, english_name, email, phone_number')
+                    .eq('id', detailUserId)
+                    .single();
+                userData = data;
+            }
+
+            const cruiseIds = allReservations.filter((s: any) => s.re_type === 'cruise').map((s: any) => s.re_id);
+            const carIds = allReservations.filter((s: any) => ['car', 'cruise'].includes(s.re_type)).map((s: any) => s.re_id);
+            const airportIds = allReservations.filter((s: any) => s.re_type === 'airport').map((s: any) => s.re_id);
+            const hotelIds = allReservations.filter((s: any) => s.re_type === 'hotel').map((s: any) => s.re_id);
+            const tourIds = allReservations.filter((s: any) => s.re_type === 'tour').map((s: any) => s.re_id);
+            const ticketIds = allReservations.filter((s: any) => s.re_type === 'ticket').map((s: any) => s.re_id);
+            const rentcarIds = allReservations.filter((s: any) => s.re_type === 'rentcar').map((s: any) => s.re_id);
+            const shtIds = allReservations.filter((s: any) => ['sht', 'car_sht'].includes(s.re_type)).map((s: any) => s.re_id);
+
+            const [cruiseRes, cruiseCarRes, airportRes, hotelRes, tourRes, ticketRes, rentcarRes, shtRes] = await Promise.all([
+                cruiseIds.length > 0 ? supabase.from('reservation_cruise').select('*').in('reservation_id', cruiseIds) : { data: [] },
+                carIds.length > 0 ? supabase.from('reservation_cruise_car').select('*').in('reservation_id', carIds) : { data: [] },
+                airportIds.length > 0 ? supabase.from('reservation_airport').select('*').in('reservation_id', airportIds) : { data: [] },
+                hotelIds.length > 0 ? supabase.from('reservation_hotel').select('*').in('reservation_id', hotelIds) : { data: [] },
+                tourIds.length > 0 ? supabase.from('reservation_tour').select('*').in('reservation_id', tourIds) : { data: [] },
+                ticketIds.length > 0 ? supabase.from('reservation_ticket').select('*').in('reservation_id', ticketIds) : { data: [] },
+                rentcarIds.length > 0 ? supabase.from('reservation_rentcar').select('*').in('reservation_id', rentcarIds) : { data: [] },
+                shtIds.length > 0 ? supabase.from('reservation_car_sht').select('*').in('reservation_id', shtIds) : { data: [] },
+            ]);
+
+            const statusMap = new Map(allReservations.map((s: any) => [s.re_id, s.re_status]));
+            const typeMap = new Map(allReservations.map((s: any) => [s.re_id, s.re_type]));
+
+            const baseHeader = {
+                source: 'new' as const,
+                re_quote_id: quoteId,
+                quoteId: quoteId,
+                customerName: userData?.name || seedItem.customerName || '',
+                customerEnglishName: userData?.english_name || '',
+                email: userData?.email || seedItem.email || '',
+                phone: userData?.phone_number || seedItem.phone || '',
+                re_created_at: allReservations[0]?.re_created_at || '',
+            };
+
+            const modalItems: any[] = [];
+
+            (cruiseRes.data || []).forEach((r: any) => {
+                modalItems.push({
+                    ...baseHeader, ...r,
+                    serviceType: 'cruise', re_type: 'cruise',
+                    reservation_id: r.reservation_id, reservationId: r.reservation_id, re_id: r.reservation_id,
+                    status: statusMap.get(r.reservation_id) || 'pending',
+                    note: r.request_note || '',
+                });
+            });
+
+            (cruiseCarRes.data || []).forEach((r: any) => {
+                const reType = typeMap.get(r.reservation_id);
+                const normalizedType = reType === 'car' ? 'car' : 'vehicle';
+                modalItems.push({
+                    ...baseHeader, ...r,
+                    serviceType: normalizedType, re_type: normalizedType,
+                    reservation_id: r.reservation_id, reservationId: r.reservation_id, re_id: r.reservation_id,
+                    status: statusMap.get(r.reservation_id) || 'pending',
+                    note: r.request_note || '',
+                });
+            });
+
+            (airportRes.data || []).forEach((r: any) => {
+                modalItems.push({
+                    ...baseHeader, ...r,
+                    serviceType: 'airport', re_type: 'airport',
+                    reservation_id: r.reservation_id, reservationId: r.reservation_id, re_id: r.reservation_id,
+                    status: statusMap.get(r.reservation_id) || 'pending',
+                    note: r.request_note || '',
+                });
+            });
+
+            (hotelRes.data || []).forEach((r: any) => {
+                modalItems.push({
+                    ...baseHeader, ...r,
+                    serviceType: 'hotel', re_type: 'hotel',
+                    reservation_id: r.reservation_id, reservationId: r.reservation_id, re_id: r.reservation_id,
+                    status: statusMap.get(r.reservation_id) || 'pending',
+                    note: r.request_note || '',
+                });
+            });
+
+            (tourRes.data || []).forEach((r: any) => {
+                modalItems.push({
+                    ...baseHeader, ...r,
+                    serviceType: 'tour', re_type: 'tour',
+                    reservation_id: r.reservation_id, reservationId: r.reservation_id, re_id: r.reservation_id,
+                    status: statusMap.get(r.reservation_id) || 'pending',
+                    note: r.request_note || '',
+                });
+            });
+
+            (ticketRes.data || []).forEach((r: any) => {
+                modalItems.push({
+                    ...baseHeader, ...r,
+                    serviceType: 'ticket', re_type: 'ticket',
+                    reservation_id: r.reservation_id, reservationId: r.reservation_id, re_id: r.reservation_id,
+                    status: statusMap.get(r.reservation_id) || 'pending',
+                    note: r.request_note || '',
+                });
+            });
+
+            (rentcarRes.data || []).forEach((r: any) => {
+                modalItems.push({
+                    ...baseHeader, ...r,
+                    serviceType: 'rentcar', re_type: 'rentcar',
+                    reservation_id: r.reservation_id, reservationId: r.reservation_id, re_id: r.reservation_id,
+                    status: statusMap.get(r.reservation_id) || 'pending',
+                    note: r.request_note || '',
+                });
+            });
+
+            (shtRes.data || []).forEach((r: any) => {
+                modalItems.push({
+                    ...baseHeader, ...r,
+                    serviceType: 'sht', re_type: 'sht',
+                    reservation_id: r.reservation_id, reservationId: r.reservation_id, re_id: r.reservation_id,
+                    status: statusMap.get(r.reservation_id) || 'pending',
+                    note: r.request_note || '',
+                });
+            });
+
+            if (modalItems.length > 0) {
+                setSelectedItems(modalItems);
+                setSelectedItem(modalItems[0]);
+            }
+        } catch (error) {
+            console.error('취소요청 통합상세 조회 실패:', error);
+        }
+    };
+
+    const handleRowCardClick = (event: React.MouseEvent<HTMLElement>, row: CancelRow) => {
+        const target = event.target as HTMLElement;
+        if (target.closest('button, input, textarea, select, a, label')) return;
+        void openReservationDetail(row);
     };
 
     useEffect(() => {
@@ -605,7 +786,11 @@ export default function MobileCancelRequestsPage() {
                                     const serviceInfos = getServiceInfo(row);
                                     const penalty = calcCancelFee(row.service_checkin, row.total_paid, row.cancel_reason_category);
                                     return (
-                                        <div key={row.id} className="rounded border p-2 text-sm space-y-2">
+                                        <div
+                                            key={row.id}
+                                            onClick={(event) => handleRowCardClick(event, row)}
+                                            className="rounded border p-2 text-sm space-y-2 cursor-pointer"
+                                        >
                                             {serviceInfos.length > 0 && (
                                                 <div className="flex flex-wrap gap-1">
                                                     {serviceInfos.map((info) => (
@@ -712,6 +897,13 @@ export default function MobileCancelRequestsPage() {
                     </>
                 )}
             </div>
+
+            <ReservationDetailModal
+                isOpen={detailModalOpen}
+                onClose={() => setDetailModalOpen(false)}
+                item={selectedItem}
+                items={selectedItems}
+            />
         </div>
     );
 }

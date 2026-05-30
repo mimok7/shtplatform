@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServiceSupabase } from '@/lib/serviceSupabase';
+import serviceSupabase from '@/lib/serviceSupabase';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -19,7 +19,10 @@ export async function POST(req: NextRequest) {
         if (!body?.reservationId || !body?.subcategory) {
             return NextResponse.json({ error: 'invalid' }, { status: 400 });
         }
-        const supabase = getServiceSupabase();
+        const supabase = serviceSupabase;
+        if (!supabase) {
+            return NextResponse.json({ error: 'service_unavailable' }, { status: 500 });
+        }
 
         // 고객 정보 조회
         const { data: resvRow } = await supabase

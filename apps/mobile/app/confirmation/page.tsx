@@ -15,6 +15,7 @@ type ReservationRow = {
   re_created_at: string;
   re_user_id: string;
   re_type: string;
+  price_breakdown?: Record<string, any> | null;
   payment_created_at?: string;
 };
 
@@ -29,6 +30,7 @@ type GroupItem = {
   serviceTypes: string[];
   count: number;
   confirmationStatus: 'waiting' | 'generated';
+  hasPromotion: boolean;
 };
 
 const TYPE_LABEL: Record<string, string> = {
@@ -43,6 +45,12 @@ const TYPE_LABEL: Record<string, string> = {
   car_sht: '스하차량',
   package: '패키지',
 };
+
+function hasPromotionBreakdown(value: any): boolean {
+  if (!value) return false;
+  if (value.promotion_code) return true;
+  return Array.isArray(value.room_selections) && value.room_selections.some((item: any) => !!item?.promotion_code);
+}
 
 export default function MobileConfirmationPage() {
   const router = useRouter();
@@ -88,7 +96,7 @@ export default function MobileConfirmationPage() {
           'reservation',
           're_id',
           reservationIds,
-          're_id, re_quote_id, re_status, re_created_at, re_user_id, re_type',
+          're_id, re_quote_id, re_status, re_created_at, re_user_id, re_type, price_breakdown',
           80
         );
 
@@ -138,12 +146,14 @@ export default function MobileConfirmationPage() {
               serviceTypes: [row.re_type],
               count: 1,
               confirmationStatus: 'waiting',
+              hasPromotion: hasPromotionBreakdown(row.price_breakdown),
             });
             continue;
           }
           existed.count += 1;
           if (!existed.reservationIds.includes(row.re_id)) existed.reservationIds.push(row.re_id);
           if (!existed.serviceTypes.includes(row.re_type)) existed.serviceTypes.push(row.re_type);
+          existed.hasPromotion = existed.hasPromotion || hasPromotionBreakdown(row.price_breakdown);
           const nextCreatedAt = row.payment_created_at || row.re_created_at;
           if (new Date(nextCreatedAt).getTime() > new Date(existed.createdAt).getTime()) {
             existed.createdAt = nextCreatedAt;
@@ -334,6 +344,9 @@ export default function MobileConfirmationPage() {
                     <p className="truncate text-[11px] text-gray-500">{item.userEmail || '-'}</p>
                   </div>
                   <div className="flex items-center gap-1.5">
+                    {item.hasPromotion && (
+                      <span className="rounded-full bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-700 border border-red-100 whitespace-nowrap">🎁 프로모션</span>
+                    )}
                     <span className={`rounded-full px-2 py-1 text-[11px] ${item.confirmationStatus === 'generated' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
                       {item.confirmationStatus === 'generated' ? '생성됨' : '대기중'}
                     </span>

@@ -1,12 +1,8 @@
-"use client";
-import React from 'react';
+import { redirect } from 'next/navigation';
 
-export default function SqlRunnerPlaceholder() {
-  return (
-    <div className="p-8">
-      <h1 className="text-2xl font-bold">SQL Runner (임시)</h1>
-      <p className="mt-2 text-gray-600">원본 페이지에 병합 충돌 마커가 발견되어 임시 플레이스홀더로 대체했습니다.</p>
-    </div>
-  );
+// 정식 SQL 실행 페이지는 /admin/sql-runner 에 존재합니다. 이 경로는 호환용 리다이렉트입니다.
+export default function SqlRunnerNewRedirect() {
+  redirect('/admin/sql-runner');
 }
+
 

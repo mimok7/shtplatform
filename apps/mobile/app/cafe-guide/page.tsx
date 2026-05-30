@@ -14,6 +14,7 @@ interface PendingReservationRow {
     re_created_at: string;
     re_user_id: string;
     total_amount: number | null;
+    price_breakdown?: Record<string, any> | null;
     re_adult_count?: number | null;
     re_child_count?: number | null;
     re_infant_count?: number | null;
@@ -30,6 +31,7 @@ interface PendingGroup {
     daysAgo: number | null;
     reservations: PendingReservationRow[];
     statuses: string[];
+    hasPromotion: boolean;
 }
 
 interface UserInfo {
@@ -149,6 +151,12 @@ function daysAgoFromToday(dateKey: string): number {
 
 function matchesStatusFilter(filter: StatusFilter, statuses: string[]): boolean {
     return statuses.includes(filter);
+}
+
+function hasPromotionBreakdown(value: any): boolean {
+    if (!value) return false;
+    if (value.promotion_code) return true;
+    return Array.isArray(value.room_selections) && value.room_selections.some((item: any) => !!item?.promotion_code);
 }
 
 function detectCruiseProgram(scheduleType?: string | null, requestNote?: string | null): 'day' | '1n2d' | '2n3d' {
@@ -287,7 +295,7 @@ export default function CafeGuidePage() {
 
                 const { data: rows, error: rowsErr } = await supabase
                     .from('reservation')
-                    .select('re_id, re_quote_id, re_type, re_status, re_created_at, re_user_id, total_amount, re_adult_count, re_child_count, re_infant_count')
+                    .select('re_id, re_quote_id, re_type, re_status, re_created_at, re_user_id, total_amount, price_breakdown, re_adult_count, re_child_count, re_infant_count')
                     .in('re_status', ['pending', 'approved', 'confirmed'])
                     .order('re_created_at', { ascending: false });
 
@@ -374,10 +382,12 @@ export default function CafeGuidePage() {
                             daysAgo: null,
                             reservations: [],
                             statuses: [],
+                            hasPromotion: false,
                         });
                     }
                     const target = grouped.get(key)!;
                     target.reservations.push(r);
+                    target.hasPromotion = target.hasPromotion || hasPromotionBreakdown(r.price_breakdown);
 
                     const reservationDate = reservationDateMap.get(r.re_id) || null;
                     if (reservationDate) {
@@ -933,10 +943,15 @@ ${totalAmount > 0 ? `${formatAmount(totalAmount)}동` : '-'}
                                         {groups.length === 0 && <option value="">해당 조건의 예약이 없습니다.</option>}
                                         {groups.map((g) => (
                                             <option key={g.key} value={g.key}>
-                                                {maskName(g.userName)} | {g.title} | 상태 {g.statuses.map((s) => mapStatusText(s)).join('/')} | 예약일 {formatKstDateDot(g.usageDate || g.createdAt)}
+                                                {g.hasPromotion ? '🎁 ' : ''}{maskName(g.userName)} | {g.title} | 상태 {g.statuses.map((s) => mapStatusText(s)).join('/')} | 예약일 {formatKstDateDot(g.usageDate || g.createdAt)}
                                             </option>
                                         ))}
                                     </select>
+                                    {selectedGroup?.hasPromotion && (
+                                        <div className="mt-2 inline-flex items-center rounded-full border border-red-100 bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-700 whitespace-nowrap">
+                                            🎁 프로모션 예약
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 

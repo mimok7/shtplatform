@@ -11,12 +11,14 @@ import {
   Ship, Plane, Building, MapPin, Car, Bus, Package, Home
 } from 'lucide-react';
 import ReservationDetailModal from '@/components/ReservationDetailModal';
+import { fetchPromotionSequenceMap } from '@/lib/promotionSequence';
 
 /* ── 타입 정의 ─────────────────────────────── */
 interface ServiceReservation {
   re_id: string;
   re_type: string;
   re_status: string;
+  price_breakdown?: Record<string, any> | null;
 }
 
 interface ReservationItem {
@@ -31,6 +33,14 @@ interface ReservationItem {
   } | null;
   quote: { title: string } | null;
   services: ServiceReservation[];
+  hasPromotion: boolean;
+  promotionSequence?: number | null;
+}
+
+function hasPromotionBreakdown(value: any): boolean {
+  if (!value) return false;
+  if (value.promotion_code) return true;
+  return Array.isArray(value.room_selections) && value.room_selections.some((item: any) => !!item?.promotion_code);
 }
 
 type BulkAction = 'approve' | 'confirm' | 'cancel' | 'delete' | 'status_update';
@@ -87,7 +97,7 @@ export default function ReservationsPage() {
 
         let query = supabase
           .from('reservation')
-          .select('re_id, re_type, re_status, re_created_at, re_quote_id, re_user_id')
+          .select('re_id, re_type, re_status, re_created_at, re_quote_id, re_user_id, price_breakdown')
           .order('re_created_at', { ascending: false })
           .order('re_id', { ascending: false })
           .range(from, to);
@@ -183,6 +193,7 @@ export default function ReservationsPage() {
             } : null,
             quote: r.re_quote_id ? quoteMap.get(r.re_quote_id) || null : null,
             services: [],
+            hasPromotion: false,
           };
         } else {
           if (!grouped[key].users && user) {
@@ -205,13 +216,34 @@ export default function ReservationsPage() {
           }
         }
 
-        grouped[key].services.push({ re_id: r.re_id, re_type: r.re_type, re_status: r.re_status });
+        grouped[key].services.push({ re_id: r.re_id, re_type: r.re_type, re_status: r.re_status, price_breakdown: r.price_breakdown || null });
+        grouped[key].hasPromotion = grouped[key].hasPromotion || hasPromotionBreakdown(r.price_breakdown);
       });
 
       let list = Object.values(grouped);
 
       // DB에서 이미 필터링됨 - 빈 그룹만 제거
       list = list.filter(item => item.services.length > 0);
+
+      // 프로모션 카운터(몇 번째 예약) 계산
+      try {
+        const promoReIds = list.flatMap((item) =>
+          item.services.filter((s) => hasPromotionBreakdown(s.price_breakdown)).map((s) => s.re_id)
+        );
+        if (promoReIds.length > 0) {
+          const seqMap = await fetchPromotionSequenceMap(promoReIds);
+          if (seqMap.size > 0) {
+            list.forEach((item) => {
+              const seqs = item.services
+                .map((s) => seqMap.get(s.re_id))
+                .filter((v): v is number => typeof v === 'number');
+              if (seqs.length > 0) item.promotionSequence = Math.min(...seqs);
+            });
+          }
+        }
+      } catch (seqErr) {
+        console.warn('프로모션 순번 계산 실패:', seqErr);
+      }
 
       // 정렬
       list.sort((a, b) => {
@@ -822,6 +854,12 @@ export default function ReservationsPage() {
                       <div className="flex-1 min-w-0">
                         {/* 서비스 배지 */}
                         <div className="flex flex-wrap gap-1 mb-2">
+                          {reservation.hasPromotion && (
+                            <span className="text-xs px-2 py-0.5 rounded-full flex items-center gap-1 font-semibold bg-red-50 text-red-700 border border-red-100 whitespace-nowrap">🎁 프로모션</span>
+                          )}
+                          {reservation.promotionSequence ? (
+                            <span className="text-xs px-2 py-0.5 rounded-full flex items-center gap-1 font-bold bg-amber-100 text-amber-800 border border-amber-200 whitespace-nowrap">{reservation.promotionSequence}번째 예약</span>
+                          ) : null}
                           {reservation.services.map((s, i) => (
                             <span key={i} className={`text-xs px-2 py-0.5 rounded-full flex items-center gap-1 font-medium ${getTypeBadge(s.re_type)}`}>
                               {getTypeIcon(s.re_type)}

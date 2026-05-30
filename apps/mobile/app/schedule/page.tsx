@@ -141,6 +141,12 @@ const inferAirportDirectionLabel = (item: any): string => {
   return '';
 };
 
+const hasPromotionBreakdown = (value: any): boolean => {
+  if (!value) return false;
+  if (value.promotion_code) return true;
+  return Array.isArray(value.room_selections) && value.room_selections.some((item: any) => !!item?.promotion_code);
+};
+
 const getKstDateTimeParts = (value: string | null | undefined) => toKstDateTimeParts(value);
 
 /* ── DB 조회(전체 행) ─────────────────────────── */
@@ -324,7 +330,7 @@ export default function SchedulePage() {
     try {
       const { data: allReservationsRaw } = await supabase
         .from('reservation')
-        .select('re_id, re_type, re_status, re_user_id, re_created_at, re_quote_id, order_id')
+        .select('re_id, re_type, re_status, re_user_id, re_created_at, re_quote_id, order_id, price_breakdown')
         .eq('re_quote_id', quoteId);
 
       const allReservations = (allReservationsRaw || []).filter((row: any) => {
@@ -372,6 +378,7 @@ export default function SchedulePage() {
         source: 'new' as const,
         re_quote_id: quoteId,
         quoteId: quoteId,
+        hasPromotion: allReservations.some((row: any) => hasPromotionBreakdown(row.price_breakdown)),
         customerName: userData?.name || item.customerName || '',
         customerEnglishName: userData?.english_name || item.customerEnglishName || '',
         email: userData?.email || item.email || '',
@@ -793,6 +800,7 @@ export default function SchedulePage() {
           re_quote_id: r.re_quote_id,
           quoteId: r.re_quote_id,
           totalAmount: Number(r.total_amount || 0),
+          hasPromotion: hasPromotionBreakdown(r.price_breakdown),
           customerName: user?.name || '',
           customerEnglishName: user?.english_name || '',
           email: user?.email || '',
@@ -1266,6 +1274,9 @@ export default function SchedulePage() {
             <Icon className={`w-4 h-4 text-${conf.color}-600`} />
           </div>
           <span className="font-bold text-sm flex-1">{conf.name}</span>
+          {item.hasPromotion && (
+            <span className="text-xs px-2 py-0.5 rounded-full font-semibold bg-red-50 text-red-700 border border-red-100 whitespace-nowrap">🎁 프로모션</span>
+          )}
           {directionLabel && (
             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${directionColor}`}>
               {directionLabel}

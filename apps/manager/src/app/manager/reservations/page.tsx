@@ -156,6 +156,7 @@ export default function ManagerReservationsPage() {
           re_user_id,
           package_id,
           total_amount,
+          price_breakdown,
           re_adult_count,
           re_child_count,
           re_infant_count
@@ -363,13 +364,17 @@ export default function ManagerReservationsPage() {
               break;
           }
 
+          const serviceDetailsWithPromotion = serviceDetails
+            ? { ...serviceDetails, _reservation_price_breakdown: (reservation as any).price_breakdown || null }
+            : serviceDetails;
+
           enrichedReservations.push({
             ...(reservation as any),
             users: finalUserInfo,
             quote: qInfo
               ? { title: qInfo.title ?? '제목 없음', status: qInfo.status ?? 'unknown' }
               : { title: '연결된 견적 없음', status: 'unknown' },
-            serviceDetails,
+            serviceDetails: serviceDetailsWithPromotion,
             serviceDetailsExtra,
             hasFastTrack: reservation.re_type === 'airport' ? fastTrackCountMap.has(reservation.re_id) : false,
             fastTrackPickupCount: reservation.re_type === 'airport' ? (fastTrackCountMap.get(reservation.re_id)?.pickup || 0) : 0,
@@ -1253,7 +1258,7 @@ export default function ManagerReservationsPage() {
                               </div>
                               <ServiceCardBody
                                 serviceType={reservation.re_type}
-                                data={reservation.serviceDetails || {}}
+                                data={{ ...(reservation.serviceDetails || {}), _reservation_price_breakdown: (reservation as any).price_breakdown || (reservation as any).priceBreakdown || null }}
                               />
                               <div className="text-xs text-gray-400 mt-2 pt-2 border-t border-gray-100">
                                 예약일: {new Date(reservation.re_created_at).toLocaleDateString('ko-KR')} |
