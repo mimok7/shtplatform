@@ -517,8 +517,6 @@ export default function PaymentDetailModal({
     payment,
     title = "결제 상세 정보"
 }: PaymentDetailModalProps) {
-    if (!isOpen || !payment) return null;
-
     const [paymentDetails, setPaymentDetails] = React.useState<any | null>(null);
     const [loading, setLoading] = React.useState(false);
 
@@ -592,6 +590,8 @@ export default function PaymentDetailModal({
     ).trim();
     const baseAmount = Math.max(0, paymentTotalAmount - manualAdditionalFee);
     const formatSignedAmount = (amount: number) => `${amount > 0 ? '+' : ''}${amount.toLocaleString()}동`;
+
+    if (!isOpen || !payment) return null;
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">

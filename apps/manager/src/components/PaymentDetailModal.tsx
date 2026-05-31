@@ -506,8 +506,6 @@ export default function PaymentDetailModal({
     payment,
     title = "결제 상세 정보"
 }: PaymentDetailModalProps) {
-    if (!isOpen || !payment) return null;
-
     const [paymentDetails, setPaymentDetails] = React.useState<any | null>(null);
     const [loading, setLoading] = React.useState(false);
 
@@ -541,8 +539,14 @@ export default function PaymentDetailModal({
             }
         };
 
-        fetchPaymentDetails();
-    }, [payment?.id]); const safeText = (v: any, fb = '정보 없음') =>
+        if (isOpen && payment?.id) {
+            fetchPaymentDetails();
+        }
+    }, [payment?.id, isOpen]);
+
+    if (!isOpen || !payment) return null;
+
+    const safeText = (v: any, fb = '정보 없음') =>
         v !== undefined && v !== null && String(v).trim() !== '' ? String(v) : fb;
 
     const getServiceName = (type: string) => {

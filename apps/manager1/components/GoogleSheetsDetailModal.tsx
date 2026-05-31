@@ -29,8 +29,6 @@ export default function GoogleSheetsDetailModal({
 }: GoogleSheetsDetailModalProps) {
     const router = useRouter();
 
-    if (!isOpen) return null;
-
     const formatDateTimePlus8 = (value: any) => {
         if (!value) return '-';
         const date = new Date(value);
@@ -457,6 +455,8 @@ export default function GoogleSheetsDetailModal({
 
         return <div className="text-sm text-gray-600">상세 정보 없음</div>;
     };
+
+    if (!isOpen) return null;
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">

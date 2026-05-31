@@ -65,7 +65,9 @@ interface ManagerLayoutProps {
 export default function ManagerLayout({ children, title, activeTab }: ManagerLayoutProps) {
   return (
     <ReservationDetailModalProvider>
-      <ManagerLayoutContent children={children} title={title} activeTab={activeTab} />
+      <ManagerLayoutContent title={title} activeTab={activeTab}>
+        {children}
+      </ManagerLayoutContent>
     </ReservationDetailModalProvider>
   );
 }

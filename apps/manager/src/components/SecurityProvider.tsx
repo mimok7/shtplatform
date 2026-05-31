@@ -47,9 +47,9 @@ export default function SecurityProvider({ children }: SecurityProviderProps) {
 
         const activityEvents = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
 
-        const resetTimer = useCallback(() => {
+        const resetTimer = () => {
             setLastActivity(Date.now());
-        }, []);
+        };
 
         // 활동 이벤트 리스너 등록
         activityEvents.forEach(event => {

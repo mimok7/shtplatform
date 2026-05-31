@@ -635,11 +635,9 @@ export default function ReservationDetailModal({
     onBack,
     selectedUser
 }: ReservationDetailModalProps) {
-    if (!isOpen || !reservation) return null;
-
     /* ----------------------- 상태 관리 ----------------------- */
     const [confirming, setConfirming] = React.useState(false);
-    const [currentStatus, setCurrentStatus] = React.useState(reservation.re_status || reservation.reservation?.re_status);
+    const [currentStatus, setCurrentStatus] = React.useState(reservation?.re_status || reservation?.reservation?.re_status);
     const [allUserReservations, setAllUserReservations] = React.useState<any[]>([]);
     const [loadingAllReservations, setLoadingAllReservations] = React.useState(false);
 

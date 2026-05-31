@@ -2,6 +2,7 @@
 
 import React, { Suspense, useEffect, useMemo, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 
 type ReasonCategory = 'natural_disaster' | 'change_of_mind' | 'other';
 type CancelType = 'full' | 'partial';
@@ -356,7 +357,7 @@ function CancelDetailContent() {
             <div className="mx-auto max-w-sm mt-10 rounded-2xl border border-red-200 bg-red-50 p-8 text-center">
                 <div className="text-5xl mb-4">⚠️</div>
                 <p className="font-semibold text-red-700">{error}</p>
-                <a href="/" className="mt-5 inline-block text-sm text-blue-600 underline">처음으로 돌아가기</a>
+                <Link href="/" className="mt-5 inline-block text-sm text-blue-600 underline">처음으로 돌아가기</Link>
             </div>
         );
     }
@@ -370,12 +371,12 @@ function CancelDetailContent() {
                     담당 매니저가 확인 후<br />처리 결과를 안내해 드립니다.
                 </p>
                 <div className="mt-6 flex flex-col gap-2">
-                    <a href={CUSTOMER_APP_URL} className="inline-block rounded-xl bg-green-600 px-6 py-2.5 text-white text-sm font-semibold hover:bg-green-700 transition text-center">
+                    <Link href={CUSTOMER_APP_URL} className="inline-block rounded-xl bg-green-600 px-6 py-2.5 text-white text-sm font-semibold hover:bg-green-700 transition text-center">
                         고객앱으로 돌아가기
-                    </a>
-                    <a href="/" className="inline-block rounded-xl border border-gray-300 px-6 py-2.5 text-gray-600 text-sm hover:bg-gray-50 transition text-center">
+                    </Link>
+                    <Link href="/" className="inline-block rounded-xl border border-gray-300 px-6 py-2.5 text-gray-600 text-sm hover:bg-gray-50 transition text-center">
                         취소 신청 홈
-                    </a>
+                    </Link>
                 </div>
             </div>
         );

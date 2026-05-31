@@ -97,10 +97,12 @@ export default function MyConfirmationsPage() {
             }
 
             // 4. 해당 quote 정보 조회
+            // 매니저가 확인서를 생성한 건만 노출 (status='confirmed' 또는 confirmed_at 존재)
             const { data: quotesData, error: quotesError } = await supabase
                 .from('quote')
                 .select('*')
                 .in('id', myQuoteIds)
+                .or('status.eq.confirmed,confirmed_at.not.is.null')
                 .order('created_at', { ascending: false });
 
             if (quotesError) {
@@ -319,7 +321,7 @@ export default function MyConfirmationsPage() {
                             <div>
                                 <h2 className="text-lg font-semibold text-blue-900 mb-2">나의 예약확인서</h2>
                                 <p className="text-blue-700 text-sm">
-                                    결제가 완료된 예약의 확인서를 확인하고 인쇄할 수 있습니다.
+                                    매니저가 생성한 예약확인서만 확인하고 인쇄할 수 있습니다.
                                     확인서에는 여행 상세 정보, 준비사항, 연락처 등이 포함되어 있습니다.
                                 </p>
                                 <p className="mt-2 text-sm font-semibold text-red-600 md:hidden">
@@ -340,7 +342,7 @@ export default function MyConfirmationsPage() {
                         <div className="text-center py-12">
                             <div className="text-4xl mb-4">📭</div>
                             <h3 className="text-lg font-medium text-gray-900 mb-2">예약 내역이 없습니다</h3>
-                            <p className="text-gray-600">결제 완료된 예약이 없습니다.</p>
+                            <p className="text-gray-600">매니저가 생성한 예약확인서가 없습니다.</p>
                         </div>
                     ) : (
                         <div className="space-y-4">

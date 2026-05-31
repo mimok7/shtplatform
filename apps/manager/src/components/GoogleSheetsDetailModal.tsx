@@ -29,8 +29,6 @@ export default function GoogleSheetsDetailModal({
 }: GoogleSheetsDetailModalProps) {
     const router = useRouter();
 
-    if (!isOpen) return null;
-
     // request_note에서 [객실 n], [구성 n] 등의 자동생성 패턴 제거
     const getFilteredNoteText = (note: any): string => {
         if (!note) return '';
@@ -469,6 +467,8 @@ export default function GoogleSheetsDetailModal({
 
         return <div className="text-sm text-gray-600">상세 정보 없음</div>;
     };
+
+    if (!isOpen) return null;
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
