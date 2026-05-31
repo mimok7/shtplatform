@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Home } from 'lucide-react';
 import supabase from '@/lib/supabase';
+import { fetchPromotionSequenceMap } from '@/lib/promotionSequence';
 
 interface PendingReservationRow {
     re_id: string;
@@ -32,6 +33,7 @@ interface PendingGroup {
     reservations: PendingReservationRow[];
     statuses: string[];
     hasPromotion: boolean;
+    promotionSequence?: number | null;
 }
 
 interface UserInfo {
@@ -156,6 +158,7 @@ function matchesStatusFilter(filter: StatusFilter, statuses: string[]): boolean 
 function hasPromotionBreakdown(value: any): boolean {
     if (!value) return false;
     if (value.promotion_code) return true;
+    if (Array.isArray(value.applied_promotions) && value.applied_promotions.length > 0) return true;
     return Array.isArray(value.room_selections) && value.room_selections.some((item: any) => !!item?.promotion_code);
 }
 
@@ -411,6 +414,23 @@ export default function CafeGuidePage() {
                     .sort(
                     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
                 );
+
+                // 프로모션 시퀀스 주입
+                const promoIds = groupList.flatMap(g =>
+                    g.reservations.filter(r => hasPromotionBreakdown(r.price_breakdown)).map(r => r.re_id)
+                );
+                if (promoIds.length > 0) {
+                    try {
+                        const seqMap = await fetchPromotionSequenceMap(promoIds);
+                        groupList.forEach(g => {
+                            const seqs = g.reservations
+                                .filter(r => hasPromotionBreakdown(r.price_breakdown))
+                                .map(r => seqMap.get(r.re_id))
+                                .filter((s): s is number => s !== undefined);
+                            if (seqs.length > 0) g.promotionSequence = Math.min(...seqs);
+                        });
+                    } catch { /* ignore */ }
+                }
 
                 setGroups(groupList);
                 if (groupList.length > 0) {
@@ -943,13 +963,13 @@ ${totalAmount > 0 ? `${formatAmount(totalAmount)}동` : '-'}
                                         {groups.length === 0 && <option value="">해당 조건의 예약이 없습니다.</option>}
                                         {groups.map((g) => (
                                             <option key={g.key} value={g.key}>
-                                                {g.hasPromotion ? '🎁 ' : ''}{maskName(g.userName)} | {g.title} | 상태 {g.statuses.map((s) => mapStatusText(s)).join('/')} | 예약일 {formatKstDateDot(g.usageDate || g.createdAt)}
+                                                {g.hasPromotion ? (g.promotionSequence ? `🎁${g.promotionSequence}번 ` : '🎁 ') : ''}{maskName(g.userName)} | {g.title} | 상태 {g.statuses.map((s) => mapStatusText(s)).join('/')} | 예약일 {formatKstDateDot(g.usageDate || g.createdAt)}
                                             </option>
                                         ))}
                                     </select>
                                     {selectedGroup?.hasPromotion && (
                                         <div className="mt-2 inline-flex items-center rounded-full border border-red-100 bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-700 whitespace-nowrap">
-                                            🎁 프로모션 예약
+                                            {selectedGroup.promotionSequence ? `🎁${selectedGroup.promotionSequence}번` : '🎁'}
                                         </div>
                                     )}
                                 </div>

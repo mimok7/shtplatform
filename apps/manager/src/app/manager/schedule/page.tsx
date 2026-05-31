@@ -940,7 +940,21 @@ export default function ManagerSchedulePage() {
                             <div className="flex items-center justify-center w-9 h-9 rounded-full bg-gray-50 border border-gray-200">
                               {getDisplayTypeIcon(schedule)}
                             </div>
-                            <h5 className="font-bold text-sm flex-1 truncate text-gray-800">{getDisplayTypeName(schedule)}</h5>
+                            <h5 className="font-bold text-sm flex-1 truncate text-gray-800 inline-flex items-center gap-1.5">
+                              <span>{getDisplayTypeName(schedule)}</span>
+                              {(() => {
+                                const _pb = schedule?.price_breakdown || null;
+                                const _promoSeqRaw = _pb?.promotion_sequence;
+                                const _promoSeq = Number.isFinite(Number(_promoSeqRaw)) ? Number(_promoSeqRaw) : null;
+                                const _hasPromo = !!_pb?.promotion_code || (Array.isArray(_pb?.applied_promotions) && _pb.applied_promotions.length > 0);
+                                if (!_hasPromo && !_promoSeq) return null;
+                                return (
+                                  <span className="inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700 border border-red-100 whitespace-nowrap">
+                                    {_promoSeq ? `🎁${_promoSeq}번` : '🎁'}
+                                  </span>
+                                );
+                              })()}
+                            </h5>
                             {schedule.re_type === 'package' && (
                               <span className="px-1.5 py-0.5 bg-indigo-100 text-indigo-700 text-xs rounded font-medium">📦</span>
                             )}
@@ -987,7 +1001,21 @@ export default function ManagerSchedulePage() {
                                       <div className="flex items-center justify-center w-9 h-9 rounded-full bg-gray-50 border border-gray-200">
                                         {getDisplayTypeIcon(schedule)}
                                       </div>
-                                      <h5 className="font-bold text-sm flex-1 truncate text-gray-800">{getDisplayTypeName(schedule)}</h5>
+                                      <h5 className="font-bold text-sm flex-1 truncate text-gray-800 inline-flex items-center gap-1.5">
+                                        <span>{getDisplayTypeName(schedule)}</span>
+                                        {(() => {
+                                          const _pb = schedule?.price_breakdown || null;
+                                          const _promoSeqRaw = _pb?.promotion_sequence;
+                                          const _promoSeq = Number.isFinite(Number(_promoSeqRaw)) ? Number(_promoSeqRaw) : null;
+                                          const _hasPromo = !!_pb?.promotion_code || (Array.isArray(_pb?.applied_promotions) && _pb.applied_promotions.length > 0);
+                                          if (!_hasPromo && !_promoSeq) return null;
+                                          return (
+                                            <span className="inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700 border border-red-100 whitespace-nowrap">
+                                              {_promoSeq ? `🎁${_promoSeq}번` : '🎁'}
+                                            </span>
+                                          );
+                                        })()}
+                                      </h5>
                                       {schedule.re_type === 'package' && (
                                         <span className="px-1.5 py-0.5 bg-indigo-100 text-indigo-700 text-xs rounded font-medium">📦</span>
                                       )}
@@ -1028,7 +1056,21 @@ export default function ManagerSchedulePage() {
                                   <div className="flex items-center justify-center w-9 h-9 rounded-full bg-gray-50 border border-gray-200">
                                     {getDisplayTypeIcon(schedule)}
                                   </div>
-                                  <h5 className="font-bold text-sm flex-1 truncate text-gray-800">{getDisplayTypeName(schedule)}</h5>
+                                  <h5 className="font-bold text-sm flex-1 truncate text-gray-800 inline-flex items-center gap-1.5">
+                                    <span>{getDisplayTypeName(schedule)}</span>
+                                    {(() => {
+                                      const _pb = schedule?.price_breakdown || null;
+                                      const _promoSeqRaw = _pb?.promotion_sequence;
+                                      const _promoSeq = Number.isFinite(Number(_promoSeqRaw)) ? Number(_promoSeqRaw) : null;
+                                      const _hasPromo = !!_pb?.promotion_code || (Array.isArray(_pb?.applied_promotions) && _pb.applied_promotions.length > 0);
+                                      if (!_hasPromo && !_promoSeq) return null;
+                                      return (
+                                        <span className="inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700 border border-red-100 whitespace-nowrap">
+                                          {_promoSeq ? `🎁${_promoSeq}번` : '🎁'}
+                                        </span>
+                                      );
+                                    })()}
+                                  </h5>
                                   {schedule.re_type === 'package' && (
                                     <span className="px-1.5 py-0.5 bg-indigo-100 text-indigo-700 text-xs rounded font-medium">📦</span>
                                   )}

@@ -10,7 +10,7 @@ export function useReservations(userId: string | undefined) {
 
             const { data, error } = await supabase
                 .from('reservation')
-                .select('re_id,re_type,re_status,re_created_at,re_quote_id')
+                .select('re_id,re_type,re_status,re_created_at,re_quote_id,price_breakdown')
                 .eq('re_user_id', userId)
                 .order('re_created_at', { ascending: false });
 

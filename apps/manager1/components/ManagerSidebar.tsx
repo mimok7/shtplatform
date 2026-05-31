@@ -22,9 +22,9 @@ function NavItem({ icon, label, isActive, onClick }: NavItemProps) {
   return (
     <button
       onClick={onClick}
-      className={`w-full flex items-center px-2 py-1.5 text-xs rounded-md transition-colors italic ${
+      className={`w-full flex items-center px-2 py-1.5 text-xs rounded-md transition-colors ${
         isActive
-          ? 'bg-blue-100 text-blue-700 font-medium'
+          ? 'bg-blue-100 text-blue-700 font-semibold'
           : 'text-gray-600 hover:bg-gray-50 hover:text-gray-700'
       }`}
     >

@@ -183,10 +183,12 @@ const extractPromotionInfo = (row: any) => {
     const breakdown = row?._reservation_price_breakdown || row?.price_breakdown || row?.priceBreakdown || {};
     const roomSelections = Array.isArray(breakdown?.room_selections) ? breakdown.room_selections : [];
     const firstRoomPromotion = roomSelections.find((item: any) => item?.promotion_code);
+    const appliedPromotions = Array.isArray(breakdown?.applied_promotions) ? breakdown.applied_promotions : [];
     const code = breakdown?.promotion_code || row?.promotion_code || firstRoomPromotion?.promotion_code || null;
     const name = breakdown?.promotion_name || row?.promotion_name || firstRoomPromotion?.promotion_name || '';
     const sequence = Number(breakdown?.promotion_sequence) || null;
-    return code ? { code, name, sequence } : null;
+    const hasPromotion = !!code || appliedPromotions.length > 0;
+    return hasPromotion ? { code, name, sequence } : null;
 };
 
 export default function ServiceCardBody({
@@ -254,7 +256,7 @@ export default function ServiceCardBody({
         return (
             <div className="flex flex-wrap items-center gap-1.5 mb-0.5">
                 <span className="inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700 border border-red-100">
-                    🎁 프로모션
+                    {promotionInfo.sequence ? `🎁${promotionInfo.sequence}번` : '🎁'}
                 </span>
                 {promotionInfo.sequence ? (
                     <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-800 border border-amber-200">
@@ -284,7 +286,6 @@ export default function ServiceCardBody({
         return (
             <div className="flex flex-col gap-1 text-sm text-gray-700 mt-1">
                 {renderCustomer()}
-                {renderPromotionBadge()}
                 <div className="flex items-start gap-2">
                     <span className="font-semibold text-green-700 text-xs mt-0.5">크루즈</span>
                     <span className="text-sm font-bold text-blue-700 break-words">{cruise}</span>

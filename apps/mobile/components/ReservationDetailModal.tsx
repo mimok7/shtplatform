@@ -736,6 +736,26 @@ function ServiceCard({
         </div>
       )}
 
+      {type === 'cruise' && (() => {
+        const _rawPb = getServicePriceBreakdown(service);
+        const _promoCode = _rawPb?.promotion_code || null;
+        const _promoApplied = Array.isArray(_rawPb?.applied_promotions) ? _rawPb.applied_promotions : [];
+        const _promoSeq = Number(_rawPb?.promotion_sequence) || null;
+        const _hasPromo = !!_promoCode || _promoApplied.length > 0;
+        return _hasPromo ? (
+          <div className="mb-2 flex flex-wrap items-center gap-1.5">
+            <span className="inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700 border border-red-100">
+              {_promoSeq ? `🎁${_promoSeq}번` : '🎁'}
+            </span>
+            {_promoSeq && (
+              <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-800 border border-amber-200">
+                {_promoSeq}번째 예약
+              </span>
+            )}
+          </div>
+        ) : null;
+      })()}
+
       {type === 'cruise' && (
         <div className="space-y-0.5">
           <DetailLine label="체크인" value={service.checkin || '-'} />

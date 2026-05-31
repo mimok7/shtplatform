@@ -10,6 +10,7 @@ import {
   ChevronLeft, ChevronRight, Search, ArrowLeft, Home
 } from 'lucide-react';
 import ReservationDetailModal from '@/components/ReservationDetailModal';
+import { fetchPromotionSequenceMap } from '@/lib/promotionSequence';
 import { toKstDateKey, toKstDateLabel, toKstDateTimeParts, toLocalDateKey } from '@/lib/dateKst';
 
 /* ── 타입 정의 ──────────────────────────────── */
@@ -144,6 +145,7 @@ const inferAirportDirectionLabel = (item: any): string => {
 const hasPromotionBreakdown = (value: any): boolean => {
   if (!value) return false;
   if (value.promotion_code) return true;
+  if (Array.isArray(value.applied_promotions) && value.applied_promotions.length > 0) return true;
   return Array.isArray(value.room_selections) && value.room_selections.some((item: any) => !!item?.promotion_code);
 };
 
@@ -737,6 +739,29 @@ export default function SchedulePage() {
         fetchRowsByIds('reservation_car_sht', 'reservation_id', reservationIds),
       ]);
 
+      // 렌트카 코드 -> vehicle_type/way_type/route 매핑
+      const rentcarPriceCodes = Array.from(new Set((rentcarData || []).map((x: any) => x.rentcar_price_code).filter(Boolean)));
+      let rentcarPriceMap = new Map<string, { vehicle_type?: string; way_type?: string; route?: string; category?: string }>();
+      if (rentcarPriceCodes.length > 0) {
+        const rentcarPriceData = await fetchRowsByIds('rentcar_price', 'rent_code', rentcarPriceCodes);
+        (rentcarPriceData || []).forEach((x: any) => {
+          if (x.rent_code) rentcarPriceMap.set(String(x.rent_code).trim(), x);
+        });
+        // 코드 정규화: 공백 제거 후 fallback
+        if (rentcarPriceMap.size < rentcarPriceCodes.length) {
+          const missingCodes = rentcarPriceCodes.filter((c: string) => !rentcarPriceMap.has(String(c).trim()));
+          if (missingCodes.length > 0) {
+            const { data: allRentRows } = await supabase.from('rentcar_price').select('rent_code, vehicle_type, way_type, route, category');
+            (allRentRows || []).forEach((x: any) => {
+              const key = String(x.rent_code || '').trim();
+              if (key && !rentcarPriceMap.has(key)) rentcarPriceMap.set(key, x);
+              const compactKey = key.replace(/\s+/g, '');
+              if (compactKey && !rentcarPriceMap.has(compactKey)) rentcarPriceMap.set(compactKey, x);
+            });
+          }
+        }
+      }
+
       const airportCodes = Array.from(new Set((airportData || []).map((x: any) => x.airport_price_code).filter(Boolean)));
       const airportPriceData = airportCodes.length > 0
         ? await fetchRowsByIds('airport_price', 'airport_code', airportCodes)
@@ -1019,12 +1044,15 @@ export default function SchedulePage() {
         if (r.re_type === 'rentcar') {
           const rows = rentcarByRid.get(r.re_id) || [{}];
           return rows.flatMap((d: any) => {
+            const rentCode = String(d.rentcar_price_code || '').trim();
+            const rentInfo = rentcarPriceMap.get(rentCode) || rentcarPriceMap.get(rentCode.replace(/\s+/g, '')) || null;
             const pickupParts = getKstDateTimeParts(d.pickup_datetime || '');
             const pickupItem = {
               ...base,
               ...d,
-              carType: d.rentcar_price_code || '',
-              route: [d.pickup_location, d.destination || d.dropoff_location].filter(Boolean).join(' → '),
+              carType: rentInfo?.vehicle_type || d.vehicle_type || rentCode,
+              wayType: rentInfo?.way_type || d.way_type || '',
+              route: rentInfo?.route || [d.pickup_location, d.destination || d.dropoff_location].filter(Boolean).join(' → '),
               carCount: Number(d.car_count || 0),
               pickupDate: pickupParts.date,
               pickupTime: pickupParts.time,
@@ -1091,10 +1119,34 @@ export default function SchedulePage() {
         }));
       });
 
-      const combined = [
+      let combined = [
         ...oldMapped.map(m => ({ ...m, source: 'sh' })),
         ...newMapped,
       ];
+
+      // 프로모션 순번(몇 번째 예약) 배지를 모바일 카드에 표시할 수 있도록 주입
+      try {
+        const promoReservationIds = Array.from(
+          new Set(
+            combined
+              .filter((item: any) => item.source === 'new' && item.hasPromotion)
+              .map((item: any) => item.reservationId || item.re_id)
+              .filter(Boolean)
+          )
+        );
+        if (promoReservationIds.length > 0) {
+          const seqMap = await fetchPromotionSequenceMap(promoReservationIds);
+          if (seqMap.size > 0) {
+            combined = combined.map((item: any) => {
+              const reservationId = item.reservationId || item.re_id;
+              const seq = reservationId ? seqMap.get(reservationId) : undefined;
+              return seq ? { ...item, promotionSequence: seq } : item;
+            });
+          }
+        }
+      } catch (seqErr) {
+        console.warn('모바일 프로모션 순번 주입 실패:', seqErr);
+      }
 
       // 디버그 로그: 로드된 전체 건수 및 선택된 날짜에 해당하는 항목들 확인
       try {
@@ -1275,7 +1327,9 @@ export default function SchedulePage() {
           </div>
           <span className="font-bold text-sm flex-1">{conf.name}</span>
           {item.hasPromotion && (
-            <span className="text-xs px-2 py-0.5 rounded-full font-semibold bg-red-50 text-red-700 border border-red-100 whitespace-nowrap">🎁 프로모션</span>
+            <span className="text-xs px-2 py-0.5 rounded-full font-semibold bg-red-50 text-red-700 border border-red-100 whitespace-nowrap">
+              {typeof item.promotionSequence === 'number' ? `🎁${item.promotionSequence}번` : '🎁'}
+            </span>
           )}
           {directionLabel && (
             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${directionColor}`}>
@@ -1397,9 +1451,13 @@ export default function SchedulePage() {
           {type === 'rentcar' && (
             <>
               <Row label="차종" value={item.carType} bold />
+              {item.wayType && <Row label="구분" value={item.wayType} />}
               <DateRow dateLabel={dateLabel} time={item.pickupTime} />
+              {item.pickupLocation && <Row label="출발지" value={item.pickupLocation} />}
               {item.destination && <Row label="목적지" value={item.destination} />}
+              {item.carCount > 0 && <Row label="차량수" value={`${item.carCount}대`} />}
               <Row label="인원" value={`${item.passengerCount}명`} />
+              {item.usagePeriod && <Row label="이용기간" value={item.usagePeriod} />}
             </>
           )}
         </div>

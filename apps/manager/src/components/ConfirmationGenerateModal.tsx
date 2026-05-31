@@ -1588,6 +1588,13 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                                                                 const roomType = storedRoom?.room_type || p?.room_type || '';
                                                                 if (cruiseName) descLines.push(`🚢 ${cruiseName}`);
                                                                 if (scheduleType !== '-' || roomType) descLines.push(`${scheduleType} / ${roomType || '-'}`);
+                                                                // 프로모션 이름 표시
+                                                                const roomSelections = Array.isArray(cruisePb?.room_selections) ? cruisePb.room_selections : [];
+                                                                const promoName = roomSelections[0]?.promotion_name
+                                                                    || (typeof cruisePb?.applied_promotions?.[0] === 'string' ? cruisePb.applied_promotions[0] : cruisePb?.applied_promotions?.[0]?.promotion_name)
+                                                                    || cruisePb?.promotion_code
+                                                                    || null;
+                                                                if (promoName) descLines.push(`🎁 ${promoName} 적용`);
                                                                 // cruise_rate_card: price_adult, price_child, price_infant, price_extra_bed, price_child_extra_bed, price_single
                                                                 const adultCount = storedRoom?.adult?.count ?? d?.adult_count ?? 0;
                                                                 const childCount = storedRoom?.child?.count ?? d?.child_count ?? 0;
@@ -1596,6 +1603,29 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                                                                 const extraBedCount = storedRoom?.extra_bed?.count ?? d?.extra_bed_count ?? 0;
                                                                 const childExtraBedCount = storedRoom?.child_extra_bed?.count ?? d?.child_extra_bed_count ?? 0;
                                                                 const singleCount = storedRoom?.single?.count ?? d?.single_count ?? 0;
+                                                                // 프로모션(room_selections 기반) 예약에서 storedRoom이 없을 때 가상 룸 생성 (비례 할인 단가)
+                                                                const effectiveRoom = storedRoom || (() => {
+                                                                    if (!roomSelections.length) return null;
+                                                                    const rs = roomSelections[0];
+                                                                    const rsTotal = Number(rs.total_for_selection || rs.subtotal_per_room || 0);
+                                                                    if (rsTotal <= 0) return null;
+                                                                    const baseAdult = Number(p?.price_adult || 0);
+                                                                    const baseChild = Number(p?.price_child || 0);
+                                                                    const baseInfant = Number(p?.price_infant || 0);
+                                                                    const baseExtraBed = Number(p?.price_extra_bed || 0);
+                                                                    const baseChildExtraBed = Number(p?.price_child_extra_bed || 0);
+                                                                    const baseSingle = Number(p?.price_single || 0);
+                                                                    const rsAdult = Number(rs.adult_count || 0);
+                                                                    const rsChild = Number(rs.child_count || 0);
+                                                                    const rsInfant = Number(rs.infant_count || 0);
+                                                                    const rsExtra = Number(rs.extra_bed_count || 0);
+                                                                    const rsChildExtra = Number(rs.child_extra_bed_count || 0);
+                                                                    const rsSingle = Number(rs.single_count || 0);
+                                                                    const baseSum = rsAdult * baseAdult + rsChild * baseChild + rsInfant * baseInfant + rsExtra * baseExtraBed + rsChildExtra * baseChildExtraBed + rsSingle * baseSingle;
+                                                                    const ratio = baseSum > 0 ? rsTotal / baseSum : 1;
+                                                                    const mk = (base: number, cnt: number) => cnt > 0 ? { unit_price: Math.round(base * ratio), count: cnt, total: Math.round(base * ratio * cnt) } : null;
+                                                                    return { adult: mk(baseAdult, rsAdult), child: mk(baseChild, rsChild), infant: mk(baseInfant, rsInfant), extra_bed: mk(baseExtraBed, rsExtra), child_extra_bed: mk(baseChildExtraBed, rsChildExtra), single: mk(baseSingle, rsSingle) };
+                                                                })();
                                                                 const pickUnit = (entry: any, count: number, fallback: number) => {
                                                                     const unit = Number(entry?.unit_price || 0);
                                                                     if (unit > 0) return unit;
@@ -1603,13 +1633,13 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                                                                     if (count > 0 && total > 0) return Math.round(total / count);
                                                                     return Number(fallback || 0);
                                                                 };
-                                                                const adultPrice = pickUnit(storedRoom?.adult, Number(adultCount || 0), Number(p?.price_adult || 0));
-                                                                const childPrice = pickUnit(storedRoom?.child, Number(childCount || 0), Number(p?.price_child || 0));
-                                                                const childOlderPrice = pickUnit(storedRoom?.child_older, Number(childOlderCount || 0), Number(p?.price_child_older || p?.price_child || 0));
-                                                                const infantPrice = pickUnit(storedRoom?.infant, Number(infantCount || 0), Number(p?.price_infant || 0));
-                                                                const extraBedPrice = pickUnit(storedRoom?.extra_bed, Number(extraBedCount || 0), Number(p?.price_extra_bed || 0));
-                                                                const childExtraBedPrice = pickUnit(storedRoom?.child_extra_bed, Number(childExtraBedCount || 0), Number(p?.price_child_extra_bed || 0));
-                                                                const singlePrice = pickUnit(storedRoom?.single, Number(singleCount || 0), Number(p?.price_single || 0));
+                                                                const adultPrice = pickUnit(effectiveRoom?.adult, Number(adultCount || 0), Number(p?.price_adult || 0));
+                                                                const childPrice = pickUnit(effectiveRoom?.child, Number(childCount || 0), Number(p?.price_child || 0));
+                                                                const childOlderPrice = pickUnit(effectiveRoom?.child_older, Number(childOlderCount || 0), Number(p?.price_child_older || p?.price_child || 0));
+                                                                const infantPrice = pickUnit(effectiveRoom?.infant, Number(infantCount || 0), Number(p?.price_infant || 0));
+                                                                const extraBedPrice = pickUnit(effectiveRoom?.extra_bed, Number(extraBedCount || 0), Number(p?.price_extra_bed || 0));
+                                                                const childExtraBedPrice = pickUnit(effectiveRoom?.child_extra_bed, Number(childExtraBedCount || 0), Number(p?.price_child_extra_bed || 0));
+                                                                const singlePrice = pickUnit(effectiveRoom?.single, Number(singleCount || 0), Number(p?.price_single || 0));
                                                                 if (adultCount > 0) calcLines.push(`성인 ${adultPrice.toLocaleString()}동 × ${adultCount}명`);
                                                                 if (extraBedCount > 0) calcLines.push(`엑스트라베드(성인) ${extraBedPrice.toLocaleString()}동 × ${extraBedCount}명`);
                                                                 if (childCount > 0) calcLines.push(`아동 ${childPrice.toLocaleString()}동 × ${childCount}명`);

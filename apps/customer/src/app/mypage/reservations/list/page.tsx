@@ -16,6 +16,7 @@ interface Reservation {
   re_status: string;
   re_created_at: string;
   re_quote_id: string | null;
+  price_breakdown?: any | null;
 }
 
 export default function MyReservationsListPage() {
@@ -293,6 +294,9 @@ export default function MyReservationsListPage() {
                             <div className="flex items-center gap-3">
                               <span className={`text-sm font-bold ${typeAccentColor(r.re_type)}`}>{typeName(r.re_type)}</span>
                               <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${statusBadgeClass(r.re_status)}`}>{statusText(r.re_status)}</span>
+                              {r.re_type === 'cruise' && (r.price_breakdown?.room_selections?.[0]?.promotion_name || r.price_breakdown?.applied_promotions?.[0]?.promotion_name || r.price_breakdown?.promotion_code) && (
+                                <span className="text-base leading-none">🎁</span>
+                              )}
                             </div>
                             <div className="text-xs text-gray-600 font-medium">
                               {dateLabel}

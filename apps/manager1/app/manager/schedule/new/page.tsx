@@ -2714,6 +2714,18 @@ export default function ManagerSchedulePage() {
               {isTruthyFlag(schedule?.service_row?.birthday_event) && <span title="생일 이벤트 신청">🎂</span>}
             </>
           )}
+          {(() => {
+            const _pb = schedule?.price_breakdown || null;
+            const _promoSeqRaw = _pb?.promotion_sequence;
+            const _promoSeq = Number.isFinite(Number(_promoSeqRaw)) ? Number(_promoSeqRaw) : null;
+            const _hasPromo = !!_pb?.promotion_code || (Array.isArray(_pb?.applied_promotions) && _pb.applied_promotions.length > 0);
+            if (!_hasPromo && !_promoSeq) return null;
+            return (
+              <span className="inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700 border border-red-100 whitespace-nowrap">
+                {_promoSeq ? `🎁${_promoSeq}번` : '🎁'}
+              </span>
+            );
+          })()}
         </h5>
         {schedule.segment_ribbon && (
           <span className={`px-2 py-0.5 rounded text-xs font-semibold ${(schedule.segment_type === 'return' || schedule.rentcar_phase === 'return') ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>
@@ -2847,9 +2859,19 @@ export default function ManagerSchedulePage() {
     const fmtDt = (v: any) => v ? new Date(v).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }) : '-';
     const statusBadge = (s: any) => {
       const statusUi = getReservationStatusUi(s.re_status);
+      const promoSeqRaw = s?.price_breakdown?.promotion_sequence;
+      const promoSeq = Number.isFinite(Number(promoSeqRaw)) ? Number(promoSeqRaw) : null;
+      const showPromoBadge = !!promoSeq || hasPromotionBreakdown(s?.price_breakdown);
       return (
-        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusUi.className}`}>
-          {statusUi.label}
+        <span className="inline-flex items-center gap-1">
+          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusUi.className}`}>
+            {statusUi.label}
+          </span>
+          {showPromoBadge && (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-50 text-red-700 border border-red-100 whitespace-nowrap">
+              {promoSeq ? `🎁${promoSeq}번` : '🎁'}
+            </span>
+          )}
         </span>
       );
     };

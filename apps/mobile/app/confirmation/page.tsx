@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { ArrowLeft, FileText, Home, Search } from 'lucide-react';
 import supabase from '@/lib/supabase';
 import { fetchTableInBatches } from '@/lib/fetchInBatches';
+import { fetchPromotionSequenceMap } from '@/lib/promotionSequence';
 import ConfirmationGenerateModal from '@/components/ConfirmationGenerateModal';
 
 type ReservationRow = {
@@ -31,6 +32,7 @@ type GroupItem = {
   count: number;
   confirmationStatus: 'waiting' | 'generated';
   hasPromotion: boolean;
+  promotionSequence?: number | null;
 };
 
 const TYPE_LABEL: Record<string, string> = {
@@ -49,6 +51,7 @@ const TYPE_LABEL: Record<string, string> = {
 function hasPromotionBreakdown(value: any): boolean {
   if (!value) return false;
   if (value.promotion_code) return true;
+  if (Array.isArray(value.applied_promotions) && value.applied_promotions.length > 0) return true;
   return Array.isArray(value.room_selections) && value.room_selections.some((item: any) => !!item?.promotion_code);
 }
 
@@ -167,8 +170,23 @@ export default function MobileConfirmationPage() {
         }
 
         if (!cancelled) {
-          const sorted = Array.from(grouped.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-          setItems(sorted);
+          const sortedArr = Array.from(grouped.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+          // 프로모션 시퀀스 주입
+          const promoIds = sortedArr.flatMap(item =>
+            item.reservationIds.filter((rid) => hasPromotionBreakdown(
+              (reservations.find((r) => r.re_id === rid) as any)?.price_breakdown
+            ))
+          );
+          if (promoIds.length > 0) {
+            try {
+              const seqMap = await fetchPromotionSequenceMap(promoIds);
+              sortedArr.forEach(item => {
+                const seqs = item.reservationIds.map(rid => seqMap.get(rid)).filter((s): s is number => s !== undefined);
+                if (seqs.length > 0) item.promotionSequence = Math.min(...seqs);
+              });
+            } catch { /* ignore */ }
+          }
+          setItems(sortedArr);
         }
       } catch (e: any) {
         if (!cancelled) setError(e?.message || '확인서 목록을 불러오지 못했습니다.');
@@ -345,7 +363,9 @@ export default function MobileConfirmationPage() {
                   </div>
                   <div className="flex items-center gap-1.5">
                     {item.hasPromotion && (
-                      <span className="rounded-full bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-700 border border-red-100 whitespace-nowrap">🎁 프로모션</span>
+                      <span className="rounded-full bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-700 border border-red-100 whitespace-nowrap">
+                        {item.promotionSequence ? `🎁${item.promotionSequence}번` : '🎁'}
+                      </span>
                     )}
                     <span className={`rounded-full px-2 py-1 text-[11px] ${item.confirmationStatus === 'generated' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
                       {item.confirmationStatus === 'generated' ? '생성됨' : '대기중'}

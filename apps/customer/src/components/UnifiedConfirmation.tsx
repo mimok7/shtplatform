@@ -190,7 +190,21 @@ export default function UnifiedConfirmation({ data }: UnifiedConfirmationProps) 
                                     return (
                                         <tr key={`${r.reservation_id}_${idx}`} className="hover:bg-gray-50">
                                             <td className="border border-gray-300 px-3 py-3 text-center text-sm text-gray-700">{idx + 1}</td>
-                                            <td className="border border-gray-300 px-3 py-3 text-sm font-medium text-gray-800 whitespace-nowrap">{typeLabel(r.service_type)}</td>
+                                            <td className="border border-gray-300 px-3 py-3 text-sm font-medium text-gray-800 whitespace-nowrap">
+                                                {typeLabel(r.service_type)}
+                                                {(r.price_breakdown?.promotion_code || (Array.isArray(r.price_breakdown?.applied_promotions) && r.price_breakdown.applied_promotions.length > 0)) && (
+                                                    <div className="mt-1">
+                                                        <span className="inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700 border border-red-100">
+                                                            {r.price_breakdown?.promotion_sequence ? `🎁${r.price_breakdown.promotion_sequence}번` : '🎁'}
+                                                        </span>
+                                                        {r.price_breakdown?.promotion_sequence && (
+                                                            <span className="ml-1 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-800 border border-amber-200">
+                                                                {r.price_breakdown.promotion_sequence}번째 예약
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </td>
                                             <td className="border border-gray-300 px-3 py-3 text-sm text-gray-700">
                                                 <div className="truncate" title={`예약ID: ${String(r.reservation_id).slice(-8)}`}>{info || '-'}</div>
                                                 <div className="text-xs text-gray-400 mt-1">예약ID: {String(r.reservation_id).slice(-8)}</div>

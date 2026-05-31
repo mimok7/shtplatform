@@ -900,8 +900,26 @@ export default function UserReservationDetailModal({
                                 makeCruiseLine('싱글차액', roomPb?.single, singleLineCount, Number(service.priceSingle || 0)),
                             ].filter(Boolean) as Array<{ label: string; value: any }>;
 
+                            // 프로모션 정보 추출
+                            const promoCode = rawPb?.promotion_code || null;
+                            const promoApplied = Array.isArray(rawPb?.applied_promotions) ? rawPb.applied_promotions : [];
+                            const promoSeq = Number(rawPb?.promotion_sequence) || null;
+                            const hasPromo = !!promoCode || promoApplied.length > 0;
+
                             return (
                                 <>
+                                    {hasPromo && (
+                                        <div className="flex flex-wrap items-center gap-1.5 mb-2">
+                                            <span className="inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700 border border-red-100">
+                                                {promoSeq ? `🎁${promoSeq}번` : '🎁'}
+                                            </span>
+                                            {promoSeq && (
+                                                <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-800 border border-amber-200">
+                                                    {promoSeq}번째 예약
+                                                </span>
+                                            )}
+                                        </div>
+                                    )}
                                     <div className="bg-blue-50 rounded-lg p-3 mb-2 border border-blue-100">
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
                                             <div><strong>크루즈명:</strong> <span className="font-semibold text-blue-800">{service.cruiseName || service.cruise || '크루즈'}</span></div>

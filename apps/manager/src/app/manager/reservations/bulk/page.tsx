@@ -5,6 +5,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import supabase from '@/lib/supabase';
 import ManagerLayout from '@/components/ManagerLayout';
+import { hasPromotionBreakdown, fetchPromotionSequenceMap } from '@/lib/promotionSequence';
 import {
     openCentralPackageDetailModal,
     openCentralReservationDetailModal,
@@ -38,6 +39,7 @@ interface ServiceReservation {
     re_id: string;
     re_type: string;
     re_status: string;
+    price_breakdown?: any;
 }
 
 interface ReservationItem {
@@ -137,6 +139,7 @@ function BulkReservationContent() {
     const [emailReservationCountMap, setEmailReservationCountMap] = useState<Record<string, number>>({});
     const [pendingDetailUserInfo, setPendingDetailUserInfo] = useState<any>(null);
     const [reservationDetails, setReservationDetails] = useState<any>(null);
+    const [promotionSequenceMap, setPromotionSequenceMap] = useState<Map<string, number>>(new Map());
 
     const totalServiceCount = useMemo(
         () => reservations.reduce((sum, r) => sum + r.services.length, 0),
@@ -196,7 +199,7 @@ function BulkReservationContent() {
 
                 let pageQuery = supabase
                     .from('reservation')
-                    .select('re_id, re_type, re_status, re_created_at, re_update_at, re_quote_id, re_user_id')
+                    .select('re_id, re_type, re_status, re_created_at, re_update_at, re_quote_id, re_user_id, price_breakdown')
                     .neq('re_type', 'car_sht')
                     .order('re_created_at', { ascending: false })
                     .order('re_id', { ascending: false })
@@ -343,6 +346,7 @@ function BulkReservationContent() {
                     re_created_at: r.re_created_at,
                     re_update_at: r.re_update_at ?? null,
                     re_quote_id: r.re_quote_id,
+                    price_breakdown: r.price_breakdown ?? null,
                     users: finalUserInfo,
                     quote: r.re_quote_id ? (quotesById[r.re_quote_id] || null) : null,
                 };
@@ -415,7 +419,8 @@ function BulkReservationContent() {
                 groupedByUser[groupKey].services.push({
                     re_id: r.re_id,
                     re_type: r.re_type,
-                    re_status: r.re_status
+                    re_status: r.re_status,
+                    price_breakdown: r.price_breakdown ?? null,
                 });
             });
 
@@ -461,6 +466,17 @@ function BulkReservationContent() {
             setReservations(list);
             setSelectedItems(new Set()); // 선택 초기화
             setError(null);
+
+            // 프로모션 시퀀스 주입
+            const promoIds = list.flatMap(r => r.services.filter(s => hasPromotionBreakdown(s.price_breakdown)).map(s => s.re_id));
+            if (promoIds.length > 0) {
+                try {
+                    const seqMap = await fetchPromotionSequenceMap(promoIds);
+                    setPromotionSequenceMap(seqMap);
+                } catch { setPromotionSequenceMap(new Map()); }
+            } else {
+                setPromotionSequenceMap(new Map());
+            }
 
         } catch (error) {
             console.error('예약 목록 로드 실패:', error);
@@ -2147,6 +2163,14 @@ function BulkReservationContent() {
                                                                                     <span key={idx} className={`text-xs px-2 py-0.5 rounded flex items-center gap-1 font-medium ${getTypeBadgeStyle(service.re_type)}`}>
                                                                                         {getTypeIcon(service.re_type)}
                                                                                         {getTypeName(service.re_type)}
+                                                                                        {hasPromotionBreakdown(service.price_breakdown) && (() => {
+                                                                                            const seq = promotionSequenceMap.get(service.re_id);
+                                                                                            return (
+                                                                                                <span className="inline-flex items-center rounded-full bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold text-red-700 border border-red-100 whitespace-nowrap">
+                                                                                                    {seq ? `🎁${seq}번` : '🎁'}
+                                                                                                </span>
+                                                                                            );
+                                                                                        })()}
                                                                                         <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] ${getStatusColor(service.re_status)}`}>
                                                                                             {getStatusText(service.re_status)}
                                                                                         </span>

@@ -2684,8 +2684,20 @@ export default function ManagerSchedulePage() {
         <div className="flex items-center justify-center w-9 h-9 rounded-full bg-gray-50 border border-gray-200">
           {getDisplayTypeIcon(schedule)}
         </div>
-        <h5 className="font-bold text-sm flex-1 truncate text-gray-800">
-          {getDisplayTypeName(schedule)}
+        <h5 className="font-bold text-sm flex-1 truncate text-gray-800 inline-flex items-center gap-1.5">
+          <span>{getDisplayTypeName(schedule)}</span>
+          {(() => {
+            const _pb = schedule?.price_breakdown || null;
+            const _promoSeqRaw = _pb?.promotion_sequence;
+            const _promoSeq = Number.isFinite(Number(_promoSeqRaw)) ? Number(_promoSeqRaw) : null;
+            const _hasPromo = !!_pb?.promotion_code || (Array.isArray(_pb?.applied_promotions) && _pb.applied_promotions.length > 0);
+            if (!_hasPromo && !_promoSeq) return null;
+            return (
+              <span className="inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700 border border-red-100 whitespace-nowrap">
+                {_promoSeq ? `🎁${_promoSeq}번` : '🎁'}
+              </span>
+            );
+          })()}
         </h5>
         {schedule.segment_ribbon && (
           <span className={`px-2 py-0.5 rounded text-xs font-semibold ${(schedule.segment_type === 'return' || schedule.rentcar_phase === 'return') ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>
@@ -2812,11 +2824,23 @@ export default function ManagerSchedulePage() {
 
     const fmtDate = (v: any) => v ? new Date(v).toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul', month: '2-digit', day: '2-digit', weekday: 'short' }) : '-';
     const fmtDt = (v: any) => v ? new Date(v).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }) : '-';
-    const statusBadge = (s: any) => (
-      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${s.re_status === 'confirmed' ? 'bg-green-100 text-green-800' : s.re_status === 'pending' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'}`}>
-        {s.re_status === 'confirmed' ? '확정' : s.re_status === 'pending' ? '대기' : '취소'}
-      </span>
-    );
+    const statusBadge = (s: any) => {
+      const promoSeqRaw = s?.price_breakdown?.promotion_sequence;
+      const promoSeq = Number.isFinite(Number(promoSeqRaw)) ? Number(promoSeqRaw) : null;
+      const showPromoBadge = !!promoSeq || hasPromotionBreakdown(s?.price_breakdown);
+      return (
+        <span className="inline-flex items-center gap-1">
+          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${s.re_status === 'confirmed' ? 'bg-green-100 text-green-800' : s.re_status === 'pending' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'}`}>
+            {s.re_status === 'confirmed' ? '확정' : s.re_status === 'pending' ? '대기' : '취소'}
+          </span>
+          {showPromoBadge && (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-50 text-red-700 border border-red-100 whitespace-nowrap">
+              {promoSeq ? `🎁${promoSeq}번` : '🎁'}
+            </span>
+          )}
+        </span>
+      );
+    };
     const actionBtn = (s: any) => (
       <button
         onClick={() => {

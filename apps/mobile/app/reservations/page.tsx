@@ -40,6 +40,7 @@ interface ReservationItem {
 function hasPromotionBreakdown(value: any): boolean {
   if (!value) return false;
   if (value.promotion_code) return true;
+  if (Array.isArray(value.applied_promotions) && value.applied_promotions.length > 0) return true;
   return Array.isArray(value.room_selections) && value.room_selections.some((item: any) => !!item?.promotion_code);
 }
 
@@ -855,11 +856,10 @@ export default function ReservationsPage() {
                         {/* 서비스 배지 */}
                         <div className="flex flex-wrap gap-1 mb-2">
                           {reservation.hasPromotion && (
-                            <span className="text-xs px-2 py-0.5 rounded-full flex items-center gap-1 font-semibold bg-red-50 text-red-700 border border-red-100 whitespace-nowrap">🎁 프로모션</span>
+                            <span className="text-xs px-2 py-0.5 rounded-full font-semibold bg-red-50 text-red-700 border border-red-100 whitespace-nowrap">
+                              {reservation.promotionSequence ? `🎁${reservation.promotionSequence}번` : '🎁'}
+                            </span>
                           )}
-                          {reservation.promotionSequence ? (
-                            <span className="text-xs px-2 py-0.5 rounded-full flex items-center gap-1 font-bold bg-amber-100 text-amber-800 border border-amber-200 whitespace-nowrap">{reservation.promotionSequence}번째 예약</span>
-                          ) : null}
                           {reservation.services.map((s, i) => (
                             <span key={i} className={`text-xs px-2 py-0.5 rounded-full flex items-center gap-1 font-medium ${getTypeBadge(s.re_type)}`}>
                               {getTypeIcon(s.re_type)}

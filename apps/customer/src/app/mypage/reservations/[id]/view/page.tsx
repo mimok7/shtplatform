@@ -1009,6 +1009,22 @@ function ReservationViewInner() {
                       </div>
                     </div>
 
+                    {/* 프로모션 적용 표시 */}
+                    {(() => {
+                      const pb = reservation.price_breakdown;
+                      const promoName = pb?.room_selections?.[0]?.promotion_name
+                        || pb?.applied_promotions?.[0]?.promotion_name
+                        || pb?.promotion_code
+                        || null;
+                      if (!promoName) return null;
+                      return (
+                        <div className="mb-4 flex items-center gap-2 px-4 py-2 bg-amber-50 border border-amber-200 rounded-lg">
+                          <span className="text-base">\ud83c\udf81</span>
+                          <span className="text-sm font-semibold text-amber-800">{promoName} 적용</span>
+                        </div>
+                      );
+                    })()}
+
                     {/* 카테고리별 상세 정보 */}
                     <div className="space-y-4">
                       <div className="text-sm font-semibold text-gray-700 mb-3">🎫 카테고리 / 객실별 상세</div>
