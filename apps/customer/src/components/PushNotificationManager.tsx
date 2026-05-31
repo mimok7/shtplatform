@@ -36,6 +36,24 @@ export default function PushNotificationManager() {
   const [isStandalone, setIsStandalone] = useState(true);
   const [isDismissed, setIsDismissed] = useState(false);
   const [showManualGuide, setShowManualGuide] = useState(false);
+  const [vapidPublicKey, setVapidPublicKey] = useState(VAPID_PUBLIC_KEY);
+
+  const resolveVapidPublicKey = async (): Promise<string> => {
+    const localKey = String(vapidPublicKey || '').trim();
+    if (localKey) return localKey;
+
+    try {
+      const response = await fetch('/api/push-config', { cache: 'no-store' });
+      if (!response.ok) return '';
+      const payload = await response.json().catch(() => ({}));
+      const nextKey = String(payload?.vapidPublicKey || '').trim();
+      if (nextKey) setVapidPublicKey(nextKey);
+      return nextKey;
+    } catch (err) {
+      console.warn('VAPID 공개키 조회 실패:', err);
+      return '';
+    }
+  };
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -77,11 +95,14 @@ export default function PushNotificationManager() {
   }, []);
 
   useEffect(() => {
-    if (!VAPID_PUBLIC_KEY || typeof window === 'undefined') return;
+    if (typeof window === 'undefined') return;
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
 
     const registerPush = async () => {
       try {
+        const resolvedVapidKey = await resolveVapidPublicKey();
+        if (!resolvedVapidKey) return;
+
         if (Notification.permission === 'denied') return;
 
         const registration = await navigator.serviceWorker.ready;
@@ -96,7 +117,7 @@ export default function PushNotificationManager() {
 
         const subscription = await registration.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: toApplicationServerKey(VAPID_PUBLIC_KEY),
+          applicationServerKey: toApplicationServerKey(resolvedVapidKey),
         });
 
         await saveSubscription(subscription);
@@ -127,7 +148,7 @@ export default function PushNotificationManager() {
 
     const timer = setTimeout(registerPush, 3000);
     return () => clearTimeout(timer);
-  }, []);
+  }, [vapidPublicKey]);
 
   const handleInstallClick = async () => {
     if (!deferredPrompt) {

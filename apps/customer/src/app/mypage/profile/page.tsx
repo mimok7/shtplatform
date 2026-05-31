@@ -63,6 +63,7 @@ export default function ProfilePage() {
     const [notificationLoading, setNotificationLoading] = useState(false);
     const [notificationEnabled, setNotificationEnabled] = useState<boolean | null>(null);
     const [notificationMessage, setNotificationMessage] = useState<string>('');
+    const [vapidPublicKey, setVapidPublicKey] = useState<string>(VAPID_PUBLIC_KEY);
 
     useLoadingTimeout(loading, setLoading, 12000);
 
@@ -98,6 +99,23 @@ export default function ProfilePage() {
         return navigator.serviceWorker.register('/sw.js');
     };
 
+    const resolveVapidPublicKey = async (): Promise<string> => {
+        const localKey = String(vapidPublicKey || '').trim();
+        if (localKey) return localKey;
+
+        try {
+            const response = await fetch('/api/push-config', { cache: 'no-store' });
+            if (!response.ok) return '';
+            const payload = await response.json().catch(() => ({}));
+            const nextKey = String(payload?.vapidPublicKey || '').trim();
+            if (nextKey) setVapidPublicKey(nextKey);
+            return nextKey;
+        } catch (err) {
+            console.warn('VAPID 공개키 조회 실패:', err);
+            return '';
+        }
+    };
+
     const refreshNotificationState = async () => {
         if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) {
             setNotificationEnabled(false);
@@ -121,7 +139,8 @@ export default function ProfilePage() {
 
     const handleEnableNotification = async () => {
         if (notificationLoading) return;
-        if (!VAPID_PUBLIC_KEY) {
+        const resolvedVapidKey = await resolveVapidPublicKey();
+        if (!resolvedVapidKey) {
             setNotificationMessage('VAPID 공개키가 설정되지 않았습니다.');
             return;
         }
@@ -146,7 +165,7 @@ export default function ProfilePage() {
             if (!subscription) {
                 subscription = await registration.pushManager.subscribe({
                     userVisibleOnly: true,
-                    applicationServerKey: toApplicationServerKey(VAPID_PUBLIC_KEY),
+                    applicationServerKey: toApplicationServerKey(resolvedVapidKey),
                 });
             }
 
