@@ -21,26 +21,38 @@ export async function fetchPromotionSequenceMap(reservationIds: (string | null |
 
     const { data: mine } = await supabase
         .from('cruise_promotion_usage')
-        .select('promotion_id, reservation_id')
+        .select('promotion_id, reservation_id, promotion_sequence')
         .in('reservation_id', ids)
         .in('status', ACTIVE_STATUSES);
+
+    for (const row of mine || []) {
+        const rid = String((row as any)?.reservation_id || '').trim();
+        const seq = Number((row as any)?.promotion_sequence || 0);
+        if (rid && seq > 0) result.set(rid, seq);
+    }
+
+    const missingIds = ids.filter((rid) => !result.has(rid));
+    if (missingIds.length === 0) return result;
 
     const promoIds = Array.from(new Set((mine || []).map((r: any) => r.promotion_id).filter(Boolean)));
     if (promoIds.length === 0) return result;
 
     const { data: all } = await supabase
         .from('cruise_promotion_usage')
-        .select('promotion_id, reservation_id, used_at')
+        .select('promotion_id, reservation_id, promotion_sequence, used_at, created_at, id')
         .in('promotion_id', promoIds)
         .in('status', ACTIVE_STATUSES)
-        .order('used_at', { ascending: true });
+        .order('used_at', { ascending: true })
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true });
 
     const counters: Record<string, number> = {};
-    const idSet = new Set(ids);
+    const idSet = new Set(missingIds);
     for (const row of all || []) {
         const pid = (row as any).promotion_id;
         if (!pid) continue;
-        counters[pid] = (counters[pid] || 0) + 1;
+        const explicitSeq = Number((row as any).promotion_sequence || 0);
+        counters[pid] = explicitSeq > 0 ? explicitSeq : (counters[pid] || 0) + 1;
         const rid = (row as any).reservation_id;
         if (rid && idSet.has(rid) && !result.has(rid)) {
             result.set(rid, counters[pid]);

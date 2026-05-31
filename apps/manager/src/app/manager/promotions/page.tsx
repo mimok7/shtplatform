@@ -8,6 +8,7 @@ import {
   CalendarDays,
   CheckCircle2,
   CircleOff,
+  Filter,
   Loader2,
   Plus,
   RefreshCw,
@@ -49,6 +50,25 @@ type PromotionRate = {
 };
 
 type UsageSummary = Record<string, number>;
+type PageTab = 'settings' | 'reservations';
+
+type PromotionReservationRow = {
+  usage_id: string;
+  promotion_id: string;
+  promotion_name: string;
+  promotion_code: string;
+  reservation_id: string;
+  reservation_status: string;
+  reservation_created_at: string | null;
+  promotion_status: string;
+  promotion_used_at: string | null;
+  promotion_sequence: number | null;
+  user_name: string;
+  user_email: string;
+  cruise_name: string;
+  room_type: string;
+  checkin: string | null;
+};
 
 type PromotionForm = Omit<Promotion, 'id' | 'created_at' | 'updated_at'> & { id?: string };
 type RateForm = Omit<PromotionRate, 'id' | 'promotion_id'> & { id?: string };
@@ -100,6 +120,10 @@ export default function PromotionManagementPage() {
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [rates, setRates] = useState<PromotionRate[]>([]);
   const [usageSummary, setUsageSummary] = useState<UsageSummary>({});
+  const [pageTab, setPageTab] = useState<PageTab>('settings');
+  const [usageRows, setUsageRows] = useState<PromotionReservationRow[]>([]);
+  const [usageLoading, setUsageLoading] = useState(false);
+  const [usageFilterPromotionId, setUsageFilterPromotionId] = useState<string>('all');
   const [selectedPromotionId, setSelectedPromotionId] = useState<string>('');
   const [promotionForm, setPromotionForm] = useState<PromotionForm>(emptyPromotionForm);
   const [rateForm, setRateForm] = useState<RateForm>(emptyRateForm);
@@ -116,6 +140,181 @@ export default function PromotionManagementPage() {
 
   const selectedUsageCount = selectedPromotion ? usageSummary[selectedPromotion.id] || 0 : 0;
   const selectedRemaining = selectedPromotion ? Math.max(selectedPromotion.quota_total - selectedUsageCount, 0) : 0;
+
+  const filteredUsageRows = useMemo(() => {
+    if (usageFilterPromotionId === 'all') return usageRows;
+    return usageRows.filter((row) => row.promotion_id === usageFilterPromotionId);
+  }, [usageRows, usageFilterPromotionId]);
+
+  const visibleUsageRows = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    return filteredUsageRows
+      .filter((row) => {
+        const checkinRaw = String(row.checkin || '').trim();
+        if (!checkinRaw) return true;
+        const checkin = new Date(`${checkinRaw}T00:00:00`);
+        if (Number.isNaN(checkin.getTime())) return true;
+        return checkin.getTime() >= today.getTime();
+      })
+      .sort((a, b) => {
+        const aReservationTime = a.reservation_created_at ? new Date(a.reservation_created_at).getTime() : Number.MAX_SAFE_INTEGER;
+        const bReservationTime = b.reservation_created_at ? new Date(b.reservation_created_at).getTime() : Number.MAX_SAFE_INTEGER;
+        if (aReservationTime !== bReservationTime) return aReservationTime - bReservationTime;
+
+        const aCheckin = String(a.checkin || '');
+        const bCheckin = String(b.checkin || '');
+        return aCheckin.localeCompare(bCheckin);
+      });
+  }, [filteredUsageRows]);
+
+  const groupedUsageRows = useMemo(() => {
+    const groups = new Map<string, { promotionId: string; promotionName: string; promotionCode: string; rows: PromotionReservationRow[] }>();
+
+    for (const row of visibleUsageRows) {
+      const key = row.promotion_id || 'unknown';
+      if (!groups.has(key)) {
+        groups.set(key, {
+          promotionId: key,
+          promotionName: row.promotion_name || '-',
+          promotionCode: row.promotion_code || '-',
+          rows: [],
+        });
+      }
+      groups.get(key)!.rows.push(row);
+    }
+
+    return Array.from(groups.values()).sort((a, b) => a.promotionName.localeCompare(b.promotionName, 'ko'));
+  }, [visibleUsageRows]);
+
+  const hiddenPastCount = Math.max(filteredUsageRows.length - visibleUsageRows.length, 0);
+
+  const loadPromotionReservations = async (promotionList?: Promotion[]) => {
+    setUsageLoading(true);
+    try {
+      const usingPromotions = promotionList || promotions;
+      const promotionMap = new Map(usingPromotions.map((promotion) => [promotion.id, promotion]));
+
+      const { data: usageData, error: usageError } = await supabase
+        .from('cruise_promotion_usage')
+        .select('id, promotion_id, reservation_id, reservation_cruise_id, status, used_at, promotion_sequence')
+        .not('reservation_id', 'is', null)
+        .in('status', ['reserved', 'confirmed'])
+        .order('used_at', { ascending: false });
+
+      if (usageError) throw usageError;
+
+      const usageRowsRaw = (usageData || []) as any[];
+      if (usageRowsRaw.length === 0) {
+        setUsageRows([]);
+        return;
+      }
+
+      const reservationIds = Array.from(new Set(usageRowsRaw.map((row) => String(row.reservation_id || '').trim()).filter(Boolean)));
+      const reservationCruiseIds = Array.from(new Set(usageRowsRaw.map((row) => String(row.reservation_cruise_id || '').trim()).filter(Boolean)));
+
+      const [{ data: reservationsData, error: reservationError }, { data: reservationCruiseData, error: reservationCruiseError }] = await Promise.all([
+        reservationIds.length > 0
+          ? supabase
+              .from('reservation')
+              .select('re_id, re_status, re_created_at, re_user_id')
+              .in('re_id', reservationIds)
+          : Promise.resolve({ data: [], error: null }),
+        reservationIds.length > 0
+          ? supabase
+              .from('reservation_cruise')
+              .select('id, reservation_id, room_price_code, checkin')
+              .in('reservation_id', reservationIds)
+          : Promise.resolve({ data: [], error: null }),
+      ]);
+
+      if (reservationError) throw reservationError;
+      if (reservationCruiseError) throw reservationCruiseError;
+
+      const reservationMap = new Map(((reservationsData || []) as any[]).map((row) => [String(row.re_id || '').trim(), row]));
+      const reservationCruiseMapById = new Map(((reservationCruiseData || []) as any[]).map((row) => [String(row.id || '').trim(), row]));
+      const reservationCruiseMapByReservationId = new Map<string, any>();
+      for (const row of (reservationCruiseData || []) as any[]) {
+        const key = String(row.reservation_id || '').trim();
+        if (!key || reservationCruiseMapByReservationId.has(key)) continue;
+        reservationCruiseMapByReservationId.set(key, row);
+      }
+
+      const userIds = Array.from(
+        new Set(
+          Array.from(reservationMap.values())
+            .map((row: any) => String(row.re_user_id || '').trim())
+            .filter(Boolean)
+        )
+      );
+
+      const { data: usersData, error: usersError } = userIds.length > 0
+        ? await supabase.from('users').select('id, name, email').in('id', userIds)
+        : { data: [], error: null };
+
+      if (usersError) throw usersError;
+
+      const userMap = new Map(((usersData || []) as any[]).map((row) => [String(row.id || '').trim(), row]));
+
+      const roomCodes = Array.from(
+        new Set(
+          ((reservationCruiseData || []) as any[])
+            .map((row) => String(row.room_price_code || '').trim())
+            .filter((value) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value))
+        )
+      );
+
+      const { data: rateCardsData, error: rateCardError } = roomCodes.length > 0
+        ? await supabase.from('cruise_rate_card').select('id, cruise_name, room_type').in('id', roomCodes)
+        : { data: [], error: null };
+
+      if (rateCardError) throw rateCardError;
+
+      const rateCardMap = new Map(((rateCardsData || []) as any[]).map((row) => [String(row.id || '').trim(), row]));
+
+      const mergedRows: PromotionReservationRow[] = usageRowsRaw.map((usage) => {
+        const reservationId = String(usage.reservation_id || '').trim();
+        const reservationCruiseId = String(usage.reservation_cruise_id || '').trim();
+        const reservation = reservationMap.get(reservationId) || null;
+        const cruiseRow = (reservationCruiseId && reservationCruiseMapById.get(reservationCruiseId))
+          || reservationCruiseMapByReservationId.get(reservationId)
+          || null;
+
+        const promotionId = String(usage.promotion_id || '').trim();
+        const promotion = promotionMap.get(promotionId) || null;
+        const user = reservation ? userMap.get(String((reservation as any).re_user_id || '').trim()) : null;
+
+        const roomPriceCode = String((cruiseRow as any)?.room_price_code || '').trim();
+        const rateCard = roomPriceCode ? rateCardMap.get(roomPriceCode) : null;
+
+        return {
+          usage_id: String(usage.id || '').trim(),
+          promotion_id: promotionId,
+          promotion_name: promotion?.name || '-',
+          promotion_code: promotion?.code || '-',
+          reservation_id: reservationId,
+          reservation_status: String((reservation as any)?.re_status || '-'),
+          reservation_created_at: (reservation as any)?.re_created_at || null,
+          promotion_status: String(usage.status || '-'),
+          promotion_used_at: usage.used_at || null,
+          promotion_sequence: Number(usage.promotion_sequence || 0) || null,
+          user_name: String((user as any)?.name || '-'),
+          user_email: String((user as any)?.email || '-'),
+          cruise_name: String((rateCard as any)?.cruise_name || promotion?.cruise_name || '-'),
+          room_type: String((rateCard as any)?.room_type || roomPriceCode || '-'),
+          checkin: (cruiseRow as any)?.checkin || null,
+        };
+      });
+
+      setUsageRows(mergedRows);
+    } catch (err) {
+      console.error('프로모션 예약내역 조회 실패:', err);
+      setError('프로모션 예약내역을 조회하지 못했습니다.');
+    } finally {
+      setUsageLoading(false);
+    }
+  };
 
   const loadPromotions = async (preferredId?: string) => {
     setLoading(true);
@@ -156,6 +355,8 @@ export default function PromotionManagementPage() {
         setPromotionForm(emptyPromotionForm);
         setRates([]);
       }
+
+      await loadPromotionReservations(loadedPromotions);
     } catch (err) {
       console.error('프로모션 조회 실패:', err);
       setError('프로모션 테이블을 조회하지 못했습니다. 프로모션 SQL 마이그레이션 적용 여부를 확인해 주세요.');
@@ -197,6 +398,7 @@ export default function PromotionManagementPage() {
 
   const startNewPromotion = () => {
     setSelectedPromotionId('');
+    setPageTab('settings');
     setPromotionForm(emptyPromotionForm);
     setRateForm(emptyRateForm);
     setRates([]);
@@ -372,6 +574,12 @@ export default function PromotionManagementPage() {
     }
   };
 
+  const getPromotionStatusBadge = (status: string) => {
+    if (status === 'confirmed') return 'bg-green-100 text-green-700';
+    if (status === 'reserved') return 'bg-blue-100 text-blue-700';
+    return 'bg-slate-100 text-slate-600';
+  };
+
   return (
     <ManagerLayout title="프로모션 관리" activeTab="promotions">
       <div className="space-y-4 p-4">
@@ -381,6 +589,22 @@ export default function PromotionManagementPage() {
             <p className="mt-1 text-sm text-slate-600">적용 여부, 예약 기간, 승선 기간, 한정 수량, 객실별 프로모션 요금을 관리합니다.</p>
           </div>
           <div className="flex items-center gap-2">
+            <div className="inline-flex rounded-lg border border-slate-300 bg-white p-1">
+              <button
+                type="button"
+                onClick={() => setPageTab('settings')}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium ${pageTab === 'settings' ? 'bg-blue-600 text-white' : 'text-slate-700 hover:bg-slate-100'}`}
+              >
+                설정
+              </button>
+              <button
+                type="button"
+                onClick={() => setPageTab('reservations')}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium ${pageTab === 'reservations' ? 'bg-blue-600 text-white' : 'text-slate-700 hover:bg-slate-100'}`}
+              >
+                프로모션 예약내역
+              </button>
+            </div>
             <button
               type="button"
               onClick={() => void loadPromotions(selectedPromotionId)}
@@ -412,6 +636,7 @@ export default function PromotionManagementPage() {
             프로모션을 불러오는 중입니다.
           </div>
         ) : (
+          pageTab === 'settings' ? (
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-[360px_1fr]">
             <section className="space-y-3">
               <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
@@ -739,6 +964,95 @@ export default function PromotionManagementPage() {
               </div>
             </section>
           </div>
+          ) : (
+            <section className="space-y-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-base font-semibold text-slate-900">프로모션 예약 상세</h2>
+                  <p className="mt-1 text-sm text-slate-600">프로모션 적용으로 저장된 예약의 예약일, 예약자, 크루즈, 객실, 체크인 일자를 확인합니다.</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Filter className="h-4 w-4 text-slate-500" />
+                  <select
+                    value={usageFilterPromotionId}
+                    onChange={(event) => setUsageFilterPromotionId(event.target.value)}
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  >
+                    <option value="all">전체 프로모션</option>
+                    {promotions.map((promotion) => (
+                      <option key={promotion.id} value={promotion.id}>{promotion.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="text-xs text-slate-500">
+                전체 {usageRows.length.toLocaleString()}건, 필터 결과 {filteredUsageRows.length.toLocaleString()}건, 표시 {visibleUsageRows.length.toLocaleString()}건
+                {hiddenPastCount > 0 ? ` (체크인 지난 예약 ${hiddenPastCount.toLocaleString()}건 숨김)` : ''}
+              </div>
+
+              {usageLoading ? (
+                <div className="rounded-lg border border-slate-200 px-3 py-8 text-center text-slate-500">
+                  <span className="inline-flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    예약내역을 조회하는 중입니다.
+                  </span>
+                </div>
+              ) : groupedUsageRows.length === 0 ? (
+                <div className="rounded-lg border border-slate-200 px-3 py-8 text-center text-slate-500">표시할 프로모션 예약내역이 없습니다.</div>
+              ) : (
+                <div className="space-y-4">
+                  {groupedUsageRows.map((group) => (
+                    <div key={group.promotionId} className="rounded-lg border border-slate-200">
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2">
+                        <div>
+                          <div className="text-sm font-semibold text-slate-800">{group.promotionName}</div>
+                          <div className="text-[11px] text-slate-500">{group.promotionCode}</div>
+                        </div>
+                        <div className="text-xs font-medium text-slate-600">{group.rows.length.toLocaleString()}건</div>
+                      </div>
+
+                      <div className="overflow-x-auto">
+                        <table className="min-w-[1050px] w-full text-left text-xs">
+                          <thead className="bg-white text-slate-600">
+                            <tr>
+                              <th className="px-3 py-2">예약일</th>
+                              <th className="px-3 py-2">예약자</th>
+                              <th className="px-3 py-2">크루즈</th>
+                              <th className="px-3 py-2">객실</th>
+                              <th className="px-3 py-2">체크인</th>
+                              <th className="px-3 py-2 text-center">순번</th>
+                              <th className="px-3 py-2 text-center">상태</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 bg-white">
+                            {group.rows.map((row) => (
+                              <tr key={row.usage_id} className="hover:bg-slate-50">
+                                <td className="px-3 py-2 text-slate-700">{row.reservation_created_at ? String(row.reservation_created_at).slice(0, 10) : '-'}</td>
+                                <td className="px-3 py-2">
+                                  <div className="font-medium text-slate-700">{row.user_name}</div>
+                                  <div className="text-[11px] text-slate-500">{row.user_email}</div>
+                                </td>
+                                <td className="px-3 py-2 text-slate-700">{row.cruise_name}</td>
+                                <td className="px-3 py-2 text-slate-700">{row.room_type}</td>
+                                <td className="px-3 py-2 text-slate-700">{row.checkin || '-'}</td>
+                                <td className="px-3 py-2 text-center font-semibold text-slate-700">{row.promotion_sequence ? `${row.promotion_sequence}번` : '-'}</td>
+                                <td className="px-3 py-2 text-center">
+                                  <span className={`rounded-full px-2 py-1 text-[11px] font-semibold ${getPromotionStatusBadge(row.promotion_status)}`}>
+                                    {row.promotion_status}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          )
         )}
       </div>
     </ManagerLayout>

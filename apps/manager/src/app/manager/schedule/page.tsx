@@ -5,6 +5,7 @@ import React, { useState, useEffect } from 'react';
 import ManagerLayout from '@/components/ManagerLayout';
 import supabase from '@/lib/supabase';
 import ServiceCardBody from '@/components/ServiceCardBody';
+import { fetchPromotionSequenceMap, hasPromotionBreakdown } from '@/lib/promotionSequence';
 import {
   openCentralReservationDetailModal,
   setCentralReservationDetailModalLoading,
@@ -167,7 +168,7 @@ export default function ManagerSchedulePage() {
       if (reservationIds.length > 0) {
         const { data: reservationsData, error: resErr } = await supabase
           .from('reservation')
-          .select('re_id, re_type, re_status, re_user_id')
+          .select('re_id, re_type, re_status, re_user_id, price_breakdown')
           .in('re_id', reservationIds)
           .neq('re_status', 'completed');
 
@@ -267,6 +268,7 @@ export default function ManagerSchedulePage() {
               re_id: reservationAny.re_id,
               re_type: type,
               re_status: reservationAny.re_status,
+              price_breakdown: reservationAny.price_breakdown || null,
               users: usersById.get(reservationAny.re_user_id) || null,
               schedule_date: scheduleDate,
               schedule_time: scheduleTime,
@@ -296,6 +298,7 @@ export default function ManagerSchedulePage() {
                     re_id: reservationAny.re_id,
                     re_type: type,
                     re_status: reservationAny.re_status,
+                    price_breakdown: reservationAny.price_breakdown || null,
                     users: usersById.get(reservationAny.re_user_id) || null,
                     schedule_date: returnDate,
                     schedule_time: toTimeStr(returnDate),
@@ -359,6 +362,7 @@ export default function ManagerSchedulePage() {
             re_id: reservationAny.re_id,
             re_type: type,
             re_status: reservationAny.re_status,
+            price_breakdown: reservationAny.price_breakdown || null,
             users: usersById.get(reservationAny.re_user_id) || null,
             schedule_date: scheduleDate,
             schedule_time: scheduleTime,
@@ -374,6 +378,26 @@ export default function ManagerSchedulePage() {
       // 타입 필터는 렌더에서 적용하되, 여기서는 날짜 범위 내 결과만 세팅
       // 최신순 정렬 (시간 기준)
       result.sort((a, b) => a.schedule_date.getTime() - b.schedule_date.getTime());
+
+      try {
+        const promoReIds = Array.from(
+          new Set(result.filter((s) => hasPromotionBreakdown(s.price_breakdown)).map((s) => s.re_id).filter(Boolean))
+        );
+        if (promoReIds.length > 0) {
+          const seqMap = await fetchPromotionSequenceMap(promoReIds);
+          if (seqMap.size > 0) {
+            for (const s of result) {
+              const seq = s.re_id ? seqMap.get(s.re_id) : undefined;
+              if (seq) {
+                s.price_breakdown = { ...(s.price_breakdown || {}), promotion_sequence: seq };
+              }
+            }
+          }
+        }
+      } catch (seqErr) {
+        console.warn('프로모션 순번 주입 실패:', seqErr);
+      }
+
       setSchedules(result);
     } catch (error) {
       console.error('일정 데이터 로딩 실패:', error);

@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import supabase from '@/lib/supabase';
 import { getReservationStoredAmount } from '@sht/domain/reservation';
+import { fetchPromotionSequenceMap, hasPromotionBreakdown } from '@/lib/promotionSequence';
 
 type SortMode = 'date' | 'type';
 
@@ -288,10 +289,12 @@ const getAmountSummaryLines = (service: any, type: string): string[] => {
 };
 
 type CruiseAmountRow = { label: string; amount: number };
+type CruiseRoomLineDraft = { label: string; count: number; unitLabel: string; fallbackUnit: number; rawUnit: number; rawTotal: number };
 
 const getCruiseAmountRows = (service: any): CruiseAmountRow[] => {
   const rawPb = getServicePriceBreakdown(service);
   const roomPb = getCruiseRoomPriceBreakdown(service);
+  const cruiseTotal = getCruiseDisplayTotal(service);
 
   // manager1과 동일: roomPb entry가 있으면 그 count 우선, 없으면 서비스 필드 폴백
   const resolveCount = (entry: any, ...fallbacks: any[]): number => {
@@ -336,21 +339,67 @@ const getCruiseAmountRows = (service: any): CruiseAmountRow[] => {
     return { label: labelStr, amount };
   };
 
-  const rows: CruiseAmountRow[] = [];
-  const add = (r: CruiseAmountRow | null) => { if (r) rows.push(r); };
+  const draftLines: CruiseRoomLineDraft[] = [
+    { label: '성인', count: adultCount, unitLabel: '명', fallbackUnit: Number(service.unitPrice || service.priceAdult || 0), rawUnit: Number(roomPb?.adult?.unit_price ?? 0), rawTotal: Number(roomPb?.adult?.total ?? 0) },
+    { label: '아동(5~7)', count: childCount, unitLabel: '명', fallbackUnit: Number(service.priceChild || 0), rawUnit: Number(roomPb?.child?.unit_price ?? 0), rawTotal: Number(roomPb?.child?.total ?? 0) },
+    { label: '아동(8~11)', count: childOlderCount, unitLabel: '명', fallbackUnit: Number(service.priceChildOlder || service.priceChild || 0), rawUnit: Number(roomPb?.child_older?.unit_price ?? 0), rawTotal: Number(roomPb?.child_older?.total ?? 0) },
+    { label: '아동엑베', count: childExtraBedCount, unitLabel: '명', fallbackUnit: Number(service.priceChildExtraBed || 0), rawUnit: Number(roomPb?.child_extra_bed?.unit_price ?? 0), rawTotal: Number(roomPb?.child_extra_bed?.total ?? 0) },
+    { label: '유아', count: infantCount, unitLabel: '명', fallbackUnit: Number(service.priceInfant || 0), rawUnit: Number(roomPb?.infant?.unit_price ?? 0), rawTotal: Number(roomPb?.infant?.total ?? 0) },
+    { label: '엑스트라베드', count: extraBedCount, unitLabel: '개', fallbackUnit: Number(service.priceExtraBed || 0), rawUnit: Number(roomPb?.extra_bed?.unit_price ?? 0), rawTotal: Number(roomPb?.extra_bed?.total ?? 0) },
+    { label: '싱글차액', count: singleCount, unitLabel: '명', fallbackUnit: Number(service.priceSingle || 0), rawUnit: Number(roomPb?.single?.unit_price ?? 0), rawTotal: Number(roomPb?.single?.total ?? 0) },
+  ].filter((line) => line.count > 0);
 
-  add(makeLine('성인', roomPb?.adult, adultCount, Number(service.unitPrice || service.priceAdult || 0)));
-  add(makeLine('아동(5~7)', roomPb?.child, childCount, Number(service.priceChild || 0)));
-  add(makeLine('아동(8~11)', roomPb?.child_older, childOlderCount, Number(service.priceChildOlder || service.priceChild || 0)));
-  add(makeLine('아동엑베', roomPb?.child_extra_bed, childExtraBedCount, Number(service.priceChildExtraBed || 0)));
-  add(makeLine('유아', roomPb?.infant, infantCount, Number(service.priceInfant || 0)));
-  add(makeLine('엑스트라베드', roomPb?.extra_bed, extraBedCount, Number(service.priceExtraBed || 0), '개'));
-  add(makeLine('싱글차액', roomPb?.single, singleCount, Number(service.priceSingle || 0)));
-
-  const optionsTotal = Number(rawPb?.options_total ?? rawPb?.option_total ?? 0);
-  if (optionsTotal > 0) rows.push({ label: '선택 옵션 합계', amount: optionsTotal });
-
+  const optionTotal = Number(rawPb?.options_total ?? rawPb?.option_total ?? 0);
   const surchargeTotal = Number(rawPb?.surcharge_total || 0);
+  const additionalFeeTotal = Number(rawPb?.additional_fee_manual ?? rawPb?.adjustment_total ?? rawPb?.additional_fee ?? 0);
+  const discountTotal = Number(rawPb?.discount_amount || 0);
+  const targetRoomTotal = cruiseTotal - optionTotal - surchargeTotal - additionalFeeTotal + discountTotal;
+
+  const promoCode = rawPb?.promotion_code || null;
+  const promoApplied = Array.isArray(rawPb?.applied_promotions) ? rawPb.applied_promotions : [];
+  const hasPromo = !!promoCode || promoApplied.length > 0;
+
+  const rawRoomTotal = draftLines.reduce((sum, line) => {
+    const fallbackTotal = line.rawUnit > 0 ? line.rawUnit * line.count : line.fallbackUnit * line.count;
+    return sum + (line.rawTotal > 0 ? line.rawTotal : fallbackTotal);
+  }, 0);
+
+  const shouldScalePromoLines = hasPromo
+    && draftLines.length > 0
+    && targetRoomTotal > 0
+    && rawRoomTotal > 0
+    && Math.abs(rawRoomTotal - targetRoomTotal) >= 1;
+
+  const scaledTotals = (() => {
+    if (!shouldScalePromoLines) return [] as number[];
+    const ratio = targetRoomTotal / rawRoomTotal;
+    let assigned = 0;
+    return draftLines.map((line, idx) => {
+      const fallbackTotal = line.rawUnit > 0 ? line.rawUnit * line.count : line.fallbackUnit * line.count;
+      const baseTotal = line.rawTotal > 0 ? line.rawTotal : fallbackTotal;
+      if (idx === draftLines.length - 1) return Math.max(0, Math.round(targetRoomTotal - assigned));
+      const scaled = Math.max(0, Math.round(baseTotal * ratio));
+      assigned += scaled;
+      return scaled;
+    });
+  })();
+
+  const rows: CruiseAmountRow[] = [];
+  draftLines.forEach((line, idx) => {
+    const baseTotal = line.rawTotal > 0
+      ? line.rawTotal
+      : ((line.rawUnit > 0 ? line.rawUnit : line.fallbackUnit) * line.count);
+    const displayTotal = scaledTotals[idx] ?? baseTotal;
+    const displayUnit = line.count > 0 && displayTotal > 0
+      ? Math.round(displayTotal / line.count)
+      : (line.rawUnit > 0 ? line.rawUnit : line.fallbackUnit);
+    const labelStr = displayUnit > 0
+      ? `${line.label} ${formatMoney(displayUnit)} × ${line.count}${line.unitLabel}`
+      : `${line.label} ${line.count}${line.unitLabel}`;
+    rows.push({ label: labelStr, amount: displayTotal });
+  });
+
+  if (optionTotal > 0) rows.push({ label: '선택 옵션 합계', amount: optionTotal });
   if (surchargeTotal > 0) rows.push({ label: '성수기/공휴일 추가요금', amount: surchargeTotal });
 
   const discountAmount = Number(rawPb?.discount_amount || 0);
@@ -360,8 +409,7 @@ const getCruiseAmountRows = (service: any): CruiseAmountRow[] => {
   }
 
   if (rows.length === 0) {
-    const total = getCruiseDisplayTotal(service);
-    if (total > 0) rows.push({ label: '총액', amount: total });
+    if (cruiseTotal > 0) rows.push({ label: '총액', amount: cruiseTotal });
   }
 
   return rows;
@@ -740,18 +788,15 @@ function ServiceCard({
         const _rawPb = getServicePriceBreakdown(service);
         const _promoCode = _rawPb?.promotion_code || null;
         const _promoApplied = Array.isArray(_rawPb?.applied_promotions) ? _rawPb.applied_promotions : [];
-        const _promoSeq = Number(_rawPb?.promotion_sequence) || null;
+        const _promoSeqRaw = _rawPb?.promotion_sequence ?? service?.promotion_sequence ?? service?.reservation?.price_breakdown?.promotion_sequence;
+        const _promoSeqNum = Number(_promoSeqRaw || 0);
+        const _promoSeq = Number.isFinite(_promoSeqNum) && _promoSeqNum > 0 ? _promoSeqNum : null;
         const _hasPromo = !!_promoCode || _promoApplied.length > 0;
         return _hasPromo ? (
           <div className="mb-2 flex flex-wrap items-center gap-1.5">
             <span className="inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700 border border-red-100">
-              {_promoSeq ? `🎁${_promoSeq}번` : '🎁'}
+              {_promoSeq ? `🎁 프로모션 ${_promoSeq} 번째` : '🎁 프로모션 적용'}
             </span>
-            {_promoSeq && (
-              <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-800 border border-amber-200">
-                {_promoSeq}번째 예약
-              </span>
-            )}
           </div>
         ) : null;
       })()}
@@ -1074,6 +1119,24 @@ export default function ReservationDetailModal({
         const tourPriceMap = new Map((tourPrices.data || []).map((r: any) => [r.pricing_id, r]));
         const reservationMap = new Map((reservationRows.data || []).map((r: any) => [r.re_id, r]));
 
+        const promoReservationIds = reservationIds.filter((reservationId) => {
+          const reservationPb = reservationMap.get(reservationId)?.price_breakdown;
+          if (hasPromotionBreakdown(reservationPb)) return true;
+          return groupedItems.some((s: any) => {
+            const rid = String(s?.reservation_id || s?.reservationId || s?.reservation?.re_id || s?.re_id || '').trim();
+            return rid === reservationId && hasPromotionBreakdown(getServicePriceBreakdown(s));
+          });
+        });
+
+        let promotionSequenceMap = new Map<string, number>();
+        if (promoReservationIds.length > 0) {
+          try {
+            promotionSequenceMap = await fetchPromotionSequenceMap(promoReservationIds);
+          } catch (seqErr) {
+            console.warn('모바일 프로모션 순번 조회 실패:', seqErr);
+          }
+        }
+
         const latestChangeMap = new Map<string, any>();
         for (const req of (changeRequests.data || []) as any[]) {
           const reservationId = String(req?.reservation_id || '').trim();
@@ -1112,6 +1175,7 @@ export default function ReservationDetailModal({
 
         const enriched = groupedItems.map((service) => {
           const reservationId = String(service.reservation_id || service.reservationId || '').trim();
+          const promoSeqFromMap = reservationId ? promotionSequenceMap.get(reservationId) : undefined;
           const reservationInfo: any = reservationId ? reservationMap.get(reservationId) : null;
           const latestChange = reservationId ? latestChangeMap.get(reservationId) : null;
           const snapshot = latestChange?.snapshot_data || null;
@@ -1158,6 +1222,25 @@ export default function ReservationDetailModal({
             ...mergedWithChange,
             note: mergedWithChange.note || mergedWithChange.request_note || mergedWithChange.requestNote || '',
           };
+
+          if (promoSeqFromMap) {
+            baseService.promotion_sequence = Number(baseService.promotion_sequence || promoSeqFromMap) || null;
+            if (baseService.price_breakdown && !baseService.price_breakdown.promotion_sequence) {
+              baseService.price_breakdown = { ...baseService.price_breakdown, promotion_sequence: promoSeqFromMap };
+            }
+            if (baseService.priceBreakdown && !baseService.priceBreakdown.promotion_sequence) {
+              baseService.priceBreakdown = { ...baseService.priceBreakdown, promotion_sequence: promoSeqFromMap };
+            }
+            if (baseService.reservation_price_breakdown && !baseService.reservation_price_breakdown.promotion_sequence) {
+              baseService.reservation_price_breakdown = { ...baseService.reservation_price_breakdown, promotion_sequence: promoSeqFromMap };
+            }
+            if (baseService.reservation?.price_breakdown && !baseService.reservation.price_breakdown.promotion_sequence) {
+              baseService.reservation = {
+                ...baseService.reservation,
+                price_breakdown: { ...baseService.reservation.price_breakdown, promotion_sequence: promoSeqFromMap },
+              };
+            }
+          }
 
           if (baseService.serviceType === 'airport' && baseService.airport_price_code) {
             const priceInfo: any = airportPriceMap.get(baseService.airport_price_code);

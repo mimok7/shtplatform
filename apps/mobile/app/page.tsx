@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   Calendar,
+  CalendarDays,
   ClipboardList,
   FilePenLine,
   FileText,
@@ -38,6 +39,7 @@ const FAVORITES: MenuItem[] = [
   { href: '/reservations',          label: '예약 처리',  desc: '예약 변경 및 일괄 처리',       icon: ClipboardList, iconColor: 'text-green-600',  bg: 'bg-green-100' },
   { href: '/confirmation',          label: '예약확인서', desc: '예약확인서 생성/미리보기',      icon: FileText,      iconColor: 'text-violet-600', bg: 'bg-violet-100' },
   { href: '/reservation-edit',      label: '예약 수정',  desc: '서비스별 상태 수정',            icon: ListChecks,    iconColor: 'text-amber-600',  bg: 'bg-amber-100' },
+  { href: '/cruise-car-dates',      label: '크차 일자',  desc: '픽업/체크인 불일치 정리',       icon: CalendarDays,  iconColor: 'text-sky-600',   bg: 'bg-sky-100' },
   { href: '/customers',             label: '고객관리',   desc: '고객 조회 / 수정 / 초기화',     icon: Users,         iconColor: 'text-cyan-600',   bg: 'bg-cyan-100' },
   { href: '/sht-car',               label: '스하 차량',  desc: '스하 차량 배정 관리',           icon: Bus,           iconColor: 'text-teal-600',   bg: 'bg-teal-100' },
   { href: '/cafe-guide',            label: '카페 안내',  desc: '카페 공지/안내문 생성',          icon: MessageSquare, iconColor: 'text-emerald-600', bg: 'bg-emerald-100' },

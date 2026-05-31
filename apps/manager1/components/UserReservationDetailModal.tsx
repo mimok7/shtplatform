@@ -5,6 +5,7 @@ import { X, Ship, Plane, Building, MapPin, Car, Users, Wallet, Calendar, Clock, 
 import supabase from '@/lib/supabase';
 import ShtCarSeatMap from '@/components/ShtCarSeatMap';
 import { getReservationStoredAmount } from '@sht/domain/reservation';
+import { fetchPromotionSequenceMap, hasPromotionBreakdown } from '@/lib/promotionSequence';
 
 interface UserReservationDetailModalProps {
     isOpen: boolean;
@@ -64,24 +65,6 @@ function formatCruiseScheduleLabel(value: any): string {
         if (Number.isFinite(nights) && nights > 0) return `${nights}박 ${nights + 1}일`;
     }
     return raw;
-}
-
-function formatDateOnlyKst(value: any): string {
-    if (!value) return '-';
-    const raw = String(value).trim();
-    if (!raw) return '-';
-
-    const hasTimezone = /[zZ]$|[+-]\d{2}:?\d{2}$/.test(raw);
-    if (!hasTimezone) {
-        const normalized = raw.replace(' ', 'T');
-        const match = normalized.match(/^(\d{4})-(\d{2})-(\d{2})/);
-        if (match) return `${match[1]}. ${match[2]}. ${match[3]}.`;
-        return raw;
-    }
-
-    const d = new Date(raw);
-    if (isNaN(d.getTime())) return raw;
-    return d.toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' });
 }
 
 const isInfantSurchargeText = (text: string): boolean => {
@@ -357,14 +340,6 @@ export default function UserReservationDetailModal({
     const [isEnriching, setIsEnriching] = useState(false);
     const [isShtSeatModalOpen, setIsShtSeatModalOpen] = useState(false);
     const [selectedShtService, setSelectedShtService] = useState<any>(null);
-    const reservationDateSource =
-        userInfo?.re_created_at
-        || userInfo?.created_at
-        || allUserServices?.[0]?.reservation?.re_created_at
-        || allUserServices?.[0]?.re_created_at
-        || null;
-    const modalTitle = userInfo?.modal_title || '예약 통합 상세';
-    const reservationDateText = formatDateOnlyKst(reservationDateSource);
 
     // 서비스 데이터 보강 (가격 테이블 정보 추가)
     useEffect(() => {
@@ -465,6 +440,24 @@ export default function UserReservationDetailModal({
                 const tourPriceMap = new Map((tourPrices.data || []).map((r: any) => [r.pricing_id, r]));
                 const reservationMap = new Map((reservationRows.data || []).map((r: any) => [r.re_id, r]));
 
+                const promoReservationIds = reservationIds.filter((reservationId) => {
+                    const reservationPb = reservationMap.get(reservationId)?.price_breakdown;
+                    if (hasPromotionBreakdown(reservationPb)) return true;
+                    return allUserServices.some((s: any) => {
+                        const rid = String(s?.reservation_id || s?.reservationId || s?.reservation?.re_id || s?.re_id || '').trim();
+                        return rid === reservationId && hasPromotionBreakdown(getServicePriceBreakdown(s));
+                    });
+                });
+
+                let promotionSequenceMap = new Map<string, number>();
+                if (promoReservationIds.length > 0) {
+                    try {
+                        promotionSequenceMap = await fetchPromotionSequenceMap(promoReservationIds);
+                    } catch (seqErr) {
+                        console.warn('프로모션 순번 조회 실패:', seqErr);
+                    }
+                }
+
                 const latestChangeMap = new Map<string, any>();
                 for (const req of (changeRequests.data || []) as any[]) {
                     const reservationId = String(req?.reservation_id || '').trim();
@@ -511,6 +504,13 @@ export default function UserReservationDetailModal({
                 // 4. 서비스 데이터 보강
                 const enriched = allUserServices.map(service => {
                     const reservationId = String(service.reservation_id || service.reservationId || '').trim();
+                    const promoSeqFromMap = reservationId ? promotionSequenceMap.get(reservationId) : undefined;
+                    const applyPromoSequence = (value: any) => {
+                        if (!value || !promoSeqFromMap) return value;
+                        const existingSeq = Number((value as any)?.promotion_sequence || 0);
+                        if (existingSeq > 0) return value;
+                        return { ...value, promotion_sequence: promoSeqFromMap };
+                    };
                     const reservationInfo: any = reservationId ? reservationMap.get(reservationId) : null;
                     const latestChange = reservationId ? latestChangeMap.get(reservationId) : null;
                     const snapshot = latestChange?.snapshot_data || null;
@@ -558,122 +558,135 @@ export default function UserReservationDetailModal({
                         note: mergedWithChange.note || mergedWithChange.request_note || '',
                     };
 
-                    if (baseService.serviceType === 'airport' && baseService.airport_price_code) {
-                        const priceInfo: any = airportPriceMap.get(baseService.airport_price_code);
+                    const normalizedService = {
+                        ...baseService,
+                        promotion_sequence: Number(baseService?.promotion_sequence || promoSeqFromMap || 0) || null,
+                        price_breakdown: applyPromoSequence(baseService?.price_breakdown),
+                        priceBreakdown: applyPromoSequence(baseService?.priceBreakdown),
+                        reservation_price_breakdown: applyPromoSequence(baseService?.reservation_price_breakdown),
+                        reservation: baseService?.reservation
+                            ? {
+                                ...baseService.reservation,
+                                price_breakdown: applyPromoSequence(baseService.reservation?.price_breakdown),
+                            }
+                            : baseService?.reservation,
+                    };
+
+                    if (normalizedService.serviceType === 'airport' && normalizedService.airport_price_code) {
+                        const priceInfo: any = airportPriceMap.get(normalizedService.airport_price_code);
                         return {
-                            ...baseService,
+                            ...normalizedService,
                             route: priceInfo?.route || service.route || '-',
-                            carType: priceInfo?.vehicle_type || baseService.carType || '-',
-                            category: priceInfo?.service_type || baseService.category || '-',
-                            flightNumber: baseService.flightNumber || baseService.ra_flight_number || '-',
-                            passengerCount: Number(baseService.passengerCount ?? baseService.ra_passenger_count ?? 0),
-                            carCount: Number(baseService.carCount ?? baseService.ra_car_count ?? 0),
-                            stopover: baseService.stopover || baseService.ra_stopover_location || '-',
+                            carType: priceInfo?.vehicle_type || normalizedService.carType || '-',
+                            category: priceInfo?.service_type || normalizedService.category || '-',
+                            flightNumber: normalizedService.flightNumber || normalizedService.ra_flight_number || '-',
+                            passengerCount: Number(normalizedService.passengerCount ?? normalizedService.ra_passenger_count ?? 0),
+                            carCount: Number(normalizedService.carCount ?? normalizedService.ra_car_count ?? 0),
+                            stopover: normalizedService.stopover || normalizedService.ra_stopover_location || '-',
                         };
                     }
-                    if (baseService.serviceType === 'cruise' && baseService.room_price_code) {
-                        const roomInfo: any = roomPriceMap.get(String(baseService.room_price_code || '').trim());
+                    if (normalizedService.serviceType === 'cruise' && normalizedService.room_price_code) {
+                        const roomInfo: any = roomPriceMap.get(String(normalizedService.room_price_code || '').trim());
                         return {
-                            ...baseService,
-                            cruiseName: roomInfo?.cruise_name || baseService.cruiseName || baseService.cruise || '-',
-                                                        scheduleType: baseService.scheduleType || baseService.schedule_type || roomInfo?.schedule_type || baseService.schedule_days || baseService.days || baseService.nights || '',
-                            cruise: roomInfo?.cruise_name || baseService.cruise || '-',
-                            roomType: roomInfo?.room_type || baseService.roomType || baseService.room_price_code || '-',
-                            paymentMethod: baseService.paymentMethod || baseService.payment_method || baseService.reservation?.payment_method || '-',
-                            priceAdult: Number(baseService.priceAdult ?? roomInfo?.price_adult ?? 0),
-                            priceChild: Number(baseService.priceChild ?? roomInfo?.price_child ?? 0),
-                            priceChildOlder: Number(baseService.priceChildOlder ?? roomInfo?.price_child_older ?? roomInfo?.price_child ?? 0),
-                            priceChildExtraBed: Number(baseService.priceChildExtraBed ?? roomInfo?.price_child_extra_bed ?? 0),
-                            priceInfant: Number(baseService.priceInfant ?? roomInfo?.price_infant ?? 0),
-                            priceExtraBed: Number(baseService.priceExtraBed ?? roomInfo?.price_extra_bed ?? 0),
-                            priceSingle: Number(baseService.priceSingle ?? roomInfo?.price_single ?? 0),
+                            ...normalizedService,
+                            cruiseName: roomInfo?.cruise_name || normalizedService.cruiseName || normalizedService.cruise || '-',
+                            cruise: roomInfo?.cruise_name || normalizedService.cruise || '-',
+                            roomType: roomInfo?.room_type || normalizedService.roomType || normalizedService.room_price_code || '-',
+                            scheduleType: normalizedService.scheduleType || normalizedService.schedule_type || roomInfo?.schedule_type || normalizedService.schedule_days || normalizedService.days || normalizedService.nights || '',
+                            paymentMethod: normalizedService.paymentMethod || normalizedService.payment_method || normalizedService.reservation?.payment_method || '-',
+                            priceAdult: Number(normalizedService.priceAdult ?? roomInfo?.price_adult ?? 0),
+                            priceChild: Number(normalizedService.priceChild ?? roomInfo?.price_child ?? 0),
+                            priceChildOlder: Number(normalizedService.priceChildOlder ?? roomInfo?.price_child_older ?? roomInfo?.price_child ?? 0),
+                            priceChildExtraBed: Number(normalizedService.priceChildExtraBed ?? roomInfo?.price_child_extra_bed ?? 0),
+                            priceInfant: Number(normalizedService.priceInfant ?? roomInfo?.price_infant ?? 0),
+                            priceExtraBed: Number(normalizedService.priceExtraBed ?? roomInfo?.price_extra_bed ?? 0),
+                            priceSingle: Number(normalizedService.priceSingle ?? roomInfo?.price_single ?? 0),
                         };
                     }
-                    if (baseService.serviceType === 'vehicle' || baseService.serviceType === 'car') {
-                        const vehicleCode = String(baseService.rentcar_price_code || baseService.car_price_code || '').trim();
+                    if (normalizedService.serviceType === 'vehicle' || normalizedService.serviceType === 'car') {
+                        const vehicleCode = String(normalizedService.rentcar_price_code || normalizedService.car_price_code || '').trim();
                         const vehiclePriceInfo: any = vehicleCode
                             ? (rentPriceMap.get(vehicleCode) || rentPriceMap.get(vehicleCode.toUpperCase()))
                             : null;
                         return {
-                            ...baseService,
-                            carCategory: baseService.carCategory || baseService.way_type || baseService.category || vehiclePriceInfo?.way_type || '-',
-                            carType: baseService.carType || baseService.vehicle_type || vehiclePriceInfo?.vehicle_type || '-',
-                            route: baseService.route || vehiclePriceInfo?.route || '-',
-                            passengerCount: Number(baseService.passengerCount ?? baseService.passenger_count ?? 0),
-                            pickupDatetime: baseService.pickupDatetime || baseService.pickup_datetime || '-',
-                            pickupLocation: baseService.pickupLocation || baseService.pickup_location || '-',
-                            dropoffLocation: baseService.dropoffLocation || baseService.dropoff_location || '-',
-                            totalPrice: Number(baseService.totalPrice ?? baseService.car_total_price ?? 0),
+                            ...normalizedService,
+                            carCategory: normalizedService.carCategory || normalizedService.way_type || normalizedService.category || vehiclePriceInfo?.way_type || '-',
+                            carType: normalizedService.carType || normalizedService.vehicle_type || vehiclePriceInfo?.vehicle_type || '-',
+                            route: normalizedService.route || vehiclePriceInfo?.route || '-',
+                            passengerCount: Number(normalizedService.passengerCount ?? normalizedService.passenger_count ?? 0),
+                            pickupDatetime: normalizedService.pickupDatetime || normalizedService.pickup_datetime || '-',
+                            pickupLocation: normalizedService.pickupLocation || normalizedService.pickup_location || '-',
+                            dropoffLocation: normalizedService.dropoffLocation || normalizedService.dropoff_location || '-',
+                            totalPrice: Number(normalizedService.totalPrice ?? normalizedService.car_total_price ?? 0),
                         };
                     }
-                    if (baseService.serviceType === 'rentcar' && baseService.rentcar_price_code) {
-                        const rentCode = String(baseService.rentcar_price_code || '').trim();
+                    if (normalizedService.serviceType === 'rentcar' && normalizedService.rentcar_price_code) {
+                        const rentCode = String(normalizedService.rentcar_price_code || '').trim();
                         const priceInfo: any = rentPriceMap.get(rentCode) || rentPriceMap.get(rentCode.toUpperCase());
                         return {
-                            ...baseService,
-                            route: priceInfo?.route || baseService.route || '-',
-                            carType: priceInfo?.vehicle_type || baseService.vehicle_type || baseService.carType || '-',
-                            category: priceInfo?.way_type || baseService.category || '-',
-                            carCount: Number(baseService.carCount ?? baseService.car_count ?? 0),
-                            passengerCount: Number(baseService.passengerCount ?? baseService.passenger_count ?? 0),
-                            luggageCount: Number(baseService.luggageCount ?? baseService.luggage_count ?? 0),
-                            pickupDatetime: baseService.pickupDatetime || baseService.pickup_datetime || null,
-                            pickupLocation: baseService.pickupLocation || baseService.pickup_location || '-',
-                            dropoffLocation: baseService.dropoffLocation || baseService.dropoff_location || baseService.destination || '-',
+                            ...normalizedService,
+                            route: priceInfo?.route || normalizedService.route || '-',
+                            carType: priceInfo?.vehicle_type || normalizedService.vehicle_type || normalizedService.carType || '-',
+                            category: priceInfo?.way_type || normalizedService.category || '-',
+                            carCount: Number(normalizedService.carCount ?? normalizedService.car_count ?? 0),
+                            passengerCount: Number(normalizedService.passengerCount ?? normalizedService.passenger_count ?? 0),
+                            luggageCount: Number(normalizedService.luggageCount ?? normalizedService.luggage_count ?? 0),
+                            pickupDatetime: normalizedService.pickupDatetime || normalizedService.pickup_datetime || null,
+                            pickupLocation: normalizedService.pickupLocation || normalizedService.pickup_location || '-',
+                            dropoffLocation: normalizedService.dropoffLocation || normalizedService.dropoff_location || normalizedService.destination || '-',
                         };
                     }
-                    if (baseService.serviceType === 'hotel') {
-                        const priceInfo: any = hotelPriceMap.get(baseService.hotel_price_code);
-                        const scheduleRaw = String(baseService.schedule ?? '').trim();
+                    if (normalizedService.serviceType === 'hotel') {
+                        const priceInfo: any = hotelPriceMap.get(normalizedService.hotel_price_code);
+                        const scheduleRaw = String(normalizedService.schedule ?? '').trim();
                         const scheduleNights = Number.parseInt(scheduleRaw, 10);
                         const normalizedNights = Number.isFinite(scheduleNights)
                             ? scheduleNights
-                            : Number(baseService.nights ?? baseService.days ?? baseService.room_count ?? 0);
+                            : Number(normalizedService.nights ?? normalizedService.days ?? normalizedService.room_count ?? 0);
                         return {
-                            ...baseService,
-                            hotelName: priceInfo?.hotel_name || baseService.hotelName || baseService.hotel_name || baseService.hotel_category || '-',
-                            roomType: priceInfo?.room_name || priceInfo?.room_type || baseService.roomType || baseService.room_type || '-',
-                            checkinDate: baseService.checkinDate || baseService.checkin_date || '-',
+                            ...normalizedService,
+                            hotelName: priceInfo?.hotel_name || normalizedService.hotelName || normalizedService.hotel_name || normalizedService.hotel_category || '-',
+                            roomType: priceInfo?.room_name || priceInfo?.room_type || normalizedService.roomType || normalizedService.room_type || '-',
+                            checkinDate: normalizedService.checkinDate || normalizedService.checkin_date || '-',
                             schedule: scheduleRaw,
                             days: normalizedNights,
                             nights: normalizedNights,
-                            guestCount: Number(baseService.guestCount ?? baseService.guest_count ?? 0),
-                            roomCount: Number(baseService.roomCount ?? baseService.room_count ?? 0),
-                            adultCount: Number(baseService.adultCount ?? baseService.adult_count ?? 0),
-                            childCount: Number(baseService.childCount ?? baseService.child_count ?? 0),
-                            infantCount: Number(baseService.infantCount ?? baseService.infant_count ?? 0),
-                            totalPrice: Number(baseService.totalPrice ?? baseService.total_price ?? 0),
+                            guestCount: Number(normalizedService.guestCount ?? normalizedService.guest_count ?? 0),
+                            roomCount: Number(normalizedService.roomCount ?? normalizedService.room_count ?? 0),
+                            adultCount: Number(normalizedService.adultCount ?? normalizedService.adult_count ?? 0),
+                            childCount: Number(normalizedService.childCount ?? normalizedService.child_count ?? 0),
+                            infantCount: Number(normalizedService.infantCount ?? normalizedService.infant_count ?? 0),
+                            totalPrice: Number(normalizedService.totalPrice ?? normalizedService.total_price ?? 0),
                         };
                     }
-                    if (baseService.serviceType === 'tour') {
-                        const priceInfo: any = tourPriceMap.get(baseService.tour_price_code);
+                    if (normalizedService.serviceType === 'tour') {
+                        const priceInfo: any = tourPriceMap.get(normalizedService.tour_price_code);
                         return {
-                            ...baseService,
-                            carType: priceInfo?.vehicle_type || baseService.carType || baseService.vehicle_type || '-',
-                            tourName: priceInfo?.tour?.tour_name || baseService.tourName || baseService.tour_name || '-',
-                            tourDate: baseService.tourDate || baseService.usage_date || baseService.usageDate || '-',
-                            tourCapacity: Number(baseService.tourCapacity ?? baseService.tour_capacity ?? 0),
-                            pickupLocation: baseService.pickupLocation || baseService.pickup_location || '-',
-                            dropoffLocation: baseService.dropoffLocation || baseService.dropoff_location || '-',
-                            totalPrice: Number(baseService.totalPrice ?? baseService.total_price ?? 0),
-                            unitPrice: Number(baseService.unitPrice ?? baseService.unit_price ?? priceInfo?.price_per_person ?? 0),
+                            ...normalizedService,
+                            carType: priceInfo?.vehicle_type || normalizedService.carType || normalizedService.vehicle_type || '-',
+                            tourName: priceInfo?.tour?.tour_name || normalizedService.tourName || normalizedService.tour_name || '-',
+                            tourDate: normalizedService.tourDate || normalizedService.usage_date || normalizedService.usageDate || '-',
+                            tourCapacity: Number(normalizedService.tourCapacity ?? normalizedService.tour_capacity ?? 0),
+                            pickupLocation: normalizedService.pickupLocation || normalizedService.pickup_location || '-',
+                            dropoffLocation: normalizedService.dropoffLocation || normalizedService.dropoff_location || '-',
+                            totalPrice: Number(normalizedService.totalPrice ?? normalizedService.total_price ?? 0),
+                            unitPrice: Number(normalizedService.unitPrice ?? normalizedService.unit_price ?? priceInfo?.price_per_person ?? 0),
                         };
                     }
-                    if (baseService.serviceType === 'sht') {
+                    if (normalizedService.serviceType === 'sht') {
                         return {
-                            ...baseService,
-                            usageDate: baseService.usageDate || baseService.usage_date || baseService.pickupDatetime || baseService.pickup_datetime || null,
-                            pickupDatetime: baseService.pickupDatetime || baseService.pickup_datetime || null,
-                            category: baseService.category || baseService.sht_category || '-',
-                            vehicleNumber: baseService.vehicleNumber || baseService.vehicle_number || baseService.dispatch_code || '-',
-                            seatNumber: baseService.seatNumber || baseService.seat_number || '-',
-                            pickupLocation: baseService.pickupLocation || baseService.pickup_location || '-',
-                            dropoffLocation: baseService.dropoffLocation || baseService.dropoff_location || '-',
-                            totalPrice: Number(baseService.totalPrice ?? baseService.car_total_price ?? 0),
-                            unitPrice: Number(baseService.unitPrice ?? baseService.unit_price ?? 0),
+                            ...normalizedService,
+                            usageDate: normalizedService.usageDate || normalizedService.usage_date || null,
+                            category: normalizedService.category || normalizedService.sht_category || '-',
+                            vehicleNumber: normalizedService.vehicleNumber || normalizedService.vehicle_number || normalizedService.dispatch_code || '-',
+                            seatNumber: normalizedService.seatNumber || normalizedService.seat_number || '-',
+                            pickupLocation: normalizedService.pickupLocation || normalizedService.pickup_location || '-',
+                            dropoffLocation: normalizedService.dropoffLocation || normalizedService.dropoff_location || '-',
+                            totalPrice: Number(normalizedService.totalPrice ?? normalizedService.car_total_price ?? 0),
+                            unitPrice: Number(normalizedService.unitPrice ?? normalizedService.unit_price ?? 0),
                         };
                     }
-                    return baseService;
+                    return normalizedService;
                 });
 
                 setEnrichedServices(enriched);
@@ -736,7 +749,6 @@ export default function UserReservationDetailModal({
         else if (service.checkinDate) dateStr = service.checkinDate;
         else if (service.tourDate) dateStr = service.tourDate;
         else if (service.usageDate) dateStr = service.usageDate.split('T')[0];
-        else if (service.pickup_datetime) dateStr = String(service.pickup_datetime).split('T')[0];
         return dateStr;
     };
 
@@ -815,6 +827,7 @@ export default function UserReservationDetailModal({
     };
 
     const sortedGroups = getSortedGroups();
+    const modalTitle = userInfo?.modal_title || '예약 통합 상세';
     const childBirthDates = Array.isArray(userInfo?.child_birth_dates)
         ? userInfo.child_birth_dates.filter((date: unknown): date is string => typeof date === 'string' && date.trim().length > 0)
         : [];
@@ -885,15 +898,6 @@ export default function UserReservationDetailModal({
                             const singleCount = Number(singleCountRaw ?? 0);
                             const childExtraBedCount = Number(childExtraBedCountRaw ?? 0);
                             const extraBedCount = Number(extraBedCountRaw ?? 0);
-                            const toAppliedText = (value: any) => {
-                                if (value === true) return '신청';
-                                if (value === false || value == null) return '미신청';
-                                const normalized = String(value).trim().toLowerCase();
-                                if (['true', 't', '1', 'yes', 'y', '신청', '있음'].includes(normalized)) return '신청';
-                                return '미신청';
-                            };
-                            const connectingRoomText = toAppliedText(service.connecting_room);
-                            const birthdayEventText = toAppliedText(service.birthday_event);
 
                             // pb: surcharge 정규화 전용. count/unit/total은 roomPb(방별 breakdown) 기준 — 모바일과 동일
                             const pb = normalizeCruisePriceBreakdown(rawPb, infantCount);
@@ -939,21 +943,45 @@ export default function UserReservationDetailModal({
                             // 프로모션 정보 추출
                             const promoCode = rawPb?.promotion_code || null;
                             const promoApplied = Array.isArray(rawPb?.applied_promotions) ? rawPb.applied_promotions : [];
-                            const promoSeq = Number(rawPb?.promotion_sequence) || null;
+                            const promoSeqRaw = rawPb?.promotion_sequence ?? service?.promotion_sequence ?? service?.reservation?.price_breakdown?.promotion_sequence;
+                            const promoSeqNum = Number(promoSeqRaw || 0);
+                            const promoSeq = Number.isFinite(promoSeqNum) && promoSeqNum > 0 ? promoSeqNum : null;
                             const hasPromo = !!promoCode || promoApplied.length > 0;
+
+                            const optionTotal = Number(pb?.options_total ?? pb?.option_total ?? 0);
+                            const surchargeTotal = Number(pb?.surcharge_total || 0);
+                            const additionalFeeTotal = Number(pb?.additional_fee_manual ?? pb?.adjustment_total ?? pb?.additional_fee ?? 0);
+                            const discountTotal = Number(pb?.discount_amount || 0);
+                            const targetRoomTotal = cruiseTotal - optionTotal - surchargeTotal - additionalFeeTotal + discountTotal;
+                            const currentRoomLineTotal = cruiseLines.reduce((sum, line) => sum + Number(line?.value?.total || 0), 0);
+                            const shouldScalePromoLines = hasPromo
+                                && cruiseLines.length > 0
+                                && targetRoomTotal > 0
+                                && currentRoomLineTotal > 0
+                                && Math.abs(currentRoomLineTotal - targetRoomTotal) >= 1;
+
+                            const promoAdjustedLineTotals: number[] = (() => {
+                                if (!shouldScalePromoLines) return [];
+                                const ratio = targetRoomTotal / currentRoomLineTotal;
+                                let assigned = 0;
+                                return cruiseLines.map((line, idx) => {
+                                    const baseTotal = Number(line?.value?.total || 0);
+                                    if (idx === cruiseLines.length - 1) {
+                                        return Math.max(0, Math.round(targetRoomTotal - assigned));
+                                    }
+                                    const scaled = Math.max(0, Math.round(baseTotal * ratio));
+                                    assigned += scaled;
+                                    return scaled;
+                                });
+                            })();
 
                             return (
                                 <>
                                     {hasPromo && (
                                         <div className="flex flex-wrap items-center gap-1.5 mb-2">
                                             <span className="inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700 border border-red-100">
-                                                {promoSeq ? `🎁${promoSeq}번` : '🎁'}
+                                                {promoSeq ? `🎁 프로모션 ${promoSeq} 번째` : '🎁 프로모션 적용'}
                                             </span>
-                                            {promoSeq && (
-                                                <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-800 border border-amber-200">
-                                                    {promoSeq}번째 예약
-                                                </span>
-                                            )}
                                         </div>
                                     )}
                                     <div className="bg-blue-50 rounded-lg p-3 mb-2 border border-blue-100">
@@ -961,13 +989,11 @@ export default function UserReservationDetailModal({
                                             <div><strong>크루즈명:</strong> <span className="font-semibold text-blue-800">{service.cruiseName || service.cruise || '크루즈'}</span></div>
                                             <div><strong>객실타입:</strong> {service.roomType}</div>
                                             <div><strong>객실수:</strong> {service.room_count || service.roomCount || 0}실</div>
-                                                                                        <div><strong>일정:</strong> {formatCruiseScheduleLabel(service.scheduleType || service.schedule_type || service.schedule_days || service.days || service.nights)}</div>
                                             <div><strong>체크인:</strong> {service.checkin}</div>
+                                            <div><strong>일정:</strong> {formatCruiseScheduleLabel(service.scheduleType || service.schedule_type || service.schedule_days || service.days || service.nights)}</div>
                                             <div><strong>결제방식:</strong> {service.paymentMethod}</div>
                                             <div><strong>성인:</strong> {adultCount}명</div>
                                             <div><strong>아동:</strong> {childCount}명</div>
-                                            <div><strong>커넥팅룸:</strong> {connectingRoomText}</div>
-                                            <div><strong>생일 이벤트:</strong> {birthdayEventText}</div>
                                             {infantCount > 0 && <div><strong>유아:</strong> {infantCount}명</div>}
                                             {childExtraBedCount > 0 && <div><strong>아동엑베:</strong> {childExtraBedCount}명</div>}
                                             {extraBedCount > 0 && <div><strong>엑스트라베드:</strong> {extraBedCount}개</div>}
@@ -990,12 +1016,13 @@ export default function UserReservationDetailModal({
                                                     엑스트라베드: Number(service.priceExtraBed || 0),
                                                     싱글차액: Number(service.priceSingle || 0),
                                                 };
-                                                const lineUnit = lineCount > 0 && rawTotal > 0
-                                                    ? Math.round(rawTotal / lineCount)
+                                                const displayTotal = promoAdjustedLineTotals[idx] ?? rawTotal;
+                                                const lineUnit = lineCount > 0 && displayTotal > 0
+                                                    ? Math.round(displayTotal / lineCount)
                                                     : (Number.isFinite(rawUnit) && rawUnit > 0
                                                         ? rawUnit
                                                         : Number(fallbackUnitByLabel[line.label] || 0));
-                                                const lineTotal = rawTotal > 0 ? rawTotal : lineUnit * lineCount;
+                                                const lineTotal = displayTotal > 0 ? displayTotal : lineUnit * lineCount;
                                                 return (
                                                     <div key={`${line.label}-${idx}`} className="flex justify-between text-sm">
                                                         <span className="text-gray-600">{line.label} {lineUnit.toLocaleString()}동 × {lineCount}명</span>
@@ -1074,12 +1101,12 @@ export default function UserReservationDetailModal({
                     <>
                         {(() => {
                             const airportTypeRaw = String(service.category || service.way_type || '').toLowerCase();
+                            const isPickup = airportTypeRaw.includes('pickup') || airportTypeRaw.includes('픽업');
                             const isSending = airportTypeRaw.includes('sending') || airportTypeRaw.includes('샌딩');
                             // 변경: 공항 위치는 ra_airport_location에서 가져오기
                             const airportDisplay = service.ra_airport_location || '-';
                             // 변경: 하차위치/승차위치는 accommodation_info에서 가져오기
                             const dropoffDisplay = service.accommodation_info || '-';
-                            const locationLabel = isSending ? '승차위치' : '하차위치';
 
                             return (
                                 <div className="bg-green-50 rounded-lg p-3 mb-2 border border-green-100">
@@ -1090,7 +1117,7 @@ export default function UserReservationDetailModal({
                                         <div><strong>일시:</strong> {service.ra_datetime ? formatDatetimeOffset(service.ra_datetime) : '-'}</div>
                                         <div><strong>항공편:</strong> {service.flightNumber || service.ra_flight_number || '-'}</div>
                                         <div><strong>공항:</strong> {airportDisplay}</div>
-                                        <div><strong>{locationLabel}:</strong> {dropoffDisplay}</div>
+                                        <div><strong>하차위치:</strong> {dropoffDisplay}</div>
                                         {/* 변경: 목적지 → 경유지로 변경 */}
                                         {service.stopover && <div><strong>경유지:</strong> {service.stopover}</div>}
                                         {service.passengerCount && <div><strong>인원:</strong> {service.passengerCount}명</div>}
@@ -1379,8 +1406,6 @@ export default function UserReservationDetailModal({
                                         )}
                                         <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
                                         <span>{userInfo.email}</span>
-                                        <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
-                                        <span>예약일: {reservationDateText}</span>
                                         <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
                                         <span>{userInfo.phone}</span>
                                         {allUserServices?.length > 0 && allUserServices[0]?.paymentMethod && (

@@ -385,6 +385,7 @@ cruise_promotion_usage,cancelled_at,timestamp with time zone,NULL 가능,null,9
 cruise_promotion_usage,metadata,jsonb,NOT NULL,'{}'::jsonb,10
 cruise_promotion_usage,created_at,timestamp with time zone,NULL 가능,now(),11
 cruise_promotion_usage,updated_at,timestamp with time zone,NULL 가능,now(),12
+cruise_promotion_usage,promotion_sequence,integer,NULL 가능,null,13
 cruise_rate_card,id,uuid,NOT NULL,gen_random_uuid(),1
 cruise_rate_card,cruise_name,text,NOT NULL,null,2
 cruise_rate_card,schedule_type,text,NOT NULL,'1N2D'::text,3
