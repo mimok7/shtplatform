@@ -5,7 +5,6 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import supabase from '../../../../../lib/supabase';
 import { getSessionUser } from '../../../../../lib/authHelpers';
 import PageWrapper from '../../../../../components/PageWrapper';
-import SectionBox from '../../../../../components/SectionBox';
 
 function AirportPriceContent() {
     const router = useRouter();
@@ -443,29 +442,10 @@ function AirportPriceContent() {
     return (
         <PageWrapper>
             <div className="space-y-6">
-                {/* 헤더 */}
-                <div className="flex justify-between items-center">
-                    <div>
-                        <h1 className="text-lg font-bold text-gray-800">✈️ 공항 서비스 가격 산정</h1>
-                        <p className="text-sm text-gray-600 mt-1">
-                            {existingQuoteData
-                                ? `가격 "${existingQuoteData.title}"에 공항 서비스를 추가합니다`
-                                : '공항 서비스를 선택하면 가격이 자동으로 생성됩니다'
-                            }
-                        </p>
-                        {existingQuoteData && (
-                            <div className="bg-blue-50 rounded-lg p-2 mt-2">
-                                <p className="text-xs text-blue-600">가격 ID: {existingQuoteData.id}</p>
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                {/* 기본 정보 삭제됨 */}
-
                 {/* 신청 유형 - 작은 버튼 방식 */}
-                <SectionBox title="🔄 신청 유형">
-                    <div className="space-y-4">
+                <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm mb-6">
+                  <h3 className="text-base font-semibold text-gray-900 mb-4">🔄 신청 유형</h3>
+                  <div className="space-y-4">
                         <div className="flex gap-2">
                             <button
                                 type="button"
@@ -509,11 +489,12 @@ function AirportPriceContent() {
                             />
                         </div>
                     </div>
-                </SectionBox>
+                </div>
 
                 {/* 주 서비스 선택 */}
-                <SectionBox title="주 서비스 선택">
-                    <div className="space-y-4">
+                <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm mb-6">
+                  <h3 className="text-base font-semibold text-gray-900 mb-4">주 서비스 선택</h3>
+                  <div className="space-y-4">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">🗺️ 경로 *</label>
@@ -559,71 +540,72 @@ function AirportPriceContent() {
                             </div>
                         )}
                     </div>
-                </SectionBox>
+                </div>
 
                 {/* 추가 서비스 선택 (픽업+샌딩인 경우만) */}
                 {applyType === 'both' && (
-                    <SectionBox title="추가 서비스 선택 (샌딩)">
-                        <div className="space-y-4">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">🗺️ 경로</label>
-                                    <select
-                                        value={selectedRoute2}
-                                        onChange={(e) => setSelectedRoute2(e.target.value)}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                                        disabled={!selectedCategory2}
-                                    >
-                                        <option value="">경로 선택</option>
-                                        {routeOptions2.map((route) => (
-                                            <option key={route} value={route}>
-                                                {route}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">🚙 차량 타입</label>
-                                    <select
-                                        value={selectedCarType2}
-                                        onChange={(e) => setSelectedCarType2(e.target.value)}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                                        disabled={!selectedRoute2}
-                                    >
-                                        <option value="">차량 타입 선택</option>
-                                        {carTypeOptions2.map((carType) => (
-                                            <option key={carType} value={carType}>
-                                                {carType}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
+                    <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm mb-6">
+                      <h3 className="text-base font-semibold text-gray-900 mb-4">추가 서비스 선택 (샌딩)</h3>
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">🗺️ 경로</label>
+                                <select
+                                    value={selectedRoute2}
+                                    onChange={(e) => setSelectedRoute2(e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                    disabled={!selectedCategory2}
+                                >
+                                    <option value="">경로 선택</option>
+                                    {routeOptions2.map((route) => (
+                                        <option key={route} value={route}>
+                                            {route}
+                                        </option>
+                                    ))}
+                                </select>
                             </div>
-                            {selectedAirportCode2 && (
-                                <div className="bg-green-50 rounded-lg p-4">
-                                    <p className="text-sm text-green-800">
-                                        추가 서비스: {selectedCategory2} | {selectedRoute2} | {selectedCarType2}
-                                    </p>
-                                    <p className="text-sm text-green-600">코드: {selectedAirportCode2}</p>
-                                </div>
-                            )}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">🚙 차량 타입</label>
+                                <select
+                                    value={selectedCarType2}
+                                    onChange={(e) => setSelectedCarType2(e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                    disabled={!selectedRoute2}
+                                >
+                                    <option value="">차량 타입 선택</option>
+                                    {carTypeOptions2.map((carType) => (
+                                        <option key={carType} value={carType}>
+                                            {carType}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
                         </div>
-                    </SectionBox>
+                        {selectedAirportCode2 && (
+                            <div className="bg-green-50 rounded-lg p-4">
+                                <p className="text-sm text-green-800">
+                                    추가 서비스: {selectedCategory2} | {selectedRoute2} | {selectedCarType2}
+                                </p>
+                                <p className="text-sm text-green-600">코드: {selectedAirportCode2}</p>
+                            </div>
+                        )}
+                      </div>
+                    </div>
                 )}
 
                 {/* 추가 요청사항 */}
-                <SectionBox title="📝 추가 요청사항">
-                    <div>
-
-                        <textarea
-                            value={formData.additional_note}
-                            onChange={(e) => setFormData(prev => ({ ...prev, additional_note: e.target.value }))}
-                            rows={4}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                            placeholder="특별 서비스 등 요청사항을 입력해주세요..."
-                        />
-                    </div>
-                </SectionBox>
+                <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm mb-6">
+                  <h3 className="text-base font-semibold text-gray-900 mb-4">📝 추가 요청사항</h3>
+                  <div className="space-y-4">
+                    <textarea
+                      value={formData.additional_note}
+                      onChange={(e) => setFormData(prev => ({ ...prev, additional_note: e.target.value }))}
+                      rows={4}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                      placeholder="특별 서비스 등 요청사항을 입력해주세요..."
+                    />
+                  </div>
+                </div>
 
                 {/* 다음 버튼 */}
                 <div className="flex justify-end">

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import supabase from '../../../../lib/supabase';
 import { refreshAuthBeforeSubmit } from '../../../../lib/authHelpers';
 import { useLoadingTimeout } from '../../../../hooks/useLoadingTimeout';
+import PageWrapper from '../../../../components/PageWrapper';
 import {
     CruisePriceCalculator,
     CruiseRateCard,
@@ -1204,23 +1205,13 @@ function DirectBookingCruiseContent() {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50">
+        <PageWrapper title={`📝 크루즈 ${isEditMode ? '예약 수정' : '예약'}`}>
             {/* 아동 엑스트라베드 생년월일 모달 */}
             {renderChildExtraBedBirthDateModal()}
 
-            {/* 헤더 */}
-            <div className="bg-sky-600 text-white p-6">
-                <div className="container mx-auto">
-                    <h1 className="text-2xl font-bold mb-2">🚢 크루즈 {isEditMode ? '예약 수정' : '직접 예약'}</h1>
-                    <p className="text-sky-100">{isEditMode ? '기존 예약 내용을 수정할 수 있습니다' : '크루즈 객실/차량을 바로 예약하세요'}</p>
-                </div>
-            </div>
-
             {/* 메인 컨텐츠 */}
-            <div className="container mx-auto px-4 py-6">
-                <div className="max-w-4xl mx-auto">
-                    <form onSubmit={(e) => handleReservationSubmit(e, 'continue')} className="bg-white rounded-xl shadow-lg p-6">
-                        <h2 className="text-xl font-bold text-gray-800 mb-4">📝 크루즈 {isEditMode ? '예약 수정' : '예약'}</h2>
+            <div className="w-full">
+                <form onSubmit={(e) => handleReservationSubmit(e, 'continue')} className="space-y-4">
 
                         <div className="bg-blue-50 rounded-lg p-4 mb-4 border border-blue-200">
                             <p className="text-blue-700 text-sm">
@@ -1807,7 +1798,6 @@ function DirectBookingCruiseContent() {
                             </div>
                         </div>
                     </form>
-                </div>
             </div>
 
             {/* 아동 생년월일 입력 모달 */}
@@ -1985,7 +1975,7 @@ function DirectBookingCruiseContent() {
                     </div>
                 </div>
             )}
-        </div>
+        </PageWrapper>
     );
 }
 

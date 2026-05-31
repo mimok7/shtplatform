@@ -513,13 +513,6 @@ export default function QuoteDetailPage() {
       {/* 하단 액션 바 (모바일 sticky) */}
       <div className="fixed bottom-0 left-0 right-0 sm:static sm:max-w-3xl sm:mx-auto sm:px-4 z-20">
         <div className="bg-white border-t sm:border sm:rounded-2xl sm:shadow-lg border-slate-200 p-3 sm:p-4 flex gap-2">
-          <button
-            onClick={() => router.push('/mypage')}
-            className="px-4 py-3 rounded-xl border border-slate-300 text-slate-700 text-sm font-medium hover:bg-slate-50 transition"
-            aria-label="홈"
-          >
-            🏠
-          </button>
           {quote.status !== 'approved' && quote.status !== 'submitted' && (
             <button
               onClick={handleSubmitQuote}

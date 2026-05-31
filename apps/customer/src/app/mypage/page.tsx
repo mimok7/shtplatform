@@ -16,9 +16,24 @@ export default function MyPage() {
   const [user, setUser] = useState<any>(null);
   const [userProfile, setUserProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   // 안전 타임아웃: 10초 이상 로딩 중이면 강제 해제
   useLoadingTimeout(loading, setLoading, 10000);
+
+  const normalizeNotifications = useCallback((rows: any[]) => (
+    (rows || []).map((row: any) => {
+      const isRead = typeof row?.is_read === 'boolean'
+        ? row.is_read
+        : ['read', 'completed'].includes(String(row?.status || '').toLowerCase());
+      return {
+        ...row,
+        is_read: isRead,
+        description: row?.description ?? row?.message ?? '',
+      };
+    })
+  ), []);
 
   useEffect(() => {
     let mounted = true;
@@ -51,6 +66,21 @@ export default function MyPage() {
         setUser(user);
         setUserProfile(profile);
 
+        // 알림 조회
+        const { data: notificationsData } = await supabase
+          .from('notifications')
+          .select('*')
+          .eq('assigned_to', user.id)
+          .order('created_at', { ascending: false })
+          .limit(10);
+
+        if (!mounted) return;
+
+        const normalized = normalizeNotifications(notificationsData || []);
+        setNotifications(normalized);
+        const unread = normalized.filter((n: any) => !n.is_read).length;
+        setUnreadCount(unread);
+
       } catch (error) {
         if (isInvalidRefreshTokenError(error)) {
           await clearInvalidSession();
@@ -66,7 +96,7 @@ export default function MyPage() {
     loadUserInfo();
 
     return () => { mounted = false; };
-  }, []); // ✅ [] 의존성 - 최초 1회만 (router 의존성 금지)
+  }, [normalizeNotifications]); // ✅ [] 의존성 - 최초 1회만 (router 의존성 금지)
 
   const getUserDisplayName = useCallback(() => {
     if (userProfile?.name) return userProfile.name;
@@ -112,13 +142,14 @@ export default function MyPage() {
   }, [router]);
 
   const quickActions = useMemo(() => [
-    { icon: '🎯', label: '예약하기', href: '/mypage/direct-booking' },
-    { icon: '📋', label: '예약내역', href: '/mypage/reservations/list' },
-    { icon: '🤝', label: '제휴업체', href: 'partner' },
-    { icon: '📍', label: '장소 추가', href: '/mypage/location-updates' },
-    { icon: '📄', label: '예약확인서', href: '/mypage/confirmations' },
-    { icon: '👤', label: '내 정보', href: '/mypage/profile' },
-  ], []);
+    { icon: '🎯', label: '예약 하기', desc: '새로운 예약 신청', href: '/mypage/direct-booking', bg: 'bg-blue-100', color: 'text-blue-600' },
+    { icon: '📋', label: '예약 내역', desc: '예약 조회 및 관리', href: '/mypage/reservations/list', bg: 'bg-green-100', color: 'text-green-600' },
+    { icon: '🤝', label: '제휴 업체', desc: '파트너사 예약', href: 'partner', bg: 'bg-orange-100', color: 'text-orange-600' },
+    { icon: '📍', label: '장소 추가', desc: '여행 위치 정보', href: '/mypage/location-updates', bg: 'bg-purple-100', color: 'text-purple-600' },
+    { icon: '🔔', label: '알림', desc: unreadCount > 0 ? `새 알림 ${unreadCount}개` : '알림 확인', href: '/mypage/notifications', bg: 'bg-red-100', color: 'text-red-600' },
+    { icon: '📄', label: '예약 확인서', desc: '확인서 조회', href: '/mypage/confirmations', bg: 'bg-violet-100', color: 'text-violet-600' },
+    { icon: '👤', label: '내 정보', desc: '프로필 관리', href: '/mypage/profile', bg: 'bg-slate-100', color: 'text-slate-600' },
+  ], [unreadCount]);
 
   // 제휴업체(파트너) 도메인으로 SSO 이동: 현재 세션 토큰을 hash로 전달
   const handleGoPartner = useCallback(async () => {
@@ -149,51 +180,110 @@ export default function MyPage() {
   }
 
   return (
-    <PageWrapper title={`🌟 ${getUserDisplayName()}님 즐거운 하루 되세요 ^^`}>
-      <div className="mb-6 flex justify-end items-center gap-3">
-        <button
-          onClick={handleLogout}
-          className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors text-sm font-medium shadow-sm"
-        >
-          🚪 로그아웃
-        </button>
-      </div>
+    <PageWrapper title={`${getUserDisplayName()}님 환영합니다`}>
+      <div className="space-y-4">
+        {/* 인사말 */}
+        <div className="text-sm text-slate-600 flex items-center gap-2">
+          <span>오늘도 행복한 하루 보내세요</span>
+          <span>😊</span>
+        </div>
 
-      {/* 알림 기능 숨김 */}
+        {/* 로그아웃 버튼 */}
+        <div className="flex justify-end">
+          <button
+            onClick={handleLogout}
+            className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-800 transition"
+          >
+            로그아웃
+          </button>
+        </div>
 
-      <SectionBox title="원하는 서비스를 선택하세요">
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        {/* 서비스 메뉴 - 2열 격자 */}
+        <div className="grid grid-cols-2 gap-2.5">
           {quickActions.map((action, index) => {
             if (action.href === 'partner') {
               return (
-                <button key={index} type="button" onClick={handleGoPartner} className="group text-left">
-                  <div className="bg-white border border-gray-200 rounded-lg p-6 text-center hover:border-blue-500 hover:shadow-md transition-all duration-200">
-                    <div className="text-4xl mb-3 transform group-hover:scale-110 transition-transform duration-200">
-                      {action.icon}
+                <button
+                  key={index}
+                  type="button"
+                  onClick={handleGoPartner}
+                  className="w-full text-left p-0 border-0 bg-transparent cursor-pointer"
+                >
+                  <div className="bg-white border border-slate-300 rounded-lg p-2 hover:shadow-md transition shadow-sm flex flex-col gap-1">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-8 h-8 flex items-center justify-center rounded-lg ${action.bg} flex-shrink-0`}>
+                        <span className="text-base">{action.icon}</span>
+                      </div>
+                      <h3 className="text-sm font-semibold text-slate-900">{action.label}</h3>
                     </div>
-                    <div className="text-sm font-medium text-gray-900 group-hover:text-blue-600 transition-colors">
-                      {action.label}
-                    </div>
+                    <p className="text-xs text-slate-500 ml-10">{action.desc}</p>
                   </div>
                 </button>
               );
             }
 
             return (
-              <Link key={index} href={action.href} className="group">
-                <div className="bg-white border border-gray-200 rounded-lg p-6 text-center hover:border-blue-500 hover:shadow-md transition-all duration-200">
-                  <div className="text-4xl mb-3 transform group-hover:scale-110 transition-transform duration-200">
-                    {action.icon}
+              <Link key={index} href={action.href} className="text-left block w-full">
+                <div className="bg-white border border-slate-300 rounded-lg p-2 hover:shadow-md transition shadow-sm flex flex-col gap-1">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-8 h-8 flex items-center justify-center rounded-lg ${action.bg} flex-shrink-0`}>
+                      <span className="text-base">{action.icon}</span>
+                    </div>
+                    <h3 className="text-sm font-semibold text-slate-900">{action.label}</h3>
                   </div>
-                  <div className="text-sm font-medium text-gray-900 group-hover:text-blue-600 transition-colors">
-                    {action.label}
-                  </div>
+                  <p className="text-xs text-slate-500 ml-10">{action.desc}</p>
                 </div>
               </Link>
             );
           })}
         </div>
-      </SectionBox>
+
+        {/* 알림 섹션 */}
+        {notifications.length > 0 && (
+          <div id="notifications-section" className="mt-6">
+            <h2 className="text-sm font-semibold text-slate-900 mb-2.5">나에게 온 알림 (최근 5개)</h2>
+            <div className="space-y-2">
+              {notifications.slice(0, 5).map((notification: any) => (
+                <div
+                  key={notification.id}
+                  className={`border rounded-lg p-3 text-sm ${
+                    !notification.is_read
+                      ? 'bg-blue-50 border-blue-200'
+                      : 'bg-white border-slate-200'
+                  }`}
+                >
+                  <div className="flex items-start gap-2">
+                    {!notification.is_read && (
+                      <div className="w-2 h-2 rounded-full bg-blue-600 mt-1.5 flex-shrink-0"></div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className={`${!notification.is_read ? 'font-medium text-slate-900' : 'text-slate-700'} break-words`}>
+                        {notification.title}
+                      </p>
+                      {notification.description && (
+                        <p className="text-xs text-slate-500 mt-1">{notification.description}</p>
+                      )}
+                      <p className="text-xs text-slate-400 mt-1">
+                        {new Date(notification.created_at).toLocaleDateString('ko-KR', {
+                          month: '2-digit',
+                          day: '2-digit',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <Link href="/mypage/notifications" className="mt-3 inline-block">
+              <button className="text-xs font-medium text-blue-600 hover:text-blue-700 transition">
+                모든 알림 보기 →
+              </button>
+            </Link>
+          </div>
+        )}
+      </div>
     </PageWrapper>
   );
 }

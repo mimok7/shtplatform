@@ -3,12 +3,10 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import supabase from '../../../lib/supabase';
 import PageWrapper from '../../../components/PageWrapper';
-import SectionBox from '../../../components/SectionBox';
 import ConfirmationGenerateModal from '@/components/ConfirmationGenerateModal';
 import { clearInvalidSession, isInvalidRefreshTokenError } from '@/lib/authRecovery';
 import { useLoadingTimeout } from '@/hooks/useLoadingTimeout';
 import { getAuthUserSafe } from '@/lib/authSafe';
-import { Home } from 'lucide-react';
 
 interface Quote {
     id: string;
@@ -33,10 +31,6 @@ export default function MyConfirmationsPage() {
     // 결제 완료만 보여주므로 filter 상태 제거
 
     useLoadingTimeout(isLoading, setIsLoading, 12000);
-
-    const handleGoHome = () => {
-        router.push('/mypage');
-    };
 
     const isAuthTimeoutError = (error: unknown) => {
         const message = (error as { message?: string } | null)?.message || '';
@@ -259,30 +253,21 @@ export default function MyConfirmationsPage() {
     if (authError) {
         return (
             <PageWrapper title="예약확인서">
-                <SectionBox title="인증 확인 지연">
-                    <div className="text-center py-8">
-                        <div className="text-4xl mb-3">⏱️</div>
-                        <p className="text-sm text-gray-700 mb-4">{authError}</p>
-                        <div className="flex justify-center gap-2">
-                            <button
-                                onClick={() => {
-                                    setIsLoading(true);
-                                    setAuthRetryKey((prev) => prev + 1);
-                                }}
-                                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
-                            >
-                                다시 시도
-                            </button>
-                            <button
-                                onClick={handleGoHome}
-                                className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium"
-                            >
-                                <Home className="w-4 h-4" />
-                                홈
-                            </button>
-                        </div>
+                <div className="text-center py-8">
+                    <div className="text-4xl mb-3">⏱️</div>
+                    <p className="text-sm text-gray-700 mb-4">{authError}</p>
+                    <div className="flex justify-center gap-2">
+                        <button
+                            onClick={() => {
+                                setIsLoading(true);
+                                setAuthRetryKey((prev) => prev + 1);
+                            }}
+                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                        >
+                            다시 시도
+                        </button>
                     </div>
-                </SectionBox>
+                </div>
             </PageWrapper>
         );
     }
@@ -291,54 +276,28 @@ export default function MyConfirmationsPage() {
     const paidQuotes = quotes;
 
     return (
-        <>
-            <PageWrapper
-                title="📄 예약확인서"
-                actions={
-                    <>
-                        <button
-                            onClick={handleGoHome}
-                            className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium"
-                        >
-                            <Home className="w-4 h-4" />
-                            홈
-                        </button>
-                        <button
-                            onClick={() => loadQuotes(user?.id)}
-                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
-                        >
-                            🔄 새로고침
-                        </button>
-                    </>
-                }
-            >
+      <>
+        <PageWrapper title="📄 예약확인서">
+          <div className="space-y-6">
+            {/* 상단 안내 */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+              <div className="flex items-start space-x-4">
+                <div className="text-3xl">📄</div>
+                <div>
+                  <h2 className="text-lg font-semibold text-blue-900 mb-2">나의 예약확인서</h2>
+                  <p className="text-blue-700 text-sm">
+                    매니저가 생성한 예약확인서만 확인하고 인쇄할 수 있습니다.
+                    확인서에는 여행 상세 정보, 준비사항, 연락처 등이 포함되어 있습니다.
+                  </p>
+                  <p className="mt-2 text-sm font-semibold text-red-600 md:hidden">
+                    모바일 사용시 가로 보기로 보세요.
+                  </p>
+                </div>
+              </div>
+            </div>
 
-                {/* 상단 안내 */}
-                <SectionBox title="">
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6">
-                        <div className="flex items-start space-x-4">
-                            <div className="text-3xl">📄</div>
-                            <div>
-                                <h2 className="text-lg font-semibold text-blue-900 mb-2">나의 예약확인서</h2>
-                                <p className="text-blue-700 text-sm">
-                                    매니저가 생성한 예약확인서만 확인하고 인쇄할 수 있습니다.
-                                    확인서에는 여행 상세 정보, 준비사항, 연락처 등이 포함되어 있습니다.
-                                </p>
-                                <p className="mt-2 text-sm font-semibold text-red-600 md:hidden">
-                                    모바일 사용시 가로 보기로 보세요.
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                </SectionBox>
-
-                {/* 새로고침 버튼 영역 삭제 */}
-
-
-
-                {/* 예약 목록 - 결제 완료된 예약만 표시 */}
-                <SectionBox title="예약확인서 목록">
-                    {quotes.length === 0 ? (
+            {/* 예약확인서 목록 */}
+            {quotes.length === 0 ? (
                         <div className="text-center py-12">
                             <div className="text-4xl mb-4">📭</div>
                             <h3 className="text-lg font-medium text-gray-900 mb-2">예약 내역이 없습니다</h3>
@@ -415,49 +374,45 @@ export default function MyConfirmationsPage() {
                             ))}
                         </div>
                     )}
-                </SectionBox>
 
-                {/* 안내사항 */}
-                <SectionBox title="">
-                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
-                        <h3 className="text-lg font-semibold text-yellow-800 mb-3 flex items-center">
-                            <span className="mr-2">💡</span>
-                            예약확인서 안내
-                        </h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm text-yellow-700">
-                            <div>
-                                <h4 className="font-semibold mb-2">📄 확인서 내용</h4>
-                                <ul className="space-y-1">
-                                    <li>• 예약자 정보 및 연락처</li>
-                                    <li>• 예약 서비스 상세 내역</li>
-                                    <li>• 긴급연락처 및 고객지원</li>
-                                </ul>
-                            </div>
-                            <div>
-                                <h4 className="font-semibold mb-2">🖨️ 이용 방법</h4>
-                                <ul className="space-y-1">
-                                    <li>• 확인서 페이지에서 인쇄 가능</li>
-                                    <li>• 모바일에서도 열람 가능</li>
-                                    <li>• 24시간 언제든 접근 가능</li>
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
-                </SectionBox>
+            {/* 안내사항 */}
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
+              <h3 className="text-lg font-semibold text-yellow-800 mb-3 flex items-center">
+                <span className="mr-2">💡</span>
+                예약확인서 안내
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm text-yellow-700">
+                <div>
+                  <h4 className="font-semibold mb-2">📄 확인서 내용</h4>
+                  <ul className="space-y-1">
+                    <li>• 예약자 정보 및 연락처</li>
+                    <li>• 예약 서비스 상세 내역</li>
+                    <li>• 긴급연락처 및 고객지원</li>
+                  </ul>
+                </div>
+                <div>
+                  <h4 className="font-semibold mb-2">🖨️ 이용 방법</h4>
+                  <ul className="space-y-1">
+                    <li>• 확인서 페이지에서 인쇄 가능</li>
+                    <li>• 모바일에서도 열람 가능</li>
+                    <li>• 24시간 언제든 접근 가능</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        </PageWrapper>
 
-
-            </PageWrapper>
-
-            {selectedQuoteId && (
-                <ConfirmationGenerateModal
-                    isOpen={isModalOpen}
-                    quoteId={selectedQuoteId}
-                    onClose={() => {
-                        setIsModalOpen(false);
-                        setSelectedQuoteId('');
-                    }}
-                />
-            )}
-        </>
+        {selectedQuoteId && (
+          <ConfirmationGenerateModal
+            isOpen={isModalOpen}
+            quoteId={selectedQuoteId}
+            onClose={() => {
+              setIsModalOpen(false);
+              setSelectedQuoteId('');
+            }}
+          />
+        )}
+      </>
     );
 }

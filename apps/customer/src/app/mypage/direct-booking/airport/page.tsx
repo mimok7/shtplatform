@@ -8,7 +8,7 @@ import { useLoadingTimeout } from '../../../../hooks/useLoadingTimeout';
 import { hasInvalidLocationChars, normalizeLocationEnglishUpper } from '@/lib/locationInput';
 import { toDbDateTimeKst, toInputDateTime } from '@/lib/kstDateTime';
 import PageWrapper from '../../../../components/PageWrapper';
-import SectionBox from '../../../../components/SectionBox';
+
 import StepperNumberInput from '../../../../components/StepperNumberInput';
 
 function DirectBookingAirportContent() {
@@ -609,17 +609,13 @@ function DirectBookingAirportContent() {
     };
 
     return (
-        <PageWrapper>
+        <PageWrapper title="✈️ 공항 예약">
 
             <div className="space-y-6">
-                {/* 헤더 */}
-                <div className="bg-sky-600 text-white p-6 rounded-lg">
-                    <h1 className="text-2xl font-bold mb-2">✈️ 공항 픽업 샌딩 신청서</h1>
-                    <p className="text-sky-100">{isEditMode ? '기존 예약 내용을 수정할 수 있습니다' : '공항 픽업/샌딩 서비스를 바로 예약하세요'}</p>
-                </div>
-
                 {/* 서비스 타입 선택 */}
-                <SectionBox title="1. 서비스 타입 선택">
+                <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm mb-6">
+                  <h3 className="text-base font-semibold text-gray-900 mb-4">1. 서비스 타입 선택</h3>
+                  <div className="space-y-4">
                     <div className="grid grid-cols-3 gap-4">
                         {[
                             { value: 'both', label: '픽업 + 샌딩', icon: '🔄' },
@@ -640,10 +636,13 @@ function DirectBookingAirportContent() {
                             </button>
                         ))}
                     </div>
-                </SectionBox>
+                  </div>
+                </div>
 
                 {/* 서비스 1 (메인) */}
-                <SectionBox title={`2. ${form.serviceType === 'both' ? '픽업' : form.serviceType === 'pickup' ? '픽업' : '샌딩'} 서비스 선택`}>
+                <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm mb-6">
+                  <h3 className="text-base font-semibold text-gray-900 mb-4">{`2. ${form.serviceType === 'both' ? '픽업' : form.serviceType === 'pickup' ? '픽업' : '샌딩'} 서비스 선택`}</h3>
+                  <div className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">카테고리</label>
@@ -691,11 +690,14 @@ function DirectBookingAirportContent() {
                             </p>
                         </div>
                     )}
-                </SectionBox>
+                  </div>
+                </div>
 
                 {/* 서비스 2 (both 선택 시만 표시) */}
                 {form.serviceType === 'both' && (
-                    <SectionBox title="3. 샌딩 서비스 선택">
+                    <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm mb-6">
+                      <h3 className="text-base font-semibold text-gray-900 mb-4">3. 샌딩 서비스 선택</h3>
+                      <div className="space-y-4">
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">카테고리</label>
@@ -746,11 +748,14 @@ function DirectBookingAirportContent() {
                                 </p>
                             </div>
                         )}
-                    </SectionBox>
+                      </div>
+                    </div>
                 )}
 
                 {/* 예약 상세 정보 */}
-                <SectionBox title={`${form.serviceType === 'both' ? '4' : '3'}. 예약 상세 정보`}>
+                <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm mb-6">
+                  <h3 className="text-base font-semibold text-gray-900 mb-4">{`${form.serviceType === 'both' ? '4' : '3'}. 예약 상세 정보`}</h3>
+                  <div className="space-y-4">
                     <div className="space-y-4">
                         {/* 픽업 정보 */}
                         {(form.serviceType === 'pickup' || form.serviceType === 'both') && (
@@ -910,7 +915,8 @@ function DirectBookingAirportContent() {
 
                         {/* 요청사항 입력란 제거됨 */}
                     </div>
-                </SectionBox>
+                  </div>
+                </div>
 
                 {/* 예약 버튼 */}
                 <div className="flex justify-end gap-4">

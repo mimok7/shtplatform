@@ -7,7 +7,7 @@ import { refreshAuthBeforeSubmit } from '@/lib/authHelpers';
 import { useLoadingTimeout } from '@/hooks/useLoadingTimeout';
 import { hasInvalidLocationChars, normalizeLocationEnglishUpper } from '@/lib/locationInput';
 import PageWrapper from '@/components/PageWrapper';
-import SectionBox from '@/components/SectionBox';
+
 
 function TourDirectBookingContent() {
     const router = useRouter();
@@ -403,17 +403,12 @@ function TourDirectBookingContent() {
     }
 
     return (
-        <PageWrapper>
+        <PageWrapper title="🎫 투어 예약">
 
             <div className="space-y-6">
-                {/* 헤더 */}
-                <div className="bg-sky-600 text-white p-6 rounded-lg">
-                    <h1 className="text-2xl font-bold mb-2">🎯 가이드 투어 신청서</h1>
-                    <p className="text-sky-100">{isEditMode ? '기존 예약 내용을 수정할 수 있습니다' : '투어 서비스를 바로 예약하세요'}</p>
-                </div>
-
-
-                <SectionBox title="1. 투어 선택">
+                <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm mb-6">
+                  <h3 className="text-base font-semibold text-gray-900 mb-4">1. 투어 선택</h3>
+                  <div className="space-y-4">
                     <form onSubmit={handleSubmit} className="space-y-6">
                         {/* 투어 안내 카드 */}
                         <div className="bg-blue-50 rounded-lg p-6 mb-6 border border-blue-200">
@@ -671,7 +666,8 @@ function TourDirectBookingContent() {
                             </button>
                         </div>
                     </form>
-                </SectionBox>
+                  </div>
+                </div>
             </div>
         </PageWrapper>
     );

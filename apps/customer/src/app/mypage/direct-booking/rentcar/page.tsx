@@ -8,7 +8,7 @@ import { useLoadingTimeout } from '@/hooks/useLoadingTimeout';
 import { toDbDateTimeKst, toInputDateTime } from '@/lib/kstDateTime';
 import { normalizeLocationEnglishUpper } from '@/lib/locationInput';
 import PageWrapper from '@/components/PageWrapper';
-import SectionBox from '@/components/SectionBox';
+
 import StepperNumberInput from '@/components/StepperNumberInput';
 
 interface VehicleData {
@@ -483,20 +483,16 @@ function RentcarDirectBookingContent() {
     }
 
     return (
-        <PageWrapper>
+        <PageWrapper title="🚗 렌트카 예약">
 
 
             <div className="space-y-6">
-                {/* 헤더 */}
-                <div className="bg-sky-600 text-white p-6 rounded-lg">
-                    <h1 className="text-2xl font-bold mb-2">🚗 렌트카 신청서</h1>
-                    <p className="text-sky-100">{isEditMode ? '기존 예약 내용을 수정할 수 있습니다' : '렌트카 서비스를 바로 예약하세요'}</p>
-                </div>
-
                 <form onSubmit={handleSubmit} className="space-y-6">
                     {/* 차량 목록 */}
                     {vehicles.map((vehicle, index) => (
-                        <SectionBox key={vehicle.id} title={`차량 ${index + 1}`}>
+                        <div key={vehicle.id} className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm mb-6">
+                          <h3 className="text-base font-semibold text-gray-900 mb-4">{`차량 ${index + 1}`}</h3>
+                          <div className="space-y-4">
                             <div className="space-y-4">
                                 {/* 이용방식 선택 */}
                                 <div>
@@ -801,9 +797,9 @@ function RentcarDirectBookingContent() {
                                     </div>
                                 )}
                             </div>
-                        </SectionBox>
+                          </div>
+                        </div>
                     ))}
-
                     {/* 차량 추가 버튼 */}
                     <div className="flex justify-center">
                         <button
@@ -816,7 +812,9 @@ function RentcarDirectBookingContent() {
                     </div>
 
                     {/* 특별 요청사항 */}
-                    <SectionBox title="특별 요청사항">
+                    <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm mb-6">
+                      <h3 className="text-base font-semibold text-gray-900 mb-4">특별 요청사항</h3>
+                      <div className="space-y-4">
                         <textarea
                             value={requestNote}
                             onChange={(e) => setRequestNote(e.target.value)}
@@ -824,7 +822,8 @@ function RentcarDirectBookingContent() {
                             rows={4}
                             placeholder="특별한 요청사항이 있으시면 입력해주세요"
                         />
-                    </SectionBox>
+                      </div>
+                    </div>
 
                     {/* 제출 버튼 */}
                     <div className="flex justify-end gap-4 pt-6">

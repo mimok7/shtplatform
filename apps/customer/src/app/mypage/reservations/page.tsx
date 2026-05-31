@@ -6,7 +6,6 @@ import supabase from '@/lib/supabase';
 import { getSessionUser } from '@/lib/authHelpers';
 import { createQuote, getQuoteWithItems } from '@/lib/quoteUtils';
 import { Quote } from '@/lib/types';
-import { Home } from 'lucide-react';
 
 // 예약 메뉴 정의 - 예약 홈으로 연결
 const menuList = [
@@ -355,16 +354,6 @@ function ReservationHomeContent() {
             </div>
 
             <div className="flex flex-wrap gap-3 self-end md:self-auto">
-              {/* 홈 버튼 */}
-              <button
-                type="button"
-                onClick={handleGoHome}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium"
-              >
-                <Home className="w-4 h-4" />
-                홈
-              </button>
-
               {/* 예약 확인 버튼 */}
               {(quoteId || existingQuoteId) && (
                 <button

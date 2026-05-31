@@ -7,9 +7,10 @@ import { getSessionUser, refreshAuthBeforeSubmit } from '@/lib/authHelpers';
 import { useLoadingTimeout } from '@/hooks/useLoadingTimeout';
 import { createPackageReservation } from '@/app/actions/packageReservation';
 import { hasInvalidLocationChars, normalizeLocationEnglishUpper } from '@/lib/locationInput';
-import { Package, Calendar, Users, Phone, Mail, ArrowRight, CheckCircle2, Package as PackageIcon, Info, Home } from 'lucide-react';
+import { Package, Calendar, Users, Phone, Mail, ArrowRight, CheckCircle2, Package as PackageIcon, Info } from 'lucide-react';
 import Link from 'next/link';
 import ShtCarSeatMap from '@/components/ShtCarSeatMap';
+import PageWrapper from '@/components/PageWrapper';
 
 function PackageBookingContent() {
     const router = useRouter();
@@ -375,7 +376,7 @@ function PackageBookingContent() {
     }
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 pb-12">
+        <PageWrapper title="� 패키지">
             {/* Hero Header */}
             <div className="bg-white/70 backdrop-blur-md border-b border-white/20 shadow-sm sticky top-0 z-10">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -389,13 +390,6 @@ function PackageBookingContent() {
                                 <p className="text-sm text-gray-500 font-medium">크루즈, 공항 픽업/샌딩, 투어가 포함된 특별한 여행</p>
                             </div>
                         </div>
-                        <Link
-                            href="/"
-                            className="p-3 bg-white border border-gray-200 rounded-2xl text-gray-700 hover:bg-gray-50 hover:border-blue-300 transition-all shadow-sm group"
-                            title="홈으로"
-                        >
-                            <Home className="w-5 h-5 text-blue-600 group-hover:scale-110 transition-transform" />
-                        </Link>
                     </div>
                 </div>
             </div>
@@ -1364,7 +1358,7 @@ function PackageBookingContent() {
                     initialCategory={shtModalType}
                 />
             )}
-        </div>
+        </PageWrapper>
     );
 }
 

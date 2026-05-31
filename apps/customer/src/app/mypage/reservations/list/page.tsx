@@ -8,7 +8,6 @@ import { useReservations, useReservationAdditionalData } from '../../../../hooks
 import { useQueryClient } from '@tanstack/react-query';
 import { getAuthUserSafe } from '@/lib/authSafe';
 import { formatKstDate } from '@/lib/kstDateTime';
-import { Home } from 'lucide-react';
 
 interface Reservation {
   re_id: string;
@@ -175,7 +174,7 @@ export default function MyReservationsListPage() {
 
   if (loading) {
     return (
-      <PageWrapper>
+      <PageWrapper title="예약 내역">
         <div className="flex flex-col items-center justify-center h-72">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-400" />
           <p className="mt-4 text-sm text-gray-600">예약 정보를 로딩 중...</p>
@@ -186,7 +185,7 @@ export default function MyReservationsListPage() {
 
   if (authError) {
     return (
-      <PageWrapper>
+      <PageWrapper title="예약 내역">
         <div className="max-w-3xl mx-auto bg-white rounded-2xl shadow-sm border border-gray-100 p-6 text-center">
           <div className="text-5xl mb-3">⏱️</div>
           <h2 className="text-lg font-semibold text-gray-800">인증 확인이 지연되고 있습니다</h2>
@@ -197,13 +196,6 @@ export default function MyReservationsListPage() {
               className="px-4 py-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors"
             >
               다시 시도
-            </button>
-            <button
-              onClick={() => router.push('/mypage')}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium"
-            >
-              <Home className="w-4 h-4" />
-              홈
             </button>
           </div>
         </div>
@@ -224,34 +216,15 @@ export default function MyReservationsListPage() {
   });
 
   return (
-    <PageWrapper>
-      <div className="max-w-5xl mx-auto">
-        {/* 헤더 */}
-        <div className="rounded-xl bg-gradient-to-r from-blue-200/60 via-blue-100/60 to-cyan-100/60 px-6 py-5 mb-6 flex flex-col gap-3 border border-blue-100/50">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="text-2xl">📋</span>
-              <h1 className="text-lg font-bold text-blue-900">예약 정보</h1>
-            </div>
-            <button
-              onClick={() => router.push('/mypage')}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium"
-            >
-              <Home className="w-4 h-4" />
-              홈
-            </button>
+    <PageWrapper title="예약 내역">
+      <div className="w-full">
+        {reservations.length === 0 && (
+          <div className="py-24 flex flex-col items-center justify-center">
+            <div className="text-6xl mb-4">📭</div>
+            <p className="text-gray-600 text-lg font-medium mb-2">등록된 예약이 없습니다</p>
+            <p className="text-gray-500 text-sm">새로운 예약을 만들어 시작하세요</p>
           </div>
-        </div>
-
-        {/* 내용 */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-          {reservations.length === 0 && (
-            <div className="py-24 flex flex-col items-center justify-center">
-              <div className="text-6xl mb-4">📭</div>
-              <p className="text-gray-600 text-lg font-medium mb-2">등록된 예약이 없습니다</p>
-              <p className="text-gray-500 text-sm">새로운 예약을 만들어 시작하세요</p>
-            </div>
-          )}
+        )}
           {groupEntries.map(([qid, list]) => {
             const title = qid === 'no-quote' ? '견적 연결 없음' : (quotesById[qid]?.title || '제목 없음');
             return (
@@ -317,7 +290,6 @@ export default function MyReservationsListPage() {
               </div>
             );
           })}
-        </div>
       </div>
     </PageWrapper>
   );

@@ -62,10 +62,6 @@ export default function ConfirmedQuoteDetailPage() {
   const params = useParams();
   const quoteId = params.id as string;
 
-  const handleGoHome = () => {
-    router.push('/mypage');
-  };
-
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [quote, setQuote] = useState<QuoteDetail | null>(null);
@@ -875,12 +871,6 @@ export default function ConfirmedQuoteDetailPage() {
 
               {/* 예약하기 버튼 - 페이지 하단 */}
               <div className="flex justify-between items-center mt-10">
-                <button
-                  onClick={handleGoHome}
-                  className="border border-gray-300 text-gray-700 px-4 py-2 rounded text-xs hover:bg-gray-50 transition-colors"
-                >
-                  🏠 홈으로
-                </button>
                 <button
                   onClick={handleReservation}
                   className="btn bg-blue-300 text-black text-xs px-4 py-2 rounded font-bold shadow-sm hover:bg-blue-400 transition-colors"

@@ -6,7 +6,7 @@ import supabase from '@/lib/supabase';
 import { getSessionUser, refreshAuthBeforeSubmit } from '@/lib/authHelpers';
 import { useLoadingTimeout } from '@/hooks/useLoadingTimeout';
 import PageWrapper from '@/components/PageWrapper';
-import SectionBox from '@/components/SectionBox';
+
 
 function TicketBookingContent() {
     const router = useRouter();
@@ -358,16 +358,12 @@ function TicketBookingContent() {
     }
 
     return (
-        <PageWrapper>
+        <PageWrapper title="🎟️ 티켓 예약">
             <div className="space-y-6">
-                {/* 헤더 */}
-                <div className="bg-gradient-to-r from-teal-600 to-cyan-600 text-white p-6 rounded-lg">
-                    <h1 className="text-2xl font-bold mb-2">🎫 티켓 구매대행</h1>
-                    <p className="text-teal-100">{isEditMode ? '기존 예약 내용을 수정할 수 있습니다' : '드래곤펄 동굴 투어, 요코온센, 기타 티켓 구매대행 서비스'}</p>
-                </div>
-
                 {/* 통합 폼 */}
-                <SectionBox title="티켓 예약 정보 입력">
+                <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm mb-6">
+                  <h3 className="text-base font-semibold text-gray-900 mb-4">티켓 예약 정보 입력</h3>
+                  <div className="space-y-4">
                     <form onSubmit={handleSubmit} className="space-y-6">
                         {/* 티켓 유형 선택 */}
                         <div>
@@ -726,7 +722,8 @@ function TicketBookingContent() {
                             </button>
                         </div>
                     </form>
-                </SectionBox>
+                  </div>
+                </div>
             </div>
         </PageWrapper>
     );

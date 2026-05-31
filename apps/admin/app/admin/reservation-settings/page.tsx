@@ -5,6 +5,8 @@ import { Bell, Check, Loader2, Plus, RefreshCw, Save, ToggleLeft, ToggleRight, T
 import AdminLayout from '@/components/AdminLayout';
 import supabase from '@/lib/supabase';
 
+type SettingsTab = 'settings' | 'subscribers' | 'customer-reminders';
+
 const APPS_TABLE = 'notification_apps';
 const EVENT_TYPES_TABLE = 'notification_event_types';
 const APP_EVENT_SETTINGS_TABLE = 'notification_app_event_settings';
@@ -73,6 +75,60 @@ type ActiveSubscriberRow = {
   user_agent: string | null;
   last_used_at: string | null;
   created_at: string | null;
+};
+
+type ReminderServiceType = 'cruise' | 'airport' | 'rentcar' | 'hotel' | 'tour' | 'ticket' | 'package';
+
+type ReminderDateBasis =
+  | 'checkin'
+  | 'pickup'
+  | 'dropoff'
+  | 'rentcar_pickup'
+  | 'rentcar_return'
+  | 'usage'
+  | 'start';
+
+type CustomerReminderRule = {
+  id: string;
+  serviceType: ReminderServiceType;
+  dateBasis: ReminderDateBasis;
+  label: string;
+  enabled: boolean;
+  daysBefore: number;
+  title: string;
+  body: string;
+};
+
+type CustomerReminderSettings = {
+  updatedAt: string;
+  updatedBy: string;
+  rules: CustomerReminderRule[];
+};
+
+const REMINDER_SERVICE_OPTIONS: Array<{ value: ReminderServiceType; label: string }> = [
+  { value: 'cruise', label: '크루즈' },
+  { value: 'airport', label: '공항' },
+  { value: 'rentcar', label: '렌트카' },
+  { value: 'hotel', label: '호텔' },
+  { value: 'tour', label: '투어' },
+  { value: 'ticket', label: '티켓' },
+  { value: 'package', label: '패키지' },
+];
+
+const REMINDER_DATE_BASIS_OPTIONS: Record<ReminderServiceType, Array<{ value: ReminderDateBasis; label: string }>> = {
+  cruise: [{ value: 'checkin', label: '체크인 기준' }],
+  airport: [
+    { value: 'pickup', label: '픽업 기준(way_type=pickup)' },
+    { value: 'dropoff', label: '드롭 기준(way_type=dropoff)' },
+  ],
+  rentcar: [
+    { value: 'rentcar_pickup', label: '픽업 기준' },
+    { value: 'rentcar_return', label: '리턴 기준' },
+  ],
+  hotel: [{ value: 'checkin', label: '체크인 기준' }],
+  tour: [{ value: 'usage', label: '사용일 기준' }],
+  ticket: [{ value: 'usage', label: '사용일 기준' }],
+  package: [{ value: 'start', label: '시작일 기준' }],
 };
 
 const DEFAULT_DRAFT: EventDraft = {
@@ -224,11 +280,24 @@ export default function ReservationSettingsPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [draft, setDraft] = useState<EventDraft>(DEFAULT_DRAFT);
-  const [viewTab, setViewTab] = useState<'settings' | 'subscribers'>('settings');
+  const [viewTab, setViewTab] = useState<SettingsTab>('settings');
   const [subscriberRows, setSubscriberRows] = useState<ActiveSubscriberRow[]>([]);
   const [subscribersLoading, setSubscribersLoading] = useState(false);
   const [subscriberAppFilter, setSubscriberAppFilter] = useState<string>('all');
   const [stoppingSubscriptionId, setStoppingSubscriptionId] = useState<string | null>(null);
+  const [customerReminderSettings, setCustomerReminderSettings] = useState<CustomerReminderSettings | null>(null);
+  const [customerReminderLoading, setCustomerReminderLoading] = useState(false);
+  const [savingCustomerReminder, setSavingCustomerReminder] = useState(false);
+  const [newReminderRule, setNewReminderRule] = useState<CustomerReminderRule>({
+    id: '',
+    serviceType: 'cruise',
+    dateBasis: 'checkin',
+    label: '',
+    enabled: true,
+    daysBefore: 3,
+    title: '',
+    body: '',
+  });
 
   const countMap = useMemo(() => {
     return new Map(counts.map((count) => [count.app_name, count]));
@@ -288,6 +357,133 @@ export default function ReservationSettingsPage() {
         setCounts((data || []) as SubscriptionCount[]);
       }
     });
+  };
+
+  const loadCustomerReminderSettings = async () => {
+    setCustomerReminderLoading(true);
+    setErrorMessage(null);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token || '';
+      const response = await fetch('/api/admin/customer-reminder-settings', {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setErrorMessage(result?.error || '고객 사전알림 설정을 불러오지 못했습니다.');
+        setCustomerReminderSettings(null);
+        return;
+      }
+      setCustomerReminderSettings(result as CustomerReminderSettings);
+    } catch (error) {
+      console.error('고객 사전알림 설정 로드 실패:', error);
+      setErrorMessage('고객 사전알림 설정을 불러오지 못했습니다.');
+      setCustomerReminderSettings(null);
+    } finally {
+      setCustomerReminderLoading(false);
+    }
+  };
+
+  const updateCustomerRule = (ruleId: string, updater: (rule: CustomerReminderRule) => CustomerReminderRule) => {
+    setCustomerReminderSettings((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        rules: prev.rules.map((rule) => (rule.id === ruleId ? updater(rule) : rule)),
+      };
+    });
+  };
+
+  const deleteCustomerRule = (ruleId: string) => {
+    setCustomerReminderSettings((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        rules: prev.rules.filter((rule) => rule.id !== ruleId),
+      };
+    });
+  };
+
+  const addCustomerRule = () => {
+    const id = normalizeKey(newReminderRule.id || newReminderRule.label);
+    if (!id) {
+      setErrorMessage('신규 알림 항목의 ID 또는 이름을 입력해 주세요.');
+      return;
+    }
+
+    const selectedBasis = REMINDER_DATE_BASIS_OPTIONS[newReminderRule.serviceType] || [];
+    const basisExists = selectedBasis.some((option) => option.value === newReminderRule.dateBasis);
+    const normalizedRule: CustomerReminderRule = {
+      ...newReminderRule,
+      id,
+      dateBasis: basisExists ? newReminderRule.dateBasis : selectedBasis[0]?.value || 'usage',
+      daysBefore: Math.max(0, Math.min(30, Number(newReminderRule.daysBefore || 0))),
+      label: newReminderRule.label.trim() || id,
+      title: newReminderRule.title.trim(),
+      body: newReminderRule.body.trim(),
+    };
+
+    setCustomerReminderSettings((prev) => {
+      if (!prev) return prev;
+      if (prev.rules.some((rule) => rule.id === id)) {
+        setErrorMessage('이미 존재하는 알림 ID입니다.');
+        return prev;
+      }
+      setErrorMessage(null);
+      return {
+        ...prev,
+        rules: [...prev.rules, normalizedRule],
+      };
+    });
+
+    const defaultBasis = REMINDER_DATE_BASIS_OPTIONS[newReminderRule.serviceType]?.[0]?.value || 'checkin';
+    setNewReminderRule({
+      id: '',
+      serviceType: 'cruise',
+      dateBasis: defaultBasis,
+      label: '',
+      enabled: true,
+      daysBefore: 3,
+      title: '',
+      body: '',
+    });
+  };
+
+  const saveCustomerReminderSettings = async () => {
+    if (!customerReminderSettings) return;
+    setSavingCustomerReminder(true);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token || '';
+      const response = await fetch('/api/admin/customer-reminder-settings', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          ...customerReminderSettings,
+          updatedBy: adminUserId || 'admin',
+          updatedAt: new Date().toISOString(),
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setErrorMessage(result?.error || '고객 사전알림 설정 저장에 실패했습니다.');
+        return;
+      }
+      setCustomerReminderSettings(result as CustomerReminderSettings);
+      setSuccessMessage('고객 사전알림 설정을 저장했습니다. (DB 미사용)');
+    } catch (error) {
+      console.error('고객 사전알림 설정 저장 실패:', error);
+      setErrorMessage('고객 사전알림 설정 저장에 실패했습니다.');
+    } finally {
+      setSavingCustomerReminder(false);
+    }
   };
 
   useEffect(() => {
@@ -573,8 +769,12 @@ export default function ReservationSettingsPage() {
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token || '';
-      const query = appFilter !== 'all' ? `?appName=${encodeURIComponent(appFilter)}` : '';
+      const params = new URLSearchParams();
+      if (appFilter !== 'all') params.set('appName', appFilter);
+      params.set('_ts', String(Date.now()));
+      const query = `?${params.toString()}`;
       const response = await fetch(`/api/admin/push-subscriptions${query}`, {
+        cache: 'no-store',
         headers: {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
@@ -640,6 +840,12 @@ export default function ReservationSettingsPage() {
     void loadActiveSubscribers(subscriberAppFilter);
   }, [viewTab, subscriberAppFilter]);
 
+  useEffect(() => {
+    if (viewTab !== 'customer-reminders') return;
+    if (customerReminderSettings) return;
+    void loadCustomerReminderSettings();
+  }, [viewTab, customerReminderSettings]);
+
   if (loading) {
     return (
       <AdminLayout title="예약설정" activeTab="reservation-settings">
@@ -672,6 +878,15 @@ export default function ReservationSettingsPage() {
             }`}
           >
             활성 구독자
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewTab('customer-reminders')}
+            className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+              viewTab === 'customer-reminders' ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-100'
+            }`}
+          >
+            고객 사전알림
           </button>
         </div>
 
@@ -708,6 +923,8 @@ export default function ReservationSettingsPage() {
               onClick={() => {
                 if (viewTab === 'subscribers') {
                   void loadActiveSubscribers(subscriberAppFilter);
+                } else if (viewTab === 'customer-reminders') {
+                  void loadCustomerReminderSettings();
                 } else {
                   void loadSettings();
                 }
@@ -823,6 +1040,208 @@ export default function ReservationSettingsPage() {
                   </tbody>
                 </table>
               </div>
+            )}
+          </section>
+        )}
+
+        {viewTab === 'customer-reminders' && (
+          <section className="rounded-lg border border-gray-200 bg-white p-5">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="text-base font-semibold text-gray-900">고객 앱 사전알림 설정</h3>
+                <p className="mt-1 text-xs text-gray-500">DB 테이블 저장 없이 JSON 설정 파일로 관리되며, 고객 앱 알림 화면에만 표시됩니다.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void saveCustomerReminderSettings()}
+                disabled={savingCustomerReminder || !customerReminderSettings}
+                className="inline-flex items-center whitespace-nowrap rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {savingCustomerReminder ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                사전알림 저장
+              </button>
+            </div>
+
+            {customerReminderLoading ? (
+              <div className="flex h-40 items-center justify-center text-gray-600">
+                <Loader2 className="mr-2 h-5 w-5 animate-spin text-blue-600" /> 설정 로드 중...
+              </div>
+            ) : !customerReminderSettings ? (
+              <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                설정을 불러오지 못했습니다.
+              </div>
+            ) : (
+              <>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200 text-sm">
+                    <thead className="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      <tr>
+                        <th className="px-3 py-3">알림 항목</th>
+                        <th className="px-3 py-3 text-center">기준일</th>
+                        <th className="px-3 py-3 text-center">사용</th>
+                        <th className="px-3 py-3 text-center">발송 N일 전</th>
+                        <th className="px-3 py-3 min-w-[16rem]">제목</th>
+                        <th className="px-3 py-3 min-w-[24rem]">내용</th>
+                        <th className="px-3 py-3 text-center">삭제</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {customerReminderSettings.rules.map((rule) => (
+                        <tr key={rule.id}>
+                          <td className="px-3 py-3 font-medium text-gray-900">
+                            <div>{rule.label}</div>
+                            <div className="text-[11px] text-gray-500 mt-1">{rule.id}</div>
+                          </td>
+                          <td className="px-3 py-3 text-center">
+                            <select
+                              value={rule.dateBasis}
+                              onChange={(event) => {
+                                updateCustomerRule(rule.id, (current) => ({
+                                  ...current,
+                                  dateBasis: event.target.value as ReminderDateBasis,
+                                }));
+                              }}
+                              className="rounded-md border border-gray-300 px-2 py-1 text-xs"
+                            >
+                              {(REMINDER_DATE_BASIS_OPTIONS[rule.serviceType] || []).map((option) => (
+                                <option key={`${rule.id}:${option.value}`} value={option.value}>{option.label}</option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="px-3 py-3 text-center">
+                            <button
+                              type="button"
+                              onClick={() => updateCustomerRule(rule.id, (current) => ({ ...current, enabled: !current.enabled }))}
+                              className={`inline-flex items-center whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold ${
+                                rule.enabled ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'
+                              }`}
+                            >
+                              {rule.enabled ? <ToggleRight className="mr-1.5 h-4 w-4" /> : <ToggleLeft className="mr-1.5 h-4 w-4" />}
+                              {rule.enabled ? '사용중' : '중지중'}
+                            </button>
+                          </td>
+                          <td className="px-3 py-3 text-center">
+                            <input
+                              type="number"
+                              min={0}
+                              max={30}
+                              value={rule.daysBefore}
+                              onChange={(event) => {
+                                const value = Number(event.target.value);
+                                updateCustomerRule(rule.id, (current) => ({ ...current, daysBefore: Number.isFinite(value) ? Math.max(0, Math.min(30, value)) : 0 }));
+                              }}
+                              className="w-20 rounded-md border border-gray-300 px-2 py-1 text-right text-sm"
+                            />
+                          </td>
+                          <td className="px-3 py-3 align-top">
+                            <textarea
+                              value={rule.title}
+                              onChange={(event) => updateCustomerRule(rule.id, (current) => ({ ...current, title: event.target.value }))}
+                              rows={2}
+                              className="w-full min-w-[16rem] rounded-md border border-gray-300 px-2 py-1 text-sm leading-relaxed"
+                            />
+                          </td>
+                          <td className="px-3 py-3 align-top">
+                            <textarea
+                              value={rule.body}
+                              onChange={(event) => updateCustomerRule(rule.id, (current) => ({ ...current, body: event.target.value }))}
+                              rows={4}
+                              className="w-full min-w-[24rem] rounded-md border border-gray-300 px-2 py-1 text-sm leading-relaxed"
+                            />
+                          </td>
+                          <td className="px-3 py-3 text-center">
+                            <button
+                              type="button"
+                              onClick={() => deleteCustomerRule(rule.id)}
+                              className="inline-flex items-center whitespace-nowrap rounded-md border border-red-200 bg-red-50 px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-100"
+                            >
+                              <Trash2 className="mr-1 h-3.5 w-3.5" /> 삭제
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
+                  <h4 className="text-sm font-semibold text-gray-900 mb-3">알림 항목 추가</h4>
+                  <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+                    <input
+                      type="text"
+                      placeholder="ID (예: airport_dropoff_d2)"
+                      value={newReminderRule.id}
+                      onChange={(event) => setNewReminderRule((prev) => ({ ...prev, id: event.target.value }))}
+                      className="rounded-md border border-gray-300 px-3 py-2 text-sm"
+                    />
+                    <input
+                      type="text"
+                      placeholder="항목 이름"
+                      value={newReminderRule.label}
+                      onChange={(event) => setNewReminderRule((prev) => ({ ...prev, label: event.target.value }))}
+                      className="rounded-md border border-gray-300 px-3 py-2 text-sm"
+                    />
+                    <select
+                      value={newReminderRule.serviceType}
+                      onChange={(event) => {
+                        const serviceType = event.target.value as ReminderServiceType;
+                        const nextBasis = REMINDER_DATE_BASIS_OPTIONS[serviceType]?.[0]?.value || 'usage';
+                        setNewReminderRule((prev) => ({ ...prev, serviceType, dateBasis: nextBasis }));
+                      }}
+                      className="rounded-md border border-gray-300 px-3 py-2 text-sm"
+                    >
+                      {REMINDER_SERVICE_OPTIONS.map((option) => (
+                        <option key={`service:${option.value}`} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={newReminderRule.dateBasis}
+                      onChange={(event) => setNewReminderRule((prev) => ({ ...prev, dateBasis: event.target.value as ReminderDateBasis }))}
+                      className="rounded-md border border-gray-300 px-3 py-2 text-sm"
+                    >
+                      {(REMINDER_DATE_BASIS_OPTIONS[newReminderRule.serviceType] || []).map((option) => (
+                        <option key={`basis:${option.value}`} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
+                    <input
+                      type="number"
+                      min={0}
+                      max={30}
+                      placeholder="N일 전"
+                      value={newReminderRule.daysBefore}
+                      onChange={(event) => setNewReminderRule((prev) => ({ ...prev, daysBefore: Number(event.target.value || 0) }))}
+                      className="rounded-md border border-gray-300 px-3 py-2 text-sm"
+                    />
+                    <textarea
+                      placeholder="제목 템플릿"
+                      value={newReminderRule.title}
+                      onChange={(event) => setNewReminderRule((prev) => ({ ...prev, title: event.target.value }))}
+                      rows={2}
+                      className="rounded-md border border-gray-300 px-3 py-2 text-sm leading-relaxed md:col-span-2"
+                    />
+                    <textarea
+                      placeholder="내용 템플릿"
+                      value={newReminderRule.body}
+                      onChange={(event) => setNewReminderRule((prev) => ({ ...prev, body: event.target.value }))}
+                      rows={4}
+                      className="rounded-md border border-gray-300 px-3 py-2 text-sm leading-relaxed md:col-span-2 lg:col-span-4"
+                    />
+                  </div>
+                  <div className="mt-3 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={addCustomerRule}
+                      className="inline-flex items-center whitespace-nowrap rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+                    >
+                      <Plus className="mr-1.5 h-4 w-4" /> 항목 추가
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-4 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3 text-xs text-indigo-900">
+                  치환 키: {'{service}'} {'{days}'} {'{date}'}
+                </div>
+              </>
             )}
           </section>
         )}

@@ -2,11 +2,9 @@
 import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import PageWrapper from '../../../components/PageWrapper';
-import SectionBox from '../../../components/SectionBox';
 import Link from 'next/link';
 import supabase from '@/lib/supabase';
 import logger from '../../../lib/logger';
-import { Home } from 'lucide-react';
 
 function DirectBookingContent() {
     const router = useRouter();
@@ -655,16 +653,6 @@ function DirectBookingContent() {
     return (
         <PageWrapper
             title={`🎯 ${getUserDisplayName()}님, 바로 예약하기`}
-            actions={
-                <button
-                    type="button"
-                    onClick={handleGoHome}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium"
-                >
-                    <Home className="w-4 h-4" />
-                    홈
-                </button>
-            }
         >
             {/* 로딩 상태 */}
             {isLoading && (
@@ -704,7 +692,7 @@ function DirectBookingContent() {
                         <div className="space-y-4 text-sm text-gray-700 leading-relaxed">
                             <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg mb-4">
                                 <p className="font-semibold text-blue-900">
-                                    스테이하롱 트래블의 <span className="underline">숙박형 크루즈 예약</span> 신청서 입니다.
+                                    스테이하롱 트래블의 크루즈 예약 신청서 입니다.
                                 </p>
                                 <p className="text-blue-800 mt-2">각 항목을 빠짐없이 작성 부탁드립니다^^</p>
                             </div>
@@ -1588,8 +1576,7 @@ function DirectBookingContent() {
                             </div>
                         )}
 
-                        <SectionBox title="예약할 서비스를 선택하세요">
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div className="grid grid-cols-2 gap-2.5">
                                 {services.map((service, index) => {
                                     const isCompleted = completedServices.includes(service.type);
                                     const isApproved = reservationStatusMap[service.type] === 'approved';
@@ -1609,66 +1596,19 @@ function DirectBookingContent() {
 
                                     return (
                                         <ServiceCard key={index}>
-                                            <div className="relative overflow-hidden bg-white border border-gray-200 rounded-xl shadow-lg transform transition-all duration-300 ease-out hover:shadow-xl hover:-translate-y-2 cursor-pointer">
-                                                <div className="absolute inset-0 bg-gradient-to-br from-blue-500 to-cyan-500 opacity-0 transition-opacity duration-300 group-hover:opacity-5"></div>
-
-                                                {/* 완료/승인 배지 */}
-                                                {isCompleted && isApproved && (
-                                                    <div className="absolute top-2 right-2 bg-blue-600 text-white text-xs px-2 py-1 rounded-full font-semibold z-10 flex items-center gap-1">
-                                                        <span>✅</span>
-                                                        <span>승인됨</span>
+                                            <div className="bg-white border border-slate-300 rounded-lg p-2 hover:shadow-md transition shadow-sm flex flex-col gap-1 min-h-24">
+                                                <div className="flex items-center gap-2">
+                                                    <div className={`w-8 h-8 flex items-center justify-center rounded-lg ${service.bg} flex-shrink-0`}>
+                                                        <span className="text-base">{service.icon}</span>
                                                     </div>
-                                                )}
-                                                {isCompleted && !isApproved && (
-                                                    <div className="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full font-semibold z-10 flex items-center gap-1">
-                                                        <span>📝</span>
-                                                        <span>완료</span>
-                                                    </div>
-                                                )}
-
-                                                <div className="relative p-4">
-                                                    <div className="flex items-center mb-4">
-                                                        <div className="text-4xl mr-4 transform transition-transform duration-300 group-hover:scale-110">
-                                                            {service.icon}
-                                                        </div>
-                                                        <div>
-                                                            <h3 className="text-lg font-bold transition-colors duration-300 text-gray-800 group-hover:text-blue-700">
-                                                                {service.label}
-                                                            </h3>
-                                                            <p className="text-sm mt-1 text-gray-600">
-                                                                {service.description}
-                                                            </p>
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="flex items-center justify-between">
-                                                        <span className={`text-sm font-medium ${isCompleted
-                                                            ? 'text-green-600'
-                                                            : 'text-blue-600'
-                                                            }`}>
-                                                            {isCompleted
-                                                                ? '추가하기 →'
-                                                                : '예약하기 →'}
-                                                        </span>
-                                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors duration-300 ${isCompleted
-                                                            ? 'bg-green-100 group-hover:bg-green-200'
-                                                            : 'bg-blue-100 group-hover:bg-blue-200'
-                                                            }`}>
-                                                            <span className={`text-sm ${isCompleted ? 'text-green-600' : 'text-blue-600'
-                                                                }`}>
-                                                                ➕
-                                                            </span>
-                                                        </div>
-                                                    </div>
+                                                    <h3 className="text-sm font-semibold text-slate-900">{service.label}</h3>
                                                 </div>
-
-                                                <div className={`absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r ${service.color} transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left`}></div>
+                                                <p className="text-xs text-slate-500 flex-grow">{service.description}</p>
                                             </div>
                                         </ServiceCard>
                                     );
                                 })}
-                            </div>
-                        </SectionBox>
+                        </div>
                     </>
                 )
             }

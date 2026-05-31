@@ -134,12 +134,6 @@ export default function VehiclePage() {
         <div className="container mx-auto px-4 py-8">
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-3xl font-bold">🚐 크루즈 차량 예약</h1>
-            <button
-              onClick={() => router.push('/mypage/quotes/new')}
-              className="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg transition-colors"
-            >
-              🏠 홈으로
-            </button>
           </div>
 
           <div className="bg-white/10 backdrop-blur rounded-lg p-6">

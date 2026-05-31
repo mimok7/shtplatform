@@ -67,56 +67,70 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="max-w-sm mx-auto mt-12 p-4 bg-white shadow rounded">
-      <div className="flex justify-start mb-4">
-        <Image src="/logo-full.png" alt="스테이하롱 전체 로고" width={320} height={80} unoptimized priority />
+    <div className="max-w-md mx-auto mt-8 px-3 py-6">
+      {/* 로고 */}
+      <div className="mb-8 flex justify-center">
+        <Image src="/logo-full.png" alt="스테이하롱" width={280} height="70" unoptimized priority />
       </div>
-      <h2 className="text-2xl font-bold mb-6 text-left">📝 신규예약</h2>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <input
-          type="email"
-          name="email"
-          autoComplete="email"
-          placeholder="이메일을 입력하세요"
-          value={form.email}
-          onChange={handleChange}
-          required
-          className="w-full border rounded px-3 py-2"
-        />
-        <input
-          type="password"
-          name="password"
-          autoComplete="new-password"
-          placeholder="비밀번호는 6자리 이상 입력"
-          value={form.password}
-          onChange={handleChange}
-          required
-          minLength={6}
-          className="w-full border rounded px-3 py-2"
-        />
 
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full bg-blue-700 text-white py-2 rounded hover:bg-blue-800 disabled:opacity-50"
-        >
-          {loading ? '처리 중...' : '신규예약'}
-        </button>
-      </form>
+      {/* 메인 폼 */}
+      <div className="bg-white rounded-lg p-6 mb-6">
+        <h2 className="text-xl font-semibold text-slate-900 mb-4 text-center">신규 예약</h2>
 
-      <div className="text-left mt-4">
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div>
+            <label className="block text-xs text-slate-600 mb-1.5 font-medium">이메일</label>
+            <input
+              type="email"
+              name="email"
+              placeholder="사용할 이메일 입력"
+              value={form.email}
+              onChange={handleChange}
+              required
+              className="w-full border border-slate-200 px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs text-slate-600 mb-1.5 font-medium">비밀번호</label>
+            <input
+              type="password"
+              name="password"
+              placeholder="6자 이상 입력"
+              value={form.password}
+              onChange={handleChange}
+              required
+              minLength={6}
+              className="w-full border border-slate-200 px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-blue-600 text-white py-2.5 rounded-lg font-medium text-sm hover:bg-blue-700 transition disabled:opacity-50 mt-4"
+          >
+            {loading ? '가입 중...' : '신규 예약'}
+          </button>
+        </form>
+      </div>
+
+      {/* 안내 메시지 */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800">
+        <p className="font-medium mb-1">💡 안내</p>
+        <p className="text-xs leading-relaxed">
+          입력하신 이메일과 비밀번호는 예약 확인 및 관리 시 사용됩니다.
+        </p>
+      </div>
+
+      {/* 로그인 링크 */}
+      <div className="mt-4 text-center">
         <button
           onClick={() => router.push('/login')}
-          className="text-blue-700 hover:text-blue-800 underline"
+          className="text-sm text-slate-600 hover:text-blue-600"
         >
-          이미 계정이 있으신가요? 예약 신청/확인
+          이미 계정이 있으신가요? <span className="font-medium">로그인</span>
         </button>
-      </div>
-
-      <div className="mt-6 p-4 bg-blue-100 rounded-lg">
-        <p className="text-sm text-blue-700">
-          💡 이메일과 비밀번호는 향후 예약내용을 확인하실 때 사용됩니다.
-        </p>
       </div>
     </div>
   );

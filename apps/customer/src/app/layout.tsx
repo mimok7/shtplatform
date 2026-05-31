@@ -30,8 +30,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="ko">
-      <body className={`${inter.className} bg-background text-foreground antialiased flex flex-col min-h-screen`}>
+    <html lang="ko" suppressHydrationWarning>
+      <body className={`${inter.className} bg-slate-100 text-foreground antialiased flex flex-col min-h-screen`}>
         <ServiceWorkerRegister />
         <PushNotificationManager />
         <QueryProvider>

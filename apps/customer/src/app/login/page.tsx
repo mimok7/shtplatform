@@ -117,105 +117,107 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="max-w-sm mx-auto mt-12 p-4 bg-white shadow rounded">
-      <div className="flex justify-start mb-4">
-        <Image src="/logo-full.png" alt="스테이하롱 전체 로고" width={320} height={80} unoptimized priority />
+    <div className="max-w-md mx-auto mt-8 px-3 py-6">
+      {/* 로고 */}
+      <div className="mb-8 flex justify-center">
+        <Image src="/logo-full.png" alt="스테이하롱" width={280} height="70" unoptimized priority />
       </div>
-      <h2 className="text-2xl font-bold mb-6 text-left">🔐 예약 신청/확인</h2>
-      <form onSubmit={handleLogin} className="space-y-4">
-        <input
-          id="login-email"
-          name="email"
-          type="email"
-          autoComplete="email"
-          placeholder="이메일"
-          className="w-full border p-2 rounded"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-        />
-        <p className="text-sm text-gray-700 mt-1">
-          견적 신청시 입력하신 이메일과 비밀번호를 입력해주세요.
-        </p>
-        <input
-          id="login-password"
-          name="password"
-          type="password"
-          autoComplete="current-password"
-          placeholder="비밀번호"
-          className="w-full border p-2 rounded"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-        />
-        <p className="text-sm text-gray-700 mt-1">비밀번호는 6자 이상 입력해주세요.</p>
-        <button
-          type="submit"
-          className="bg-blue-700 text-white w-full py-2 rounded hover:bg-blue-800 transition disabled:opacity-50"
-          disabled={loading}
-        >
-          {loading ? '처리 중...' : '예약 신청/확인'}
-        </button>
-      </form>
 
-      <div className="mt-4 text-left">
-        <p className="text-sm text-gray-700">
-          계정이 없으신가요?{' '}
+      {/* 메인 폼 */}
+      <div className="bg-white rounded-lg p-6 mb-6">
+        <h2 className="text-xl font-semibold text-slate-900 mb-4 text-center">예약 신청/확인</h2>
+
+        <form onSubmit={handleLogin} className="space-y-3">
+          <div>
+            <label className="block text-xs text-slate-600 mb-1.5 font-medium">이메일</label>
+            <input
+              id="login-email"
+              type="email"
+              placeholder="예약 시 입력한 이메일"
+              className="w-full border border-slate-200 px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs text-slate-600 mb-1.5 font-medium">비밀번호</label>
+            <input
+              id="login-password"
+              type="password"
+              placeholder="6자 이상 입력"
+              className="w-full border border-slate-200 px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+          </div>
+
           <button
-            onClick={() => router.push('/signup')}
-            className="text-blue-700 hover:text-blue-800 underline"
+            type="submit"
+            className="w-full bg-blue-600 text-white py-2.5 rounded-lg font-medium text-sm hover:bg-blue-700 transition disabled:opacity-50 mt-4"
+            disabled={loading}
           >
-            신규예약
+            {loading ? '로그인 중...' : '로그인'}
           </button>
-        </p>
+        </form>
       </div>
 
-      <div className="mt-3 text-left">
+      {/* 링크 영역 */}
+      <div className="flex flex-col items-center gap-3 text-sm">
         <button
-          type="button"
-          onClick={() => { setShowForgot((v) => !v); setForgotMessage(null); }}
-          className="text-sm text-gray-500 hover:text-gray-700 underline"
+          onClick={() => router.push('/signup')}
+          className="text-blue-600 hover:text-blue-700 font-medium"
+        >
+          신규 가입
+        </button>
+        <button
+          onClick={() => setShowForgot(!showForgot)}
+          className="text-slate-500 hover:text-slate-700"
         >
           비밀번호를 잊으셨나요?
         </button>
       </div>
 
+      {/* 비밀번호 찾기 폼 */}
       {showForgot && (
-        <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
-          <h3 className="text-sm font-semibold text-gray-800 mb-2">임시 비밀번호 발송</h3>
-          <p className="text-xs text-gray-600 mb-3">
-            예약 시 입력한 <strong>이름과 이메일</strong>을 입력하시면 임시 비밀번호를 보내드립니다.
-            받으신 임시 비밀번호로 로그인 후 <strong>내 정보</strong>에서 새 비밀번호로 변경해 주세요.
-          </p>
-          <form onSubmit={handleForgotPassword} className="space-y-2">
-            <input
-              type="text"
-              placeholder="이름 (예약 시 입력한 이름)"
-              className="w-full border p-2 rounded text-sm"
-              value={forgotName}
-              onChange={(e) => setForgotName(e.target.value)}
-              required
-            />
-            <input
-              type="email"
-              placeholder="이메일 (예약 시 사용한 이메일)"
-              className="w-full border p-2 rounded text-sm"
-              value={forgotEmail}
-              onChange={(e) => setForgotEmail(e.target.value)}
-              required
-            />
+        <div className="mt-6 bg-slate-50 border border-slate-200 rounded-lg p-4">
+          <h3 className="text-sm font-semibold text-slate-900 mb-3">임시 비밀번호 발송</h3>
+          <form onSubmit={handleForgotPassword} className="space-y-2.5">
+            <div>
+              <input
+                type="text"
+                placeholder="이름 (예약 시 입력한 이름)"
+                className="w-full border border-slate-200 px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={forgotName}
+                onChange={(e) => setForgotName(e.target.value)}
+                required
+              />
+            </div>
+            <div>
+              <input
+                type="email"
+                placeholder="이메일 (예약 시 입력한 이메일)"
+                className="w-full border border-slate-200 px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={forgotEmail}
+                onChange={(e) => setForgotEmail(e.target.value)}
+                required
+              />
+            </div>
             <button
               type="submit"
+              className="w-full bg-blue-600 text-white py-2 rounded-lg font-medium text-sm hover:bg-blue-700 transition disabled:opacity-50"
               disabled={forgotLoading}
-              className="w-full bg-orange-500 text-white py-2 rounded text-sm hover:bg-orange-600 disabled:opacity-50"
             >
-              {forgotLoading ? '발송 중...' : '임시 비밀번호 이메일 받기'}
+              {forgotLoading ? '발송 중...' : '임시 비밀번호 발송'}
             </button>
           </form>
+
           {forgotMessage && (
-            <p className="mt-2 text-xs whitespace-pre-line rounded bg-white border px-3 py-2 text-gray-700">
+            <div className={`mt-3 text-xs p-2.5 rounded ${forgotMessage.includes('발송') ? 'bg-blue-50 text-blue-800' : 'bg-red-50 text-red-800'}`}>
               {forgotMessage}
-            </p>
+            </div>
           )}
         </div>
       )}

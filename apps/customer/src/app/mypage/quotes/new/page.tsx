@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Home } from 'lucide-react';
 import supabase from '@/lib/supabase';
 import { createQuote, getQuoteWithItems } from '@/lib/quoteUtils';
 import { Quote } from '@/lib/types';
@@ -260,14 +259,6 @@ function QuoteManagementContent() {
             </div>
 
             <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => router.push('/mypage')}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium"
-              >
-                <Home className="w-4 h-4" />
-                홈
-              </button>
               {/* 견적 확인 버튼 */}
               {quoteId && (
                 <button

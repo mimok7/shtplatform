@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import serviceSupabase from '@/lib/serviceSupabase';
 
+export const dynamic = 'force-dynamic';
+
 type SubscriptionRow = {
   id: string;
   app_name: string | null;
@@ -132,7 +134,16 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    return NextResponse.json({ rows });
+    return NextResponse.json(
+      { rows },
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate',
+          Pragma: 'no-cache',
+          Expires: '0',
+        },
+      }
+    );
   } catch (error: any) {
     return NextResponse.json({ error: error?.message || '서버 오류' }, { status: 500 });
   }
@@ -153,16 +164,22 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'subscriptionId 필수' }, { status: 400 });
     }
 
-    const { error } = await serviceSupabase!
+    const { data: updatedRows, error } = await serviceSupabase!
       .from('push_subscriptions')
       .update({
         is_active: isActive,
         last_used_at: new Date().toISOString(),
       })
-      .eq('id', subscriptionId);
+      .eq('id', subscriptionId)
+      .select('id')
+      .limit(1);
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    if (!updatedRows || updatedRows.length === 0) {
+      return NextResponse.json({ error: '대상 구독을 찾을 수 없습니다.' }, { status: 404 });
     }
 
     return NextResponse.json({ success: true, id: subscriptionId, isActive });

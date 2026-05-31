@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import supabase from '@/lib/supabase';
 import { getSessionUser } from '@/lib/authHelpers';
 import PageWrapper from '@/components/PageWrapper';
-import SectionBox from '@/components/SectionBox';
+
 
 function HotelReservationContent() {
     const router = useRouter();
@@ -387,21 +387,10 @@ function HotelReservationContent() {
     return (
         <PageWrapper>
             <div className="space-y-6">
-                {/* 헤더 */}
-                <div className="flex justify-between items-center">
-                    <div>
-                        <h1 className="text-lg font-bold text-gray-800">
-                            🏨 호텔 서비스 {isEditMode ? '수정' : '예약'}
-                        </h1>
-                        <p className="text-sm text-gray-600 mt-1">행복 여행 이름: {quote.title}</p>
-                        {isEditMode && (
-                            <p className="text-sm text-blue-600 mt-1">📝 기존 예약을 수정하고 있습니다</p>
-                        )}
-                    </div>
-                </div>
-
                 {/* 사용 가능한 서비스 옵션들 - 정보 표시만 (선택 불가) */}
-                <SectionBox title="가격에 포함된 호텔 서비스">
+                <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm mb-6">
+                  <h3 className="text-base font-semibold text-gray-900 mb-4">가격에 포함된 호텔 서비스</h3>
+                  <div className="space-y-4">
                     {availableServices.length > 0 && (
                         <div className="mb-6">
                             <h4 className="text-md font-medium text-orange-800 mb-3">🏨 호텔 서비스</h4>
@@ -426,11 +415,14 @@ function HotelReservationContent() {
                             </div>
                         </div>
                     )}
-                </SectionBox>
+                  </div>
+                </div>
 
                 {/* 입력 폼 - 서비스 존재 여부에 따라 자동 표시 */}
                 {availableServices.length > 0 && (
-                    <SectionBox title="호텔 상세 정보">
+                    <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm mb-6">
+                      <h3 className="text-base font-semibold text-gray-900 mb-4">호텔 상세 정보</h3>
+                      <div className="space-y-4">
                         <div className="space-y-6">
                             {/* 호텔 기본 정보 */}
                             <div className="bg-orange-50 rounded-lg p-4">
@@ -534,7 +526,8 @@ function HotelReservationContent() {
                                 />
                             </div>
                         </div>
-                    </SectionBox>
+                      </div>
+                    </div>
                 )}
 
                 {/* 예약 버튼 */}

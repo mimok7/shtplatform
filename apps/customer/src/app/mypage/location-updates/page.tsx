@@ -9,7 +9,6 @@ import { isLocationFieldKey, normalizeLocationEnglishUpper } from '@/lib/locatio
 import { useLoadingTimeout } from '@/hooks/useLoadingTimeout';
 import { getAuthUserSafe } from '@/lib/authSafe';
 import { clearInvalidSession, isInvalidRefreshTokenError } from '@/lib/authRecovery';
-import { Home } from 'lucide-react';
 
 type ReservationType = 'airport' | 'rentcar' | 'tour' | 'car' | 'cruise_car' | 'sht_car' | 'sht' | 'car_sht' | 'cruise' | 'hotel';
 
@@ -844,16 +843,7 @@ export default function LocationUpdatesPage() {
   }
 
   return (
-    <PageWrapper title="📍 장소 수정" actions={
-      <button
-        type="button"
-        onClick={() => router.push('/mypage')}
-        className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium"
-      >
-        <Home className="w-4 h-4" />
-        홈
-      </button>
-    }>
+    <PageWrapper title="📑 장소 수정">
       <SectionBox title="장소 수정">
         <div className="space-y-4">
           <div className="flex items-center justify-between">

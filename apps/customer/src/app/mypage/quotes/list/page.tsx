@@ -31,10 +31,6 @@ export default function QuotesUnifiedPage() {
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
   const [creating, setCreating] = useState(false);
 
-  const handleGoHome = () => {
-    router.push('/mypage');
-  };
-
   const ensureUserProfile = async (authUser: any) => {
     const fallbackName = authUser?.user_metadata?.display_name
       || authUser?.user_metadata?.name
@@ -261,12 +257,6 @@ export default function QuotesUnifiedPage() {
             className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {creating ? '⏳ 생성 중...' : '➕ 새 견적 작성'}
-          </button>
-          <button
-            onClick={handleGoHome}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium shadow-sm"
-          >
-            🏠 홈
           </button>
         </>
       }

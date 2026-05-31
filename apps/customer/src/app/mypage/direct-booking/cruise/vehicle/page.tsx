@@ -6,6 +6,7 @@ import supabase from '../../../../../lib/supabase';
 import { refreshAuthBeforeSubmit } from '../../../../../lib/authHelpers';
 import { useLoadingTimeout } from '../../../../../hooks/useLoadingTimeout';
 import { hasInvalidLocationChars, normalizeLocationEnglishUpper } from '../../../../../lib/locationInput';
+import PageWrapper from '../../../../../components/PageWrapper';
 import ShtCarSeatMap from '../../../../../components/ShtCarSeatMap';
 
 type VehicleRow = {
@@ -872,20 +873,9 @@ function CruiseVehicleContent() {
     }
 
     return (
-        <div className="min-h-screen bg-gray-50">
-            <div className="bg-sky-600 text-white p-6">
-                <div className="container mx-auto">
-                    <h1 className="text-2xl font-bold mb-2">🚗 차량 선택</h1>
-                    <p className="text-sky-100">
-                        {cruiseName ? `${cruiseName} · ` : ''}{schedule}{checkin ? ` · ${checkin}` : ''}
-                    </p>
-                </div>
-            </div>
-
-            <div className="container mx-auto px-4 py-6">
-                <div className="max-w-4xl mx-auto">
-                    <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-lg p-6">
-                        <h2 className="text-xl font-bold text-gray-800 mb-4">📝 차량 예약</h2>
+        <PageWrapper title="📝 차량 예약">
+            <div className="w-full">
+                <form onSubmit={handleSubmit} className="space-y-4">
 
                         <div className="bg-blue-50 rounded-lg p-4 mb-4 border border-blue-200">
                             <p className="text-blue-700 text-sm">
@@ -1204,7 +1194,6 @@ function CruiseVehicleContent() {
                         </div>
                     </form>
                 </div>
-            </div>
 
             {isShtCarModalOpen && (
                 <ShtCarSeatMap
@@ -1217,7 +1206,7 @@ function CruiseVehicleContent() {
                     preventCloseWithoutSave={true}
                 />
             )}
-        </div>
+        </PageWrapper>
     );
 }
 
