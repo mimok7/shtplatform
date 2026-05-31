@@ -6,12 +6,12 @@ import supabase from '@/lib/supabase';
 
 interface MismatchRow {
   rcc_id: string;
-  re_id: string;
   user_email: string;
   user_name: string;
   checkin: string;
   pickup_datetime: string;
   diff_days: number;
+  way_type: string;
 }
 
 export default function CruiseCarDatesPage() {
@@ -31,7 +31,7 @@ export default function CruiseCarDatesPage() {
       // Step 1: reservation_cruise_car 전체 조회
       const { data: carRows, error: carErr } = await supabase
         .from('reservation_cruise_car')
-        .select('id, reservation_id, pickup_datetime')
+        .select('id, reservation_id, pickup_datetime, way_type')
         .not('pickup_datetime', 'is', null);
 
       if (carErr || !carRows?.length) {
@@ -107,12 +107,12 @@ export default function CruiseCarDatesPage() {
 
         result.push({
           rcc_id: car.id as string,
-          re_id: vehicleRes.re_id as string,
           user_email: user?.email || '-',
           user_name: user?.name || '-',
           checkin: checkinDate,
           pickup_datetime: pickupDate,
           diff_days: diffDays,
+          way_type: (car.way_type as string) || '-',
         });
       }
 
@@ -244,12 +244,13 @@ export default function CruiseCarDatesPage() {
                       className="w-3.5 h-3.5"
                     />
                   </th>
-                  <th className="px-3 py-2 text-left text-gray-600 font-medium">예약자 이메일</th>
-                  <th className="px-3 py-2 text-left text-gray-600 font-medium">예약 ID</th>
+                  <th className="px-3 py-2 text-left text-gray-600 font-medium">이름</th>
+                  <th className="px-3 py-2 text-left text-gray-600 font-medium">이메일</th>
+                  <th className="px-3 py-2 text-left text-gray-600 font-medium">운송 방식</th>
                   <th className="px-3 py-2 text-left text-gray-600 font-medium">체크인</th>
                   <th className="px-3 py-2 text-left text-gray-600 font-medium">픽업일자</th>
                   <th className="px-3 py-2 text-left text-gray-600 font-medium">비고</th>
-                  <th className="px-3 py-2 text-left text-gray-600 font-medium">수정</th>
+                  <th className="px-3 py-2 text-left text-gray-600 font-medium">작업</th>
                 </tr>
               </thead>
               <tbody>
@@ -267,15 +268,9 @@ export default function CruiseCarDatesPage() {
                         className="w-3.5 h-3.5"
                       />
                     </td>
-                    <td className="px-3 py-2 text-gray-700">
-                      {row.user_email}
-                      {row.user_name && row.user_name !== '-' && (
-                        <span className="ml-1 text-gray-400">({row.user_name})</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2 text-gray-500 font-mono">
-                      {row.re_id.slice(0, 8)}...
-                    </td>
+                    <td className="px-3 py-2 text-gray-800 font-semibold">{row.user_name || '-'}</td>
+                    <td className="px-3 py-2 text-gray-600">{row.user_email}</td>
+                    <td className="px-3 py-2 text-gray-600 font-medium">{row.way_type}</td>
                     <td className="px-3 py-2 text-green-700 font-medium">{row.checkin}</td>
                     <td className="px-3 py-2 text-red-600 font-medium">{row.pickup_datetime}</td>
                     <td className="px-3 py-2 text-gray-500">

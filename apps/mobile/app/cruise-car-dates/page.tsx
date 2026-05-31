@@ -7,12 +7,12 @@ import { ArrowLeft, Calendar, CheckSquare, Home, Square } from 'lucide-react';
 
 interface MismatchRow {
   rcc_id: string;
-  re_id: string;
   user_email: string;
   user_name: string;
   checkin: string;
   pickup_datetime: string;
   diff_days: number;
+  way_type: string;
 }
 
 export default function MobileCruiseCarDatesPage() {
@@ -31,7 +31,7 @@ export default function MobileCruiseCarDatesPage() {
     try {
       const { data: carRows, error: carErr } = await supabase
         .from('reservation_cruise_car')
-        .select('id, reservation_id, pickup_datetime')
+        .select('id, reservation_id, pickup_datetime, way_type')
         .not('pickup_datetime', 'is', null);
 
       if (carErr || !carRows?.length) {
@@ -100,12 +100,12 @@ export default function MobileCruiseCarDatesPage() {
 
         result.push({
           rcc_id: String(car.id),
-          re_id: String(vehicleRes.re_id),
           user_email: user?.email || '-',
           user_name: user?.name || '-',
           checkin: checkinDate,
           pickup_datetime: pickupDate,
           diff_days: diffDays,
+          way_type: (car.way_type as string) || '-',
         });
       }
 
@@ -263,11 +263,9 @@ export default function MobileCruiseCarDatesPage() {
                     </button>
 
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-xs font-semibold text-slate-800">{row.user_email}</div>
-                      {row.user_name && row.user_name !== '-' && (
-                        <div className="truncate text-[11px] text-slate-500">{row.user_name}</div>
-                      )}
-                      <div className="mt-1 text-[11px] text-slate-400">예약 ID: {row.re_id.slice(0, 8)}...</div>
+                      <div className="text-sm font-bold text-slate-900">{row.user_name || '-'}</div>
+                      <div className="text-xs text-slate-500 mt-0.5">{row.user_email}</div>
+                      <div className="mt-1 text-[11px] font-semibold text-blue-600">운송 방식: {row.way_type}</div>
                     </div>
 
                     <button
