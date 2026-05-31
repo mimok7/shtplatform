@@ -102,7 +102,7 @@ echo 로컬에 다운로드한 backup .dump 파일을 준비한 후 계속하세
 echo (GitHub Actions Artifact에서 zip 파일을 다운받고 압축을 해제하여 .dump 파일을 구해야 합니다)
 echo.
 
-set /p BACKUP_FILE="백업 파일 경로를 입력하세요 (예: C:\Downloads\backup_2026-04-28_030001.dump): "
+set /p BACKUP_FILE="백업 파일 경로를 입력하세요 (예: C:\\Downloads\\backup_2026-04-28_030001.dump): "
 
 if not exist "!BACKUP_FILE!" (
     echo 오류: 파일을 찾을 수 없습니다: !BACKUP_FILE!

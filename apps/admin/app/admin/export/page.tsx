@@ -88,7 +88,7 @@ export default function ExportPage() {
     return XLSX.utils.json_to_sheet(flattened);
   };
 
-  const sanitize = (name: string) => name.replace(/[\\/?*\[\]:]/g, '_').slice(0, 31);
+  const sanitize = (name: string) => name.replace(/[\\/?*:[\]]/g, '_').slice(0, 31);
 
   // === 1. 예약자별 ===
   const exportByUser = async (allUsers: boolean) => {

@@ -240,25 +240,10 @@ export default function UnifiedConfirmation({ data, isPackage }: UnifiedConfirma
                                         const vehicleType = priceInfo?.vehicle_type || '-';
                                         customInfo = `차량: ${vehicleType} • 픽업: ${pickupDt} • 반납: ${returnDt} • 타입: ${rentalType}`;
                                         customDetails = `픽업지: ${d.pickup_location || '-'} • 목적지: ${d.destination || '-'} • 경유지: ${d.via_location || '-'} • 탑승: ${d.car_count || '-'}대 • 승객: ${d.passenger_count || '-'}명 • 수하물: ${d.luggage_count || 0}개 • 별도요청: ${d.request_note || '-'}`;
-                                    } else if (r.service_type === 'airport') {
-                                        // 공항 차량: 구분, 경로, 차종
-                                        const category = d.category || priceInfo?.airport_category || '-';
-                                        const route = d.route || priceInfo?.airport_route || '-';
-                                        const carType = priceInfo?.airport_car_type || '-';
-                                        const flightInfo = `${d.ra_flight_number || '항공편정보없음'}`;
-                                        customInfo = `경로: ${route} • 차종: ${carType} • 구분: ${category} • 항공편: ${flightInfo}`;
-                                        customDetails = `일시: ${d.ra_datetime?.split('T')[0] || '-'} ${d.ra_datetime?.split('T')[1]?.slice(0, 5) || ''} • 장소: ${d.ra_airport_location || '-'} • 차량수: ${d.ra_car_count || '-'}대 • 승객: ${d.ra_passenger_count || '-'}명 • 수하물: ${d.ra_luggage_count || 0}개 • 경유지: ${d.ra_stopover_location || '-'} (${d.ra_stopover_wait_minutes || 0}분) • 상태: ${d.ra_is_processed === 'true' ? '처리완료' : '대기중'} • 별도요청: ${d.request_note || '-'}`;
                                     } else if (r.service_type === 'sht') {
                                         // SHT 차량: 차량정보
                                         customInfo = `차량: ${d.vehicle_number || '-'} • 좌석: ${d.seat_number || '-'} • 카테고리: ${d.sht_category || '-'}`;
                                         customDetails = `사용일: ${d.usage_date || '-'} • 픽업: ${d.pickup_location || '-'} • 드랍: ${d.dropoff_location || '-'} • 배정: ${d.dispatch_code || '-'} • 배정내용: ${d.dispatch_memo || '-'}`;
-                                    } else if (r.service_type === 'cruise_car') {
-                                        // 크루즈 차량: 승객수 제외
-                                        const carType = priceInfo?.vehicle_type || d.vehicle_type || '-';
-                                        const route = d.route || priceInfo?.route || '-';
-                                        const rental = d.rental_type || priceInfo?.rental_type || '-';
-                                        customInfo = `경로: ${route} • 차종: ${carType} • 차량수: ${d.car_count || '-'}대 • 렌탈: ${rental}`;
-                                        customDetails = `픽업: ${d.pickup_datetime || '-'} • 장소: ${d.pickup_location || '-'} → ${d.dropoff_location || '-'} • 승객: ${d.passenger_count || '-'}명 • 반납: ${d.return_datetime || '-'} • 배정: ${d.dispatch_code || '-'} • 배정내용: ${d.dispatch_memo || '-'}`;
                                     } else {
                                         // 기타: 기본 요약
                                         customInfo = summarize(d, { exclude: ['price_info'] });

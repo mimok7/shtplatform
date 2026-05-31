@@ -87,8 +87,7 @@ const supabaseProxy: any = new Proxy({}, {
   get(_, prop) {
     const client = initSupabase();
     const obj: any = client || fallbackStub;
-    // @ts-ignore
-    return obj[prop as any];
+    return obj[prop as keyof typeof obj];
   }
 });
 
