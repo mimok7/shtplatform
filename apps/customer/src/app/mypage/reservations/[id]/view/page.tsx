@@ -913,41 +913,22 @@ function ReservationViewInner() {
   const createdDate = new Date(reservation.re_created_at);
 
   return (
-    <PageWrapper>
+    <PageWrapper title="예약 상세 정보">
       <div className="space-y-6 max-w-4xl mx-auto pb-8">
-        {/* 헤더 - 고객 친화적으로 개선 */}
-        <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl p-6 text-white shadow-lg">
-          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-            <div className="flex-1">
-              <div className="flex items-center gap-3 mb-2">
-                <span className="text-4xl">{getTypeIcon(reservation.re_type)}</span>
-                <div>
-                  <h1 className="text-2xl font-bold">{getTypeName(reservation.re_type)} 예약</h1>
-                </div>
-              </div>
-              <div className="mt-4 text-sm">
-                <span className="text-blue-100">
-                  예약일: {createdDate.toLocaleDateString('ko-KR')}
-                </span>
-              </div>
-            </div>
-            <button
-              onClick={() => router.push('/mypage/reservations/list')}
-              className="self-end px-4 py-2 bg-white bg-opacity-20 hover:bg-opacity-30 text-white rounded-lg transition-all text-sm font-medium"
-            >
-              ← 목록으로
-            </button>
-          </div>
-        </div>
 
 
 
         {/* 서비스 상세 - 고객 친화적 카드 UI */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-4 border-b border-gray-200">
-            <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-              {getTypeIcon(reservation.re_type)} {getTypeName(reservation.re_type)} 상세 정보
-            </h2>
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-base font-bold text-gray-800">
+                예약 상세 정보 <span className="text-sm font-medium text-gray-600">(예약일: {createdDate.toLocaleDateString('ko-KR')})</span>
+              </h2>
+              <span className="text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded-full px-2.5 py-1">
+                {getTypeName(reservation.re_type)}
+              </span>
+            </div>
           </div>
           <div className="p-6">
             {serviceDetails && serviceDetails.length > 0 ? (

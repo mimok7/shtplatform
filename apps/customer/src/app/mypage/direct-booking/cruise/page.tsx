@@ -1539,10 +1539,6 @@ function DirectBookingCruiseContent() {
                                             )}
                                         </div>
                                     )}
-                                    <div className="mt-3 flex justify-between border-t-2 border-green-300 pt-3 text-lg font-bold">
-                                        <span>총 예상 금액</span>
-                                        <span className="text-green-700">{formatVND(priceResult.grand_total)}</span>
-                                    </div>
                                 </div>
                             )}
 

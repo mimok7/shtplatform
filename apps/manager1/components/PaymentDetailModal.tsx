@@ -224,8 +224,6 @@ const ServiceDetailSection = ({ payment }: { payment: any }) => {
                                 const pickUnit = (entry: any, count: number, fallback: number) => {
                                     const unit = Number(entry?.unit_price || 0);
                                     if (unit > 0) return unit;
-                                    const total = Number(entry?.total || 0);
-                                    if (count > 0 && total > 0) return Math.round(total / count);
                                     return Number(fallback || 0);
                                 };
                                 const categoryRows = [

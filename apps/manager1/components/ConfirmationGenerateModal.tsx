@@ -108,14 +108,9 @@ const getShtSeatPriceSummary = (detail: any, fallbackAmount = 0) => {
     });
 
     if (grouped.size === 0) {
-        const inferredUnit = passengerCount > 0 && fallbackAmount > 0
-            ? Math.round(fallbackAmount / passengerCount)
-            : 0;
         return {
             amount: fallbackAmount,
-            calcLines: passengerCount > 0 && inferredUnit > 0
-                ? [`${passengerCount}인 × ${inferredUnit.toLocaleString()}동`]
-                : [fallbackAmount > 0 ? `${fallbackAmount.toLocaleString()}동` : '-'],
+            calcLines: [fallbackAmount > 0 ? `${fallbackAmount.toLocaleString()}동` : '-'],
         };
     }
 
@@ -123,16 +118,12 @@ const getShtSeatPriceSummary = (detail: any, fallbackAmount = 0) => {
         .map((type) => [type, grouped.get(type) || 0] as const)
         .filter(([, count]) => count > 0);
     const knownTotal = groupedEntries.reduce((sum, [type, count]) => sum + (Number(seatPriceMap[type] || 0) * count), 0);
-    const missingSeatCount = groupedEntries.reduce((sum, [type, count]) => sum + (seatPriceMap[type] ? 0 : count), 0);
-    const inferredUnit = missingSeatCount > 0 && fallbackAmount > knownTotal
-        ? Math.round((fallbackAmount - knownTotal) / missingSeatCount)
-        : 0;
 
     let total = 0;
     const calcLines: string[] = [];
     groupedEntries.forEach(([type, count]) => {
         if (!count) return;
-        const unit = Number(seatPriceMap[type] || inferredUnit || 0);
+        const unit = Number(seatPriceMap[type] || 0);
         total += unit * count;
         calcLines.push(`${type}좌석 ${count}인 × ${unit.toLocaleString()}동`);
     });
@@ -1605,34 +1596,10 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                                                                 const extraBedCount = storedRoom?.extra_bed?.count ?? d?.extra_bed_count ?? 0;
                                                                 const childExtraBedCount = storedRoom?.child_extra_bed?.count ?? d?.child_extra_bed_count ?? 0;
                                                                 const singleCount = storedRoom?.single?.count ?? d?.single_count ?? 0;
-                                                                // 프로모션(room_selections 기반) 예약에서 storedRoom이 없을 때 가상 룸 생성 (비례 할인 단가)
-                                                                const effectiveRoom = storedRoom || (() => {
-                                                                    if (!roomSelections.length) return null;
-                                                                    const rs = roomSelections[0];
-                                                                    const rsTotal = Number(rs.total_for_selection || rs.subtotal_per_room || 0);
-                                                                    if (rsTotal <= 0) return null;
-                                                                    const baseAdult = Number(p?.price_adult || 0);
-                                                                    const baseChild = Number(p?.price_child || 0);
-                                                                    const baseInfant = Number(p?.price_infant || 0);
-                                                                    const baseExtraBed = Number(p?.price_extra_bed || 0);
-                                                                    const baseChildExtraBed = Number(p?.price_child_extra_bed || 0);
-                                                                    const baseSingle = Number(p?.price_single || 0);
-                                                                    const rsAdult = Number(rs.adult_count || 0);
-                                                                    const rsChild = Number(rs.child_count || 0);
-                                                                    const rsInfant = Number(rs.infant_count || 0);
-                                                                    const rsExtra = Number(rs.extra_bed_count || 0);
-                                                                    const rsChildExtra = Number(rs.child_extra_bed_count || 0);
-                                                                    const rsSingle = Number(rs.single_count || 0);
-                                                                    const baseSum = rsAdult * baseAdult + rsChild * baseChild + rsInfant * baseInfant + rsExtra * baseExtraBed + rsChildExtra * baseChildExtraBed + rsSingle * baseSingle;
-                                                                    const ratio = baseSum > 0 ? rsTotal / baseSum : 1;
-                                                                    const mk = (base: number, cnt: number) => cnt > 0 ? { unit_price: Math.round(base * ratio), count: cnt, total: Math.round(base * ratio * cnt) } : null;
-                                                                    return { adult: mk(baseAdult, rsAdult), child: mk(baseChild, rsChild), infant: mk(baseInfant, rsInfant), extra_bed: mk(baseExtraBed, rsExtra), child_extra_bed: mk(baseChildExtraBed, rsChildExtra), single: mk(baseSingle, rsSingle) };
-                                                                })();
+                                                                const effectiveRoom = storedRoom;
                                                                 const pickUnit = (entry: any, count: number, fallback: number) => {
                                                                     const unit = Number(entry?.unit_price || 0);
                                                                     if (unit > 0) return unit;
-                                                                    const total = Number(entry?.total || 0);
-                                                                    if (count > 0 && total > 0) return Math.round(total / count);
                                                                     return Number(fallback || 0);
                                                                 };
                                                                 const adultPrice = pickUnit(effectiveRoom?.adult, Number(adultCount || 0), Number(p?.price_adult || 0));

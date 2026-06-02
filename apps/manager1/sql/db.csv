@@ -480,6 +480,10 @@ reservation,reservation_date,date,NULL 가능,null,29
 reservation,price_breakdown,jsonb,NULL 가능,null,30
 reservation,manual_additional_fee,numeric,NOT NULL,0,31
 reservation,manual_additional_fee_detail,text,NULL 가능,null,32
+reservation,pricing_source,text,NOT NULL,'normal'::text,33
+reservation,pricing_source_reason,text,NOT NULL,'default_normal'::text,34
+reservation,pricing_rule_version,text,NOT NULL,'v1'::text,35
+reservation,pricing_resolved_at,timestamp with time zone,NOT NULL,now(),36
 reservation_airport,id,uuid,NOT NULL,gen_random_uuid(),1
 reservation_airport,reservation_id,uuid,NULL 가능,null,2
 reservation_airport,airport_price_code,text,NULL 가능,'AP01'::text,3
