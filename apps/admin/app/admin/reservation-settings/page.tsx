@@ -288,6 +288,17 @@ export default function ReservationSettingsPage() {
   const [customerReminderSettings, setCustomerReminderSettings] = useState<CustomerReminderSettings | null>(null);
   const [customerReminderLoading, setCustomerReminderLoading] = useState(false);
   const [savingCustomerReminder, setSavingCustomerReminder] = useState(false);
+  const [cleanupRetentionDays, setCleanupRetentionDays] = useState(5);
+  const [customerReminderCleanupLoading, setCustomerReminderCleanupLoading] = useState(false);
+  const [cleanupSummary, setCleanupSummary] = useState<{
+    dryRun: boolean;
+    retentionDays: number;
+    targetNotificationCount?: number;
+    targetDispatchLogCount?: number;
+    deletedNotificationCount?: number;
+    deletedDispatchLogCount?: number;
+    cutoffIso?: string;
+  } | null>(null);
   const [newReminderRule, setNewReminderRule] = useState<CustomerReminderRule>({
     id: '',
     serviceType: 'cruise',
@@ -477,12 +488,61 @@ export default function ReservationSettingsPage() {
         return;
       }
       setCustomerReminderSettings(result as CustomerReminderSettings);
-      setSuccessMessage('고객 사전알림 설정을 저장했습니다. (DB 미사용)');
+      setSuccessMessage('고객 사전알림 설정을 저장했습니다. (DB 저장)');
     } catch (error) {
       console.error('고객 사전알림 설정 저장 실패:', error);
       setErrorMessage('고객 사전알림 설정 저장에 실패했습니다.');
     } finally {
       setSavingCustomerReminder(false);
+    }
+  };
+
+  const runCustomerReminderCleanup = async (dryRun: boolean) => {
+    setCustomerReminderCleanupLoading(true);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token || '';
+      const retentionDays = Math.max(1, Math.min(90, Number(cleanupRetentionDays || 5)));
+      const params = new URLSearchParams({ retentionDays: String(retentionDays) });
+      if (dryRun) params.set('dryRun', 'true');
+
+      const response = await fetch(`/api/cron/customer-reminder-cleanup?${params.toString()}`, {
+        method: 'POST',
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setCleanupSummary(null);
+        setErrorMessage(result?.error || '고객 사전알림 데이터 정리에 실패했습니다.');
+        return;
+      }
+
+      setCleanupSummary({
+        dryRun: Boolean(result?.dryRun),
+        retentionDays: Number(result?.retentionDays || retentionDays),
+        targetNotificationCount: Number(result?.targetNotificationCount || 0),
+        targetDispatchLogCount: Number(result?.targetDispatchLogCount || 0),
+        deletedNotificationCount: Number(result?.deletedNotificationCount || 0),
+        deletedDispatchLogCount: Number(result?.deletedDispatchLogCount || 0),
+        cutoffIso: typeof result?.cutoffIso === 'string' ? result.cutoffIso : undefined,
+      });
+
+      if (dryRun) {
+        setSuccessMessage('삭제 대상 건수를 조회했습니다.');
+      } else {
+        setSuccessMessage('고객 사전알림 지난 데이터를 삭제했습니다.');
+      }
+    } catch (error) {
+      console.error('고객 사전알림 정리 실행 실패:', error);
+      setCleanupSummary(null);
+      setErrorMessage('고객 사전알림 데이터 정리에 실패했습니다.');
+    } finally {
+      setCustomerReminderCleanupLoading(false);
     }
   };
 
@@ -1049,7 +1109,7 @@ export default function ReservationSettingsPage() {
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h3 className="text-base font-semibold text-gray-900">고객 앱 사전알림 설정</h3>
-                <p className="mt-1 text-xs text-gray-500">DB 테이블 저장 없이 JSON 설정 파일로 관리되며, 고객 앱 알림 화면에만 표시됩니다.</p>
+                <p className="mt-1 text-xs text-gray-500">customer_reminder_rules 테이블에 저장되며, 고객 앱 알림 목록 + 푸시 크론 발송에 함께 사용됩니다.</p>
               </div>
               <button
                 type="button"
@@ -1060,6 +1120,67 @@ export default function ReservationSettingsPage() {
                 {savingCustomerReminder ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                 사전알림 저장
               </button>
+            </div>
+
+            <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-semibold text-amber-900">지난 데이터 보관일</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={90}
+                    value={cleanupRetentionDays}
+                    onChange={(event) => {
+                      const value = Number(event.target.value || 5);
+                      setCleanupRetentionDays(Math.max(1, Math.min(90, Number.isFinite(value) ? value : 5)));
+                    }}
+                    className="w-20 rounded-md border border-amber-300 bg-white px-2 py-1.5 text-right text-sm"
+                  />
+                  <span className="text-sm text-amber-900">일</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void runCustomerReminderCleanup(true)}
+                  disabled={customerReminderCleanupLoading}
+                  className="inline-flex items-center rounded-md border border-amber-300 bg-white px-3 py-1.5 text-sm font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-50"
+                >
+                  {customerReminderCleanupLoading ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}
+                  대상 건수 확인
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const confirmed = window.confirm(`고객 사전알림 지난 데이터를 삭제하시겠습니까?\n보관일: ${cleanupRetentionDays}일`);
+                    if (!confirmed) return;
+                    void runCustomerReminderCleanup(false);
+                  }}
+                  disabled={customerReminderCleanupLoading}
+                  className="inline-flex items-center rounded-md border border-red-300 bg-red-50 px-3 py-1.5 text-sm font-semibold text-red-700 hover:bg-red-100 disabled:opacity-50"
+                >
+                  {customerReminderCleanupLoading ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Trash2 className="mr-1.5 h-4 w-4" />}
+                  지난 데이터 삭제
+                </button>
+              </div>
+              <p className="mt-2 text-xs text-amber-800">
+                자동 삭제는 매일 실행되며, 여기서는 즉시 수동 실행이 가능합니다.
+              </p>
+              {cleanupSummary && (
+                <div className="mt-3 rounded-md border border-amber-300 bg-white px-3 py-2 text-xs text-amber-900">
+                  <p>
+                    기준 보관일: {cleanupSummary.retentionDays}일 / 기준 시각: {cleanupSummary.cutoffIso ? formatDateTime(cleanupSummary.cutoffIso) : '-'}
+                  </p>
+                  {cleanupSummary.dryRun ? (
+                    <p>
+                      삭제 예정 notifications: {(cleanupSummary.targetNotificationCount || 0).toLocaleString()}건, dispatch_log: {(cleanupSummary.targetDispatchLogCount || 0).toLocaleString()}건
+                    </p>
+                  ) : (
+                    <p>
+                      삭제 완료 notifications: {(cleanupSummary.deletedNotificationCount || 0).toLocaleString()}건, dispatch_log: {(cleanupSummary.deletedDispatchLogCount || 0).toLocaleString()}건
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
 
             {customerReminderLoading ? (

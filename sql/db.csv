@@ -459,6 +459,18 @@ customer_notifications,updated_at,timestamp with time zone,NULL 가능,now(),14
 customer_notifications,processed_at,timestamp with time zone,NULL 가능,null,15
 customer_notifications,status,character varying,NULL 가능,null,16
 customer_notifications,manager_name,character varying,NULL 가능,null,17
+customer_reminder_rules,id,text,NOT NULL,null,1
+customer_reminder_rules,service_type,text,NOT NULL,null,2
+customer_reminder_rules,date_basis,text,NOT NULL,null,3
+customer_reminder_rules,label,text,NOT NULL,null,4
+customer_reminder_rules,enabled,boolean,NOT NULL,true,5
+customer_reminder_rules,days_before,integer,NOT NULL,3,6
+customer_reminder_rules,title,text,NOT NULL,null,7
+customer_reminder_rules,body,text,NOT NULL,null,8
+customer_reminder_rules,sort_order,integer,NOT NULL,100,9
+customer_reminder_rules,updated_by,uuid,NULL 가능,null,10
+customer_reminder_rules,updated_at,timestamp with time zone,NOT NULL,now(),11
+customer_reminder_rules,created_at,timestamp with time zone,NOT NULL,now(),12
 customer_request_attachments,id,uuid,NOT NULL,gen_random_uuid(),1
 customer_request_attachments,request_id,uuid,NOT NULL,null,2
 customer_request_attachments,file_name,text,NOT NULL,null,3

@@ -43,20 +43,35 @@ type RuntimeReminder = {
   daysBefore: number;
 };
 
-function toDateOnly(value: string | null | undefined): Date | null {
+function toYmdInKst(value: string | null | undefined): string | null {
   if (!value) return null;
+
+  const plainYmd = String(value).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(plainYmd)) return plainYmd;
+
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+
+  return formatter.format(date);
 }
 
 function diffDaysFromToday(targetDate: string | null | undefined): number | null {
-  const target = toDateOnly(targetDate);
-  if (!target) return null;
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const diffMs = target.getTime() - today.getTime();
-  return Math.round(diffMs / (1000 * 60 * 60 * 24));
+  const targetYmd = toYmdInKst(targetDate);
+  if (!targetYmd) return null;
+
+  const todayYmd = toYmdInKst(new Date().toISOString());
+  if (!todayYmd) return null;
+
+  const targetMs = Date.parse(`${targetYmd}T00:00:00Z`);
+  const todayMs = Date.parse(`${todayYmd}T00:00:00Z`);
+  return Math.round((targetMs - todayMs) / (1000 * 60 * 60 * 24));
 }
 
 function formatDate(value: string | null | undefined): string {
@@ -84,7 +99,6 @@ export default function NotificationsPage() {
   const [loading, setLoading] = useState(true);
   const [runtimeReminders, setRuntimeReminders] = useState<RuntimeReminder[]>([]);
   const [runtimeLoading, setRuntimeLoading] = useState(true);
-  const [dismissedReminderKeys, setDismissedReminderKeys] = useState<string[]>([]);
 
   const normalizeNotifications = (rows: any[]) => (
     (rows || []).map((row: any) => {
@@ -99,31 +113,9 @@ export default function NotificationsPage() {
     })
   );
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const key = `customer_runtime_reminders_dismissed_${new Date().toISOString().slice(0, 10)}`;
-    const raw = window.localStorage.getItem(key);
-    if (!raw) {
-      setDismissedReminderKeys([]);
-      return;
-    }
-    try {
-      const parsed = JSON.parse(raw);
-      setDismissedReminderKeys(Array.isArray(parsed) ? parsed : []);
-    } catch {
-      setDismissedReminderKeys([]);
-    }
-  }, []);
-
-  const dismissReminderForToday = (reminderId: string) => {
-    if (typeof window === 'undefined') return;
-    const key = `customer_runtime_reminders_dismissed_${new Date().toISOString().slice(0, 10)}`;
-    setDismissedReminderKeys((prev) => {
-      if (prev.includes(reminderId)) return prev;
-      const next = [...prev, reminderId];
-      window.localStorage.setItem(key, JSON.stringify(next));
-      return next;
-    });
+  const getAccessToken = async () => {
+    const { data: sessionData } = await supabase.auth.getSession();
+    return sessionData.session?.access_token || '';
   };
 
   useEffect(() => {
@@ -134,15 +126,20 @@ export default function NotificationsPage() {
 
       try {
         setLoading(true);
-        const { data, error } = await supabase
-          .from('notifications')
-          .select('*')
-          .eq('assigned_to', user.id)
-          .order('created_at', { ascending: false });
+        const token = await getAccessToken();
+        const response = await fetch('/api/notifications', {
+          cache: 'no-store',
+          headers: {
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        });
+        const result = await response.json().catch(() => ({}));
 
         if (!cancelled) {
-          if (error) throw error;
-          setNotifications(normalizeNotifications(data || []));
+          if (!response.ok) {
+            throw new Error(result?.error || '알림 조회 실패');
+          }
+          setNotifications(normalizeNotifications(Array.isArray(result?.rows) ? result.rows : []));
         }
       } catch (err) {
         console.error('알림 조회 실패:', err);
@@ -304,16 +301,16 @@ export default function NotificationsPage() {
               const serviceDate = resolveServiceDate(reservation, rule.dateBasis);
               if (!serviceDate) return;
               const days = diffDaysFromToday(serviceDate);
-              if (days === null || days !== rule.daysBefore) return;
+              if (days === null || days < 0 || days > rule.daysBefore) return;
 
               const serviceLabel = serviceLabelMap[serviceType] || serviceType;
               dynamicReminders.push({
-                id: `${rule.id}:${rule.dateBasis}:${reservation.re_id}:${serviceDate}`,
-                title: applyTemplate(rule.title, serviceLabel, rule.daysBefore, serviceDate),
-                body: applyTemplate(rule.body, serviceLabel, rule.daysBefore, serviceDate),
+                id: `${rule.id}:${rule.dateBasis}:${reservation.re_id}:${serviceDate}:${days}`,
+                title: applyTemplate(rule.title, serviceLabel, days, serviceDate),
+                body: applyTemplate(rule.body, serviceLabel, days, serviceDate),
                 serviceType,
                 serviceDate,
-                daysBefore: rule.daysBefore,
+                daysBefore: days,
               });
             });
         });
@@ -346,10 +343,19 @@ export default function NotificationsPage() {
 
   const handleMarkAsRead = async (notificationId: string) => {
     try {
-      await supabase
-        .from('notifications')
-        .update({ status: 'read' })
-        .eq('id', notificationId);
+      const token = await getAccessToken();
+      const response = await fetch('/api/notifications', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ mode: 'single', notificationId }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(result?.error || '읽음 처리 실패');
+      }
 
       setNotifications(prev =>
         prev.map(n => n.id === notificationId ? { ...n, is_read: true, status: 'read' } : n)
@@ -367,10 +373,19 @@ export default function NotificationsPage() {
     if (unreadIds.length === 0) return;
 
     try {
-      await supabase
-        .from('notifications')
-        .update({ status: 'read' })
-        .in('id', unreadIds);
+      const token = await getAccessToken();
+      const response = await fetch('/api/notifications', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ mode: 'all' }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(result?.error || '전체 읽음 처리 실패');
+      }
 
       setNotifications(prev =>
         prev.map(n => ({ ...n, is_read: true, status: 'read' }))
@@ -391,35 +406,27 @@ export default function NotificationsPage() {
   }
 
   const unreadCount = notifications.filter(n => !n.is_read).length;
-  const visibleRuntimeReminders = runtimeReminders.filter((reminder) => !dismissedReminderKeys.includes(reminder.id));
 
   return (
     <PageWrapper title="알림">
       <div className="space-y-3">
-        {/* DB 미저장 동적 사전알림 */}
+        {/* 동적 사전알림 */}
         {runtimeLoading ? (
           <div className="rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-800">
             고객 사전알림을 계산 중입니다...
           </div>
-        ) : visibleRuntimeReminders.length > 0 ? (
+        ) : runtimeReminders.length > 0 ? (
           <div className="space-y-2">
-            {visibleRuntimeReminders.map((reminder) => (
+            {runtimeReminders.map((reminder) => (
               <div
                 key={reminder.id}
                 className="rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3"
               >
-                <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3">
                   <p className="text-sm font-semibold text-indigo-900">{reminder.title}</p>
-                  <button
-                    type="button"
-                    onClick={() => dismissReminderForToday(reminder.id)}
-                    className="shrink-0 rounded-md border border-indigo-300 bg-white px-2 py-1 text-[11px] font-semibold text-indigo-700 hover:bg-indigo-100"
-                  >
-                    오늘만 숨기기
-                  </button>
                 </div>
                 <p className="mt-1 text-xs text-indigo-800">{reminder.body}</p>
-                <p className="mt-1 text-[11px] text-indigo-600">서비스일: {formatDate(reminder.serviceDate)} · {reminder.daysBefore}일 전 안내</p>
+                <p className="mt-1 text-[11px] text-indigo-600">서비스일: {formatDate(reminder.serviceDate)} · {reminder.daysBefore}일 전 안내 (0시 기준)</p>
               </div>
             ))}
           </div>
@@ -451,7 +458,6 @@ export default function NotificationsPage() {
             {notifications.map((notification: any) => (
               <div
                 key={notification.id}
-                onClick={() => handleMarkAsRead(notification.id)}
                 className={`border rounded-lg p-3 cursor-pointer transition ${
                   !notification.is_read
                     ? 'bg-blue-50 border-blue-200 hover:bg-blue-100'
@@ -484,6 +490,17 @@ export default function NotificationsPage() {
                         minute: '2-digit',
                       })}
                     </p>
+                    {!notification.is_read && (
+                      <div className="mt-2">
+                        <button
+                          type="button"
+                          onClick={() => handleMarkAsRead(notification.id)}
+                          className="rounded-md bg-blue-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-blue-700"
+                        >
+                          읽음
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

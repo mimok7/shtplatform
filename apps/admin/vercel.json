@@ -6,6 +6,14 @@
   "framework": "nextjs",
   "crons": [
     {
+      "path": "/api/cron/customer-reminder-cleanup",
+      "schedule": "30 0 * * *"
+    },
+    {
+      "path": "/api/cron/customer-reminder-notifications",
+      "schedule": "15 0 * * *"
+    },
+    {
       "path": "/api/cron/sht-car-low-seat-warning",
       "schedule": "10 15 * * *"
     },

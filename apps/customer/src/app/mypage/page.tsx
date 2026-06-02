@@ -35,6 +35,11 @@ export default function MyPage() {
     })
   ), []);
 
+  const getAccessToken = useCallback(async () => {
+    const { data: sessionData } = await supabase.auth.getSession();
+    return sessionData.session?.access_token || '';
+  }, []);
+
   useEffect(() => {
     let mounted = true;
 
@@ -67,16 +72,22 @@ export default function MyPage() {
         setUserProfile(profile);
 
         // 알림 조회
-        const { data: notificationsData } = await supabase
-          .from('notifications')
-          .select('*')
-          .eq('assigned_to', user.id)
-          .order('created_at', { ascending: false })
-          .limit(10);
+        const token = await getAccessToken();
+        const response = await fetch('/api/notifications', {
+          cache: 'no-store',
+          headers: {
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(result?.error || '알림 조회 실패');
+        }
 
         if (!mounted) return;
 
-        const normalized = normalizeNotifications(notificationsData || []);
+        const rows = Array.isArray(result?.rows) ? result.rows : [];
+        const normalized = normalizeNotifications(rows);
         setNotifications(normalized);
         const unread = normalized.filter((n: any) => !n.is_read).length;
         setUnreadCount(unread);
@@ -96,7 +107,7 @@ export default function MyPage() {
     loadUserInfo();
 
     return () => { mounted = false; };
-  }, [normalizeNotifications]); // ✅ [] 의존성 - 최초 1회만 (router 의존성 금지)
+  }, [getAccessToken, normalizeNotifications]); // ✅ [] 의존성 - 최초 1회만 (router 의존성 금지)
 
   const getUserDisplayName = useCallback(() => {
     if (userProfile?.name) return userProfile.name;
@@ -229,7 +240,14 @@ export default function MyPage() {
                     <div className={`w-8 h-8 flex items-center justify-center rounded-lg ${action.bg} flex-shrink-0`}>
                       <span className="text-base">{action.icon}</span>
                     </div>
-                    <h3 className="text-sm font-semibold text-slate-900">{action.label}</h3>
+                    <div className="flex items-center gap-1.5">
+                      <h3 className="text-sm font-semibold text-slate-900">{action.label}</h3>
+                      {action.href === '/mypage/notifications' && unreadCount > 0 && (
+                        <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                          {unreadCount > 99 ? '99+' : unreadCount}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <p className="text-xs text-slate-500 ml-10">{action.desc}</p>
                 </div>

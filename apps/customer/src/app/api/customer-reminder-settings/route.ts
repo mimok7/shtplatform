@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import fs from 'node:fs/promises';
-import path from 'node:path';
+import serviceSupabase from '../../../lib/serviceSupabase';
 
 type ReminderServiceType = 'cruise' | 'airport' | 'rentcar' | 'hotel' | 'tour' | 'ticket' | 'package';
 
@@ -29,31 +28,39 @@ type CustomerReminderSettings = {
   updatedBy: string;
   rules: CustomerReminderRule[];
 };
-
-const SETTINGS_RELATIVE_PATH = path.join('config', 'customer-reminder-settings.json');
-
-async function findWorkspaceRoot(startDir: string): Promise<string> {
-  let current = startDir;
-  for (let i = 0; i < 8; i += 1) {
-    const marker = path.join(current, 'pnpm-workspace.yaml');
-    try {
-      await fs.access(marker);
-      return current;
-    } catch {
-      const parent = path.dirname(current);
-      if (parent === current) break;
-      current = parent;
-    }
-  }
-  return startDir;
-}
+const TABLE_NAME = 'customer_reminder_rules';
 
 export async function GET() {
   try {
-    const root = await findWorkspaceRoot(process.cwd());
-    const targetPath = path.join(root, SETTINGS_RELATIVE_PATH);
-    const raw = await fs.readFile(targetPath, 'utf-8');
-    const parsed = JSON.parse(raw) as CustomerReminderSettings;
+    if (!serviceSupabase) {
+      return NextResponse.json({ error: '서버 설정 오류' }, { status: 500 });
+    }
+
+    const { data, error } = await serviceSupabase
+      .from(TABLE_NAME)
+      .select('id, service_type, date_basis, label, enabled, days_before, title, body, sort_order')
+      .order('sort_order', { ascending: true })
+      .order('id', { ascending: true });
+
+    if (error) {
+      return NextResponse.json({ error: `고객 사전알림 설정 조회 실패: ${error.message}` }, { status: 500 });
+    }
+
+    const parsed: CustomerReminderSettings = {
+      updatedAt: new Date().toISOString(),
+      updatedBy: 'system',
+      rules: (data || []).map((row: any) => ({
+        id: String(row.id || ''),
+        serviceType: row.service_type as ReminderServiceType,
+        dateBasis: row.date_basis as ReminderDateBasis,
+        label: String(row.label || ''),
+        enabled: Boolean(row.enabled),
+        daysBefore: Number(row.days_before || 0),
+        title: String(row.title || ''),
+        body: String(row.body || ''),
+      })),
+    };
+
     return NextResponse.json(parsed);
   } catch (error: any) {
     return NextResponse.json({ error: error?.message || '고객 사전알림 설정 조회 실패' }, { status: 500 });
