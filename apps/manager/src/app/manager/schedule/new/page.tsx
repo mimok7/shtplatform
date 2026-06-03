@@ -186,7 +186,7 @@ interface SHRCReservation {
   email: string;
 }
 
-const SCHEDULE_VISIBLE_STATUSES = ['approved', 'confirmed'] as const;
+const SCHEDULE_VISIBLE_STATUSES = ['approved', 'confirmed', 'completed'] as const;
 
 export default function ManagerSchedulePage() {
   const [schedules, setSchedules] = useState<any[]>([]);

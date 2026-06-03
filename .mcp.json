@@ -8,6 +8,7 @@
       "command": "npx",
       "args": ["-y", "smithery", "run", "googlesheets"]
     },
+<<<<<<< Updated upstream
     "github": {
       "command": "npx",
       "args": ["-y", "smithery", "run", "github"]
@@ -15,6 +16,15 @@
     "vercel": {
       "command": "npx",
       "args": ["-y", "smithery", "run", "vercel"]
+=======
+    "vercel-mcp": {
+      "command": "npx",
+      "args": ["-y", "smithery", "run", "vercel"]
+    },
+    "supabase-mcp": {
+      "type": "http",
+      "url": "https://mcp.supabase.com/mcp"
+>>>>>>> Stashed changes
     }
   }
 }

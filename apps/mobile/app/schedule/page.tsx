@@ -16,7 +16,7 @@ import { toKstDateKey, toKstDateLabel, toKstDateTimeParts, toLocalDateKey } from
 /* ── 타입 정의 ──────────────────────────────── */
 type ViewMode = 'day' | 'week' | 'month';
 type SourceFilter = 'all' | 'old' | 'new';
-const SCHEDULE_VISIBLE_STATUSES = ['approved', 'confirmed'] as const;
+const SCHEDULE_VISIBLE_STATUSES = ['approved', 'confirmed', 'completed'] as const;
 
 /* ── 날짜 유틸 ──────────────────────────────── */
 const parseDate = (dateStr: string | null | undefined): Date | null => {

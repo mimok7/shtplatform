@@ -169,8 +169,7 @@ export default function ManagerSchedulePage() {
         const { data: reservationsData, error: resErr } = await supabase
           .from('reservation')
           .select('re_id, re_type, re_status, re_user_id, price_breakdown')
-          .in('re_id', reservationIds)
-          .neq('re_status', 'completed');
+          .in('re_id', reservationIds);
 
         if (resErr) {
           console.error('예약 정보 조회 실패:', resErr);
@@ -1044,8 +1043,8 @@ export default function ManagerSchedulePage() {
                                         <span className="px-1.5 py-0.5 bg-indigo-100 text-indigo-700 text-xs rounded font-medium">📦</span>
                                       )}
                                       <div className="flex items-center gap-2">
-                                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${schedule.re_status === 'confirmed' ? 'bg-green-100 text-green-800' : schedule.re_status === 'pending' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'}`}>
-                                          {schedule.re_status === 'confirmed' ? '확정' : schedule.re_status === 'pending' ? '대기' : '취소'}
+                                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${schedule.re_status === 'confirmed' ? 'bg-green-100 text-green-800' : schedule.re_status === 'approved' ? 'bg-blue-100 text-blue-800' : schedule.re_status === 'pending' ? 'bg-yellow-100 text-yellow-800' : schedule.re_status === 'completed' ? 'bg-gray-100 text-gray-800' : 'bg-red-100 text-red-800'}`}>
+                                          {schedule.re_status === 'confirmed' ? '확정' : schedule.re_status === 'approved' ? '승인' : schedule.re_status === 'pending' ? '대기' : schedule.re_status === 'completed' ? '완료' : '취소'}
                                         </span>
                                         <button onClick={() => {
                                           if (schedule.users?.id) {
@@ -1099,8 +1098,8 @@ export default function ManagerSchedulePage() {
                                     <span className="px-1.5 py-0.5 bg-indigo-100 text-indigo-700 text-xs rounded font-medium">📦</span>
                                   )}
                                   <div className="flex items-center gap-2">
-                                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${schedule.re_status === 'confirmed' ? 'bg-green-100 text-green-800' : schedule.re_status === 'pending' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'}`}>
-                                      {schedule.re_status === 'confirmed' ? '확정' : schedule.re_status === 'pending' ? '대기' : '취소'}
+                                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${schedule.re_status === 'confirmed' ? 'bg-green-100 text-green-800' : schedule.re_status === 'approved' ? 'bg-blue-100 text-blue-800' : schedule.re_status === 'pending' ? 'bg-yellow-100 text-yellow-800' : schedule.re_status === 'completed' ? 'bg-gray-100 text-gray-800' : 'bg-red-100 text-red-800'}`}>
+                                      {schedule.re_status === 'confirmed' ? '확정' : schedule.re_status === 'approved' ? '승인' : schedule.re_status === 'pending' ? '대기' : schedule.re_status === 'completed' ? '완료' : '취소'}
                                     </span>
                                     <button onClick={() => {
                                       if (schedule.users?.id) {
