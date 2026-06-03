@@ -49,3 +49,4 @@ logs/
 test-results/
 playwright-report/
 playwright/.cache/
+env.local
