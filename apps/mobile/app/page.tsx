@@ -48,6 +48,7 @@ const FAVORITES: MenuItem[] = [
   { href: '/quotes/cruise',         label: '견적 입력',  desc: '크루즈 견적 신규 입력',         icon: FilePenLine,   iconColor: 'text-purple-600', bg: 'bg-purple-100' },
   { href: '/cancel-requests',       label: '취소요청',  desc: '취소 신청 승인/반려 처리',      icon: Home,          iconColor: 'text-red-600',    bg: 'bg-red-100' },
   { href: '/notifications',         label: '알림 관리',  desc: '읽지 않은 알림 확인',           icon: Bell,          iconColor: 'text-rose-600',   bg: 'bg-rose-100' },
+  { href: '/program-updates',       label: '프로그램 수정', desc: '앱 수정 요청 접수 / 완료 기록', icon: FilePenLine, iconColor: 'text-fuchsia-600', bg: 'bg-fuchsia-100' },
 ];
 
 export default function HomePage() {

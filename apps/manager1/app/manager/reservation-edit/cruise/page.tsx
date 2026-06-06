@@ -105,6 +105,20 @@ interface AdditionalFeeItem {
 
 const BIRTHDAY_EVENT_FEE = 1000000;
 
+const normalizeAdditionalFeeTemplateId = (value: unknown): number | null => {
+    if (value === null || value === undefined || value === '') return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+};
+
+const isBirthdayEventAdditionalFeeItem = (item: AdditionalFeeItem) => {
+    if (String(item.key || '').startsWith('birthday-event-')) return true;
+    const normalizedName = String(item.name || '').replace(/\s+/g, '');
+    return item.template_id === null
+        && (normalizedName === '생일이벤트추가' || normalizedName === '생일이벤트')
+        && Number(item.amount) === BIRTHDAY_EVENT_FEE;
+};
+
 const toBoolean = (value: unknown): boolean => {
     if (typeof value === 'boolean') return value;
     if (typeof value === 'string') {
@@ -1278,19 +1292,28 @@ function CruiseReservationEditContent() {
             const rawAdditionalFeeItems = Array.isArray(resRow.price_breakdown?.additional_fee_items)
                 ? resRow.price_breakdown.additional_fee_items
                 : [];
-            const savedAdditionalFeeItems: AdditionalFeeItem[] = rawAdditionalFeeItems
+            const normalizedAdditionalFeeItems: AdditionalFeeItem[] = rawAdditionalFeeItems
                 .map((item: any, index: number) => ({
                     key: String(item?.key || `saved-${index + 1}`),
-                    template_id: Number.isFinite(Number(item?.template_id)) ? Number(item.template_id) : null,
+                    template_id: normalizeAdditionalFeeTemplateId(item?.template_id),
                     name: String(item?.name || '').trim(),
                     amount: Number(item?.amount) || 0,
                 }))
                 .filter((item: AdditionalFeeItem) => item.name && item.amount !== 0);
+
+            const savedBirthdayAutoFeeItems = normalizedAdditionalFeeItems.filter((item) =>
+                isBirthdayEventAdditionalFeeItem(item)
+            );
+            const savedAdditionalFeeItems = normalizedAdditionalFeeItems.filter((item) =>
+                !isBirthdayEventAdditionalFeeItem(item)
+            );
+
             const savedTemplateAdditionalFeeTotal = savedAdditionalFeeItems.reduce((sum, item) => sum + item.amount, 0);
+            const savedBirthdayAutoFeeTotal = savedBirthdayAutoFeeItems.reduce((sum, item) => sum + item.amount, 0);
 
             const savedAdditionalFeeTotal = Number(resRow.price_breakdown?.additional_fee);
             const fallbackManualAdditionalFee = Number.isFinite(savedAdditionalFeeTotal)
-                ? Math.max(0, savedAdditionalFeeTotal - savedTemplateAdditionalFeeTotal)
+                ? Math.max(0, savedAdditionalFeeTotal - savedTemplateAdditionalFeeTotal - savedBirthdayAutoFeeTotal)
                 : 0;
             const savedManualAdditionalFee = Number(
                 resRow.price_breakdown?.additional_fee_manual

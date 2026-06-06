@@ -8,7 +8,7 @@ import supabase from '@/lib/supabase';
 import { clearInvalidSession, isInvalidRefreshTokenError } from '@/lib/authRecovery';
 import { useLoadingTimeout } from '@/hooks/useLoadingTimeout';
 import { getAuthUserSafe } from '@/lib/authSafe';
-import { Home, Camera, Trash2, Ticket } from 'lucide-react';
+import { Camera, Trash2, Ticket } from 'lucide-react';
 
 const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || '';
 
@@ -66,14 +66,6 @@ export default function ProfilePage() {
     const [vapidPublicKey, setVapidPublicKey] = useState<string>(VAPID_PUBLIC_KEY);
 
     useLoadingTimeout(loading, setLoading, 12000);
-
-    const handleGoHome = () => {
-        if (!isFormValid()) {
-            alert('모든 필수 필드를 정확히 입력해주세요.');
-            return;
-        }
-        router.push('/mypage');
-    };
 
     useEffect(() => {
         init();
@@ -647,21 +639,7 @@ export default function ProfilePage() {
     return (
         <PageWrapper
             title="👤 내 정보"
-            actions={
-                <button
-                    type="button"
-                    onClick={handleGoHome}
-                    disabled={!isFormValid()}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm font-medium ${
-                        !isFormValid()
-                            ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
-                            : 'bg-blue-500 text-white hover:bg-blue-600 cursor-pointer'
-                    }`}
-                >
-                    <Home className="w-4 h-4" />
-                    홈
-                </button>
-            }
+            disableHomeButton={!isFormValid()}
         >
             <div className="space-y-6">
 
@@ -669,6 +647,9 @@ export default function ProfilePage() {
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                     <p className="text-sm text-blue-700">
                         💡 <strong>환영합니다!</strong> 아래 정보를 입력하시면 더 편리하게 서비스를 이용하실 수 있습니다.
+                    </p>
+                    <p className="text-sm text-blue-700 mt-2">
+                        ⚠️ <strong>필수 입력 필드:</strong> 이메일, 이름, 영문이름, 휴대폰 번호를 모두 입력해주세요.
                     </p>
                 </div>
 
