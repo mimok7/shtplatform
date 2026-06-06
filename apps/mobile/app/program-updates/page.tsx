@@ -27,6 +27,150 @@ const APP_OPTIONS = [
   'other',
 ];
 
+const APP_MENU_OPTIONS: Record<string, Array<{ label: string; path: string }>> = {
+  mobile: [
+    { label: '예약일정', path: '/schedule' },
+    { label: '예약 처리', path: '/reservations' },
+    { label: '예약확인서', path: '/confirmation' },
+    { label: '예약 수정', path: '/reservation-edit' },
+    { label: '크차 일자', path: '/cruise-car-dates' },
+    { label: '고객관리', path: '/customers' },
+    { label: '스하 차량', path: '/sht-car' },
+    { label: '카페 안내', path: '/cafe-guide' },
+    { label: '견적 목록', path: '/quotes' },
+    { label: '견적 입력', path: '/quotes/cruise' },
+    { label: '취소요청', path: '/cancel-requests' },
+    { label: '알림 관리', path: '/notifications' },
+    { label: '프로그램 수정', path: '/program-updates' },
+  ],
+  manager: [
+    { label: '견적 목록', path: '/manager/quotes' },
+    { label: '전체 검색', path: '/manager/quotes/comprehensive' },
+    { label: '신/구 구분', path: '/manager/schedule/new' },
+    { label: '예약 처리', path: '/manager/reservations/bulk' },
+    { label: '스하 차량', path: '/manager/sht-car' },
+    { label: '패키지', path: '/manager/reservations/package' },
+    { label: '제휴업체 예약', path: '/partner/admin/reservations' },
+    { label: '예약 수정', path: '/manager/reservation-edit' },
+    { label: '시트 수정', path: '/manager/schedule/sheet-edit' },
+    { label: '수정 승인', path: '/manager/reservation-edit/approval' },
+    { label: '여권 관리', path: '/manager/passport-management' },
+    { label: '승선 코드', path: '/manager/boarding-code' },
+    { label: '차량 코드', path: '/manager/dispatch-codes/vehicle' },
+    { label: '차량 배차', path: '/manager/dispatch' },
+    { label: '승차 확인', path: '/manager/dispatch-codes/confirm' },
+    { label: '호텔 코드', path: '/manager/assignment-codes/hotel' },
+    { label: '크차 일자', path: '/manager/cruise-car-dates' },
+    { label: '결제 처리', path: '/manager/payment-processing' },
+    { label: '현황 처리', path: '/manager/payments' },
+    { label: '예약 확인서', path: '/manager/confirmation' },
+    { label: '취소 요청', path: '/manager/cancel-requests' },
+    { label: '통계 조회', path: '/manager/analytics' },
+    { label: '카페 안내', path: '/manager/cafe-guide' },
+    { label: '리포트 스하 차량', path: '/manager/reports/sht-car' },
+    { label: '리포트 크루즈 차량', path: '/manager/reports/cruise-car' },
+    { label: '고객 관리', path: '/manager/customers' },
+    { label: '프로모션', path: '/manager/promotions' },
+    { label: '추가 요금', path: '/manager/additional-fee-management' },
+    { label: '예약 삭제', path: '/manager/quote-bulk-delete' },
+    { label: '앱 설정', path: '/manager/settings' },
+  ],
+  manager1: [
+    { label: '예약일정', path: '/manager/schedule/new' },
+    { label: '예약 처리', path: '/manager/reservations/bulk' },
+    { label: '견적 입력', path: '/manager/quotes/cruise' },
+    { label: '견적 목록', path: '/manager/quotes' },
+    { label: '예약 요청', path: '/manager/reservations/requests' },
+    { label: '예약 수정', path: '/manager/reservation-edit' },
+    { label: '결제 처리', path: '/manager/payment-processing' },
+    { label: '스하 차량', path: '/manager/sht-car' },
+    { label: '제휴업체', path: '/partner/admin/reservations' },
+    { label: '알림 관리', path: '/manager/notifications' },
+    { label: '취소 요청', path: '/manager/cancel-requests' },
+    { label: '앱 설정', path: '/manager/settings' },
+    { label: '카페 안내', path: '/manager/cafe-guide' },
+    { label: '시트 수정', path: '/manager/schedule/sheet-edit' },
+    { label: '고객 관리', path: '/manager/customers' },
+    { label: '수정 승인', path: '/manager/reservation-edit/approval' },
+    { label: '예약 통계', path: '/manager/analytics' },
+    { label: '예약 확인서', path: '/manager/confirmation' },
+    { label: '여권 관리', path: '/manager/passport-management' },
+    { label: '프로모션', path: '/manager/promotions' },
+    { label: '크차 일자', path: '/manager/cruise-car-dates' },
+    { label: '추가 요금', path: '/manager/additional-fee-management' },
+    { label: '예약 삭제', path: '/manager/quote-bulk-delete' },
+  ],
+  customer: [
+    { label: '로그인', path: '/login' },
+    { label: '마이페이지', path: '/mypage' },
+    { label: '예약 하기', path: '/mypage/direct-booking' },
+    { label: '예약 내역', path: '/mypage/reservations/list' },
+    { label: '제휴 업체', path: '/partner/browse' },
+    { label: '장소 추가', path: '/mypage/location-updates' },
+    { label: '알림', path: '/mypage/notifications' },
+    { label: '예약 확인서', path: '/mypage/confirmations' },
+    { label: '프로필', path: '/mypage/profile' },
+    { label: '직접 예약', path: '/mypage/direct-booking' },
+    { label: '직접 예약 크루즈', path: '/mypage/direct-booking/cruise' },
+    { label: '직접 예약 공항', path: '/mypage/direct-booking/airport' },
+    { label: '직접 예약 호텔', path: '/mypage/direct-booking/hotel' },
+    { label: '직접 예약 투어', path: '/mypage/direct-booking/tour' },
+    { label: '직접 예약 렌터카', path: '/mypage/direct-booking/rentcar' },
+    { label: '직접 예약 패키지', path: '/mypage/direct-booking/package' },
+    { label: '견적 메인', path: '/mypage/quotes' },
+    { label: '크루즈 견적', path: '/mypage/quotes/cruise' },
+    { label: '공항 견적', path: '/mypage/quotes/airport' },
+    { label: '호텔 견적', path: '/mypage/quotes/hotel' },
+    { label: '투어 견적', path: '/mypage/quotes/tour' },
+    { label: '렌터카 견적', path: '/mypage/quotes/rentcar' },
+    { label: '일반 견적', path: '/quote' },
+    { label: '회원가입', path: '/signup' },
+  ],
+  partner: [
+    { label: '전체 카테고리', path: '/partner/browse' },
+    { label: '내 예약 내역', path: '/partner/my-reservations' },
+    { label: '예약 목록', path: '/partner/dashboard' },
+    { label: '월별 캘린더', path: '/partner/calendar' },
+    { label: '파트너 예약생성', path: '/partner/booking' },
+    { label: '파트너 관리자 예약', path: '/partner/admin/reservations' },
+    { label: '업체 목록/등록', path: '/partner/admin/partners' },
+    { label: '서비스/메뉴', path: '/partner/admin/services' },
+    { label: '파트너 관리자 요금', path: '/partner/admin/prices' },
+    { label: '파트너 관리자 프로모션', path: '/partner/admin/promotions' },
+  ],
+  admin: [
+    { label: '관리자 홈', path: '/admin' },
+    { label: '월별 매출 현황', path: '/admin/revenue/monthly' },
+    { label: '일별 매출 현황', path: '/admin/revenue/daily' },
+    { label: '사용자 관리', path: '/admin/users' },
+    { label: '사용자 동기화', path: '/admin/user-sync' },
+    { label: '인증 동기화', path: '/admin/auth-sync' },
+    { label: '데이터 연결', path: '/admin/data-management' },
+    { label: '데이터 동기화', path: '/admin/sync' },
+    { label: 'sh_cc 동기화', path: '/admin/sync-shcc-to-reservation' },
+    { label: '가격 동기화', path: '/admin/base-prices' },
+    { label: '수량 수정', path: '/admin/fix-quantities' },
+    { label: '알림 설정', path: '/admin/reservation-settings' },
+    { label: '총금액 계산', path: '/admin/reservation-total-system' },
+    { label: '스하좌석', path: '/admin/sht-seat' },
+    { label: '패키지 관리', path: '/admin/packages' },
+    { label: '리포트', path: '/admin/reports' },
+    { label: 'SQL 실행', path: '/admin/sql-runner' },
+    { label: 'DB 스키마', path: '/admin/database-schema' },
+    { label: 'DB 관리', path: '/admin/database' },
+    { label: '백업/복원', path: '/admin/backup' },
+    { label: '복원 검증', path: '/admin/backup/verify' },
+    { label: '계정 이전', path: '/admin/backup/migrate' },
+    { label: '백업 지침', path: '/admin/backup/guide' },
+    { label: '엑셀 자동 설정', path: '/admin/backup/setup' },
+    { label: '엑셀 내보내기', path: '/admin/export' },
+    { label: 'DB 시트 내보내기', path: '/admin/sheets-sync' },
+    { label: '설정', path: '/admin/settings' },
+    { label: '로그인', path: '/login' },
+  ],
+  other: [],
+};
+
 const formatDateTime = (value?: string | null) => {
   if (!value) return '-';
   const date = new Date(value);
@@ -53,14 +197,26 @@ export default function ProgramUpdatesPage() {
     content: '',
     account: '',
   });
+  const [origin, setOrigin] = useState('');
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    setOrigin(window.location.origin);
     setForm((prev) => ({
       ...prev,
-      request_url: prev.request_url.trim() ? prev.request_url : window.location.href,
+      request_url: prev.request_url.trim() ? prev.request_url : `${window.location.origin}/schedule`,
     }));
   }, []);
+
+  const getMenuOptions = (appName: string) => {
+    const options = APP_MENU_OPTIONS[appName] || [];
+    return options.map((item) => ({
+      label: item.label,
+      value: origin ? `${origin}${item.path}` : item.path,
+    }));
+  };
+
+  const currentMenuOptions = getMenuOptions(form.app_name);
 
   const loadCurrentUser = async () => {
     try {
@@ -193,6 +349,17 @@ export default function ProgramUpdatesPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const handleAppChange = (nextAppName: string) => {
+    const nextOptions = getMenuOptions(nextAppName);
+    setForm((prev) => ({
+      ...prev,
+      app_name: nextAppName,
+      request_url: nextOptions.some((item) => item.value === prev.request_url)
+        ? prev.request_url
+        : (nextOptions[0]?.value || ''),
+    }));
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 pb-10">
       <div className="sticky top-0 z-10 border-b bg-white/95 px-4 py-3 backdrop-blur">
@@ -232,7 +399,7 @@ export default function ProgramUpdatesPage() {
               <label className="mb-1 block text-xs font-medium text-gray-600">앱명</label>
               <select
                 value={form.app_name}
-                onChange={(e) => setForm((prev) => ({ ...prev, app_name: e.target.value }))}
+                onChange={(e) => handleAppChange(e.target.value)}
                 className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-fuchsia-500 focus:outline-none focus:ring-2 focus:ring-fuchsia-100"
               >
                 {APP_OPTIONS.map((option) => (
@@ -244,13 +411,25 @@ export default function ProgramUpdatesPage() {
             </div>
 
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">수정요청페이지 URL</label>
-              <input
+              <label className="mb-1 block text-xs font-medium text-gray-600">수정요청페이지</label>
+              <select
                 value={form.request_url}
                 onChange={(e) => setForm((prev) => ({ ...prev, request_url: e.target.value }))}
-                placeholder="수정 요청 대상 페이지 URL을 입력하세요"
                 className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-fuchsia-500 focus:outline-none focus:ring-2 focus:ring-fuchsia-100"
-              />
+              >
+                {currentMenuOptions.length === 0 ? (
+                  <option value="">선택 가능한 메뉴가 없습니다</option>
+                ) : (
+                  currentMenuOptions.map((item, index) => (
+                    <option key={`${item.value}-${item.label}-${index}`} value={item.value}>
+                      {item.label}
+                    </option>
+                  ))
+                )}
+                {form.request_url && !currentMenuOptions.some((item) => item.value === form.request_url) && (
+                  <option value={form.request_url}>{form.request_url}</option>
+                )}
+              </select>
             </div>
 
             <div>
@@ -319,7 +498,7 @@ export default function ProgramUpdatesPage() {
                     </div>
 
                     <div className="mb-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2">
-                      <div className="text-[11px] font-medium text-blue-700">수정요청페이지 URL</div>
+                      <div className="text-[11px] font-medium text-blue-700">수정요청페이지</div>
                       <div className="mt-1 break-all text-xs text-blue-900">{row.request_url || '-'}</div>
                     </div>
 
