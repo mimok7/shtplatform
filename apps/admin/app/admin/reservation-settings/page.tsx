@@ -209,6 +209,26 @@ const SERVICE_EVENT_PRESETS: ServiceEventPreset[] = [
     default_priority: 'high',
     sort_order: 260,
   },
+  {
+    event_key: 'program_update_requested',
+    event_label: '프로그램 수정 신청',
+    description: '프로그램 수정 요청이 새로 등록될 때 모바일 알림에 표시되는 알림',
+    default_title: '프로그램 수정 신청',
+    default_body: '새 프로그램 수정 요청이 등록되었습니다.',
+    default_url: 'https://newmobile.stayhalong.com/program-updates',
+    default_priority: 'high',
+    sort_order: 270,
+  },
+  {
+    event_key: 'program_update_completed',
+    event_label: '프로그램 수정 완료',
+    description: '프로그램 수정 요청이 완료 처리될 때 모바일 알림에 표시되는 알림',
+    default_title: '프로그램 수정 완료',
+    default_body: '프로그램 수정 요청이 완료되었습니다.',
+    default_url: 'https://newmobile.stayhalong.com/program-updates',
+    default_priority: 'normal',
+    sort_order: 271,
+  },
 ];
 
 function normalizeKey(value: string) {
@@ -1376,8 +1396,9 @@ export default function ReservationSettingsPage() {
           <ul className="mt-2 list-disc space-y-1 pl-5 text-xs sm:text-sm">
             <li><span className="font-semibold">전체 푸시: 허용중</span>이면 해당 앱의 푸시 발송이 가능하고, <span className="font-semibold">차단중</span>이면 앱 전체가 막힙니다.</li>
             <li><span className="font-semibold">유형 상태: 사용중</span>이어야 해당 알림 유형이 동작합니다. <span className="font-semibold">중지중</span>이면 동작하지 않습니다.</li>
-            <li>각 셀의 <span className="font-semibold">허용중</span>은 앱별-유형별 허용 상태입니다. 단, 상위가 꺼져 있으면 실제 발송은 되지 않습니다.</li>
+            <li>각 셀은 부모 앱 허용 상태를 함께 반영합니다. 앱별 푸시 허용이 <span className="font-semibold">차단중</span>이면 자식 셀도 <span className="font-semibold">차단중</span>으로 표시됩니다.</li>
             <li><span className="font-semibold">실제 발송 조건</span>: 전체 푸시 = 허용중 + 유형 상태 = 사용중 + 셀 상태 = 허용중</li>
+            <li>알림 유형이 <span className="font-semibold">중지중</span>이면 셀 값과 상관없이 해당 유형은 발송되지 않습니다.</li>
           </ul>
         </section>
 
@@ -1440,15 +1461,15 @@ export default function ReservationSettingsPage() {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="max-h-[70vh] overflow-auto rounded-lg border border-gray-200">
             <table className="min-w-full divide-y divide-gray-200 text-sm">
               <thead className="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                 <tr>
-                  <th className="sticky left-0 z-10 bg-gray-50 px-3 py-3">알림 유형</th>
+                  <th className="sticky left-0 top-0 z-30 bg-gray-50 px-3 py-3">알림 유형</th>
+                  <th className="sticky top-0 z-20 bg-gray-50 px-3 py-3 text-center">유형 상태</th>
                   {apps.map((app) => (
-                    <th key={app.app_name} className="px-3 py-3 text-center">{app.app_label}</th>
+                    <th key={app.app_name} className="sticky top-0 z-20 bg-gray-50 px-3 py-3 text-center">{app.app_label}</th>
                   ))}
-                  <th className="px-3 py-3 text-center">유형 상태</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -1475,34 +1496,6 @@ export default function ReservationSettingsPage() {
                           </button>
                         </div>
                       </td>
-                      {apps.map((app) => {
-                        const setting = settingMap.get(`${app.app_name}:${event.event_key}`);
-                        const enabled = setting?.enabled !== false;
-                        const disabledByParent = !app.enabled || !event.is_active;
-                        const key = `${app.app_name}:${event.event_key}`;
-                        const isSaving = savingKey === `setting:${key}`;
-
-                        return (
-                          <td key={key} className="px-3 py-3 text-center">
-                            <button
-                              type="button"
-                              disabled={isSaving}
-                              onClick={() => void saveAppEventEnabled(app.app_name, event.event_key, !enabled)}
-                              title={disabledByParent ? '앱 또는 알림 유형이 꺼져 있어 발송되지 않습니다.' : undefined}
-                              className={`inline-flex min-w-20 items-center justify-center rounded-full px-3 py-1.5 text-xs font-semibold ${
-                                enabled && !disabledByParent
-                                  ? 'bg-blue-100 text-blue-700'
-                                  : enabled
-                                    ? 'bg-yellow-100 text-yellow-700'
-                                    : 'bg-gray-100 text-gray-500'
-                              } disabled:opacity-50`}
-                            >
-                              {isSaving ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : enabled ? <ToggleRight className="mr-1.5 h-4 w-4" /> : <ToggleLeft className="mr-1.5 h-4 w-4" />}
-                              {enabled ? (disabledByParent ? '허용(대기)' : '허용중') : '차단중'}
-                            </button>
-                          </td>
-                        );
-                      })}
                       <td className="px-3 py-3 text-center">
                         <button
                           type="button"
@@ -1516,6 +1509,37 @@ export default function ReservationSettingsPage() {
                           {event.is_active ? '사용중' : '중지중'}
                         </button>
                       </td>
+                      {apps.map((app) => {
+                        const setting = settingMap.get(`${app.app_name}:${event.event_key}`);
+                        const enabled = setting?.enabled !== false;
+                        const displayEnabled = app.enabled && event.is_active && enabled;
+                        const key = `${app.app_name}:${event.event_key}`;
+                        const isSaving = savingKey === `setting:${key}`;
+                        const blockedReason = !app.enabled
+                          ? '앱별 푸시 허용이 차단중입니다.'
+                          : !event.is_active
+                            ? '알림 유형이 중지중입니다.'
+                            : undefined;
+
+                        return (
+                          <td key={key} className="px-3 py-3 text-center">
+                            <button
+                              type="button"
+                              disabled={isSaving}
+                              onClick={() => void saveAppEventEnabled(app.app_name, event.event_key, !enabled)}
+                              title={blockedReason}
+                              className={`inline-flex min-w-20 items-center justify-center rounded-full px-3 py-1.5 text-xs font-semibold ${
+                                displayEnabled
+                                  ? 'bg-blue-100 text-blue-700'
+                                  : 'bg-gray-100 text-gray-500'
+                              } disabled:opacity-50`}
+                            >
+                              {isSaving ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : displayEnabled ? <ToggleRight className="mr-1.5 h-4 w-4" /> : <ToggleLeft className="mr-1.5 h-4 w-4" />}
+                              {displayEnabled ? '허용중' : '차단중'}
+                            </button>
+                          </td>
+                        );
+                      })}
                     </tr>
                   );
                 })}

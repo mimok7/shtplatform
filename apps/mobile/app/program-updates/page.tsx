@@ -260,7 +260,29 @@ export default function ProgramUpdatesPage() {
     void loadRows();
   }, []);
 
-  const saveRequest = async (mode: 'request' | 'complete') => {
+  const sendProgramUpdateNotification = async (requestId: string, action: 'requested' | 'completed') => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    const response = await fetch('/api/program-update-notify', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+      },
+      body: JSON.stringify({ requestId, action }),
+    });
+
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(result?.error || 'notification_request_failed');
+    }
+
+    return result;
+  };
+
+  const saveRequest = async () => {
     const appName = form.app_name.trim();
     const requestUrl = form.request_url.trim();
     const content = form.content.trim();
@@ -289,18 +311,35 @@ export default function ProgramUpdatesPage() {
         account: account || null,
       };
 
-      const { error } = editingId
+      const isEditing = Boolean(editingId);
+      const result = isEditing
         ? await supabase
             .from('program_update_requests')
             .update(payload)
             .eq('id', editingId)
-        : await supabase.from('program_update_requests').insert({
-            ...payload,
-            requested_at: requestedAt,
-            completed_at: null,
-          });
+            .select('id')
+            .single()
+        : await supabase
+            .from('program_update_requests')
+            .insert({
+              ...payload,
+              requested_at: requestedAt,
+              completed_at: null,
+            })
+            .select('id')
+            .single();
 
-      if (error) throw error;
+      if (result.error) throw result.error;
+
+      let notificationFailed = false;
+      if (!isEditing && result.data?.id) {
+        try {
+          await sendProgramUpdateNotification(result.data.id, 'requested');
+        } catch (notificationError) {
+          notificationFailed = true;
+          console.error('프로그램 수정 신청 알림 생성 실패:', notificationError);
+        }
+      }
 
       setForm({
         app_name: appName === 'other' ? 'mobile' : appName,
@@ -310,7 +349,11 @@ export default function ProgramUpdatesPage() {
       });
       setEditingId(null);
       await loadRows();
-      alert(editingId ? '프로그램 수정 요청이 수정되었습니다.' : '프로그램 수정 요청이 저장되었습니다.');
+      if (notificationFailed) {
+        alert(isEditing ? '프로그램 수정 요청이 수정되었습니다.' : '프로그램 수정 요청은 저장되었지만 알림 생성에 실패했습니다.');
+      } else {
+        alert(isEditing ? '프로그램 수정 요청이 수정되었습니다.' : '프로그램 수정 요청이 저장되었습니다.');
+      }
     } catch (error) {
       console.error('프로그램 수정 저장 실패:', error);
       alert('저장 중 오류가 발생했습니다.');
@@ -329,7 +372,18 @@ export default function ProgramUpdatesPage() {
         .eq('id', row.id);
 
       if (error) throw error;
+      let notificationFailed = false;
+      try {
+        await sendProgramUpdateNotification(row.id, 'completed');
+      } catch (notificationError) {
+        notificationFailed = true;
+        console.error('프로그램 수정 완료 알림 생성 실패:', notificationError);
+      }
+
       await loadRows();
+      if (notificationFailed) {
+        alert('완료 처리는 저장되었지만 알림 생성에 실패했습니다.');
+      }
     } catch (error) {
       console.error('완료일시 업데이트 실패:', error);
       alert('완료일시 저장에 실패했습니다.');
@@ -384,14 +438,14 @@ export default function ProgramUpdatesPage() {
             </div>
             <div>
               <h2 className="text-sm font-semibold text-gray-900">{editingId ? '수정 요청 수정' : '수정 요청 등록'}</h2>
-              <p className="text-xs text-gray-500">앱명, 수정요청페이지 URL, 내용을 저장합니다.</p>
+              <p className="text-xs text-gray-500">앱명, 수정요청페이지, 내용을 저장합니다.</p>
             </div>
           </div>
 
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              void saveRequest('request');
+              void saveRequest();
             }}
             className="space-y-3"
           >

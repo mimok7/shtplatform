@@ -792,6 +792,15 @@ payment_notifications,created_at,timestamp with time zone,NULL 가능,CURRENT_TI
 payment_notifications,recipient_email,text,NULL 가능,null,9
 payment_notifications,recipient_phone,text,NULL 가능,null,10
 payment_notifications,priority,text,NULL 가능,'normal'::text,11
+program_update_requests,id,uuid,NOT NULL,gen_random_uuid(),1
+program_update_requests,app_name,text,NOT NULL,null,2
+program_update_requests,request_url,text,NULL 가능,null,3
+program_update_requests,content,text,NOT NULL,null,4
+program_update_requests,account,text,NULL 가능,null,5
+program_update_requests,requested_at,timestamp with time zone,NOT NULL,null,6
+program_update_requests,completed_at,timestamp with time zone,NULL 가능,null,7
+program_update_requests,created_at,timestamp with time zone,NOT NULL,now(),8
+program_update_requests,updated_at,timestamp with time zone,NOT NULL,now(),9
 push_subscriptions,id,uuid,NOT NULL,gen_random_uuid(),1
 push_subscriptions,user_id,uuid,NULL 가능,null,2
 push_subscriptions,endpoint,text,NOT NULL,null,3

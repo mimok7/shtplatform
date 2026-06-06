@@ -37,6 +37,8 @@ const APP_ROUTE_CONFIG: Record<string, AppRouteConfig> = {
   quote: { baseUrl: 'https://quote.stayhalong.com', defaultPath: '/' },
 };
 
+const PERSONAL_NOTIFICATION_APPS = new Set(['customer', 'customer1']);
+
 function normalizeBaseUrl(url: string) {
   return url.replace(/\/$/, '');
 }
@@ -191,13 +193,19 @@ export async function dispatchPushNotification(options: DispatchOptions): Promis
     .select('id, endpoint, p256dh, auth, user_id, app_name, user_agent, last_used_at, created_at')
     .eq('is_active', true);
 
-  if (userId) query = query.eq('user_id', userId);
   if (allowedAppNames.length > 0) query = query.in('app_name', allowedAppNames);
 
-  const { data: subscriptions, error: subsError } = await query;
+  const { data: rawSubscriptions, error: subsError } = await query;
   if (subsError) {
     return { ok: false, eventKey, sentCount: 0, failCount: 0, total: 0, allowedAppNames, warning: 'subscription_query_failed' };
   }
+
+  const subscriptions = (rawSubscriptions || []).filter((sub) => {
+    if (!userId) return true;
+    if (!PERSONAL_NOTIFICATION_APPS.has(String(sub.app_name || ''))) return true;
+    return sub.user_id === userId;
+  });
+
   if (!subscriptions || subscriptions.length === 0) {
     return { ok: true, eventKey, sentCount: 0, failCount: 0, total: 0, allowedAppNames, message: '활성 구독 없음' };
   }

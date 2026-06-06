@@ -69,15 +69,17 @@ async function runCron() {
   const userIds = Array.from(new Set(toInsert.map((r: any) => r.re_user_id).filter(Boolean)));
   const emailMap = new Map<string, string>();
   const phoneMap = new Map<string, string>();
+  const nameMap = new Map<string, string>();
   if (userIds.length > 0) {
     const { data: users } = await serviceSupabase
       .from('users')
-      .select('id, email, phone_number')
+      .select('id, email, phone_number, name')
       .in('id', userIds);
     (users || []).forEach((u: any) => {
       if (u?.id) {
         if (u.email) emailMap.set(u.id, u.email);
         if (u.phone_number) phoneMap.set(u.id, u.phone_number);
+        if (u.name) nameMap.set(u.id, u.name);
       }
     });
   }
@@ -86,11 +88,12 @@ async function runCron() {
     const total = Number(r.total_amount || 0);
     const paid = Number(r.paid_amount || 0);
     const remain = total - paid;
+    const customerName = r.re_user_id ? (nameMap.get(r.re_user_id) || '-') : '-';
     return {
       reservation_id: r.re_id,
       notification_type: 'payment_due',
       notification_date: today,
-      message_content: `[${r.re_type || '예약'}] 미결제 잔액 ${remain.toLocaleString()}원 확인 부탁드립니다.`,
+      message_content: `고객명: ${customerName} | [${r.re_type || '예약'}] 미결제 잔액 ${remain.toLocaleString()}원 확인 부탁드립니다.`,
       is_sent: false,
       recipient_email: r.re_user_id ? (emailMap.get(r.re_user_id) || null) : null,
       recipient_phone: r.re_user_id ? (phoneMap.get(r.re_user_id) || null) : null,
@@ -115,8 +118,9 @@ async function runCron() {
     const total = Number(r.total_amount || 0);
     const paid = Number(r.paid_amount || 0);
     const remain = total - paid;
+    const customerName = r.re_user_id ? (nameMap.get(r.re_user_id) || '-') : '-';
     const title = '결제 예정 알림';
-    const body = `[${r.re_type || '예약'}] 미결제 잔액 ${remain.toLocaleString()}원 확인이 필요합니다.`;
+    const body = `고객명: ${customerName} | [${r.re_type || '예약'}] 미결제 잔액 ${remain.toLocaleString()}원 확인이 필요합니다.`;
 
     let sentCount = 0;
     let failCount = 0;
@@ -164,6 +168,7 @@ async function runCron() {
           eventKey: EVENT_KEY,
           reservationId: r.re_id,
           reservationType: r.re_type || null,
+          customerName,
           notificationDate: today,
           remainAmount: remain,
           sentCount,

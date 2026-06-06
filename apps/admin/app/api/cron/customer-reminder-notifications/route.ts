@@ -33,6 +33,11 @@ type ReservationRow = {
   reservation_date: string | null;
 };
 
+type UserRow = {
+  id: string;
+  name: string | null;
+};
+
 function toYmdInKst(value: string | null | undefined): string | null {
   if (!value) return null;
 
@@ -123,6 +128,25 @@ async function runCron(request: NextRequest) {
   const list = (reservations || []) as ReservationRow[];
   if (list.length === 0) {
     return NextResponse.json({ ok: true, rules: enabledRules.length, candidates: 0, inserted: 0, pushSent: 0, pushFailed: 0, message: '대상 예약 없음' });
+  }
+
+  const userIds = Array.from(new Set(list.map((row) => row.re_user_id).filter((id): id is string => Boolean(id))));
+  const userNameMap = new Map<string, string>();
+  if (userIds.length > 0) {
+    const { data: users, error: userError } = await serviceSupabase
+      .from('users')
+      .select('id, name')
+      .in('id', userIds);
+
+    if (userError) {
+      return NextResponse.json({ error: `users query failed: ${userError.message}` }, { status: 500 });
+    }
+
+    (users || []).forEach((user) => {
+      const row = user as UserRow;
+      if (!row.id) return;
+      userNameMap.set(row.id, String(row.name || '').trim() || '-');
+    });
   }
 
   const cruiseIds = list.filter((r) => r.re_type === 'cruise').map((r) => r.re_id);
@@ -255,6 +279,7 @@ async function runCron(request: NextRequest) {
     dedupeKey: string;
     reservationId: string;
     userId: string;
+    customerName: string;
     title: string;
     body: string;
     serviceDateYmd: string;
@@ -281,13 +306,15 @@ async function runCron(request: NextRequest) {
         if (!shouldSend) return;
 
         const serviceLabel = serviceLabelMap[serviceType] || serviceType;
+        const customerName = userNameMap.get(userId) || '-';
         const title = applyTemplate(rule.title, serviceLabel, rule.days_before, serviceDateYmd);
-        const body = applyTemplate(rule.body, serviceLabel, rule.days_before, serviceDateYmd);
+        const body = `고객명: ${customerName} | ${applyTemplate(rule.body, serviceLabel, rule.days_before, serviceDateYmd)}`;
 
         candidates.push({
           dedupeKey: `${rule.id}:${rule.date_basis}:${reservation.re_id}:${serviceDateYmd}:${rule.days_before}`,
           reservationId: reservation.re_id,
           userId,
+          customerName,
           title,
           body,
           serviceDateYmd,
@@ -347,6 +374,7 @@ async function runCron(request: NextRequest) {
           metadata: {
             eventKey: EVENT_KEY,
             ruleId: candidate.ruleId,
+            customerName: candidate.customerName,
             serviceDate: candidate.serviceDateYmd,
             source: 'cron_customer_reminder',
           },
@@ -391,6 +419,7 @@ async function runCron(request: NextRequest) {
           payload: {
             reservationId: candidate.reservationId,
             userId: candidate.userId,
+            customerName: candidate.customerName,
             ruleId: candidate.ruleId,
             serviceDate: candidate.serviceDateYmd,
             sentCount,
