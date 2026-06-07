@@ -24,10 +24,8 @@ export default function ServiceWorkerRegister() {
     navigator.serviceWorker
       .register('/sw.js')
       .then(registration => {
-        console.log('✅ Service Worker registered (mobile):', registration);
       })
       .catch(error => {
-        console.warn('⚠️ Service Worker registration failed (mobile):', error);
       });
   }, []);
 

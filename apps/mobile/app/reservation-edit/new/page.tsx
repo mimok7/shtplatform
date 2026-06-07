@@ -1514,7 +1514,6 @@ function NewReservationContent() {
             const total = (fastTrackRows || []).length;
             setSelectedQuoteFastTrack({ has: total > 0, total });
         } catch (error) {
-            console.warn('⚠️ 패스트랙 요약 조회 실패:', error);
             setSelectedQuoteFastTrack({ has: false, total: 0 });
         }
     };

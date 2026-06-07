@@ -211,7 +211,7 @@ function RightDetailsCard() {
                                 detailed.rentcars.push({ item, rentcarInfo, priceInfo: priceInfo || [] });
                             }
                         }
-                    } catch (ie) { console.warn('상세 로드 실패:', ie); }
+                    } catch (ie) {}
                 }
                 setDetailedServices(detailed);
             } finally { setLoading(false); }

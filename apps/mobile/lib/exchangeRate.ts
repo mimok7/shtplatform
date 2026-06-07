@@ -45,7 +45,6 @@ export async function getExchangeRate(currency: string = 'VND'): Promise<Exchang
             }
         } catch (e) {
             // 서버 호출 실패: 더 이상 로컬 fallback을 수행하지 않음
-            console.warn('getExchangeRate API failed, not falling back to local storage', e);
             return null;
         }
 

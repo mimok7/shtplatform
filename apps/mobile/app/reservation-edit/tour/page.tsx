@@ -100,7 +100,6 @@ function TourReservationEditContent() {
 
     const loadReservation = async () => {
         try {
-            console.log('🔄 투어 예약 데이터 로드 시작...', reservationId);
             setLoading(true);
 
             // 1) 예약 기본 정보 조회
@@ -134,7 +133,6 @@ function TourReservationEditContent() {
                 .maybeSingle();
 
             if (tourErr) {
-                console.warn('⚠️ 투어 예약 상세 조회 실패:', tourErr);
             }
 
             // 4) 견적 타이틀
@@ -250,7 +248,6 @@ function TourReservationEditContent() {
 
         try {
             setSaving(true);
-            console.log('💾 투어 예약 수정 저장 시작...');
 
             const payload = {
                 usage_date: formData.tour_date || null,
@@ -341,12 +338,10 @@ function TourReservationEditContent() {
                     },
                 });
             } catch (trackErr) {
-                console.warn('⚠️ 변경 추적 기록 실패(저장은 계속):', trackErr);
             }
 
             // 2. Insert fallback
             if (!updatedData || updatedData.length === 0) {
-                console.log('⚠️ 기존 데이터 없음, 신규 삽입...');
                 const { error: insertError } = await supabase
                     .from('reservation_tour')
                     .insert({
@@ -356,7 +351,6 @@ function TourReservationEditContent() {
                 if (insertError) throw insertError;
             }
 
-            console.log('✅ 투어 예약 수정 완료');
             alert('투어 예약이 성공적으로 수정되었습니다.');
 
             // 데이터 다시 로드 + Next.js 라우터 캐시 무효화 (상세 모달 최신화)

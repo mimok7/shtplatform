@@ -489,6 +489,18 @@ export default function SchedulePage() {
 
   const moveToReservationEdit = (target: any) => {
     if (!target) return;
+    const source = target?.source;
+    const orderId = target?.orderId || target?.order_id;
+
+    if (source === 'sh') {
+      if (orderId) {
+        router.push(`/sheet-reservations/${encodeURIComponent(orderId)}/edit`);
+        return;
+      }
+      router.push('/reservation-edit/old');
+      return;
+    }
+
     const quoteId = target?.quoteId || target?.re_quote_id || target?.quote_id;
     const userId = target?.re_user_id || target?.userId || target?.user_id;
 
@@ -1145,7 +1157,6 @@ export default function SchedulePage() {
           }
         }
       } catch (seqErr) {
-        console.warn('모바일 프로모션 순번 주입 실패:', seqErr);
       }
 
       // 디버그 로그: 로드된 전체 건수 및 선택된 날짜에 해당하는 항목들 확인
@@ -1159,9 +1170,7 @@ export default function SchedulePage() {
           }
           return toKstDateKey(ds) === debugTodayKey;
         }).map(i => ({ id: i.reservationId || i.orderId || i.re_id || null, source: i.source, type: getServiceType(i), date: getDateField(i) }));
-        console.info('SCHEDULE_DEBUG: loaded total=', combined.length, 'todayKey=', debugTodayKey, 'todayItems=', debugItems);
       } catch (e) {
-        console.warn('SCHEDULE_DEBUG: debug log failed', e);
       }
 
       setAllData(combined);

@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import ManagerLayout from '@/components/ManagerLayout';
+import ManagerLayout from '../_components/MobileReservationLayout';
 import supabase from '@/lib/supabase';
 import {
     Ship, Plane, Building, MapPin, Car, Calendar, RefreshCw,
@@ -363,7 +363,7 @@ function DetailModal({
                 </div>
                 <div className="flex gap-2 px-4 py-3 border-t bg-gray-50 rounded-b-xl">
                     <button
-                        onClick={() => router.push(`/manager/sheet-reservations/${item.orderId}/edit`)}
+                        onClick={() => router.push(`/sheet-reservations/${item.orderId}/edit`)}
                         className="flex items-center gap-1 px-4 py-2 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600 flex-1 justify-center"
                     >
                         <Edit2 className="w-4 h-4" />수정
@@ -596,14 +596,14 @@ export default function SheetEditPage() {
                     <div className="flex items-center gap-2">
                         <button
                             type="button"
-                            onClick={() => router.push('/manager/reservation-edit')}
+                            onClick={() => router.push('/reservation-edit')}
                             className="px-4 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 text-sm font-medium transition-colors"
                         >
                             NEW 수정
                         </button>
                         <button
                             type="button"
-                            onClick={() => router.push('/manager/schedule/sheet-edit')}
+                            onClick={() => router.push('/reservation-edit/old')}
                             className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium"
                         >
                             OLD 수정

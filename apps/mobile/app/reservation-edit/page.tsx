@@ -172,7 +172,6 @@ function ReservationEditContent() {
 
     const loadReservations = async (keywordRaw: string = searchTerm) => {
         try {
-            console.log('🔄 예약 데이터 로드 시작 (배이스 테이블 조회)...');
             setLoading(true);
 
             // URL 파라미터에서 필터 추출
@@ -296,13 +295,11 @@ function ReservationEditContent() {
 
             // 1.5) 사용자 정보 로드
             const userIds = Array.from(new Set(baseRows.map((r: any) => r.re_user_id).filter(Boolean)));
-            console.log('📌 추출된 사용자 IDs:', userIds);
 
             let userMap: Record<string, any> = {};
             if (userIds.length > 0) {
                 // phone 컬럼이 없어서 오류 발생함. id, name, email, phone_number 조회
                 const usersData = await fetchTableInBatches('users', 'id', userIds as string[], 'id, name, email, phone_number');
-                console.log('📌 조회된 사용자 데이터:', usersData);
 
                 if (usersData) {
                     usersData.forEach((u: any) => {
@@ -401,7 +398,6 @@ function ReservationEditContent() {
                     });
                 }
 
-                console.log('✅ 차량 데이터 로드 완료:', Object.keys(vehicleDataMap).length, '개 예약에 차량 데이터 있음');
             }
 
             // 2-b) 각 서비스별 전체 상세 데이터 배치 조회 (카드 통일 표시용)
@@ -460,7 +456,6 @@ function ReservationEditContent() {
                     }
                 });
 
-                console.log('✅ 서비스 상세 데이터 로드 완료:', Object.keys(serviceDetailsMap).length, '개');
             }
 
             // 3) quote를 배치로 조회하여 맵 구성
@@ -476,8 +471,6 @@ function ReservationEditContent() {
                         acc[q.id] = { title: q.title, status: q.status };
                         return acc;
                     }, {});
-                } else if (quoteErr) {
-                    console.warn('⚠️ 견적 배치 조회 오류:', quoteErr);
                 }
             }
 
@@ -527,7 +520,6 @@ function ReservationEditContent() {
 
             const merged: ReservationSummary[] = Object.values(groupedByUser);
 
-            console.log('✅ 예약 데이터 로드/머지 완료:', merged.length, '개 그룹 (총', baseRows.length, '개 서비스)');
             setReservations(merged);
         } catch (error) {
             console.error('❌ 예약 목록 로드 실패:', error);
@@ -583,8 +575,7 @@ function ReservationEditContent() {
 
             const serviceTable = serviceTableMap[reType];
             if (serviceTable) {
-                const { error: childErr } = await supabase.from(serviceTable).delete().eq('reservation_id', reId);
-                if (childErr) console.warn(`자식 테이블 ${serviceTable} 삭제 경고:`, childErr.message);
+                await supabase.from(serviceTable).delete().eq('reservation_id', reId);
             }
 
             const { error } = await supabase.from('reservation').delete().eq('re_id', reId);
@@ -767,6 +758,25 @@ function ReservationEditContent() {
             {/* 본문 */}
             <div className="px-2 py-4">
             <div className="space-y-6">
+                <div className="bg-white rounded-lg shadow-md p-2">
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={() => router.push('/reservation-edit')}
+                            className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium"
+                        >
+                            NEW 수정
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => router.push('/reservation-edit/old')}
+                            className="px-4 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 text-sm font-medium transition-colors"
+                        >
+                            OLD 수정
+                        </button>
+                    </div>
+                </div>
+
                 {/* 검색 및 액션 */}
                 <div className="bg-white rounded-lg shadow-md p-3">
                     <div className="flex flex-wrap gap-4 items-center mb-4">

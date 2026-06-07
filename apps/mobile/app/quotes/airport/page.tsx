@@ -246,7 +246,6 @@ function RightDetailsCard() {
                             }
                         }
                     } catch (ie) {
-                        console.warn('상세 로드 실패:', ie);
                     }
                 }
                 setDetailedServices(detailed);

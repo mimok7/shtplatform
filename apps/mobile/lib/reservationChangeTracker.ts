@@ -58,7 +58,6 @@ export async function recordReservationChange(input: RecordChangeInput): Promise
         const { data: userData } = await supabase.auth.getUser();
         const userId = userData?.user?.id;
         if (!userId) {
-            console.warn('[change-tracker] 인증 사용자 없음 - 변경 기록 생략');
             return { requestId: null, error: 'no_auth_user', childErrors };
         }
 

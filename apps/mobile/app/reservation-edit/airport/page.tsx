@@ -289,7 +289,6 @@ function AirportReservationEditContent() {
                 .order('airport_id', { ascending: true });
 
             if (error) {
-                console.warn('⚠️ 공항명 목록 로드 실패:', error);
                 return;
             }
 
@@ -332,7 +331,6 @@ function AirportReservationEditContent() {
                     setUsdRateToKrw(Number(usdRate.rate_to_krw));
                 }
             } catch (error) {
-                console.warn('⚠️ USD 환율 로드 실패:', error);
             }
         };
 
@@ -419,7 +417,6 @@ function AirportReservationEditContent() {
 
     const loadReservation = async () => {
         try {
-            console.log('🔄 공항 서비스 예약 데이터 로드 시작...', reservationId);
             setLoading(true);
             const normalizedReservationId = normalizeReservationId(reservationId);
             if (!normalizedReservationId) {
@@ -462,7 +459,6 @@ function AirportReservationEditContent() {
                 .order('created_at', { ascending: true });
 
             if (airportErr) {
-                console.warn('⚠️ 공항 예약 상세 조회 실패 (데이터 없음?):', airportErr);
             }
 
             const { data: fastTrackRows } = await supabase
@@ -672,7 +668,6 @@ function AirportReservationEditContent() {
                     },
                 });
             } catch (trackErr) {
-                console.warn('⚠️ 변경 추적 기록 실패(저장은 계속):', trackErr);
             }
 
             alert('공항 서비스 예약이 성공적으로 수정되었습니다.');

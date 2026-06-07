@@ -119,9 +119,7 @@ export default function PushNotificationManager() {
         });
 
         await saveSubscription(subscription);
-        console.log(`✅ Push subscription saved (${APP_NAME})`);
       } catch (err) {
-        console.warn('⚠️ Push subscription failed:', err);
       }
     };
 

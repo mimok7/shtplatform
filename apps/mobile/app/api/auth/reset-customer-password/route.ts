@@ -107,7 +107,6 @@ export async function POST(request: NextRequest) {
         .eq(column, normalizedValue)
         .limit(1);
       if (error) {
-        console.warn(`[reset-pw] users.${column} 조회 실패:`, error.message);
         return;
       }
       const role = normalizeRole(data?.[0]?.role);
@@ -137,7 +136,6 @@ export async function POST(request: NextRequest) {
           requesterRoles = [...new Set([...requesterRoles, ...adminApiRoles])];
         }
       } catch (e) {
-        console.warn('[reset-pw] admin.getUserById 폴백 실패:', e);
       }
     }
 

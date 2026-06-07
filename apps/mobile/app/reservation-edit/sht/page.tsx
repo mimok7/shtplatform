@@ -337,7 +337,6 @@ function SHTReservationEditContent() {
                 .limit(200);
 
             if (error) {
-                console.warn('⚠️ SHT 좌석 가격 조회 실패, 기본값 사용:', error);
                 setSeatPriceMap(SHT_SEAT_PRICES);
                 setSeatPriceByCode({});
                 setSeatCodeByType({});
@@ -395,12 +394,10 @@ function SHTReservationEditContent() {
                 ...mapped,
             };
 
-            console.log('✅ SHT 좌석 가격 적용:', merged);
             setSeatPriceMap(merged);
             setSeatPriceByCode(priceByCode);
             setSeatCodeByType(codeByType);
         } catch (err) {
-            console.warn('⚠️ SHT 좌석 가격 로드 중 예외, 기본값 사용:', err);
             setSeatPriceMap(SHT_SEAT_PRICES);
             setSeatPriceByCode({});
             setSeatCodeByType({});
@@ -409,7 +406,6 @@ function SHTReservationEditContent() {
 
     const loadReservation = async () => {
         try {
-            console.log('🔄 스하차량 예약 데이터 로드 시작...', reservationId);
             setLoading(true);
 
             // 1) 예약 기본 정보 조회
@@ -450,10 +446,8 @@ function SHTReservationEditContent() {
             ]);
 
             if (shtResult.error) {
-                console.warn('⚠️ 스하차량 예약 상세 조회 실패:', shtResult.error);
             }
             if (cruiseCarResult.error) {
-                console.warn('⚠️ 크루즈 차량 상세 조회 실패:', cruiseCarResult.error);
             }
 
             const shtRows = Array.isArray(shtResult.data) ? shtResult.data : [];
@@ -620,7 +614,6 @@ function SHTReservationEditContent() {
 
         try {
             setSaving(true);
-            console.log('💾 스하차량 예약 수정 저장 시작...');
 
             // 저장할 데이터 (reservation_id는 필수)
             const normalizedCategory = activeCategory;
@@ -643,7 +636,6 @@ function SHTReservationEditContent() {
                 pickup_confirmed_at: formData.pickup_confirmed_at || null,
             };
 
-            console.log('📤 기존 데이터 삭제 후 새로 삽입 시작:', payload);
 
             // 1. 현재 카테고리(Pickup/Drop-off) 데이터만 삭제
             const { error: deleteError } = await supabase
@@ -657,7 +649,6 @@ function SHTReservationEditContent() {
                 throw deleteError;
             }
 
-            console.log('✅ 기존 데이터 삭제 완료');
 
             // 2. 새 데이터 삽입
             const { data: insertedData, error: insertError } = await supabase
@@ -670,7 +661,6 @@ function SHTReservationEditContent() {
                 throw insertError;
             }
 
-            console.log('✅ 스하차량 저장 완료, 저장된 행:', insertedData?.length || 0, insertedData);
 
             if (!insertedData || insertedData.length === 0) {
                 throw new Error('스하차량 정보 저장에 실패했습니다.');
@@ -746,10 +736,8 @@ function SHTReservationEditContent() {
                     },
                 });
             } catch (trackErr) {
-                console.warn('⚠️ 변경 추적 기록 실패(저장은 계속):', trackErr);
             }
 
-            console.log('✅ 스하차량 예약 수정 완료');
             alert('스하차량 예약이 성공적으로 수정되었습니다.');
 
             // 데이터 다시 로드 + Next.js 라우터 캐시 무효화 (상세 모달 최신화)

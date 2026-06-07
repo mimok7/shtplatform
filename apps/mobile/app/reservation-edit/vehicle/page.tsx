@@ -143,7 +143,6 @@ function CruiseCarReservationEditContent() {
                 setAuthChecked(true);
             } catch (err) {
                 if (cancelled) return;
-                console.warn('인증 확인 오류:', err);
                 router.replace('/login');
             }
         };
@@ -315,7 +314,6 @@ function CruiseCarReservationEditContent() {
             .maybeSingle();
 
         if (error) {
-            console.warn('⚠️ rentcar_price 코드 조회 실패:', error);
             return null;
         }
         return data as RentcarPriceOption | null;
@@ -339,7 +337,6 @@ function CruiseCarReservationEditContent() {
         }
 
         if (!data) {
-            console.warn('⚠️ 일치하는 rentcar_price 데이터가 없습니다:', { wayType, route, vehicleType });
             return null;
         }
 
@@ -411,7 +408,6 @@ function CruiseCarReservationEditContent() {
                 .order('created_at', { ascending: true });
 
             if (carErr) {
-                console.warn('⚠️ 크루즈 차량 예약 상세 조회 실패:', carErr);
             }
 
             let quoteInfo = null as { title: string } | null;
@@ -582,7 +578,6 @@ function CruiseCarReservationEditContent() {
                 .insert(extendedRows);
 
             if (insertResult.error && /does not exist|column/i.test(insertResult.error.message || '')) {
-                console.warn('⚠️ 확장 컬럼 미지원, 기본 컬럼으로 저장 재시도');
                 insertResult = await supabase
                     .from('reservation_cruise_car')
                     .insert(basicRows);
@@ -628,7 +623,6 @@ function CruiseCarReservationEditContent() {
                 .eq('re_id', reservationId);
 
             if (reservationError) {
-                console.warn('⚠️ reservation 동기화 실패:', reservationError);
             }
 
             await saveAdditionalFeeTemplateFromInput({
@@ -651,7 +645,6 @@ function CruiseCarReservationEditContent() {
                     },
                 });
             } catch (trackErr) {
-                console.warn('⚠️ 변경 추적 기록 실패(저장은 계속):', trackErr);
             }
 
             alert('크루즈 차량 예약이 성공적으로 수정되었습니다.');

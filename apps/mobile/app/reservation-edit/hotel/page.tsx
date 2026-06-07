@@ -105,7 +105,6 @@ function HotelReservationEditContent() {
 
     const loadReservation = async () => {
         try {
-            console.log('🔄 호텔 예약 데이터 로드 시작...', reservationId);
             setLoading(true);
 
             // 1) 서비스 상세
@@ -160,14 +159,8 @@ function HotelReservationEditContent() {
                     .eq('hotel_price_code', hotelRow.hotel_price_code)
                     .single();
 
-                console.log('🏨 호텔 가격 정보 조회 (전체):', {
-                    hotel_price_code: hotelRow.hotel_price_code,
-                    result: hp,
-                    error: hpErr
-                });
 
                 if (hpErr) {
-                    console.warn('⚠️ 호텔 가격 정보 조회 실패:', hpErr);
 
                     // hotel_price_code로 검색해도 없으면 전체 테이블에서 비슷한 코드 찾기
                     const { data: allHotels, error: allErr } = await supabase
@@ -176,11 +169,9 @@ function HotelReservationEditContent() {
                         .ilike('hotel_price_code', `%${hotelRow.hotel_price_code}%`)
                         .limit(5);
 
-                    console.log('🔍 비슷한 호텔 코드 검색:', allHotels);
                 } else if (hp) {
                     hotelPriceInfo = hp;
                 } else {
-                    console.warn('⚠️ 호텔 가격 정보를 찾을 수 없습니다:', hotelRow.hotel_price_code);
                 }
             } const fullReservation: HotelReservation = {
                 ...hotelRow,
@@ -251,7 +242,6 @@ function HotelReservationEditContent() {
 
         try {
             setSaving(true);
-            console.log('💾 호텔 예약 수정 저장 시작...');
 
             // schedule에서 숫자 추출 (예: "3박" -> 3)
             const nightsNum = getNightsFromSchedule(formData.schedule);
@@ -301,7 +291,6 @@ function HotelReservationEditContent() {
                 throw hotelError;
             }
 
-            console.log('✅ 1. 예약 호텔 테이블 저장 완료');
 
             // 2. 메인 예약 테이블 동기화 (총 금액 + 인원수 + 예약일 + 타임스탬프)
             const { error: reservationError } = await supabase
@@ -322,7 +311,6 @@ function HotelReservationEditContent() {
                 throw reservationError;
             }
 
-            console.log('✅ 2. 예약 테이블 동기화 완료 (총 금액, 인원수, 예약일)');
 
             await saveAdditionalFeeTemplateFromInput({
                 serviceType: 'hotel',
@@ -355,10 +343,8 @@ function HotelReservationEditContent() {
                     },
                 });
             } catch (trackErr) {
-                console.warn('⚠️ 변경 추적 기록 실패(저장은 계속):', trackErr);
             }
 
-            console.log('✅ 모든 테이블 저장 완료');
             alert('호텔 예약이 성공적으로 수정되었습니다.');
 
             // 데이터 다시 로드 + Next.js 라우터 캐시 무효화 (상세 모달 최신화)

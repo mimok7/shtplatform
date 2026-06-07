@@ -1209,7 +1209,6 @@ export default function ReservationDetailModal({
           try {
             promotionSequenceMap = await fetchPromotionSequenceMap(promoReservationIds);
           } catch (seqErr) {
-            console.warn('모바일 프로모션 순번 조회 실패:', seqErr);
           }
         }
 

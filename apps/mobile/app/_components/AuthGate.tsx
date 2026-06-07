@@ -101,7 +101,6 @@ export default function AuthGate({ children }: AuthGateProps) {
 
         if (!cancelled) setChecking(false);
       } catch (err) {
-        console.warn('Session validation error (non-blocking):', err);
         if (!cancelled) {
           setChecking(false);
         }

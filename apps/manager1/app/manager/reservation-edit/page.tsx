@@ -715,6 +715,25 @@ function ReservationEditContent() {
     return (
         <ManagerLayout title="📝 예약 수정" activeTab="reservation-edit">
             <div className="space-y-6">
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-2">
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={() => router.push('/manager/reservation-edit')}
+                            className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium"
+                        >
+                            NEW 수정
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => router.push('/manager/schedule/sheet-edit')}
+                            className="px-4 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 text-sm font-medium transition-colors"
+                        >
+                            OLD 수정
+                        </button>
+                    </div>
+                </div>
+
                 {/* 필터 및 검색 */}
                 <div className="bg-white rounded-lg shadow-sm p-6">
                     <div className="flex flex-wrap gap-4 items-center mb-4">

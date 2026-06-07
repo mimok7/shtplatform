@@ -156,7 +156,6 @@ export default function ShtCarSeatMap({
                     .order('pickup_datetime', { ascending: true });
 
                 if (error) {
-                    console.warn('reservation_car_sht 로드 오류:', error);
                     setAllData([]);
                     return;
                 }
@@ -177,7 +176,6 @@ export default function ShtCarSeatMap({
                         .in('re_id', batch);
 
                     if (reservationError) {
-                        console.warn('reservation 배치 조회 오류:', reservationError);
                         continue;
                     }
 
@@ -206,7 +204,6 @@ export default function ShtCarSeatMap({
                             .in('id', batch);
 
                         if (userError) {
-                            console.warn('users 배치 조회 오류:', userError);
                             continue;
                         }
 
@@ -395,7 +392,6 @@ export default function ShtCarSeatMap({
             setSelectedSeats([]);
             setSelectedReservedInfo(null);
         } catch (err) {
-            console.warn('date change failed', err);
         }
     };
 

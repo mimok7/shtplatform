@@ -184,7 +184,6 @@ export default function ShtCarPage() {
             const { data: reservationCarRows, error: reservationCarError } = await q;
 
             if (reservationCarError) {
-                console.warn('reservation_car_sht 조회 오류:', reservationCarError);
                 setReservations([]);
                 setVehicles([]);
                 return;
@@ -192,7 +191,6 @@ export default function ShtCarPage() {
 
             const filteredRows = reservationCarRows || [];
 
-            console.log(`📋 reservation_car_sht=${filteredRows.length} 건`);
 
             if (filteredRows.length === 0) {
                 setReservations([]);
@@ -391,7 +389,6 @@ export default function ShtCarPage() {
                 .order('pickup_datetime', { ascending: true });
 
             if (carError) {
-                console.warn('이상 배정 조회 실패(reservation_car_sht):', carError);
                 setAnomalyRows([]);
                 return;
             }

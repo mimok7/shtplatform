@@ -468,7 +468,6 @@ function PackageReservationEditContent() {
             return getStepOrder(a) - getStepOrder(b);
         });
 
-        console.log('📦 패키지 서비스 로드 완료:', sortedServices.length, '개');
         setServices(sortedServices);
     };
 
@@ -545,7 +544,6 @@ function PackageReservationEditContent() {
                 const { error: pkgDetailError } = await detailQuery;
 
                 if (pkgDetailError) {
-                    console.warn('reservation_package 저장 실패:', pkgDetailError);
                 }
             }
 
@@ -562,7 +560,6 @@ function PackageReservationEditContent() {
                         .eq(idField, id);
 
                     if (serviceError) {
-                        console.warn(`${tableName} 업데이트 실패:`, serviceError);
                     }
                 }
             }
@@ -606,7 +603,6 @@ function PackageReservationEditContent() {
                     },
                 });
             } catch (trackErr) {
-                console.warn('⚠️ 변경 추적 기록 실패(저장은 계속):', trackErr);
             }
             router.push('/reservation-edit?type=package');
 

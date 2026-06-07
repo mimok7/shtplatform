@@ -182,7 +182,6 @@ function RentcarReservationEditContent() {
 
     const loadReservation = async () => {
         try {
-            console.log('🔄 렌터카 예약 데이터 로드 시작...', reservationId);
             setLoading(true);
 
             // 1) 예약 기본 정보 조회
@@ -216,7 +215,6 @@ function RentcarReservationEditContent() {
                 .maybeSingle();
 
             if (rentcarErr) {
-                console.warn('⚠️ 렌터카 예약 상세 조회 실패:', rentcarErr);
             }
 
             // 4) 견적 타이틀
@@ -459,7 +457,6 @@ function RentcarReservationEditContent() {
 
         try {
             setSaving(true);
-            console.log('💾 렌터카 예약 수정 저장 시작...');
 
             const payload = {
                 pickup_datetime: toDbDateTimeKst(formData.pickup_datetime),
@@ -570,12 +567,10 @@ function RentcarReservationEditContent() {
                     },
                 });
             } catch (trackErr) {
-                console.warn('⚠️ 변경 추적 기록 실패(저장은 계속):', trackErr);
             }
 
             // 2. Insert fallback
             if (!updatedData || updatedData.length === 0) {
-                console.log('⚠️ 기존 데이터 없음, 신규 삽입...');
                 const { error: insertError } = await supabase
                     .from('reservation_rentcar')
                     .insert({
@@ -586,7 +581,6 @@ function RentcarReservationEditContent() {
                 if (insertError) throw insertError;
             }
 
-            console.log('✅ 렌터카 예약 수정 완료');
             alert('렌터카 예약이 성공적으로 수정되었습니다.');
 
             // 데이터 다시 로드 + Next.js 라우터 캐시 무효화 (상세 모달 최신화)
