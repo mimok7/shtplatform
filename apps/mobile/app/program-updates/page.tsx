@@ -17,6 +17,8 @@ type ProgramUpdateRow = {
   updated_at: string;
 };
 
+type StatusFilter = 'requested' | 'completed' | 'all';
+
 const APP_OPTIONS = [
   'mobile',
   'manager',
@@ -187,6 +189,7 @@ const formatDateTime = (value?: string | null) => {
 
 export default function ProgramUpdatesPage() {
   const [rows, setRows] = useState<ProgramUpdateRow[]>([]);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('requested');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [completeSavingId, setCompleteSavingId] = useState<string | null>(null);
@@ -259,6 +262,14 @@ export default function ProgramUpdatesPage() {
     void loadCurrentUser();
     void loadRows();
   }, []);
+
+  const filteredRows = rows.filter((row) => {
+    const isCompleted = Boolean(row.completed_at);
+
+    if (statusFilter === 'requested') return !isCompleted;
+    if (statusFilter === 'completed') return isCompleted;
+    return true;
+  });
 
   const sendProgramUpdateNotification = async (requestId: string, action: 'requested' | 'completed') => {
     const {
@@ -514,7 +525,30 @@ export default function ProgramUpdatesPage() {
           <div className="mb-3 flex items-center justify-between">
             <div>
               <h2 className="text-sm font-semibold text-gray-900">프로그램 수정 신청 목록</h2>
-              <p className="text-xs text-gray-500">총 {rows.length}건</p>
+              <p className="text-xs text-gray-500">총 {filteredRows.length}건</p>
+            </div>
+            <div className="flex items-center gap-2">
+              {[
+                { key: 'requested', label: '신청' },
+                { key: 'completed', label: '완료' },
+                { key: 'all', label: '전체' },
+              ].map((filter) => {
+                const isActive = statusFilter === filter.key;
+                return (
+                  <button
+                    key={filter.key}
+                    type="button"
+                    onClick={() => setStatusFilter(filter.key as StatusFilter)}
+                    className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
+                      isActive
+                        ? 'bg-fuchsia-600 text-white shadow-sm'
+                        : 'border border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    {filter.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -523,13 +557,17 @@ export default function ProgramUpdatesPage() {
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               불러오는 중...
             </div>
-          ) : rows.length === 0 ? (
+          ) : filteredRows.length === 0 ? (
             <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-8 text-center text-sm text-gray-500">
-              저장된 프로그램 수정 요청이 없습니다.
+              {statusFilter === 'requested'
+                ? '신청 상태의 프로그램 수정 요청이 없습니다.'
+                : statusFilter === 'completed'
+                  ? '완료 상태의 프로그램 수정 요청이 없습니다.'
+                  : '저장된 프로그램 수정 요청이 없습니다.'}
             </div>
           ) : (
             <div className="space-y-3">
-              {rows.map((row) => {
+              {filteredRows.map((row) => {
                 const isCompleted = Boolean(row.completed_at);
                 return (
                   <article key={row.id} className="rounded-xl border border-gray-200 bg-gray-50 p-3">
@@ -547,7 +585,7 @@ export default function ProgramUpdatesPage() {
                             : 'bg-amber-100 text-amber-700'
                         }`}
                       >
-                        {isCompleted ? '완료' : '진행중'}
+                        {isCompleted ? '완료' : '신청'}
                       </span>
                     </div>
 

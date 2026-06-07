@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import webpush from 'web-push';
 import serviceSupabase from '@/lib/serviceSupabase';
-
-const webpush = require('web-push');
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
