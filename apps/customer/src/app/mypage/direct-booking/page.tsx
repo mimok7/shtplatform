@@ -371,7 +371,8 @@ function DirectBookingContent() {
     const getServiceDisplayName = (serviceType: string) => {
         const names: { [key: string]: string } = {
             cruise: '크루즈',
-            airport: '공항 서비스',
+            cruise_vehicle: '크루즈 차량',
+            airport: '공항 서비스 예약',
             hotel: '호텔',
             rentcar: '렌터카',
             tour: '투어',
@@ -597,14 +598,25 @@ function DirectBookingContent() {
             label: '크루즈 예약',
             href: '/mypage/direct-booking/cruise',
             description: '크루즈 여행 객실 및 차량 직접 예약',
+            bg: 'bg-blue-100',
             color: 'from-blue-500 to-cyan-500',
             type: 'cruise'
         },
         {
+            icon: '🚗',
+            label: '크루즈 차량만 추가',
+            href: '/mypage/direct-booking/cruise/vehicle',
+            description: '기존 크루즈 예약에 선착장 차량만 추가 예약',
+            bg: 'bg-indigo-100',
+            color: 'from-indigo-500 to-blue-500',
+            type: 'cruise_vehicle'
+        },
+        {
             icon: '✈️',
-            label: '공항 서비스',
+            label: '공항 서비스 예약',
             href: '/mypage/direct-booking/airport',
             description: '공항 픽업/샌딩 서비스 직접 예약',
+            bg: 'bg-sky-100',
             color: 'from-sky-500 to-blue-500',
             type: 'airport'
         },
@@ -613,6 +625,7 @@ function DirectBookingContent() {
             label: '호텔 예약',
             href: '/mypage/direct-booking/hotel',
             description: '호텔 숙박 서비스 직접 예약',
+            bg: 'bg-purple-100',
             color: 'from-purple-500 to-pink-500',
             type: 'hotel'
         },
@@ -621,6 +634,7 @@ function DirectBookingContent() {
             label: '렌터카 예약',
             href: '/mypage/direct-booking/rentcar',
             description: '렌터카 서비스 직접 예약',
+            bg: 'bg-green-100',
             color: 'from-green-500 to-emerald-500',
             type: 'rentcar'
         },
@@ -629,6 +643,7 @@ function DirectBookingContent() {
             label: '투어 예약',
             href: '/mypage/direct-booking/tour',
             description: '관광 투어 서비스 직접 예약',
+            bg: 'bg-orange-100',
             color: 'from-orange-500 to-red-500',
             type: 'tour'
         },
@@ -637,6 +652,7 @@ function DirectBookingContent() {
             label: '패키지 예약',
             href: '/mypage/direct-booking/package',
             description: '크루즈, 공항 픽업/샌딩, 투어가 포함된 패키지 예약',
+            bg: 'bg-amber-100',
             color: 'from-amber-500 to-orange-500',
             type: 'package'
         },
@@ -645,6 +661,7 @@ function DirectBookingContent() {
             label: '티켓 예약',
             href: '/mypage/direct-booking/ticket',
             description: '드래곤펄 동굴 투어 및 기타 티켓 구매대행',
+            bg: 'bg-teal-100',
             color: 'from-teal-500 to-cyan-500',
             type: 'ticket'
         }

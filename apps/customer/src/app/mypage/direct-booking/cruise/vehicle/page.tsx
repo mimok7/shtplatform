@@ -18,6 +18,16 @@ type VehicleRow = {
     custom_price?: number;
 };
 
+type CruiseReservationOption = {
+    reservationId: string;
+    quoteId: string | null;
+    cruiseName: string;
+    checkin: string;
+    schedule: string;
+    roomTypes: string[];
+    guestCount: number;
+};
+
 const carCategoryHardcoded = ['편도', '당일왕복', '다른날왕복'];
 
 const isShtVehicleType = (vehicleType?: string) =>
@@ -73,6 +83,7 @@ function CruiseVehicleContent() {
     const [user, setUser] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [pageError, setPageError] = useState<string>('');
+    const [cruiseOptions, setCruiseOptions] = useState<CruiseReservationOption[]>([]);
 
     // 크루즈 정보 (rentcar 필터 + 자동 차량 결정용)
     const [cruiseName, setCruiseName] = useState('');
@@ -110,6 +121,74 @@ function CruiseVehicleContent() {
     const [selectedShtSeat, setSelectedShtSeat] = useState<{ vehicle: string; seat: string; category: string } | null>(null);
 
     useLoadingTimeout(loading, setLoading);
+
+    const loadCruiseReservationOptions = useCallback(async (userId: string) => {
+        let reservationQuery = supabase
+            .from('reservation')
+            .select('re_id, re_quote_id')
+            .eq('re_user_id', userId)
+            .eq('re_type', 'cruise')
+            .order('re_created_at', { ascending: false });
+
+        if (quoteId) {
+            reservationQuery = reservationQuery.eq('re_quote_id', quoteId);
+        }
+
+        const { data: reservations, error: reservationError } = await reservationQuery;
+        if (reservationError) throw reservationError;
+
+        const reservationIds = (reservations || []).map((row: any) => row.re_id).filter(Boolean);
+        if (reservationIds.length === 0) {
+            setCruiseOptions([]);
+            return;
+        }
+
+        const { data: cruiseRows, error: cruiseError } = await supabase
+            .from('reservation_cruise')
+            .select('reservation_id, room_price_code, checkin, guest_count')
+            .in('reservation_id', reservationIds);
+
+        if (cruiseError) throw cruiseError;
+
+        const priceCodeIds = [...new Set((cruiseRows || []).map((row: any) => row.room_price_code).filter(Boolean))];
+        let rateCardMap = new Map<string, any>();
+
+        if (priceCodeIds.length > 0) {
+            const { data: rateCards } = await supabase
+                .from('cruise_rate_card')
+                .select('id, cruise_name, room_type, schedule_type')
+                .in('id', priceCodeIds);
+            rateCardMap = new Map((rateCards || []).map((row: any) => [String(row.id), row]));
+        }
+
+        const rowsByReservation = new Map<string, any[]>();
+        (cruiseRows || []).forEach((row: any) => {
+            const current = rowsByReservation.get(row.reservation_id) || [];
+            current.push(row);
+            rowsByReservation.set(row.reservation_id, current);
+        });
+
+        const nextOptions: CruiseReservationOption[] = (reservations || []).map((reservation: any) => {
+            const rows = rowsByReservation.get(reservation.re_id) || [];
+            const rateCards = rows
+                .map((row: any) => rateCardMap.get(String(row.room_price_code)))
+                .filter(Boolean);
+            const firstRateCard = rateCards[0];
+            const firstRow = rows[0];
+
+            return {
+                reservationId: reservation.re_id,
+                quoteId: reservation.re_quote_id || null,
+                cruiseName: firstRateCard?.cruise_name || '크루즈 정보 없음',
+                checkin: firstRow?.checkin || '',
+                schedule: firstRateCard?.schedule_type || '',
+                roomTypes: [...new Set(rateCards.map((card: any) => String(card.room_type || '').trim()).filter(Boolean))],
+                guestCount: rows.reduce((sum: number, row: any) => sum + Number(row.guest_count || 0), 0),
+            };
+        });
+
+        setCruiseOptions(nextOptions);
+    }, [quoteId]);
 
     // 일정에 따라 사용 가능한 차량 카테고리 필터링
     const getAvailableCarCategories = useMemo(() => {
@@ -206,7 +285,6 @@ function CruiseVehicleContent() {
             }
             // 정렬 (안정적 표시)
             uniqueCarTypes.sort();
-            console.log('[vehicle] loadCarTypeOptions', { wayType: wt, route: rt, cruiseName, rawTypes, uniqueCarTypes, packageEligible });
             setCarTypeOptions(uniqueCarTypes);
         } catch (error) {
             console.error('차량타입 옵션 조회 실패:', error);
@@ -340,14 +418,19 @@ function CruiseVehicleContent() {
         let cancelled = false;
         const init = async () => {
             try {
-                if (!reservationId) {
-                    setPageError('예약 정보가 없습니다. 크루즈 예약 페이지로 돌아가세요.');
+                const { data: { user: currentUser } } = await supabase.auth.getUser();
+                if (cancelled) return;
+                if (currentUser) {
+                    setUser(currentUser);
+                } else {
+                    setPageError('로그인이 필요합니다.');
                     return;
                 }
 
-                const { data: { user: currentUser } } = await supabase.auth.getUser();
-                if (cancelled) return;
-                if (currentUser) setUser(currentUser);
+                if (!reservationId) {
+                    await loadCruiseReservationOptions(currentUser.id);
+                    return;
+                }
 
                 // 크루즈 예약 조회
                 const { data: reservation, error: resError } = await supabase
@@ -545,7 +628,7 @@ function CruiseVehicleContent() {
             try { subscription?.unsubscribe?.(); } catch { /* noop */ }
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [reservationId]);
+    }, [reservationId, loadCruiseReservationOptions]);
 
     // ── 이용방식 변경 시 경로 옵션 자동 로드 (페이지 복귀 포함) ──
     useEffect(() => {
@@ -872,24 +955,69 @@ function CruiseVehicleContent() {
         );
     }
 
+    if (!reservationId) {
+        return (
+            <PageWrapper title="📝 차량 예약">
+                <div className="w-full space-y-4">
+                    <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                        <p className="text-blue-700 text-sm">
+                            차량을 추가할 크루즈 예약을 먼저 선택해 주세요.
+                        </p>
+                    </div>
+
+                    {cruiseOptions.length === 0 ? (
+                        <div className="bg-white rounded-xl shadow p-6 text-center space-y-4">
+                            <p className="text-gray-600">추가 가능한 크루즈 예약이 없습니다.</p>
+                            <button
+                                type="button"
+                                onClick={() => router.push('/mypage/direct-booking/cruise')}
+                                className="px-4 py-2 bg-sky-600 text-white rounded-lg hover:bg-sky-700"
+                            >
+                                크루즈 예약하러 가기
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 gap-3">
+                            {cruiseOptions.map((option) => (
+                                <button
+                                    key={option.reservationId}
+                                    type="button"
+                                    onClick={() => {
+                                        const nextQuoteId = option.quoteId || quoteId || '';
+                                        const nextUrl = nextQuoteId
+                                            ? `/mypage/direct-booking/cruise/vehicle?reservationId=${option.reservationId}&quoteId=${nextQuoteId}`
+                                            : `/mypage/direct-booking/cruise/vehicle?reservationId=${option.reservationId}`;
+                                        router.push(nextUrl);
+                                    }}
+                                    className="bg-white border border-slate-300 rounded-lg p-4 hover:shadow-md transition text-left"
+                                >
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div>
+                                            <h3 className="text-base font-semibold text-slate-900">{option.cruiseName}</h3>
+                                            <p className="text-sm text-slate-500 mt-1">
+                                                체크인 {option.checkin || '-'} · {option.schedule || '일정 미상'}
+                                            </p>
+                                            <p className="text-sm text-slate-600 mt-1">
+                                                객실 {option.roomTypes.join(', ') || '-'} · 인원 {option.guestCount || 0}명
+                                            </p>
+                                        </div>
+                                        <span className="text-xs px-2 py-1 rounded-full bg-indigo-100 text-indigo-700">
+                                            차량 추가
+                                        </span>
+                                    </div>
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </PageWrapper>
+        );
+    }
+
     return (
         <PageWrapper title="📝 차량 예약">
             <div className="w-full">
                 <form onSubmit={handleSubmit} className="space-y-4">
-
-                        <div className="bg-blue-50 rounded-lg p-4 mb-4 border border-blue-200">
-                            <p className="text-blue-700 text-sm">
-                                크루즈 예약이 저장되었습니다. 추가로 필요한 차량을 선택해주세요. 차량이 필요 없으시면 "건너뛰기"를 누르세요.
-                            </p>
-                        </div>
-
-                        {grandPioneersVehicleDiscountEligible && (
-                            <div className="bg-emerald-50 rounded-lg p-4 mb-4 border border-emerald-200">
-                                <p className="text-emerald-700 text-sm">
-                                    그랜드 파이어니스 크루즈 베란다 스위트 이상 예약으로 크루즈 셔틀, 스하 셔틀 리무진, 단독차량 금액의 50% 지원이 적용됩니다.
-                                </p>
-                            </div>
-                        )}
 
                         <div className="space-y-4">
                             {/* 차량 자동 선택 안내 */}
@@ -921,7 +1049,10 @@ function CruiseVehicleContent() {
                             )}
 
                             <div className="mb-4 flex justify-between items-center">
-                                <h4 className="text-sm font-medium text-gray-700">차량 선택 정보</h4>
+                                <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                                    <span>🚗</span>
+                                    차량 선택 정보
+                                </h3>
                                 {vehicleForm.some(v => isShtVehicleType(v.car_type) && v.count > 0) && (
                                     isShtExclusiveCruise ? (
                                         <span className="px-3 py-1 bg-orange-100 text-orange-700 border border-orange-300 rounded text-sm font-medium">
@@ -1082,7 +1213,6 @@ function CruiseVehicleContent() {
                                                         && !normalizedCarType.includes('단독')
                                                         && (selectedWayType === '당일왕복' || selectedWayType === '다른날왕복')
                                                         && !isShtExclusiveCruise;
-                                                    console.log('[vehicle] car_type onChange', { rawCarType, baseCarType, normalizedCarType, selectedWayType, isShtRoundTrip });
                                                     if (isShtRoundTrip) {
                                                         setIsModalReadOnly(false);
                                                         setSelectedShtSeat(null);
@@ -1182,7 +1312,7 @@ function CruiseVehicleContent() {
                                 onClick={handleSkip}
                                 className="px-6 py-3 bg-gray-500 text-white rounded-lg hover:bg-gray-600"
                             >
-                                건너뛰기
+                                취소
                             </button>
                             <button
                                 type="submit"
