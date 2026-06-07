@@ -21,11 +21,21 @@ const TABLE_MAP: Record<string, string> = {
 const SERVICE_LABELS: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
     cruise: { label: '크루즈', color: 'blue', icon: <Ship className="w-4 h-4" /> },
     car: { label: '차량', color: 'sky', icon: <Car className="w-4 h-4" /> },
-    vehicle: { label: '스하차량', color: 'purple', icon: <Car className="w-4 h-4" /> },
+    vehicle: { label: '스차', color: 'purple', icon: <Car className="w-4 h-4" /> },
     airport: { label: '공항', color: 'green', icon: <Plane className="w-4 h-4" /> },
     hotel: { label: '호텔', color: 'orange', icon: <Building className="w-4 h-4" /> },
     tour: { label: '투어', color: 'red', icon: <MapPin className="w-4 h-4" /> },
     rentcar: { label: '렌트카', color: 'indigo', icon: <Car className="w-4 h-4" /> },
+};
+
+const SERVICE_ORDER: Record<string, number> = {
+    cruise: 0,
+    car: 1,
+    vehicle: 2,
+    airport: 3,
+    hotel: 4,
+    tour: 5,
+    rentcar: 6,
 };
 
 const BG: Record<string, string> = {
@@ -87,6 +97,10 @@ interface CardItem {
     serviceType: string;
     data: any;
     dateKey: string;
+}
+
+function getUserGroupKey(item: CardItem): string {
+    return item.data.customerName || item.data.orderId || '이름 없음';
 }
 
 function getPrimaryDate(serviceType: string, row: any): string {
@@ -388,11 +402,14 @@ function DetailModal({
 
 // ─── 메인 페이지 ───
 export default function SheetEditPage() {
+    const router = useRouter();
     const [items, setItems] = useState<CardItem[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(false);
     const [userEmail, setUserEmail] = useState<string | null>(null);
-    const [typeFilter, setTypeFilter] = useState<ServiceType>('all');
-    const [searchQuery, setSearchQuery] = useState('');
+    const [typeFilter, setTypeFilter] = useState<Exclude<ServiceType, 'all'> | null>(null);
+    const [searchInput, setSearchInput] = useState('');
+    const [searchTerm, setSearchTerm] = useState('');
+    const [hasSearched, setHasSearched] = useState(false);
     const [groupMode, setGroupMode] = useState<GroupMode>('date');
     const [futureOnly, setFutureOnly] = useState(true);
     const [detailItem, setDetailItem] = useState<CardItem | null>(null);
@@ -409,7 +426,16 @@ export default function SheetEditPage() {
         });
     }, []);
 
-    const loadData = useCallback(async () => {
+    const loadData = useCallback(async (keywordRaw: string, requestedType?: Exclude<ServiceType, 'all'> | null) => {
+        const keyword = keywordRaw.trim().toLowerCase();
+        const activeType = requestedType ?? typeFilter;
+
+        if (!keyword && !activeType) {
+            setItems([]);
+            setHasSearched(false);
+            return;
+        }
+
         setLoading(true);
         setSelected(new Set());
         try {
@@ -440,45 +466,67 @@ export default function SheetEditPage() {
                 return all;
             };
 
-            const tables: [string, string][] =
-                typeFilter === 'all'
-                    ? [['sh_r', 'cruise'], ['sh_c', 'car'], ['sh_cc', 'vehicle'], ['sh_p', 'airport'], ['sh_h', 'hotel'], ['sh_t', 'tour'], ['sh_rc', 'rentcar']]
-                    : [[TABLE_MAP[typeFilter], typeFilter]];
+            const tables: [string, string][] = [
+                ['sh_r', 'cruise'],
+                ['sh_c', 'car'],
+                ['sh_cc', 'vehicle'],
+                ['sh_p', 'airport'],
+                ['sh_h', 'hotel'],
+                ['sh_t', 'tour'],
+                ['sh_rc', 'rentcar'],
+            ];
 
             const results = await Promise.all(
                 tables.map(([tbl, st]) => fetchAll(tbl).then((rows) => mapRow(rows, st, userMap)))
             );
-            setItems(results.flat());
+            const merged = results.flat();
+            const searched = merged.filter((item) => {
+                if (!keyword) return true;
+                const d = item.data || {};
+                return (
+                    (d.customerName || '').toLowerCase().includes(keyword) ||
+                    (d.customerEnglishName || '').toLowerCase().includes(keyword) ||
+                    (d.email || '').toLowerCase().includes(keyword) ||
+                    (d.orderId || '').toLowerCase().includes(keyword) ||
+                    (d.cruise || '').toLowerCase().includes(keyword) ||
+                    (d.hotelName || '').toLowerCase().includes(keyword) ||
+                    (d.tourName || '').toLowerCase().includes(keyword) ||
+                    (d.airportName || '').toLowerCase().includes(keyword) ||
+                    (d.route || '').toLowerCase().includes(keyword) ||
+                    (d.carType || '').toLowerCase().includes(keyword) ||
+                    (d.vehicleNumber || '').toLowerCase().includes(keyword) ||
+                    (d.destination || '').toLowerCase().includes(keyword)
+                );
+            });
+            setItems(searched);
+            setHasSearched(true);
         } finally {
             setLoading(false);
         }
     }, [typeFilter]);
 
-    useEffect(() => { loadData(); }, [loadData]);
-
     const today = todayYMD();
 
     const processedItems = useMemo(() => {
         let list = items;
-        if (searchQuery.trim()) {
-            const q = searchQuery.trim().toLowerCase();
-            list = list.filter((item) => {
-                const d = item.data;
-                return (
-                    (d.customerName || '').toLowerCase().includes(q) ||
-                    (d.customerEnglishName || '').toLowerCase().includes(q) ||
-                    (d.orderId || '').toLowerCase().includes(q) ||
-                    (d.cruise || '').toLowerCase().includes(q) ||
-                    (d.hotelName || '').toLowerCase().includes(q) ||
-                    (d.tourName || '').toLowerCase().includes(q) ||
-                    (d.airportName || '').toLowerCase().includes(q) ||
-                    (d.route || '').toLowerCase().includes(q)
-                );
-            });
-        }
         if (futureOnly) list = list.filter((item) => !item.dateKey || item.dateKey >= today);
+        if (groupMode === 'date') {
+            if (typeFilter) {
+                list = list.filter((item) => item.serviceType === typeFilter);
+            }
+            return list;
+        }
+
+        if (typeFilter) {
+            const matchedUserKeys = new Set(
+                list
+                    .filter((item) => item.serviceType === typeFilter)
+                    .map((item) => getUserGroupKey(item))
+            );
+            return list.filter((item) => matchedUserKeys.has(getUserGroupKey(item)));
+        }
         return list;
-    }, [items, searchQuery, futureOnly, today]);
+    }, [items, typeFilter, futureOnly, today, groupMode]);
 
     const groupedData = useMemo((): { key: string; label: string; items: CardItem[] }[] => {
         if (groupMode === 'date') {
@@ -494,7 +542,7 @@ export default function SheetEditPage() {
         } else {
             const map = new Map<string, CardItem[]>();
             for (const item of processedItems) {
-                const key = item.data.customerName || item.data.orderId || '이름 없음';
+                const key = getUserGroupKey(item);
                 if (!map.has(key)) map.set(key, []);
                 map.get(key)!.push(item);
             }
@@ -503,7 +551,11 @@ export default function SheetEditPage() {
                 .map(([key, its]) => ({
                     key,
                     label: key,
-                    items: its.slice().sort((a, b) => a.dateKey.localeCompare(b.dateKey)),
+                    items: its.slice().sort((a, b) => {
+                        const serviceDiff = (SERVICE_ORDER[a.serviceType] ?? 999) - (SERVICE_ORDER[b.serviceType] ?? 999);
+                        if (serviceDiff !== 0) return serviceDiff;
+                        return a.dateKey.localeCompare(b.dateKey);
+                    }),
                 }));
         }
     }, [processedItems, groupMode]);
@@ -588,6 +640,17 @@ export default function SheetEditPage() {
     };
 
     const handleDeleted = (id: string) => setItems((prev) => prev.filter((i) => i._id !== id));
+    const handleSearchClick = () => {
+        const keyword = searchInput.trim();
+        setSearchTerm(keyword);
+        void loadData(keyword, typeFilter);
+    };
+
+    const handleTypeFilterClick = (nextType: Exclude<ServiceType, 'all'>) => {
+        const resolvedType = typeFilter === nextType ? null : nextType;
+        setTypeFilter(resolvedType);
+        void loadData(searchTerm, resolvedType);
+    };
 
     return (
         <ManagerLayout title="시트 수정" activeTab="schedule-sheet-edit">
@@ -615,13 +678,13 @@ export default function SheetEditPage() {
                 <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-3 mb-3 flex flex-wrap gap-2 items-center">
                     {/* 서비스 타입 필터 */}
                     <div className="flex gap-1 flex-wrap">
-                        {(['all', 'cruise', 'car', 'vehicle', 'airport', 'hotel', 'tour', 'rentcar'] as ServiceType[]).map((t) => (
+                        {(['cruise', 'car', 'vehicle', 'airport', 'hotel', 'tour', 'rentcar'] as Exclude<ServiceType, 'all'>[]).map((t) => (
                             <button
                                 key={t}
-                                onClick={() => setTypeFilter(t)}
+                                onClick={() => handleTypeFilterClick(t)}
                                 className={`px-2 py-1 rounded text-xs font-medium transition-colors ${typeFilter === t ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
                             >
-                                {t === 'all' ? '전체' : SERVICE_LABELS[t]?.label || t}
+                                {SERVICE_LABELS[t]?.label || t}
                             </button>
                         ))}
                     </div>
@@ -656,16 +719,18 @@ export default function SheetEditPage() {
                             <input
                                 type="text"
                                 placeholder="검색…"
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
+                                value={searchInput}
+                                onChange={(e) => setSearchInput(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && handleSearchClick()}
                                 className="px-2 py-1 border border-gray-200 rounded text-xs w-36"
                             />
-                            {searchQuery && (
-                                <button onClick={() => setSearchQuery('')} className="px-2 text-xs bg-gray-100 rounded">✕</button>
+                            <button onClick={handleSearchClick} className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600">검색</button>
+                            {searchInput && (
+                                <button onClick={() => { setSearchInput(''); setSearchTerm(''); setItems([]); setHasSearched(false); }} className="px-2 text-xs bg-gray-100 rounded">✕</button>
                             )}
                         </div>
 
-                        <button onClick={loadData} className="p-1.5 rounded bg-gray-100 hover:bg-gray-200" title="새로고침">
+                        <button onClick={() => void loadData(searchTerm, typeFilter)} className="p-1.5 rounded bg-gray-100 hover:bg-gray-200" title="새로고침" disabled={!hasSearched && !typeFilter}>
                             <RefreshCw className="w-4 h-4 text-gray-500" />
                         </button>
                     </div>
@@ -692,6 +757,10 @@ export default function SheetEditPage() {
                 {loading ? (
                     <div className="flex justify-center items-center h-64">
                         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500" />
+                    </div>
+                ) : !hasSearched ? (
+                    <div className="text-center text-gray-400 py-16 text-sm">
+                        검색어를 입력하고 검색 버튼을 눌러주세요.
                     </div>
                 ) : groupedData.length === 0 ? (
                     <div className="text-center text-gray-400 py-16 text-sm">데이터가 없습니다.</div>
@@ -740,7 +809,7 @@ export default function SheetEditPage() {
                                     </div>
 
                                     {!collapsed && (
-                                        <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+                                        <div className="grid gap-2 grid-cols-1">
                                             {group.items.map((item) => (
                                                 <div key={item._id} className="relative">
                                                     {canDelete && (

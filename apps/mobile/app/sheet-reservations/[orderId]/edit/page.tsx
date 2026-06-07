@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import supabase from '@/lib/supabase';
 import ManagerLayout from '@/app/reservation-edit/_components/MobileReservationLayout';
-import { Save, ArrowLeft, Loader2, User, Ship, Car, Users, Plane, Building, MapPin } from 'lucide-react';
+import { Save, ArrowLeft, Loader2, User, Ship, Car, Users, Plane, Building, MapPin, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface ShMData {
     id: number;
@@ -139,6 +139,46 @@ interface ShCCData {
     email: string;
 }
 
+function AccordionSection({
+    title,
+    count,
+    icon: Icon,
+    iconColor,
+    isOpen,
+    onToggle,
+    children,
+}: {
+    title: string;
+    count?: number;
+    icon: any;
+    iconColor: string;
+    isOpen: boolean;
+    onToggle: () => void;
+    children: React.ReactNode;
+}) {
+    return (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6 overflow-hidden">
+            <button
+                type="button"
+                onClick={onToggle}
+                className="w-full flex items-center gap-2 px-4 py-4 text-left"
+            >
+                <Icon className={`w-5 h-5 ${iconColor}`} />
+                <h2 className="text-base font-bold text-gray-800 flex-1">
+                    {title}
+                    {typeof count === 'number' ? ` - ${count}건` : ''}
+                </h2>
+                {isOpen ? (
+                    <ChevronUp className="w-5 h-5 text-gray-400" />
+                ) : (
+                    <ChevronDown className="w-5 h-5 text-gray-400" />
+                )}
+            </button>
+            {isOpen && <div className="px-4 pb-4 border-t border-gray-100">{children}</div>}
+        </div>
+    );
+}
+
 export default function SheetReservationEditPage() {
     const router = useRouter();
     const params = useParams();
@@ -155,6 +195,11 @@ export default function SheetReservationEditPage() {
     const [shRCList, setShRCList] = useState<ShRCData[]>([]);
     const [shCList, setShCList] = useState<ShCData[]>([]);
     const [shCCList, setShCCList] = useState<ShCCData[]>([]);
+    const [openSection, setOpenSection] = useState<string | null>(null);
+
+    const toggleSection = (key: string) => {
+        setOpenSection((prev) => (prev === key ? null : key));
+    };
 
     useEffect(() => {
         if (orderId) {
@@ -442,12 +487,13 @@ export default function SheetReservationEditPage() {
                     </button>
                 </div>
 
-                {/* SH_M 고객 정보 섹션 */}
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-                    <div className="flex items-center gap-2 mb-4 pb-4 border-b">
-                        <User className="w-6 h-6 text-blue-600" />
-                        <h2 className="text-xl font-bold text-gray-800">고객 정보 (SH_M)</h2>
-                    </div>
+                <AccordionSection
+                    title="고객 정보 (SH_M)"
+                    icon={User}
+                    iconColor="text-blue-600"
+                    isOpen={openSection === 'customer'}
+                    onToggle={() => toggleSection('customer')}
+                >
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-semibold text-gray-600 mb-1">한글 이름</label>
@@ -549,15 +595,17 @@ export default function SheetReservationEditPage() {
                             />
                         </div>
                     </div>
-                </div>
+                </AccordionSection>
 
-                {/* SH_R 크루즈 객실 섹션 */}
                 {shRList.length > 0 && (
-                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-                        <div className="flex items-center gap-2 mb-4 pb-4 border-b">
-                            <Ship className="w-6 h-6 text-blue-600" />
-                            <h2 className="text-xl font-bold text-gray-800">크루즈 객실 (SH_R) - {shRList.length}건</h2>
-                        </div>
+                    <AccordionSection
+                        title="크루즈 객실 (SH_R)"
+                        count={shRList.length}
+                        icon={Ship}
+                        iconColor="text-blue-600"
+                        isOpen={openSection === 'cruise'}
+                        onToggle={() => toggleSection('cruise')}
+                    >
                         <div className="space-y-6">
                             {shRList.map((shR, index) => (
                                 <div key={shR.id} className="border border-blue-200 rounded-lg p-4 bg-blue-50">
@@ -697,16 +745,18 @@ export default function SheetReservationEditPage() {
                                 </div>
                             ))}
                         </div>
-                    </div>
+                    </AccordionSection>
                 )}
 
-                {/* SH_P 공항 서비스 섹션 */}
                 {shPList.length > 0 && (
-                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-                        <div className="flex items-center gap-2 mb-4 pb-4 border-b">
-                            <Plane className="w-6 h-6 text-green-600" />
-                            <h2 className="text-xl font-bold text-gray-800">공항 서비스 (SH_P) - {shPList.length}건</h2>
-                        </div>
+                    <AccordionSection
+                        title="공항 서비스 (SH_P)"
+                        count={shPList.length}
+                        icon={Plane}
+                        iconColor="text-green-600"
+                        isOpen={openSection === 'airport'}
+                        onToggle={() => toggleSection('airport')}
+                    >
                         <div className="space-y-6">
                             {shPList.map((shP, index) => (
                                 <div key={shP.id} className="border border-green-200 rounded-lg p-4 bg-green-50">
@@ -859,16 +909,18 @@ export default function SheetReservationEditPage() {
                                 </div>
                             ))}
                         </div>
-                    </div>
+                    </AccordionSection>
                 )}
 
-                {/* SH_H 호텔 섹션 */}
                 {shHList.length > 0 && (
-                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-                        <div className="flex items-center gap-2 mb-4 pb-4 border-b">
-                            <Building className="w-6 h-6 text-orange-600" />
-                            <h2 className="text-xl font-bold text-gray-800">호텔 (SH_H) - {shHList.length}건</h2>
-                        </div>
+                    <AccordionSection
+                        title="호텔 (SH_H)"
+                        count={shHList.length}
+                        icon={Building}
+                        iconColor="text-orange-600"
+                        isOpen={openSection === 'hotel'}
+                        onToggle={() => toggleSection('hotel')}
+                    >
                         <div className="space-y-6">
                             {shHList.map((shH, index) => (
                                 <div key={shH.id} className="border border-orange-200 rounded-lg p-4 bg-orange-50">
@@ -1008,16 +1060,18 @@ export default function SheetReservationEditPage() {
                                 </div>
                             ))}
                         </div>
-                    </div>
+                    </AccordionSection>
                 )}
 
-                {/* SH_T 투어 섹션 */}
                 {shTList.length > 0 && (
-                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-                        <div className="flex items-center gap-2 mb-4 pb-4 border-b">
-                            <MapPin className="w-6 h-6 text-pink-600" />
-                            <h2 className="text-xl font-bold text-gray-800">투어 (SH_T) - {shTList.length}건</h2>
-                        </div>
+                    <AccordionSection
+                        title="투어 (SH_T)"
+                        count={shTList.length}
+                        icon={MapPin}
+                        iconColor="text-pink-600"
+                        isOpen={openSection === 'tour'}
+                        onToggle={() => toggleSection('tour')}
+                    >
                         <div className="space-y-6">
                             {shTList.map((shT, index) => (
                                 <div key={shT.id} className="border border-pink-200 rounded-lg p-4 bg-pink-50">
@@ -1131,16 +1185,18 @@ export default function SheetReservationEditPage() {
                                 </div>
                             ))}
                         </div>
-                    </div>
+                    </AccordionSection>
                 )}
 
-                {/* SH_RC 렌트카 섹션 */}
                 {shRCList.length > 0 && (
-                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-                        <div className="flex items-center gap-2 mb-4 pb-4 border-b">
-                            <Car className="w-6 h-6 text-indigo-600" />
-                            <h2 className="text-xl font-bold text-gray-800">렌트카 (SH_RC) - {shRCList.length}건</h2>
-                        </div>
+                    <AccordionSection
+                        title="렌트카 (SH_RC)"
+                        count={shRCList.length}
+                        icon={Car}
+                        iconColor="text-indigo-600"
+                        isOpen={openSection === 'rentcar'}
+                        onToggle={() => toggleSection('rentcar')}
+                    >
                         <div className="space-y-6">
                             {shRCList.map((shRC, index) => (
                                 <div key={shRC.id} className="border border-indigo-200 rounded-lg p-4 bg-indigo-50">
@@ -1306,16 +1362,18 @@ export default function SheetReservationEditPage() {
                                 </div>
                             ))}
                         </div>
-                    </div>
+                    </AccordionSection>
                 )}
 
-                {/* SH_C 차량 서비스 섹션 */}
                 {shCList.length > 0 && (
-                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-                        <div className="flex items-center gap-2 mb-4 pb-4 border-b">
-                            <Car className="w-6 h-6 text-purple-600" />
-                            <h2 className="text-xl font-bold text-gray-800">차량 서비스 (SH_C) - {shCList.length}건</h2>
-                        </div>
+                    <AccordionSection
+                        title="차량 서비스 (SH_C)"
+                        count={shCList.length}
+                        icon={Car}
+                        iconColor="text-purple-600"
+                        isOpen={openSection === 'car'}
+                        onToggle={() => toggleSection('car')}
+                    >
                         <div className="space-y-6">
                             {shCList.map((shC, index) => (
                                 <div key={shC.id} className="border border-purple-200 rounded-lg p-4 bg-purple-50">
@@ -1468,16 +1526,18 @@ export default function SheetReservationEditPage() {
                                 </div>
                             ))}
                         </div>
-                    </div>
+                    </AccordionSection>
                 )}
 
-                {/* SH_CC 차량 배정 섹션 */}
                 {shCCList.length > 0 && (
-                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-                        <div className="flex items-center gap-2 mb-4 pb-4 border-b">
-                            <Users className="w-6 h-6 text-teal-600" />
-                            <h2 className="text-xl font-bold text-gray-800">차량 배정 (SH_CC) - {shCCList.length}건</h2>
-                        </div>
+                    <AccordionSection
+                        title="차량 배정 (SH_CC)"
+                        count={shCCList.length}
+                        icon={Users}
+                        iconColor="text-teal-600"
+                        isOpen={openSection === 'assignment'}
+                        onToggle={() => toggleSection('assignment')}
+                    >
                         <div className="space-y-4">
                             {shCCList.map((shCC, index) => (
                                 <div key={shCC.id} className="border border-teal-200 rounded-lg p-4 bg-teal-50">
@@ -1565,7 +1625,7 @@ export default function SheetReservationEditPage() {
                                 </div>
                             ))}
                         </div>
-                    </div>
+                    </AccordionSection>
                 )}
 
                 {/* 하단 저장 버튼 */}
@@ -1573,16 +1633,16 @@ export default function SheetReservationEditPage() {
                     <button
                         onClick={handleSave}
                         disabled={saving}
-                        className="flex items-center gap-2 px-8 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:bg-gray-400 text-lg font-semibold"
+                        className="flex items-center gap-2 px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors disabled:bg-gray-400"
                     >
                         {saving ? (
                             <>
-                                <Loader2 className="w-5 h-5 animate-spin" />
+                                <Loader2 className="w-4 h-4 animate-spin" />
                                 저장 중...
                             </>
                         ) : (
                             <>
-                                <Save className="w-5 h-5" />
+                                <Save className="w-4 h-4" />
                                 저장
                             </>
                         )}
