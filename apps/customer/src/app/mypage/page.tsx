@@ -10,6 +10,7 @@ import { clearAuthCache } from '@/hooks/useAuth';
 import { clearInvalidSession, isInvalidRefreshTokenError } from '@/lib/authRecovery';
 import { useLoadingTimeout } from '@/hooks/useLoadingTimeout';
 import { getSessionUser } from '@/lib/authHelpers';
+import { LogOut } from 'lucide-react';
 
 export default function MyPage() {
   const router = useRouter();
@@ -191,22 +192,17 @@ export default function MyPage() {
   }
 
   return (
-    <PageWrapper title={`${getUserDisplayName()}님 환영합니다`}>
+    <PageWrapper
+      title={`${getUserDisplayName()}님 환영합니다`}
+      rightIcon={<LogOut className="w-5 h-5 text-gray-600" />}
+      rightLabel="로그아웃"
+      onRightClick={handleLogout}
+    >
       <div className="space-y-4">
         {/* 인사말 */}
         <div className="text-sm text-slate-600 flex items-center gap-2">
           <span>오늘도 행복한 하루 보내세요</span>
           <span>😊</span>
-        </div>
-
-        {/* 로그아웃 버튼 */}
-        <div className="flex justify-end">
-          <button
-            onClick={handleLogout}
-            className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-800 transition"
-          >
-            로그아웃
-          </button>
         </div>
 
         {/* 서비스 메뉴 - 2열 격자 */}

@@ -1,6 +1,6 @@
 {
-  "name": "스하관리자",
-  "short_name": "스하관리자",
+  "name": "스하취소",
+  "short_name": "스하취소",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
@@ -14,11 +14,6 @@
     {
       "src": "/icon-512.png",
       "sizes": "512x512",
-      "type": "image/png"
-    },
-    {
-      "src": "/logo-160.png",
-      "sizes": "160x160",
       "type": "image/png"
     }
   ]

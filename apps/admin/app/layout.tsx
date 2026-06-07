@@ -10,10 +10,11 @@ import PushNotificationManager from '@/components/PushNotificationManager';
 export const metadata = {
   title: '스테이하롱 관리자',
   description: '스테이하롱 관리자 전용 시스템',
+  manifest: '/manifest.json',
   icons: {
-    icon: '/favicon.ico',
-    shortcut: '/favicon.ico',
-    apple: '/logo.png',
+    icon: '/icon-192.png',
+    shortcut: '/icon-192.png',
+    apple: '/icon-192.png',
   },
 };
 
