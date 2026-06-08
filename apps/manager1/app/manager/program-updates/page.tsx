@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
-import { ArrowLeft, CheckCircle2, Home, Loader2, Pencil, Wrench } from 'lucide-react';
+import { CheckCircle2, Loader2, Pencil, Wrench } from 'lucide-react';
+import ManagerLayout from '@/components/ManagerLayout';
 import supabase from '@/lib/supabase';
 
 type ProgramUpdateRow = {
@@ -213,6 +213,20 @@ const APP_ROUTE_CONFIG: Record<AppOption, AppRouteConfig> = {
   },
 };
 
+const formatDateTime = (value?: string | null) => {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '-';
+  return date.toLocaleString('ko-KR', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
 function normalizeBaseUrl(url: string) {
   return url.replace(/\/$/, '');
 }
@@ -230,21 +244,7 @@ function buildDefaultRequestUrl(appName: AppOption) {
   return buildAbsoluteUrl(appName, config.defaultPath);
 }
 
-const formatDateTime = (value?: string | null) => {
-  if (!value) return '-';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '-';
-  return date.toLocaleString('ko-KR', {
-    timeZone: 'Asia/Seoul',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-};
-
-export default function ProgramUpdatesPage() {
+export default function ManagerProgramUpdatesPage() {
   const [rows, setRows] = useState<ProgramUpdateRow[]>([]);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('requested');
   const [loading, setLoading] = useState(true);
@@ -312,7 +312,6 @@ export default function ProgramUpdatesPage() {
 
   const filteredRows = rows.filter((row) => {
     const isCompleted = Boolean(row.completed_at);
-
     if (statusFilter === 'requested') return !isCompleted;
     if (statusFilter === 'completed') return isCompleted;
     return true;
@@ -407,6 +406,7 @@ export default function ProgramUpdatesPage() {
       });
       setEditingId(null);
       await loadRows();
+
       if (notificationFailed) {
         alert(isEditing ? '프로그램 수정 요청이 수정되었습니다.' : '프로그램 수정 요청은 저장되었지만 알림 생성에 실패했습니다.');
       } else {
@@ -474,215 +474,201 @@ export default function ProgramUpdatesPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-10">
-      <div className="sticky top-0 z-10 border-b bg-white/95 px-4 py-3 backdrop-blur">
-        <div className="grid grid-cols-[40px_1fr_40px] items-center">
-          <Link href="/" className="rounded-lg p-1.5 hover:bg-gray-100">
-            <ArrowLeft className="h-5 w-5 text-gray-600" />
-          </Link>
-          <div className="text-center">
-            <h1 className="text-base font-bold text-gray-900">프로그램 수정</h1>
-          </div>
-          <Link href="/" className="ml-auto rounded-lg bg-fuchsia-100 p-1.5 hover:bg-fuchsia-200">
-            <Home className="h-4 w-4 text-fuchsia-700" />
-          </Link>
-        </div>
-      </div>
-
-      <div className="space-y-4 px-3 pt-4">
-        <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-          <div className="mb-3 flex items-center gap-2">
-            <div className="rounded-xl bg-fuchsia-100 p-2">
-              <Wrench className="h-4 w-4 text-fuchsia-700" />
-            </div>
-            <div>
-              <h2 className="text-sm font-semibold text-gray-900">{editingId ? '수정 요청 수정' : '수정 요청 등록'}</h2>
-              <p className="text-xs text-gray-500">앱명, 수정요청페이지, 내용을 저장합니다.</p>
-            </div>
-          </div>
-
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              void saveRequest();
-            }}
-            className="space-y-3"
-          >
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">앱명</label>
-              <select
-                value={form.app_name}
-                onChange={(e) => handleAppChange(e.target.value as AppOption)}
-                className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-fuchsia-500 focus:outline-none focus:ring-2 focus:ring-fuchsia-100"
-              >
-                {APP_OPTIONS.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
+    <ManagerLayout title="프로그램 수정" activeTab="program-updates">
+      <div className="min-h-full bg-gray-100 p-4 md:p-6">
+        <div className="mx-auto max-w-5xl space-y-4">
+          <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+            <div className="mb-3 flex items-center gap-2">
+              <div className="rounded-xl bg-fuchsia-100 p-2">
+                <Wrench className="h-4 w-4 text-fuchsia-700" />
+              </div>
+              <div>
+                <h2 className="text-sm font-semibold text-gray-900">{editingId ? '수정 요청 수정' : '수정 요청 등록'}</h2>
+                <p className="text-xs text-gray-500">앱명, 수정요청페이지, 내용을 저장합니다.</p>
+              </div>
             </div>
 
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">수정요청페이지</label>
-              <select
-                value={form.request_url}
-                onChange={(e) => setForm((prev) => ({ ...prev, request_url: e.target.value }))}
-                className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-fuchsia-500 focus:outline-none focus:ring-2 focus:ring-fuchsia-100"
-              >
-                {currentMenuOptions.length === 0 ? (
-                  <option value="">선택 가능한 메뉴가 없습니다</option>
-                ) : (
-                  currentMenuOptions.map((item, index) => (
-                    <option key={`${item.value}-${item.label}-${index}`} value={item.value}>
-                      {item.label}
-                    </option>
-                  ))
-                )}
-                {form.request_url && !currentMenuOptions.some((item) => item.value === form.request_url) && (
-                  <option value={form.request_url}>{form.request_url}</option>
-                )}
-              </select>
-            </div>
-
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">내용</label>
-              <textarea
-                value={form.content}
-                onChange={(e) => setForm((prev) => ({ ...prev, content: e.target.value }))}
-                rows={4}
-                placeholder="수정 요청 내용을 입력하세요"
-                className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-fuchsia-500 focus:outline-none focus:ring-2 focus:ring-fuchsia-100"
-              />
-            </div>
-
-            <div className="grid grid-cols-1 gap-2">
-              <button
-                type="submit"
-                disabled={saving}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-fuchsia-200 bg-fuchsia-100 px-4 py-2.5 text-sm font-semibold text-fuchsia-800 hover:bg-fuchsia-200 disabled:cursor-not-allowed disabled:bg-fuchsia-50 disabled:text-fuchsia-300"
-              >
-                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wrench className="h-4 w-4" />}
-                {editingId ? '수정 저장' : '신청'}
-              </button>
-            </div>
-          </form>
-        </section>
-
-        <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-          <div className="mb-3 flex items-center justify-between">
-            <div>
-              <h2 className="text-sm font-semibold text-gray-900">프로그램 수정 신청 목록</h2>
-              <p className="text-xs text-gray-500">총 {filteredRows.length}건</p>
-            </div>
-            <div className="flex items-center gap-2">
-              {[
-                { key: 'requested', label: '신청' },
-                { key: 'completed', label: '완료' },
-                { key: 'all', label: '전체' },
-              ].map((filter) => {
-                const isActive = statusFilter === filter.key;
-                return (
-                  <button
-                    key={filter.key}
-                    type="button"
-                    onClick={() => setStatusFilter(filter.key as StatusFilter)}
-                    className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
-                      isActive
-                        ? 'bg-fuchsia-600 text-white shadow-sm'
-                        : 'border border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
-                    }`}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                void saveRequest();
+              }}
+              className="space-y-3"
+            >
+              <div className="grid gap-3 md:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-600">앱명</label>
+                  <select
+                    value={form.app_name}
+                    onChange={(e) => handleAppChange(e.target.value as AppOption)}
+                    className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-fuchsia-500 focus:outline-none focus:ring-2 focus:ring-fuchsia-100"
                   >
-                    {filter.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+                    {APP_OPTIONS.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-          {loading ? (
-            <div className="flex items-center justify-center py-10 text-sm text-gray-500">
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              불러오는 중...
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-600">수정요청페이지</label>
+                  <select
+                    value={form.request_url}
+                    onChange={(e) => setForm((prev) => ({ ...prev, request_url: e.target.value }))}
+                    className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-fuchsia-500 focus:outline-none focus:ring-2 focus:ring-fuchsia-100"
+                  >
+                    {currentMenuOptions.length === 0 ? (
+                      <option value="">선택 가능한 메뉴가 없습니다</option>
+                    ) : (
+                      currentMenuOptions.map((item, index) => (
+                        <option key={`${item.value}-${item.label}-${index}`} value={item.value}>
+                          {item.label}
+                        </option>
+                      ))
+                    )}
+                    {form.request_url && !currentMenuOptions.some((item) => item.value === form.request_url) && (
+                      <option value={form.request_url}>{form.request_url}</option>
+                    )}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-600">내용</label>
+                <textarea
+                  value={form.content}
+                  onChange={(e) => setForm((prev) => ({ ...prev, content: e.target.value }))}
+                  rows={5}
+                  placeholder="수정 요청 내용을 입력하세요"
+                  className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-fuchsia-500 focus:outline-none focus:ring-2 focus:ring-fuchsia-100"
+                />
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-fuchsia-200 bg-fuchsia-100 px-4 py-2.5 text-sm font-semibold text-fuchsia-800 hover:bg-fuchsia-200 disabled:cursor-not-allowed disabled:bg-fuchsia-50 disabled:text-fuchsia-300"
+                >
+                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wrench className="h-4 w-4" />}
+                  {editingId ? '수정 저장' : '신청'}
+                </button>
+              </div>
+            </form>
+          </section>
+
+          <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+            <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-sm font-semibold text-gray-900">프로그램 수정 신청 목록</h2>
+                <p className="text-xs text-gray-500">총 {filteredRows.length}건</p>
+              </div>
+              <div className="flex items-center gap-2">
+                {[
+                  { key: 'requested', label: '신청' },
+                  { key: 'completed', label: '완료' },
+                  { key: 'all', label: '전체' },
+                ].map((filter) => {
+                  const isActive = statusFilter === filter.key;
+                  return (
+                    <button
+                      key={filter.key}
+                      type="button"
+                      onClick={() => setStatusFilter(filter.key as StatusFilter)}
+                      className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
+                        isActive
+                          ? 'bg-fuchsia-600 text-white shadow-sm'
+                          : 'border border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                      }`}
+                    >
+                      {filter.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          ) : filteredRows.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-8 text-center text-sm text-gray-500">
-              {statusFilter === 'requested'
-                ? '신청 상태의 프로그램 수정 요청이 없습니다.'
-                : statusFilter === 'completed'
-                  ? '완료 상태의 프로그램 수정 요청이 없습니다.'
-                  : '저장된 프로그램 수정 요청이 없습니다.'}
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {filteredRows.map((row) => {
-                const isCompleted = Boolean(row.completed_at);
-                return (
-                  <article key={row.id} className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-                    <div className="mb-2 flex items-start justify-between gap-3">
-                      <div>
-                        <div className="text-sm font-semibold text-gray-900">{row.app_name}</div>
-                        <div className="mt-1 text-xs text-gray-500">
-                          계정: {row.account || '-'}
+
+            {loading ? (
+              <div className="flex items-center justify-center py-10 text-sm text-gray-500">
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                불러오는 중...
+              </div>
+            ) : filteredRows.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-8 text-center text-sm text-gray-500">
+                {statusFilter === 'requested'
+                  ? '신청 상태의 프로그램 수정 요청이 없습니다.'
+                  : statusFilter === 'completed'
+                    ? '완료 상태의 프로그램 수정 요청이 없습니다.'
+                    : '저장된 프로그램 수정 요청이 없습니다.'}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {filteredRows.map((row) => {
+                  const isCompleted = Boolean(row.completed_at);
+                  return (
+                    <article key={row.id} className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                      <div className="mb-2 flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-semibold text-gray-900">{row.app_name}</div>
+                          <div className="mt-1 text-xs text-gray-500">계정: {row.account || '-'}</div>
                         </div>
+                        <span
+                          className={`rounded-full px-2 py-1 text-[11px] font-medium ${
+                            isCompleted ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                          }`}
+                        >
+                          {isCompleted ? '완료' : '신청'}
+                        </span>
                       </div>
-                      <span
-                        className={`rounded-full px-2 py-1 text-[11px] font-medium ${
-                          isCompleted
-                            ? 'bg-emerald-100 text-emerald-700'
-                            : 'bg-amber-100 text-amber-700'
-                        }`}
-                      >
-                        {isCompleted ? '완료' : '신청'}
-                      </span>
-                    </div>
 
-                    <div className="mb-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2">
-                      <div className="text-[11px] font-medium text-blue-700">수정요청페이지</div>
-                      <div className="mt-1 break-all text-xs text-blue-900">{row.request_url || '-'}</div>
-                    </div>
+                      <div className="mb-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2">
+                        <div className="text-[11px] font-medium text-blue-700">수정요청페이지</div>
+                        <div className="mt-1 break-all text-xs text-blue-900">{row.request_url || '-'}</div>
+                      </div>
 
-                    <div className="whitespace-pre-wrap rounded-lg bg-white px-3 py-2 text-sm text-gray-800">
-                      {row.content}
-                    </div>
+                      <div className="whitespace-pre-wrap rounded-lg bg-white px-3 py-2 text-sm text-gray-800">
+                        {row.content}
+                      </div>
 
-                    <div className="mt-3 grid grid-cols-1 gap-2 text-xs text-gray-500">
-                      <div>신청일시: {formatDateTime(row.requested_at)}</div>
-                      <div>완료일시: {formatDateTime(row.completed_at)}</div>
-                    </div>
+                      <div className="mt-3 grid grid-cols-1 gap-2 text-xs text-gray-500 md:grid-cols-2">
+                        <div>신청일시: {formatDateTime(row.requested_at)}</div>
+                        <div>완료일시: {formatDateTime(row.completed_at)}</div>
+                      </div>
 
-                    <div className="mt-3 grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleEditRow(row)}
-                        className="inline-flex items-center justify-center gap-2 rounded-lg border border-sky-200 bg-sky-100 px-3 py-2 text-xs font-medium text-sky-800 hover:bg-sky-200"
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                        수정
-                      </button>
-                      {!isCompleted && (
+                      <div className="mt-3 flex flex-wrap gap-2">
                         <button
                           type="button"
-                          onClick={() => void handleMarkCompleteNow(row)}
-                          disabled={completeSavingId === row.id}
-                          className="inline-flex items-center justify-center gap-2 rounded-lg border border-emerald-200 bg-emerald-100 px-3 py-2 text-xs font-medium text-emerald-800 hover:bg-emerald-200 disabled:cursor-not-allowed disabled:bg-emerald-50 disabled:text-emerald-300"
+                          onClick={() => handleEditRow(row)}
+                          className="inline-flex items-center justify-center gap-2 rounded-lg border border-sky-200 bg-sky-100 px-3 py-2 text-xs font-medium text-sky-800 hover:bg-sky-200"
                         >
-                          {completeSavingId === row.id ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <CheckCircle2 className="h-3.5 w-3.5" />
-                          )}
-                          완료
+                          <Pencil className="h-3.5 w-3.5" />
+                          수정
                         </button>
-                      )}
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-          )}
-        </section>
+                        {!isCompleted && (
+                          <button
+                            type="button"
+                            onClick={() => void handleMarkCompleteNow(row)}
+                            disabled={completeSavingId === row.id}
+                            className="inline-flex items-center justify-center gap-2 rounded-lg border border-emerald-200 bg-emerald-100 px-3 py-2 text-xs font-medium text-emerald-800 hover:bg-emerald-200 disabled:cursor-not-allowed disabled:bg-emerald-50 disabled:text-emerald-300"
+                          >
+                            {completeSavingId === row.id ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                            )}
+                            완료
+                          </button>
+                        )}
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        </div>
       </div>
-    </div>
+    </ManagerLayout>
   );
 }

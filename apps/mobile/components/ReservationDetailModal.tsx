@@ -361,40 +361,26 @@ const getCruiseAmountRows = (service: any): CruiseAmountRow[] => {
   };
 
   const draftLines: CruiseRoomLineDraft[] = [
-    { label: '성인', count: adultCount, unitLabel: '명', fallbackUnit: Number(pbAdult?.unit_price || service.promoRateAdult || service.unitPrice || service.priceAdult || 0), rawUnit: Number(pbAdult?.unit_price ?? 0), rawTotal: Number(pbAdult?.total ?? 0) },
-    { label: '아동(5~7)', count: childCount, unitLabel: '명', fallbackUnit: Number(pbChild?.unit_price || service.promoRateChild || service.priceChild || 0), rawUnit: Number(pbChild?.unit_price ?? 0), rawTotal: Number(pbChild?.total ?? 0) },
-    { label: '아동(8~11)', count: childOlderCount, unitLabel: '명', fallbackUnit: Number(pbChildOlder?.unit_price || service.promoRateChild || service.priceChildOlder || service.priceChild || 0), rawUnit: Number(pbChildOlder?.unit_price ?? 0), rawTotal: Number(pbChildOlder?.total ?? 0) },
-    { label: '아동엑베', count: childExtraBedCount, unitLabel: '명', fallbackUnit: Number(pbChildExtraBed?.unit_price || service.promoRateChildExtraBed || service.priceChildExtraBed || 0), rawUnit: Number(pbChildExtraBed?.unit_price ?? 0), rawTotal: Number(pbChildExtraBed?.total ?? 0) },
-    { label: '유아', count: infantCount, unitLabel: '명', fallbackUnit: Number(pbInfant?.unit_price || service.promoRateInfant || service.priceInfant || 0), rawUnit: Number(pbInfant?.unit_price ?? 0), rawTotal: Number(pbInfant?.total ?? 0) },
-    { label: '엑스트라베드', count: extraBedCount, unitLabel: '개', fallbackUnit: Number(pbExtraBed?.unit_price || service.promoRateExtraBed || service.priceExtraBed || 0), rawUnit: Number(pbExtraBed?.unit_price ?? 0), rawTotal: Number(pbExtraBed?.total ?? 0) },
-    { label: '싱글차액', count: singleCount, unitLabel: '명', fallbackUnit: Number(pbSingle?.unit_price || service.promoRateSingle || service.priceSingle || 0), rawUnit: Number(pbSingle?.unit_price ?? 0), rawTotal: Number(pbSingle?.total ?? 0) },
+    { label: '성인', count: adultCount, unitLabel: '명', fallbackUnit: Number(pbAdult?.unit_price || service.unitPrice || service.priceAdult || 0), rawUnit: Number(pbAdult?.unit_price ?? 0), rawTotal: Number(pbAdult?.total ?? 0) },
+    { label: '아동(5~7)', count: childCount, unitLabel: '명', fallbackUnit: Number(pbChild?.unit_price || service.priceChild || 0), rawUnit: Number(pbChild?.unit_price ?? 0), rawTotal: Number(pbChild?.total ?? 0) },
+    { label: '아동(8~11)', count: childOlderCount, unitLabel: '명', fallbackUnit: Number(pbChildOlder?.unit_price || service.priceChildOlder || service.priceChild || 0), rawUnit: Number(pbChildOlder?.unit_price ?? 0), rawTotal: Number(pbChildOlder?.total ?? 0) },
+    { label: '아동엑베', count: childExtraBedCount, unitLabel: '명', fallbackUnit: Number(pbChildExtraBed?.unit_price || service.priceChildExtraBed || 0), rawUnit: Number(pbChildExtraBed?.unit_price ?? 0), rawTotal: Number(pbChildExtraBed?.total ?? 0) },
+    { label: '유아', count: infantCount, unitLabel: '명', fallbackUnit: Number(pbInfant?.unit_price || service.priceInfant || 0), rawUnit: Number(pbInfant?.unit_price ?? 0), rawTotal: Number(pbInfant?.total ?? 0) },
+    { label: '엑스트라베드', count: extraBedCount, unitLabel: '개', fallbackUnit: Number(pbExtraBed?.unit_price || service.priceExtraBed || 0), rawUnit: Number(pbExtraBed?.unit_price ?? 0), rawTotal: Number(pbExtraBed?.total ?? 0) },
+    { label: '싱글차액', count: singleCount, unitLabel: '명', fallbackUnit: Number(pbSingle?.unit_price || service.priceSingle || 0), rawUnit: Number(pbSingle?.unit_price ?? 0), rawTotal: Number(pbSingle?.total ?? 0) },
   ].filter((line) => line.count > 0);
 
   const optionTotal = Number(rawPb?.options_total ?? rawPb?.option_total ?? 0);
   const surchargeTotal = Number(rawPb?.surcharge_total || 0);
   const discountAmount = Number(rawPb?.discount_amount || 0);
 
-  const isPromotionPricing = getServicePricingSource(service) === 'promotion';
-  const promoUnitByLabel: Record<string, number> = {
-    성인: Number(service.promoRateAdult || 0),
-    '아동(5~7)': Number(service.promoRateChild || 0),
-    '아동(8~11)': Number(service.promoRateChild || 0),
-    아동엑베: Number(service.promoRateChildExtraBed || 0),
-    유아: Number(service.promoRateInfant || 0),
-    엑스트라베드: Number(service.promoRateExtraBed || 0),
-    싱글차액: Number(service.promoRateSingle || 0),
-  };
-
   const rows: CruiseAmountRow[] = [];
   draftLines.forEach((line) => {
-    const usePromoUnit = isPromotionPricing && Number(promoUnitByLabel[line.label] || 0) > 0;
     const baseTotal = line.rawTotal > 0
       ? line.rawTotal
       : ((line.rawUnit > 0 ? line.rawUnit : line.fallbackUnit) * line.count);
-    const displayUnit = usePromoUnit
-      ? Number(promoUnitByLabel[line.label] || 0)
-      : (line.rawUnit > 0 ? line.rawUnit : line.fallbackUnit);
-    const displayTotal = usePromoUnit ? (displayUnit * line.count) : baseTotal;
+    const displayUnit = line.rawUnit > 0 ? line.rawUnit : line.fallbackUnit;
+    const displayTotal = baseTotal;
     const labelStr = displayUnit > 0
       ? `${line.label} ${formatMoney(displayUnit)} × ${line.count}${line.unitLabel}`
       : `${line.label} ${line.count}${line.unitLabel}`;
@@ -1090,15 +1076,7 @@ export default function ReservationDetailModal({
           .flatMap((s) => [s?.reservation_id, s?.reservationId, s?.reservation?.re_id, s?.re_id])
           .map((id) => String(id || '').trim())
           .filter(Boolean)));
-        // 크루즈 서비스의 프로모션 코드 수집
-        const uniquePromoCodes = [...new Set(
-          groupedItems
-            .filter((s) => s.serviceType === 'cruise')
-            .map((s) => String(getServicePriceBreakdown(s)?.promotion_code || '').trim())
-            .filter(Boolean),
-        )];
-
-        const [cruiseRates, airportPrices, hotelPrices, rentPrices, tourPrices, reservationRows, changeRequests, promoRows] = await Promise.all([
+        const [cruiseRates, airportPrices, hotelPrices, rentPrices, tourPrices, reservationRows, changeRequests] = await Promise.all([
           cruiseCodes.length > 0
             ? supabase
               .from('cruise_rate_card')
@@ -1117,12 +1095,6 @@ export default function ReservationDetailModal({
               .in('reservation_id', reservationIds)
               .not('status', 'in', '(rejected,cancelled)')
               .order('submitted_at', { ascending: false })
-            : Promise.resolve({ data: [] }),
-          uniquePromoCodes.length > 0
-            ? supabase
-              .from('cruise_promotion')
-              .select('id, code, cruise_promotion_rate(promotion_id, schedule_type, room_type, checkin_from, checkin_to, price_adult, price_child, price_infant, price_extra_bed, price_child_extra_bed, price_single)')
-              .in('code', uniquePromoCodes)
             : Promise.resolve({ data: [] }),
         ]);
 
@@ -1145,64 +1117,10 @@ export default function ReservationDetailModal({
         const tourPriceMap = new Map((tourPrices.data || []).map((r: any) => [r.pricing_id, r]));
         const reservationMap = new Map((reservationRows.data || []).map((r: any) => [r.re_id, r]));
 
-        // 프로모션 요금 조회 맵 (code → { cruise_promotion_rate[] })
-        const promoByCode = new Map<string, any>();
-        for (const promo of (promoRows.data || [])) {
-          promoByCode.set(String(promo.code || '').trim(), promo);
-        }
-        const findPromoRate = (promo: any, scheduleType: string, roomType: string, checkin: string): any => {
-          if (!promo || !Array.isArray(promo.cruise_promotion_rate)) return null;
-          const norm = (v: any) => String(v || '').trim().toLowerCase().replace(/\s+/g, '');
-          const rates: any[] = promo.cruise_promotion_rate;
-          const checkinStr = String(checkin || '').substring(0, 10);
-          const st = norm(scheduleType);
-          const rt = norm(roomType);
-          const inDate = (r: any) => (!r.checkin_from || checkinStr >= r.checkin_from) && (!r.checkin_to || checkinStr <= r.checkin_to);
-          const byDate = rates.filter((r) => inDate(r));
-          const exact = byDate.find((r) => norm(r.schedule_type) === st && norm(r.room_type) === rt);
-          if (exact) return exact;
-          const scheduleOnly = byDate.find((r) => norm(r.schedule_type) === st && !norm(r.room_type));
-          if (scheduleOnly) return scheduleOnly;
-          const roomOnly = byDate.find((r) => !norm(r.schedule_type) && norm(r.room_type) === rt);
-          if (roomOnly) return roomOnly;
-          const dateFallback = byDate.find((r) => !norm(r.schedule_type) && !norm(r.room_type));
-          return dateFallback || null;
-        };
-        const getPromoRate = (promoCode: string, scheduleType: string, roomType: string, checkin: string): any =>
-          findPromoRate(promoByCode.get(promoCode), scheduleType, roomType, checkin);
-
         const promoReservationIds = reservationIds.filter((reservationId) => {
-          const reservationInfo = reservationMap.get(reservationId);
+          const reservationInfo: any = reservationMap.get(reservationId);
           return normalizePricingSource(reservationInfo?.pricing_source) === 'promotion';
         });
-
-        // price_breakdown에 promotion_code가 없는 프로모션 예약 대비: usage 기반 promotion_id → 요금표 매핑
-        const promoIdByReservation = new Map<string, string>();
-        const promoById = new Map<string, any>();
-        if (promoReservationIds.length > 0) {
-          const { data: usageRows } = await supabase
-            .from('cruise_promotion_usage')
-            .select('reservation_id, promotion_id, status')
-            .in('reservation_id', promoReservationIds)
-            .in('status', ['reserved', 'confirmed']);
-          for (const row of (usageRows || []) as any[]) {
-            const rid = String(row?.reservation_id || '').trim();
-            const pid = String(row?.promotion_id || '').trim();
-            if (rid && pid && !promoIdByReservation.has(rid)) promoIdByReservation.set(rid, pid);
-          }
-          const neededPromoIds = Array.from(new Set(Array.from(promoIdByReservation.values())));
-          if (neededPromoIds.length > 0) {
-            const { data: promoByIdRows } = await supabase
-              .from('cruise_promotion')
-              .select('id, code, cruise_promotion_rate(promotion_id, schedule_type, room_type, checkin_from, checkin_to, price_adult, price_child, price_infant, price_extra_bed, price_child_extra_bed, price_single)')
-              .in('id', neededPromoIds);
-            for (const promo of (promoByIdRows || []) as any[]) {
-              promoById.set(String(promo.id || '').trim(), promo);
-            }
-          }
-        }
-        const getPromoRateById = (promoId: string, scheduleType: string, roomType: string, checkin: string): any =>
-          findPromoRate(promoById.get(promoId), scheduleType, roomType, checkin);
 
         let promotionSequenceMap = new Map<string, number>();
         if (promoReservationIds.length > 0) {
@@ -1335,18 +1253,6 @@ export default function ReservationDetailModal({
 
           if (baseService.serviceType === 'cruise' && baseService.room_price_code) {
             const roomInfo: any = roomPriceMap.get(String(baseService.room_price_code || '').trim());
-            // 프로모션 요금 조회: price_breakdown.rooms[].unit_price가 없을 때 fallback으로 사용
-            const servicePb = getServicePriceBreakdown(baseService) || baseService.reservation?.price_breakdown || null;
-            const promoCode = String(servicePb?.promotion_code || '').trim();
-            const promoSchedule = String(baseService.scheduleType || baseService.schedule_type || roomInfo?.schedule_type || '').trim();
-            const promoRoomType = String(baseService.roomType || baseService.room_type || roomInfo?.room_type || '').trim();
-            const promoCheckin = String(baseService.checkin || '').substring(0, 10);
-            let promoRate = promoCode ? getPromoRate(promoCode, promoSchedule, promoRoomType, promoCheckin) : null;
-            // price_breakdown에 코드가 없거나 매칭 실패 시: pricing_source=promotion 이면 usage 기반 요금표로 보강
-            if (!promoRate && normalizePricingSource(reservationInfo?.pricing_source) === 'promotion' && reservationId) {
-              const pid = promoIdByReservation.get(reservationId);
-              if (pid) promoRate = getPromoRateById(pid, promoSchedule, promoRoomType, promoCheckin);
-            }
             return {
               ...baseService,
               cruiseName: roomInfo?.cruise_name || baseService.cruiseName || baseService.cruise || '-',
@@ -1361,13 +1267,6 @@ export default function ReservationDetailModal({
               priceInfant: Number(baseService.priceInfant ?? baseService.price_infant ?? roomInfo?.price_infant ?? 0),
               priceExtraBed: Number(baseService.priceExtraBed ?? baseService.price_extra_bed ?? roomInfo?.price_extra_bed ?? 0),
               priceSingle: Number(baseService.priceSingle ?? baseService.price_single ?? roomInfo?.price_single ?? 0),
-              // 프로모션 단가 (price_breakdown.rooms[].unit_price 없을 때 fallback)
-              promoRateAdult: Number(promoRate?.price_adult ?? 0),
-              promoRateChild: Number(promoRate?.price_child ?? 0),
-              promoRateChildExtraBed: Number(promoRate?.price_child_extra_bed ?? 0),
-              promoRateInfant: Number(promoRate?.price_infant ?? 0),
-              promoRateExtraBed: Number(promoRate?.price_extra_bed ?? 0),
-              promoRateSingle: Number(promoRate?.price_single ?? 0),
             };
           }
 

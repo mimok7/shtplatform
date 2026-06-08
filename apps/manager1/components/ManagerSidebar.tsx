@@ -48,6 +48,7 @@ export default function ManagerSidebar({ activeTab, userEmail, onLogout, userRol
     if (pathname.startsWith('/manager/reservations/bulk')) return 'reservations-bulk';
     if (pathname.startsWith('/manager/reservation-edit/approval')) return 'reservation-edit-approval';
     if (pathname.startsWith('/manager/reservation-edit')) return 'reservation-edit';
+    if (pathname.startsWith('/manager/program-updates')) return 'program-updates';
     if (pathname.startsWith('/manager/cafe-guide')) return 'cafe-guide';
     if (pathname.startsWith('/manager/confirmation')) return 'confirmation';
     if (pathname.startsWith('/manager/passport-management')) return 'passport-management';
@@ -198,6 +199,13 @@ export default function ManagerSidebar({ activeTab, userEmail, onLogout, userRol
                 </h3>
               </div>
               <div className="p-2 space-y-1">
+              <NavItem
+                icon="🛠️"
+                label="프로그램 수정"
+                path="/manager/program-updates"
+                isActive={isActiveTab('program-updates')}
+                onClick={() => handleNavigation('/manager/program-updates')}
+              />
               <NavItem
                 icon="📣"
                 label="카페 안내"
