@@ -1220,22 +1220,24 @@ reservation_cruise_car,car_price_code,text,NULL 가능,null,3
 reservation_cruise_car,car_count,integer,NULL 가능,0,4
 reservation_cruise_car,passenger_count,integer,NULL 가능,0,5
 reservation_cruise_car,pickup_datetime,date,NOT NULL,null,6
-reservation_cruise_car,pickup_location,text,NULL 가능,null,7
-reservation_cruise_car,dropoff_location,text,NULL 가능,null,8
-reservation_cruise_car,car_total_price,numeric,NULL 가능,0,9
-reservation_cruise_car,request_note,text,NULL 가능,null,10
-reservation_cruise_car,created_at,timestamp with time zone,NULL 가능,now(),11
-reservation_cruise_car,updated_at,timestamp with time zone,NULL 가능,now(),12
-reservation_cruise_car,unit_price,numeric,NULL 가능,null,13
-reservation_cruise_car,dispatch_code,text,NULL 가능,null,14
-reservation_cruise_car,pickup_confirmed_at,timestamp with time zone,NULL 가능,null,15
-reservation_cruise_car,dispatch_memo,text,NULL 가능,null,16
-reservation_cruise_car,rentcar_price_code,text,NULL 가능,null,17
-reservation_cruise_car,way_type,text,NULL 가능,null,18
-reservation_cruise_car,route,text,NULL 가능,null,19
-reservation_cruise_car,vehicle_type,text,NULL 가능,null,20
-reservation_cruise_car,rental_type,text,NULL 가능,null,21
-reservation_cruise_car,return_datetime,date,NULL 가능,null,22
+reservation_cruise_car,pickup_time,time,NULL 가능,null,7
+reservation_cruise_car,return_datetime,date,NULL 가능,null,8
+reservation_cruise_car,return_time,time,NULL 가능,null,9
+reservation_cruise_car,pickup_location,text,NULL 가능,null,10
+reservation_cruise_car,dropoff_location,text,NULL 가능,null,11
+reservation_cruise_car,car_total_price,numeric,NULL 가능,0,12
+reservation_cruise_car,request_note,text,NULL 가능,null,13
+reservation_cruise_car,created_at,timestamp with time zone,NULL 가능,now(),14
+reservation_cruise_car,updated_at,timestamp with time zone,NULL 가능,now(),15
+reservation_cruise_car,unit_price,numeric,NULL 가능,null,16
+reservation_cruise_car,dispatch_code,text,NULL 가능,null,17
+reservation_cruise_car,pickup_confirmed_at,timestamp with time zone,NULL 가능,null,18
+reservation_cruise_car,dispatch_memo,text,NULL 가능,null,19
+reservation_cruise_car,rentcar_price_code,text,NULL 가능,null,20
+reservation_cruise_car,way_type,text,NULL 가능,null,21
+reservation_cruise_car,route,text,NULL 가능,null,22
+reservation_cruise_car,vehicle_type,text,NULL 가능,null,23
+reservation_cruise_car,rental_type,text,NULL 가능,null,24
 reservation_daily_stats,id,bigint,NOT NULL,null,1
 reservation_daily_stats,stat_date,date,NOT NULL,null,2
 reservation_daily_stats,service_type,text,NOT NULL,null,3

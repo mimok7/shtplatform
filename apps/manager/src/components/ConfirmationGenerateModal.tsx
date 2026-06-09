@@ -1444,6 +1444,15 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                                                                         const isShtDropoff = reservation.service_type === 'sht' &&
                                                                             (shtCat.includes('drop') || shtCat.includes('sending') || shtCat.includes('샌딩'));
                                                                         if (isShtDropoff) return null;
+                                                                        const reservationKey = String(reservation.reservation_id || '').trim();
+                                                                        const firstCruiseRow = reservation.service_type === 'cruise'
+                                                                            ? quoteData.reservations.find((row: any) =>
+                                                                                row.service_type === 'cruise' &&
+                                                                                String(row.reservation_id || '').trim() === reservationKey
+                                                                            )
+                                                                            : null;
+                                                                        const shouldShowAdditionalFee = reservation.service_type !== 'cruise' || firstCruiseRow === reservation;
+                                                                        if (!shouldShowAdditionalFee) return null;
                                                                         const fee = Number(reservation.manual_additional_fee || 0);
                                                                         const detail = String(reservation.manual_additional_fee_detail || '').trim();
                                                                         if (fee === 0 && !detail) return null;
@@ -1559,6 +1568,14 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                                                     return displaySorted.map((r, i) => {
                                                         const d = r.service_details as any;
                                                         const p = r.priceDetail as any;
+                                                        const reservationKey = String(r.reservation_id || '').trim();
+                                                        const firstCruiseRow = r.service_type === 'cruise'
+                                                            ? sorted.find((row) =>
+                                                                row.service_type === 'cruise' &&
+                                                                String(row.reservation_id || '').trim() === reservationKey
+                                                            )
+                                                            : null;
+                                                        const shouldShowReservationAdditionalFee = r.service_type !== 'cruise' || firstCruiseRow === r;
                                                         let rowAmountOverride: number | null = null;
 
                                                         // 서비스 상세명 줄 + 인원별 계산식 줄 목록 생성
@@ -1614,8 +1631,8 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                                                                 if (childExtraBedCount > 0) calcLines.push(`아동 엑스트라베드 ${childExtraBedPrice.toLocaleString()}동 × ${childExtraBedCount}명`);
                                                                 if (infantCount > 0) calcLines.push(`유아 ${infantPrice.toLocaleString()}동 × ${infantCount}명`);
                                                                 if (singleCount > 0) calcLines.push(`싱글차액 ${singlePrice.toLocaleString()}동 × ${singleCount}명`);
-                                                                const pbGrandTotal = Number(cruisePb?.grand_total || 0);
-                                                                if (pbGrandTotal > 0) rowAmountOverride = pbGrandTotal;
+                                                                const roomTotal = Number(storedRoom?.total || d?.room_total_price || 0);
+                                                                if (roomTotal > 0) rowAmountOverride = roomTotal;
                                                                 break;
                                                             }
                                                             case 'airport': {
@@ -1711,19 +1728,22 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                                                         const additionalFeeItems = Array.isArray(priceBreakdown?.additional_fee_items) ? priceBreakdown.additional_fee_items : [];
                                                         const additionalFeeDetail = String(priceBreakdown?.additional_fee_detail || r.manual_additional_fee_detail || '').trim();
                                                         const manualAdditionalFee = Number(priceBreakdown?.additional_fee_manual ?? r.manual_additional_fee ?? 0);
+                                                        const reservationAdditionalFeeAmount = additionalFeeItems.length > 0
+                                                            ? additionalFeeItems.reduce((sum: number, item: any) => sum + Number(item?.amount || 0), 0)
+                                                            : manualAdditionalFee;
 
-                                                        if (additionalFeeItems.length > 0) {
+                                                        if (shouldShowReservationAdditionalFee && additionalFeeItems.length > 0) {
                                                             // 추가/차감 항목별 상세 표시
                                                             additionalFeeItems.forEach((item: any) => {
                                                                 const amount = Number(item?.amount || 0);
                                                                 if (!amount) return;
                                                                 calcLines.push(`${item?.name || '추가내역'} ${formatSignedDong(amount)}`);
                                                             });
-                                                        } else if (manualAdditionalFee !== 0) {
+                                                        } else if (shouldShowReservationAdditionalFee && manualAdditionalFee !== 0) {
                                                             // 직접 추가/차감만 있는 경우
                                                             calcLines.push(additionalFeeDetail ? `${additionalFeeDetail} ${formatSignedDong(manualAdditionalFee)}` : `추가/차감: ${formatSignedDong(manualAdditionalFee)}`);
                                                         }
-                                                        if (additionalFeeDetail && additionalFeeItems.length === 0 && manualAdditionalFee === 0) {
+                                                        if (shouldShowReservationAdditionalFee && additionalFeeDetail && additionalFeeItems.length === 0 && manualAdditionalFee === 0) {
                                                             calcLines.push(additionalFeeDetail);
                                                         }
 
@@ -1762,15 +1782,14 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                                                             ).reduce((sum, value) => sum + Number(value || 0), 0)
                                                             : null;
 
-                                                        const rowAmountFallback = r.service_type === 'sht'
-                                                            ? baseRowAmount + manualAdditionalFee
-                                                            : baseRowAmount;
+                                                        const rowAmountAdditional = r.service_type === 'sht'
+                                                            ? manualAdditionalFee
+                                                            : (shouldShowReservationAdditionalFee ? reservationAdditionalFeeAmount : 0);
+                                                        const rowAmountFallback = baseRowAmount + rowAmountAdditional;
 
                                                         const rowAmount = mergedAirportReservationTotal !== null && Number.isFinite(mergedAirportReservationTotal)
                                                             ? mergedAirportReservationTotal
-                                                            : (rowAmountOverride !== null
-                                                                ? Number(rowAmountOverride)
-                                                                : (hasReservationTotal && reservationRowCount <= 1 ? reservationRowTotal : rowAmountFallback));
+                                                            : (hasReservationTotal && reservationRowCount <= 1 ? reservationRowTotal : rowAmountFallback);
 
                                                         return (
                                                             <tr key={`pay-row-${i}`} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>

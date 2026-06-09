@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import supabase from '@/lib/supabase';
+import { clearInvalidSession, isInvalidRefreshTokenError } from '@/lib/authRecovery';
 
 interface AuthState {
     user: any | null;
@@ -132,6 +133,13 @@ export function useAuth(redirectOnFail: string = '/login') {
                 }
             } catch (err) {
                 if (cancelled) return;
+                if (isInvalidRefreshTokenError(err)) {
+                    await clearInvalidSession();
+                    writeSessionCache(null);
+                    setAuthState({ user: null, loading: false, error: err as Error });
+                    router.replace(redirectOnFail);
+                    return;
+                }
                 // 오류 발생 시 캐시된 사용자를 유지 (강제 로그아웃 금지)
                 setAuthState(prev => ({ ...prev, loading: false, error: err as Error }));
             }
@@ -190,6 +198,13 @@ export function useAuth(redirectOnFail: string = '/login') {
                 setAuthState({ user: null, loading: false, error: null });
             }
         } catch (err) {
+            if (isInvalidRefreshTokenError(err)) {
+                await clearInvalidSession();
+                writeSessionCache(null);
+                setAuthState({ user: null, loading: false, error: err as Error });
+                router.replace(redirectOnFail);
+                return;
+            }
             setAuthState(prev => ({ ...prev, error: err as Error }));
         }
     };

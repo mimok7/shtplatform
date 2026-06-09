@@ -320,14 +320,27 @@ export default function ProgramUpdatesPage() {
 
   const sendProgramUpdateNotification = async (requestId: string, action: 'requested' | 'completed') => {
     const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      throw new Error('로그인이 필요합니다.');
+    }
+
+    const {
       data: { session },
     } = await supabase.auth.getSession();
+
+    if (!session?.access_token) {
+      throw new Error('인증 토큰을 찾을 수 없습니다. 다시 로그인해 주세요.');
+    }
 
     const response = await fetch('/api/program-update-notify', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        Authorization: `Bearer ${session.access_token}`,
       },
       body: JSON.stringify({ requestId, action }),
     });
