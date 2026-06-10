@@ -937,7 +937,8 @@ function CruiseCarReservationEditContent() {
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 mb-1">
                                                         <Calendar className="inline w-4 h-4 mr-1" />
-                                                        픽업 일시 (가는 편)
+                                                        픽업 일시
+                                                        <span className="ml-1 text-xs text-blue-500">(가는 편)</span>
                                                     </label>
                                                     <input
                                                         type="date"
@@ -960,39 +961,37 @@ function CruiseCarReservationEditContent() {
                                                     </div>
                                                 </div>
 
-                                                {(item.way_type === '당일왕복' || item.way_type === '다른날왕복') && (
-                                                    <div>
-                                                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                                                            <Calendar className="inline w-4 h-4 mr-1" />
-                                                            오는 편 날짜
-                                                            <span className="ml-1 text-xs text-orange-500">(pier → 숙소)</span>
-                                                        </label>
-                                                        <input
-                                                            type="date"
-                                                            value={item.return_datetime}
-                                                            onChange={(e) => updateVehicleForm(index, { return_datetime: e.target.value })}
-                                                            className="w-full px-3 py-2 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 bg-orange-50"
-                                                        />
-                                                        <div className="mt-2 flex items-center gap-2">
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => copyPickupDateToReturnDate(index, 'next-day')}
-                                                                disabled={!item.pickup_datetime}
-                                                                className="px-2 py-1 text-xs rounded border border-orange-200 text-orange-600 hover:bg-orange-50 disabled:text-gray-400 disabled:border-gray-200 disabled:cursor-not-allowed"
-                                                            >
-                                                                픽업 다음일 복사
-                                                            </button>
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => copyPickupDateToReturnDate(index, 'same-day')}
-                                                                disabled={!item.pickup_datetime}
-                                                                className="px-2 py-1 text-xs rounded border border-blue-200 text-blue-600 hover:bg-blue-50 disabled:text-gray-400 disabled:border-gray-200 disabled:cursor-not-allowed"
-                                                            >
-                                                                당일 복사
-                                                            </button>
-                                                        </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                        <Calendar className="inline w-4 h-4 mr-1" />
+                                                        리턴 일시
+                                                        <span className="ml-1 text-xs text-orange-500">(오는 편)</span>
+                                                    </label>
+                                                    <input
+                                                        type="date"
+                                                        value={item.return_datetime}
+                                                        onChange={(e) => updateVehicleForm(index, { return_datetime: e.target.value })}
+                                                        className="w-full px-3 py-2 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 bg-orange-50"
+                                                    />
+                                                    <div className="mt-2 flex items-center gap-2">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => copyPickupDateToReturnDate(index, 'next-day')}
+                                                            disabled={!item.pickup_datetime}
+                                                            className="px-2 py-1 text-xs rounded border border-orange-200 text-orange-600 hover:bg-orange-50 disabled:text-gray-400 disabled:border-gray-200 disabled:cursor-not-allowed"
+                                                        >
+                                                            픽업 다음일 복사
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => copyPickupDateToReturnDate(index, 'same-day')}
+                                                            disabled={!item.pickup_datetime}
+                                                            className="px-2 py-1 text-xs rounded border border-blue-200 text-blue-600 hover:bg-blue-50 disabled:text-gray-400 disabled:border-gray-200 disabled:cursor-not-allowed"
+                                                        >
+                                                            당일 복사
+                                                        </button>
                                                     </div>
-                                                )}
+                                                </div>
                                             </div>
 
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

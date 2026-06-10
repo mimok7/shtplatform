@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import ManagerLayout from '@/components/ManagerLayout';
 import supabase from '@/lib/supabase';
 import { LayoutGrid, Table as TableIcon } from 'lucide-react';
@@ -304,6 +305,7 @@ const validateCruiseCarRow = (
 };
 
 export default function CruiseCarDatesPage() {
+  const router = useRouter();
   const [rows, setRows] = useState<ValidationRow[]>([]);
   const [completedRows, setCompletedRows] = useState<CompletedRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -435,7 +437,7 @@ export default function CruiseCarDatesPage() {
       const completedChildRows = filteredCompletedRequests.length
         ? await fetchByIdsInChunks(
             'reservation_change_cruise_car',
-            'request_id, reservation_id, pickup_datetime, return_datetime, way_type, one_way_direction',
+            'request_id, reservation_id, pickup_datetime, return_datetime, way_type',
             'request_id',
             filteredCompletedRequests.map((row: any) => row.id)
           )
@@ -456,6 +458,9 @@ export default function CruiseCarDatesPage() {
         if (!cruiseInfo?.checkin) continue;
 
         const user = userById.get(vehicleRes.re_user_id);
+        const snapshotRequestedRow = Array.isArray(req.snapshot_data?.requested)
+          ? req.snapshot_data.requested[0]
+          : null;
         completedResult.push({
           request_id: String(req.id),
           reservation_id: String(item.reservation_id || ''),
@@ -467,7 +472,7 @@ export default function CruiseCarDatesPage() {
           pickup_datetime: toDateOnly(item.pickup_datetime) || '-',
           return_datetime: toDateOnly(item.return_datetime) || '-',
           way_type: normalizeWayType(item.way_type),
-          one_way_direction: normalizeDirection(item.one_way_direction),
+          one_way_direction: normalizeDirection(snapshotRequestedRow?.one_way_direction),
           action_type: String(req.snapshot_data?.action || ''),
           manager_note: String(req.manager_note || ''),
           submitted_at: String(req.submitted_at || ''),
@@ -525,6 +530,11 @@ export default function CruiseCarDatesPage() {
     } else {
       setSelected(new Set(displayRows.map((r) => r.rcc_id)));
     }
+  };
+
+  const moveToReservationEdit = (reservationId: string) => {
+    if (!reservationId) return;
+    router.push(`/manager/reservation-edit/vehicle?id=${reservationId}`);
   };
 
   const applyFix = async (row: ValidationRow) => {
@@ -824,6 +834,13 @@ export default function CruiseCarDatesPage() {
                   <span className="text-[11px] text-gray-400">ID: {row.rcc_id.slice(0, 8)}</span>
                   <div className="flex items-center gap-2">
                     <button
+                      onClick={() => moveToReservationEdit(row.reservation_id)}
+                      disabled={confirming === row.rcc_id || syncing === row.rcc_id || syncingAll}
+                      className="whitespace-nowrap rounded border border-sky-300 bg-sky-50 px-3 py-1.5 text-xs text-sky-700 hover:bg-sky-100 disabled:opacity-50"
+                    >
+                      수정
+                    </button>
+                    <button
                       onClick={() => void handleConfirm(row)}
                       disabled={confirming === row.rcc_id || syncing === row.rcc_id || syncingAll}
                       className="whitespace-nowrap rounded border border-gray-300 bg-white px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-50"
@@ -971,6 +988,13 @@ export default function CruiseCarDatesPage() {
                         </td>
                         <td className="px-3 py-2">
                           <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => moveToReservationEdit(row.reservation_id)}
+                              disabled={confirming === row.rcc_id || syncing === row.rcc_id || syncingAll}
+                              className="whitespace-nowrap rounded border border-sky-300 bg-sky-50 px-2 py-1 text-xs text-sky-700 hover:bg-sky-100 disabled:opacity-50"
+                            >
+                              수정
+                            </button>
                             <button
                               onClick={() => void handleConfirm(row)}
                               disabled={confirming === row.rcc_id || syncing === row.rcc_id || syncingAll}
