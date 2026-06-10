@@ -402,9 +402,19 @@ const getCruiseAmountRows = (service: any): CruiseAmountRow[] => {
   return rows;
 };
 
-function formatDatetimeOffset(value: any): string {
-  if (!value) return '-';
-  const raw = String(value).trim();
+function formatDatetimeOffset(value: any, dateValue?: any, timeValue?: any): string {
+  const rawValue = String(value ?? '').trim();
+  const rawDate = String(dateValue ?? '').trim();
+  const rawTime = String(timeValue ?? '').trim();
+  const raw = (() => {
+    if (rawValue) {
+      const normalized = rawValue.replace(' ', 'T');
+      const hasTime = /T\d{2}:\d{2}/.test(normalized) || /\d{2}:\d{2}/.test(normalized);
+      if (hasTime || (!rawDate && !rawTime)) return rawValue;
+    }
+    if (rawDate && rawTime) return `${rawDate}T${rawTime}`;
+    return rawValue || rawDate || rawTime;
+  })();
   if (!raw) return '-';
   const hasTimezone = /[zZ]$|[+-]\d{2}:?\d{2}$/.test(raw);
   if (!hasTimezone) {
@@ -817,7 +827,10 @@ function ServiceCard({
 
       {(type === 'vehicle' || type === 'car') && (
         <div className="space-y-0.5">
-          <DetailLine label="일시" value={service.pickupDatetime ? formatDateOnlyKst(service.pickupDatetime) : '-'} />
+          <DetailLine label="픽업일시" value={formatDatetimeOffset(service.pickupDatetime || service.pickup_datetime, service.pickupDate || service.pickup_date, service.pickupTime || service.pickup_time)} />
+          {(service.returnDatetime || service.return_datetime || service.returnDate || service.return_date) && (
+            <DetailLine label="드랍일시" value={<span className="font-medium text-orange-700">{formatDatetimeOffset(service.returnDatetime || service.return_datetime, service.returnDate || service.return_date, service.returnTime || service.return_time)}</span>} />
+          )}
           <DetailLine label="구분" value={service.carCategory || service.way_type || service.category || '-'} />
           <DetailLine label="차량타입" value={service.carType || '-'} />
           <DetailLine label="총인원수" value={formatNonZeroCount(service.passengerCount, '명')} />
@@ -910,12 +923,12 @@ function ServiceCard({
           <DetailLine label="탑승 인원" value={`${Number(service.passengerCount ?? service.passenger_count ?? 0)}명`} />
           <DetailLine label="수하물" value={Number(service.luggageCount ?? service.luggage_count ?? 0) > 0 ? `${Number(service.luggageCount ?? service.luggage_count)}개` : '-'} />
           <DetailLine label="차량번호" value={service.dispatchCode || service.dispatch_code || '-'} />
-          <DetailLine label="픽업 시간" value={service.pickupDatetime || service.pickup_datetime ? formatDatetimeOffset(service.pickupDatetime || service.pickup_datetime) : '-'} />
+          <DetailLine label="픽업 일시" value={service.pickupDatetime || service.pickup_datetime ? formatDatetimeOffset(service.pickupDatetime || service.pickup_datetime, service.pickupDate || service.pickup_date, service.pickupTime || service.pickup_time) : '-'} />
           <DetailLine label="픽업장소" value={service.pickupLocation || service.pickup_location || '-'} />
           <DetailLine label="드롭장소" value={service.destination || service.dropoffLocation || service.dropoff_location || '-'} />
           <DetailLine label="경유지" value={service.viaLocation || service.via_location || '-'} />
           <DetailLine label="대기" value={service.viaWaiting || service.via_waiting || '-'} />
-          <DetailLine label="리턴 시간" value={service.returnDatetime || service.return_datetime ? formatDatetimeOffset(service.returnDatetime || service.return_datetime) : '-'} />
+          <DetailLine label="리턴 일시" value={service.returnDatetime || service.return_datetime ? formatDatetimeOffset(service.returnDatetime || service.return_datetime, service.returnDate || service.return_date, service.returnTime || service.return_time) : '-'} />
           <DetailLine label="리턴 픽업" value={service.returnPickupLocation || service.return_pickup_location || '-'} />
           <DetailLine label="리턴 드롭" value={service.returnDestination || service.return_destination || '-'} />
           <DetailLine label="리턴 경유" value={service.returnViaLocation || service.return_via_location || '-'} />
@@ -1282,6 +1295,11 @@ export default function ReservationDetailModal({
               route: baseService.route || vehiclePriceInfo?.route || '-',
               passengerCount: Number(baseService.passengerCount ?? baseService.passenger_count ?? 0),
               pickupDatetime: baseService.pickupDatetime || baseService.pickup_datetime || '-',
+              pickupDate: baseService.pickupDate || baseService.pickup_date || null,
+              pickupTime: baseService.pickupTime || baseService.pickup_time || null,
+              returnDatetime: baseService.returnDatetime || baseService.return_datetime || null,
+              returnDate: baseService.returnDate || baseService.return_date || null,
+              returnTime: baseService.returnTime || baseService.return_time || null,
               pickupLocation: baseService.pickupLocation || baseService.pickup_location || '-',
               dropoffLocation: baseService.dropoffLocation || baseService.dropoff_location || '-',
               totalPrice: Number(baseService.totalPrice ?? baseService.car_total_price ?? 0),

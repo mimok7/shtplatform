@@ -16,10 +16,20 @@ interface UserReservationDetailModalProps {
 }
 
 // 시간 표시는 항상 KST 기준으로 통일 (수동 +8/+9 보정 금지)
-function formatDatetimeOffset(value: any): string {
-    if (!value) return '-';
+function formatDatetimeOffset(value: any, dateValue?: any, timeValue?: any): string {
+    const rawValue = String(value ?? '').trim();
+    const rawDate = String(dateValue ?? '').trim();
+    const rawTime = String(timeValue ?? '').trim();
+    const raw = (() => {
+        if (rawValue) {
+            const normalized = rawValue.replace(' ', 'T');
+            const hasTime = /T\d{2}:\d{2}/.test(normalized) || /\d{2}:\d{2}/.test(normalized);
+            if (hasTime || (!rawDate && !rawTime)) return rawValue;
+        }
+        if (rawDate && rawTime) return `${rawDate}T${rawTime}`;
+        return rawValue || rawDate || rawTime;
+    })();
 
-    const raw = String(value).trim();
     if (!raw) return '-';
 
     const hasTimezone = /[zZ]$|[+-]\d{2}:?\d{2}$/.test(raw);
@@ -628,6 +638,11 @@ export default function UserReservationDetailModal({
                             route: normalizedService.route || vehiclePriceInfo?.route || '-',
                             passengerCount: Number(normalizedService.passengerCount ?? normalizedService.passenger_count ?? 0),
                             pickupDatetime: normalizedService.pickupDatetime || normalizedService.pickup_datetime || '-',
+                            pickupDate: normalizedService.pickupDate || normalizedService.pickup_date || null,
+                            pickupTime: normalizedService.pickupTime || normalizedService.pickup_time || null,
+                            returnDatetime: normalizedService.returnDatetime || normalizedService.return_datetime || null,
+                            returnDate: normalizedService.returnDate || normalizedService.return_date || null,
+                            returnTime: normalizedService.returnTime || normalizedService.return_time || null,
                             pickupLocation: normalizedService.pickupLocation || normalizedService.pickup_location || '-',
                             dropoffLocation: normalizedService.dropoffLocation || normalizedService.dropoff_location || '-',
                             totalPrice: Number(normalizedService.totalPrice ?? normalizedService.car_total_price ?? 0),
@@ -1095,7 +1110,10 @@ export default function UserReservationDetailModal({
                         <div>차량타입: {service.carType || '-'}</div>
                         <div>경로: {service.route || '-'}</div>
                         <div>총인원수: {service.passengerCount || 0}명</div>
-                        <div>픽업일시: {service.pickupDatetime?.replace('T', ' ') || '-'}</div>
+                        <div>픽업일시: {formatDatetimeOffset(service.pickupDatetime || service.pickup_datetime, service.pickupDate || service.pickup_date, service.pickupTime || service.pickup_time)}</div>
+                        {(service.returnDatetime || service.return_datetime || service.returnDate || service.return_date) && (
+                            <div>드랍일시: <span className="font-medium text-orange-700">{formatDatetimeOffset(service.returnDatetime || service.return_datetime, service.returnDate || service.return_date, service.returnTime || service.return_time)}</span></div>
+                        )}
                         <div>픽업위치: {service.pickupLocation || '-'}</div>
                         <div>드랍위치: {service.dropoffLocation || '-'}</div>
                         {service.vehicleNumber && <div>차량번호: {service.vehicleNumber}</div>}
@@ -1268,7 +1286,7 @@ export default function UserReservationDetailModal({
                             <div className="mt-1 p-2 bg-blue-50 rounded-lg border border-blue-100">
                                 <div className="text-xs font-bold text-blue-700 mb-1">📍 픽업</div>
                                 {(service.pickupDatetime || service.pickup_datetime) && (
-                                    <div className="text-xs">시간: <span className="font-medium">{formatDatetimeOffset(service.pickupDatetime || service.pickup_datetime)}</span></div>
+                                    <div className="text-xs">일시: <span className="font-medium">{formatDatetimeOffset(service.pickupDatetime || service.pickup_datetime, service.pickupDate || service.pickup_date, service.pickupTime || service.pickup_time)}</span></div>
                                 )}
                                 {(service.pickupLocation || service.pickup_location) && (
                                     <div className="text-xs">픽업장소: <span className="font-medium">{service.pickupLocation || service.pickup_location}</span></div>
@@ -1293,7 +1311,7 @@ export default function UserReservationDetailModal({
                             <div className="mt-1 p-2 bg-green-50 rounded-lg border border-green-100">
                                 <div className="text-xs font-bold text-green-700 mb-1">🎯 리턴</div>
                                 {(service.returnDatetime || service.return_datetime) && (
-                                    <div className="text-xs">시간: <span className="font-medium">{formatDatetimeOffset(service.returnDatetime || service.return_datetime)}</span></div>
+                                    <div className="text-xs">일시: <span className="font-medium">{formatDatetimeOffset(service.returnDatetime || service.return_datetime, service.returnDate || service.return_date, service.returnTime || service.return_time)}</span></div>
                                 )}
                                 {(service.returnPickupLocation || service.return_pickup_location) && (
                                     <div className="text-xs">픽업장소: <span className="font-medium">{service.returnPickupLocation || service.return_pickup_location}</span></div>

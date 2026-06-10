@@ -502,7 +502,7 @@ function CustomerConfirmationClient() {
                 <div className="space-y-1 text-xs">
                     {details.pickup_datetime != null && <div><span className="text-gray-500">픽업일시:</span> <span className="font-medium">{formatDate(details.pickup_datetime)}</span></div>}
                     {(details.return_datetime != null || details.dropoff_datetime != null) && (
-                        <div><span className="text-gray-500">드롭일시:</span> <span className="font-medium">{formatDate(details.return_datetime || details.dropoff_datetime)}</span></div>
+                        <div><span className="text-gray-500">드랍일시:</span> <span className="font-medium">{formatDate(details.return_datetime || details.dropoff_datetime)}</span></div>
                     )}
                     {(details.pickup_location != null || details.dropoff_location != null) && <div><span className="text-gray-500">픽업/드랍:</span> <span className="font-medium">{details.pickup_location || '-'} → {details.dropoff_location || '-'}</span></div>}
                     {details.car_count != null && <div><span className="text-gray-500">차량수:</span> <span>{details.car_count}대</span></div>}

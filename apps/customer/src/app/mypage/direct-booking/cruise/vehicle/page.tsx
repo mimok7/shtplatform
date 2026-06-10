@@ -40,7 +40,7 @@ type OtherDayRoundTripForm = {
     embarkPickupHotel: string;
 };
 
-const carCategoryHardcoded = ['편도', '당일왕복', '다른날왕복'];
+const carCategoryHardcoded = ['편도', '당일왕복', '일정왕복', '다른날왕복'];
 
 const isShtVehicleType = (vehicleType?: string) =>
     !!vehicleType && vehicleType.includes('스테이하롱 셔틀 리무진');
@@ -98,6 +98,38 @@ const createEmptyOtherDayRoundTripForm = (): OtherDayRoundTripForm => ({
     embarkPickupHotel: '',
 });
 
+const isMultiDayCruiseSchedule = (value?: string) => {
+    const raw = String(value || '').trim().toUpperCase();
+    return raw === '1박2일'.toUpperCase() || raw === '2박3일'.toUpperCase() || raw === '1N2D' || raw === '2N3D';
+};
+
+const getScheduleReturnOffsetDays = (value?: string) => {
+    const raw = String(value || '').trim().toUpperCase();
+    if (raw === '2박3일'.toUpperCase() || raw === '2N3D') return 2;
+    if (raw === '당일'.toUpperCase() || raw === 'DAY') return 0;
+    return 1;
+};
+
+const isOtherDayStyleCategory = (value?: string) =>
+    value === '다른날왕복' || value === '일정왕복';
+
+const isCustomOtherDayRoundTripCategory = (value?: string) =>
+    value === '다른날왕복';
+
+const isScheduleRoundTripCategory = (value?: string) =>
+    value === '일정왕복';
+
+const getLookupWayType = (value?: string) =>
+    value === '일정왕복' ? '다른날왕복' : value || '';
+
+const getEffectiveOtherDayUsageOption = (
+    category: string,
+    form: OtherDayRoundTripForm | Partial<OtherDayRoundTripForm>
+): OtherDayUsageOption => {
+    if (category === '일정왕복') return 'before_boarding';
+    return (form.usageOption as OtherDayUsageOption) || '';
+};
+
 const combineDateAndTime = (date?: string | null, time?: string | null) => {
     if (!date) return null;
     if (!time) return date;
@@ -113,6 +145,18 @@ const extractTimeFromDateTime = (value?: string | null) => {
 const extractDateFromDateTime = (value?: string | null) => {
     if (!value) return '';
     return String(value).split('T')[0] || '';
+};
+
+const getOneWayDirectionFromCruiseCar = (row: any): 'pickup' | 'dropoff' => {
+    if (row?.one_way_direction === 'dropoff') return 'dropoff';
+    return 'pickup';
+};
+
+const getCruiseCarRideDatetime = (row: any) => {
+    const direction = getOneWayDirectionFromCruiseCar(row);
+    return direction === 'dropoff'
+        ? (row?.return_datetime || null)
+        : (row?.pickup_datetime || null);
 };
 
 const buildOtherDayRequestNote = (form: OtherDayRoundTripForm) => {
@@ -190,6 +234,7 @@ function CruiseVehicleContent() {
     const [selectedRoomTypes, setSelectedRoomTypes] = useState<string[]>([]);
     const [selectedRateCardPromotion, setSelectedRateCardPromotion] = useState(false);
     const [cruisePromotionCode, setCruisePromotionCode] = useState('');
+    const [applyGrandPioneersVehicleDiscount, setApplyGrandPioneersVehicleDiscount] = useState(false);
 
     // 기존 차량 예약 ID
     const [existingVehicleReservationId, setExistingVehicleReservationId] = useState<string | null>(null);
@@ -290,8 +335,11 @@ function CruiseVehicleContent() {
 
     // 일정에 따라 사용 가능한 차량 카테고리 필터링
     const getAvailableCarCategories = useMemo(() => {
-        const isMultiDay = schedule && ['1박2일', '2박3일'].includes(schedule);
-        return carCategoryHardcoded.filter(cat => !(isMultiDay && cat === '당일왕복'));
+        const isMultiDay = isMultiDayCruiseSchedule(schedule);
+        return carCategoryHardcoded.filter((cat) => {
+            if (isMultiDay) return cat !== '당일왕복';
+            return cat !== '일정왕복';
+        });
     }, [schedule]);
 
     const isShtExclusiveCruise = useMemo(() => {
@@ -315,6 +363,12 @@ function CruiseVehicleContent() {
         const roomTypes = selectedRoomTypes.length > 0 ? selectedRoomTypes : [selectedRoomType];
         return isGrandPioneers && roomTypes.some(isGrandPioneersVehicleDiscountRoom);
     }, [cruiseName, selectedRoomType, selectedRoomTypes]);
+
+    useEffect(() => {
+        if (!grandPioneersVehicleDiscountEligible && applyGrandPioneersVehicleDiscount) {
+            setApplyGrandPioneersVehicleDiscount(false);
+        }
+    }, [grandPioneersVehicleDiscountEligible, applyGrandPioneersVehicleDiscount]);
 
     const hasShtSeatRequiredVehicle = useMemo(
         () => vehicleForm.some(v =>
@@ -353,7 +407,7 @@ function CruiseVehicleContent() {
             let query = supabase
                 .from('rentcar_price')
                 .select('route')
-                .eq('way_type', wayType)
+                .eq('way_type', getLookupWayType(wayType))
                 .like('route', '%하롱베이%');
             query = applyCruiseFilterToRentcarQuery(query);
             const { data, error } = await query.order('route');
@@ -373,7 +427,7 @@ function CruiseVehicleContent() {
             let query = supabase
                 .from('rentcar_price')
                 .select('vehicle_type')
-                .eq('way_type', wt);
+                .eq('way_type', getLookupWayType(wt));
             if (rt) query = query.eq('route', rt);
             else query = query.like('route', '%하롱베이%');
             query = applyCruiseFilterToRentcarQuery(query);
@@ -405,7 +459,7 @@ function CruiseVehicleContent() {
             let query = supabase
                 .from('rentcar_price')
                 .select('rent_code')
-                .eq('way_type', carCategory);
+                .eq('way_type', getLookupWayType(carCategory));
             if (isAggregatedSht) {
                 query = query.like('vehicle_type', '%스테이하롱 셔틀 리무진%');
             } else {
@@ -561,6 +615,16 @@ function CruiseVehicleContent() {
                     : [];
                 setSelectedRoomTypes([...new Set<string>(breakdownRoomTypes)]);
 
+                const appliedPromotions: string[] = Array.isArray(priceBreakdown.applied_promotions)
+                    ? priceBreakdown.applied_promotions.map((code: any) => String(code || '').trim()).filter(Boolean)
+                    : [];
+                const hasGrandPioneersPromotion =
+                    String(priceBreakdown.promotion_code || '').trim() === GRAND_PIONEERS_VEHICLE_DISCOUNT_CODE
+                    || appliedPromotions.includes(GRAND_PIONEERS_VEHICLE_DISCOUNT_CODE);
+                if (hasGrandPioneersPromotion) {
+                    setApplyGrandPioneersVehicleDiscount(true);
+                }
+
                 // reservation_cruise 상세
                 const { data: cruiseData } = await supabase
                     .from('reservation_cruise')
@@ -649,6 +713,7 @@ function CruiseVehicleContent() {
                         }
 
                         // 일반 차량
+                        let firstOneWayDirection: 'pickup' | 'dropoff' | '' = '';
                         for (const carData of (carRows || [])) {
                             const code = carData.rentcar_price_code || carData.car_price_code;
                             const { data: rentcarData } = await supabase
@@ -667,20 +732,26 @@ function CruiseVehicleContent() {
                             if (!firstRoute) firstRoute = carData.route || rentcarData?.route || '';
                             if (!firstPickup && carData.pickup_location) firstPickup = carData.pickup_location;
                             if (!firstDropoff && carData.dropoff_location) firstDropoff = carData.dropoff_location;
-                            if (!firstRideDate && carData.pickup_datetime) firstRideDate = extractDateFromDateTime(carData.pickup_datetime);
-                            if (!firstRideTime && carData.pickup_datetime) firstRideTime = extractTimeFromDateTime(carData.pickup_datetime);
+                            const rideDatetime = getCruiseCarRideDatetime(carData);
+                            if (!firstRideDate && rideDatetime) firstRideDate = extractDateFromDateTime(rideDatetime);
+                            if (!firstRideTime && rideDatetime) firstRideTime = extractTimeFromDateTime(rideDatetime);
+                            if (!firstOneWayDirection && (carData.way_type || rentcarData?.way_type || '') === '편도') {
+                                firstOneWayDirection = getOneWayDirectionFromCruiseCar(carData);
+                            }
                             if (!parsedOtherDay && carData.request_note) parsedOtherDay = parseOtherDayRequestNote(carData.request_note);
                         }
 
                         if (loadedVehicles.length > 0) {
                             setVehicleForm(loadedVehicles);
                             if (firstWayType) setSelectedCarCategory(firstWayType);
+                            if (firstWayType === '편도') setPyongdoDirection(firstOneWayDirection || 'pickup');
                             if (firstRoute) setSelectedRoute(firstRoute);
                             if (firstPickup) setPickupLocation(firstPickup);
                             if (firstDropoff) setDropoffLocation(firstDropoff);
-                            if (firstWayType === '다른날왕복') {
+                            if (isOtherDayStyleCategory(firstWayType)) {
                                 setOtherDayRoundTripForm({
                                     ...createEmptyOtherDayRoundTripForm(),
+                                    usageOption: getEffectiveOtherDayUsageOption(firstWayType, parsedOtherDay || createEmptyOtherDayRoundTripForm()),
                                     rideDate: firstRideDate,
                                     rideTime: firstRideTime,
                                     ridePickupLocation: firstPickup,
@@ -706,6 +777,7 @@ function CruiseVehicleContent() {
                             let firstDropoff = '';
                             let firstRideDate = '';
                             let firstRideTime = '';
+                            let firstOneWayDirection: 'pickup' | 'dropoff' | '' = '';
                             let parsedOtherDay: Partial<OtherDayRoundTripForm> | null = null;
                             for (const carData of carRows) {
                                 const code = carData.rentcar_price_code || carData.car_price_code;
@@ -725,18 +797,24 @@ function CruiseVehicleContent() {
                                 if (!firstRoute) firstRoute = carData.route || rentcarData?.route || '';
                                 if (!firstPickup && carData.pickup_location) firstPickup = carData.pickup_location;
                                 if (!firstDropoff && carData.dropoff_location) firstDropoff = carData.dropoff_location;
-                                if (!firstRideDate && carData.pickup_datetime) firstRideDate = extractDateFromDateTime(carData.pickup_datetime);
-                                if (!firstRideTime && carData.pickup_datetime) firstRideTime = extractTimeFromDateTime(carData.pickup_datetime);
+                                const rideDatetime = getCruiseCarRideDatetime(carData);
+                                if (!firstRideDate && rideDatetime) firstRideDate = extractDateFromDateTime(rideDatetime);
+                                if (!firstRideTime && rideDatetime) firstRideTime = extractTimeFromDateTime(rideDatetime);
+                                if (!firstOneWayDirection && (carData.way_type || rentcarData?.way_type || '') === '편도') {
+                                    firstOneWayDirection = getOneWayDirectionFromCruiseCar(carData);
+                                }
                                 if (!parsedOtherDay && carData.request_note) parsedOtherDay = parseOtherDayRequestNote(carData.request_note);
                             }
                             setVehicleForm(loaded);
                             if (firstWayType) setSelectedCarCategory(firstWayType);
+                            if (firstWayType === '편도') setPyongdoDirection(firstOneWayDirection || 'pickup');
                             if (firstRoute) setSelectedRoute(firstRoute);
                             if (firstPickup) setPickupLocation(firstPickup);
                             if (firstDropoff) setDropoffLocation(firstDropoff);
-                            if (firstWayType === '다른날왕복') {
+                            if (isOtherDayStyleCategory(firstWayType)) {
                                 setOtherDayRoundTripForm({
                                     ...createEmptyOtherDayRoundTripForm(),
+                                    usageOption: getEffectiveOtherDayUsageOption(firstWayType, parsedOtherDay || createEmptyOtherDayRoundTripForm()),
                                     rideDate: firstRideDate,
                                     rideTime: firstRideTime,
                                     ridePickupLocation: firstPickup,
@@ -841,8 +919,9 @@ function CruiseVehicleContent() {
             alert('편도 방향(픽업/드롭)을 선택해주세요.');
             return false;
         }
-        if (selectedCarCategory === '다른날왕복') {
-            if (!otherDayRoundTripForm.usageOption) {
+        if (isCustomOtherDayRoundTripCategory(selectedCarCategory)) {
+            const effectiveUsageOption = getEffectiveOtherDayUsageOption(selectedCarCategory, otherDayRoundTripForm);
+            if (selectedCarCategory === '다른날왕복' && !effectiveUsageOption) {
                 alert('다른날 왕복 이용 유형을 선택해주세요.');
                 return false;
             }
@@ -854,11 +933,11 @@ function CruiseVehicleContent() {
                 alert('차량 승차/하차 장소를 입력해주세요.');
                 return false;
             }
-            if (otherDayRoundTripForm.usageOption === 'before_boarding' && !otherDayRoundTripForm.postCruiseDropoffLocation) {
+            if (effectiveUsageOption === 'before_boarding' && !otherDayRoundTripForm.postCruiseDropoffLocation) {
                 alert('하선 후 드랍 장소를 입력해주세요.');
                 return false;
             }
-            if (otherDayRoundTripForm.usageOption === 'after_disembark' && !otherDayRoundTripForm.embarkPickupHotel) {
+            if (effectiveUsageOption === 'after_disembark' && !otherDayRoundTripForm.embarkPickupHotel) {
                 alert('승선 시 픽업 호텔을 입력해주세요.');
                 return false;
             }
@@ -905,7 +984,9 @@ function CruiseVehicleContent() {
                 || vehicleType.includes('리무진')
                 || vehicleType.includes('단독')
                 || r.priceData?.rental_type === '단독대여';
-            return grandPioneersVehicleDiscountEligible && eligibleGrandPioneersVehicle ? VEHICLE_DISCOUNT_RATE : 0;
+            return grandPioneersVehicleDiscountEligible && applyGrandPioneersVehicleDiscount && eligibleGrandPioneersVehicle
+                ? VEHICLE_DISCOUNT_RATE
+                : 0;
         };
 
         const getVehicleDiscountNote = (r: ResolvedVehicle) => {
@@ -931,7 +1012,11 @@ function CruiseVehicleContent() {
         }, 0);
 
         const otherDayPickupDatetime = combineDateAndTime(otherDayRoundTripForm.rideDate, otherDayRoundTripForm.rideTime);
-        const otherDayRequestNote = buildOtherDayRequestNote(otherDayRoundTripForm);
+        const effectiveOtherDayUsageOption = getEffectiveOtherDayUsageOption(selectedCarCategory, otherDayRoundTripForm);
+        const otherDayRequestNote = buildOtherDayRequestNote({
+            ...otherDayRoundTripForm,
+            usageOption: effectiveOtherDayUsageOption,
+        } as OtherDayRoundTripForm);
 
         // re_type 결정: SHT 차량이 하나라도 있으면 sht, 아니면 car
         const vehicleReservationType = resolved.some(r => r.isSht) ? 'sht' : 'car';
@@ -980,12 +1065,12 @@ function CruiseVehicleContent() {
             const discountNote = getVehicleDiscountNote(r);
 
             if (r.isSht) {
-                const pickupDateSource = selectedCarCategory === '다른날왕복'
+                const pickupDateSource = isCustomOtherDayRoundTripCategory(selectedCarCategory)
                     ? otherDayRoundTripForm.rideDate
                     : checkin;
                 const pickupDate = pickupDateSource ? new Date(pickupDateSource) : null;
                 const pickupDateISO = pickupDate ? pickupDate.toISOString() : null;
-                const mergedShtNote = [discountNote, selectedCarCategory === '다른날왕복' ? otherDayRequestNote : null]
+                const mergedShtNote = [discountNote, isCustomOtherDayRoundTripCategory(selectedCarCategory) ? otherDayRequestNote : null]
                     .filter(Boolean)
                     .join('\n');
                 const baseData = {
@@ -1015,11 +1100,11 @@ function CruiseVehicleContent() {
                             dropoffDateISO = pickupDate.toISOString();
                         } else {
                             const dropoffDate = new Date(pickupDate);
-                            dropoffDate.setDate(dropoffDate.getDate() + (schedule === '2박3일' ? 2 : 1));
+                            dropoffDate.setDate(dropoffDate.getDate() + getScheduleReturnOffsetDays(schedule));
                             dropoffDateISO = dropoffDate.toISOString();
                         }
                     }
-                    if (selectedCarCategory === '다른날왕복' && otherDayRoundTripForm.usageOption === 'after_disembark') {
+                    if (selectedCarCategory === '다른날왕복' && effectiveOtherDayUsageOption === 'after_disembark') {
                         await supabase.from('reservation_car_sht').insert({
                             ...baseData,
                             usage_date: checkin || null,
@@ -1041,10 +1126,10 @@ function CruiseVehicleContent() {
                             ...baseData,
                             usage_date: pickupDateISO,
                             sht_category: 'Pickup',
-                            pickup_location: selectedCarCategory === '다른날왕복'
+                            pickup_location: isCustomOtherDayRoundTripCategory(selectedCarCategory)
                                 ? (otherDayRoundTripForm.ridePickupLocation || null)
                                 : (pickupLocation || null),
-                            dropoff_location: selectedCarCategory === '다른날왕복'
+                            dropoff_location: isCustomOtherDayRoundTripCategory(selectedCarCategory)
                                 ? (otherDayRoundTripForm.rideDropoffLocation || pierLocation)
                                 : pierLocation,
                             car_total_price: totalPrice
@@ -1054,7 +1139,7 @@ function CruiseVehicleContent() {
                             usage_date: dropoffDateISO,
                             sht_category: 'Drop-off',
                             pickup_location: pierLocation,
-                            dropoff_location: selectedCarCategory === '다른날왕복'
+                            dropoff_location: isCustomOtherDayRoundTripCategory(selectedCarCategory)
                                 ? (otherDayRoundTripForm.postCruiseDropoffLocation || null)
                                 : (dropoffLocation || null),
                             car_total_price: 0
@@ -1063,37 +1148,62 @@ function CruiseVehicleContent() {
                 }
             } else {
                 const carCat = r.row.car_category || selectedCarCategory || '';
+                const otherDayUsageOption = isCustomOtherDayRoundTripCategory(carCat)
+                    ? getEffectiveOtherDayUsageOption(carCat, otherDayRoundTripForm)
+                    : '';
+                const otherDayDirection: 'pickup' | 'dropoff' = otherDayUsageOption === 'after_disembark' ? 'dropoff' : 'pickup';
                 let returnDatetime: string | null = null;
                 let finalPickupDatetime: string | null = checkin || null;
                 let finalPickupLocation: string | null = pickupLocation || null;
                 let finalDropoffLocation: string | null = dropoffLocation || null;
                 let finalRequestNote: string | null = discountNote;
+                let pickupTime: string | null = null;
+                let returnTime: string | null = null;
 
                 if (carCat === '당일왕복') {
                     returnDatetime = checkin || null;
-                } else if (carCat === '다른날왕복') {
-                    finalPickupDatetime = otherDayPickupDatetime;
+                } else if (isCustomOtherDayRoundTripCategory(carCat)) {
                     finalPickupLocation = otherDayRoundTripForm.ridePickupLocation || null;
                     finalDropoffLocation = otherDayRoundTripForm.rideDropoffLocation || null;
 
-                    if (otherDayRoundTripForm.usageOption === 'before_boarding') {
+                    if (otherDayUsageOption === 'before_boarding') {
+                        finalPickupDatetime = otherDayPickupDatetime;
                         if (checkin) {
                             const rd = new Date(checkin);
-                            rd.setDate(rd.getDate() + (schedule === '2박3일' ? 2 : 1));
+                            rd.setDate(rd.getDate() + getScheduleReturnOffsetDays(schedule));
                             returnDatetime = rd.toISOString().split('T')[0];
                         }
                     } else {
-                        returnDatetime = null;
+                        finalPickupDatetime = null;
+                        returnDatetime = otherDayPickupDatetime;
                     }
 
                     finalRequestNote = [discountNote, otherDayRequestNote].filter(Boolean).join('\n');
+                    pickupTime = otherDayRoundTripForm.rideTime || null;
+                } else if (isScheduleRoundTripCategory(carCat)) {
+                    finalPickupDatetime = checkin || null;
+                    if (checkin) {
+                        const rd = new Date(checkin);
+                        rd.setDate(rd.getDate() + getScheduleReturnOffsetDays(schedule));
+                        returnDatetime = rd.toISOString().split('T')[0];
+                    }
+                } else if (carCat === '편도') {
+                    const isPickupDir = pyongdoDirection === 'pickup';
+                    if (isPickupDir) {
+                        returnDatetime = null;
+                    } else {
+                        returnDatetime = finalPickupDatetime;
+                        finalPickupDatetime = null;
+                    }
                 }
 
                 await supabase.from('reservation_cruise_car').insert({
                     reservation_id: vehicleReId,
                     car_price_code: r.priceData.rent_code,
                     rentcar_price_code: r.priceData.rent_code,
-                    way_type: r.priceData.way_type || r.row.car_category || null,
+                    way_type: carCat === '일정왕복'
+                        ? '일정왕복'
+                        : (r.priceData.way_type || r.row.car_category || null),
                     route: r.priceData.route || r.row.route || null,
                     vehicle_type: r.priceData.vehicle_type || r.row.car_type || null,
                     rental_type: r.priceData.rental_type || null,
@@ -1102,9 +1212,12 @@ function CruiseVehicleContent() {
                     pickup_datetime: finalPickupDatetime,
                     pickup_location: finalPickupLocation,
                     dropoff_location: finalDropoffLocation,
-                    pickup_time: carCat === '다른날왕복' ? (otherDayRoundTripForm.rideTime || null) : null,
-                    return_time: null,
+                    pickup_time: pickupTime,
+                    return_time: returnTime,
                     return_datetime: returnDatetime,
+                    one_way_direction: carCat === '편도'
+                        ? (pyongdoDirection === 'dropoff' ? 'dropoff' : 'pickup')
+                        : (carCat === '다른날왕복' ? otherDayDirection : null),
                     unit_price: unitPrice,
                     car_total_price: totalPrice,
                     request_note: finalRequestNote
@@ -1233,7 +1346,7 @@ function CruiseVehicleContent() {
             <div className="w-full">
                 <form onSubmit={handleSubmit} className="space-y-4">
 
-                        <div className="space-y-4">
+                        <div className="space-y-4 flex flex-col">
                             {/* 차량 자동 선택 안내 */}
                             {isFullPromoOrLegacyC && (
                                 <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg">
@@ -1259,6 +1372,24 @@ function CruiseVehicleContent() {
                                             🚐 좌석 선택
                                         </button>
                                     </div>
+                                </div>
+                            )}
+
+                            {grandPioneersVehicleDiscountEligible && (
+                                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                                    <label className="flex items-start gap-2 cursor-pointer text-sm text-amber-800">
+                                        <input
+                                            type="checkbox"
+                                            className="mt-0.5"
+                                            checked={applyGrandPioneersVehicleDiscount}
+                                            onChange={(e) => setApplyGrandPioneersVehicleDiscount(e.target.checked)}
+                                        />
+                                        <span>
+                                            프로모션 관리: GP-VERANDA-UP-VEHICLE-50-2026-05-30 적용
+                                            <br />
+                                            비고: 그랜드 파이어니스 베란다 스위트 이상 차량 50% 지원 적용
+                                        </span>
+                                    </label>
                                 </div>
                             )}
 
@@ -1312,7 +1443,7 @@ function CruiseVehicleContent() {
                                                 setCarTypeOptions([]);
                                                 // 편도 방향 초기화 (편도가 아닌 경우)
                                                 if (category !== '편도') setPyongdoDirection('');
-                                                if (category !== '다른날왕복') {
+                                                if (!isCustomOtherDayRoundTripCategory(category)) {
                                                     setOtherDayRoundTripForm(createEmptyOtherDayRoundTripForm());
                                                 }
                                                 const updatedVehicleForm = vehicleForm.map(v => ({
@@ -1365,8 +1496,14 @@ function CruiseVehicleContent() {
                                 </div>
                             )}
 
-                            {selectedCarCategory === '다른날왕복' && (
-                                <div className="space-y-4 border border-blue-200 bg-blue-50 rounded-lg p-4">
+                            {isScheduleRoundTripCategory(selectedCarCategory) && (
+                                <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 text-sm text-blue-700">
+                                    일정왕복은 승차일자/하차일자가 체크인일과 일정 기준으로 자동 입력됩니다.
+                                </div>
+                            )}
+
+                            {isCustomOtherDayRoundTripCategory(selectedCarCategory) && (
+                                <div className="order-3 space-y-4 border border-blue-200 bg-blue-50 rounded-lg p-4">
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-2">다른날 왕복 이용 유형</label>
                                         <div className="grid grid-cols-2 gap-2">
@@ -1485,6 +1622,7 @@ function CruiseVehicleContent() {
                                 </div>
                             )}
 
+                            <div className="order-2 space-y-4">
                             {vehicleForm.map((vehicle, vehicleIndex) => (
                                 <div key={vehicleIndex} className="border border-green-200 rounded-lg p-4 bg-green-50">
                                     <div className="flex items-center justify-between mb-3">
@@ -1548,7 +1686,7 @@ function CruiseVehicleContent() {
                                                     // 당일왕복/다른날왕복 + 일반 SHT → 좌석 선택 모달 자동 오픈 (필수)
                                                     const isShtRoundTrip = isShtVehicleType(normalizedCarType)
                                                         && !normalizedCarType.includes('단독')
-                                                        && (selectedWayType === '당일왕복' || selectedWayType === '다른날왕복')
+                                                        && (selectedWayType === '당일왕복' || selectedWayType === '다른날왕복' || selectedWayType === '일정왕복')
                                                         && !isShtExclusiveCruise;
                                                     if (isShtRoundTrip) {
                                                         setIsModalReadOnly(false);
@@ -1602,9 +1740,10 @@ function CruiseVehicleContent() {
                                     + 차량 추가 (최대 6대)
                                 </button>
                             )}
+                            </div>
 
                             {/* 픽업/드롭오프 */}
-                            {selectedCarCategory !== '다른날왕복' && (
+                            {!isCustomOtherDayRoundTripCategory(selectedCarCategory) && (
                             <div className="space-y-4">
                                 <h3 className="text-lg font-semibold text-gray-800">📍 픽업/드롭오프 장소</h3>
                                 {selectedCarCategory === '편도' && !pyongdoDirection && (

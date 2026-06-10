@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, CheckCircle2, Home, Loader2, Pencil, Wrench } from 'lucide-react';
+import { ArrowLeft, Check, CheckCircle2, Copy, Home, Loader2, Pencil, Wrench } from 'lucide-react';
 import supabase from '@/lib/supabase';
 
 type ProgramUpdateRow = {
@@ -230,6 +230,31 @@ function buildDefaultRequestUrl(appName: AppOption) {
   return buildAbsoluteUrl(appName, config.defaultPath);
 }
 
+function getRequestPageMeta(appName: string, requestUrl?: string | null) {
+  const normalizedApp = APP_OPTIONS.includes(appName as AppOption) ? (appName as AppOption) : 'other';
+  const config = APP_ROUTE_CONFIG[normalizedApp] || APP_ROUTE_CONFIG.mobile;
+  const safeUrl = String(requestUrl || '').trim();
+
+  if (!safeUrl) {
+    return { menuLabel: '-', url: '-' };
+  }
+
+  const matched = config.menuOptions.find((item) => {
+    const absoluteUrl = buildAbsoluteUrl(normalizedApp, item.path);
+    if (absoluteUrl === safeUrl || item.path === safeUrl) return true;
+    try {
+      return new URL(absoluteUrl).pathname === new URL(safeUrl).pathname;
+    } catch {
+      return false;
+    }
+  });
+
+  return {
+    menuLabel: matched?.label || '직접입력',
+    url: safeUrl,
+  };
+}
+
 const formatDateTime = (value?: string | null) => {
   if (!value) return '-';
   const date = new Date(value);
@@ -251,6 +276,7 @@ export default function ProgramUpdatesPage() {
   const [saving, setSaving] = useState(false);
   const [completeSavingId, setCompleteSavingId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [copiedRowId, setCopiedRowId] = useState<string | null>(null);
   const [form, setForm] = useState<ProgramUpdateForm>({
     app_name: 'mobile' as AppOption,
     request_url: buildDefaultRequestUrl('mobile'),
@@ -486,6 +512,19 @@ export default function ProgramUpdatesPage() {
     }));
   };
 
+  const handleCopyContent = async (row: ProgramUpdateRow) => {
+    try {
+      await navigator.clipboard.writeText(row.content || '');
+      setCopiedRowId(row.id);
+      window.setTimeout(() => {
+        setCopiedRowId((current) => (current === row.id ? null : current));
+      }, 1800);
+    } catch (error) {
+      console.error('프로그램 수정 내용 복사 실패:', error);
+      alert('내용 복사에 실패했습니다.');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 pb-10">
       <div className="sticky top-0 z-10 border-b bg-white/95 px-4 py-3 backdrop-blur">
@@ -630,6 +669,8 @@ export default function ProgramUpdatesPage() {
             <div className="space-y-3">
               {filteredRows.map((row) => {
                 const isCompleted = Boolean(row.completed_at);
+                const requestPageMeta = getRequestPageMeta(row.app_name, row.request_url);
+                const isCopied = copiedRowId === row.id;
                 return (
                   <article key={row.id} className="rounded-xl border border-gray-200 bg-gray-50 p-3">
                     <div className="mb-2 flex items-start justify-between gap-3">
@@ -652,11 +693,27 @@ export default function ProgramUpdatesPage() {
 
                     <div className="mb-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2">
                       <div className="text-[11px] font-medium text-blue-700">수정요청페이지</div>
-                      <div className="mt-1 break-all text-xs text-blue-900">{row.request_url || '-'}</div>
+                      <div className="mt-1 text-xs font-semibold text-blue-900">{requestPageMeta.menuLabel}</div>
+                      <div className="mt-1 break-all text-[11px] text-blue-800/90">{requestPageMeta.url}</div>
                     </div>
 
-                    <div className="whitespace-pre-wrap rounded-lg bg-white px-3 py-2 text-sm text-gray-800">
-                      {row.content}
+                    <div className="rounded-lg bg-white px-3 py-2">
+                      <div className="mb-2 flex items-center justify-between gap-3">
+                        <div className="text-[11px] font-medium text-gray-500">내용</div>
+                        <button
+                          type="button"
+                          onClick={() => void handleCopyContent(row)}
+                          className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-[11px] font-medium text-gray-600 hover:bg-gray-100"
+                          title="내용 전체 복사"
+                          aria-label="내용 전체 복사"
+                        >
+                          {isCopied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                          {isCopied ? '복사됨' : '복사'}
+                        </button>
+                      </div>
+                      <div className="whitespace-pre-wrap text-sm text-gray-800">
+                        {row.content}
+                      </div>
                     </div>
 
                     <div className="mt-3 grid grid-cols-1 gap-2 text-xs text-gray-500">

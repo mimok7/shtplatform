@@ -1235,9 +1235,10 @@ reservation_cruise_car,pickup_confirmed_at,timestamp with time zone,NULL 가능,
 reservation_cruise_car,dispatch_memo,text,NULL 가능,null,19
 reservation_cruise_car,rentcar_price_code,text,NULL 가능,null,20
 reservation_cruise_car,way_type,text,NULL 가능,null,21
-reservation_cruise_car,route,text,NULL 가능,null,22
-reservation_cruise_car,vehicle_type,text,NULL 가능,null,23
-reservation_cruise_car,rental_type,text,NULL 가능,null,24
+reservation_cruise_car,one_way_direction,text,NULL 가능,null,22
+reservation_cruise_car,route,text,NULL 가능,null,23
+reservation_cruise_car,vehicle_type,text,NULL 가능,null,24
+reservation_cruise_car,rental_type,text,NULL 가능,null,25
 reservation_daily_stats,id,bigint,NOT NULL,null,1
 reservation_daily_stats,stat_date,date,NOT NULL,null,2
 reservation_daily_stats,service_type,text,NOT NULL,null,3

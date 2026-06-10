@@ -200,13 +200,6 @@ export default function ManagerSidebar({ activeTab, userEmail, onLogout, userRol
               </div>
               <div className="p-2 space-y-1">
               <NavItem
-                icon="🛠️"
-                label="프로그램 수정"
-                path="/manager/program-updates"
-                isActive={isActiveTab('program-updates')}
-                onClick={() => handleNavigation('/manager/program-updates')}
-              />
-              <NavItem
                 icon="📣"
                 label="카페 안내"
                 path="/manager/cafe-guide"
@@ -282,6 +275,13 @@ export default function ManagerSidebar({ activeTab, userEmail, onLogout, userRol
                 path="/manager/quote-bulk-delete"
                 isActive={isActiveTab('quote-bulk-delete')}
                 onClick={() => handleNavigation('/manager/quote-bulk-delete')}
+              />
+              <NavItem
+                icon="🛠️"
+                label="앱수정 요청"
+                path="/manager/program-updates"
+                isActive={isActiveTab('program-updates')}
+                onClick={() => handleNavigation('/manager/program-updates')}
               />
               </div>
             </div>

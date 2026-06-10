@@ -142,6 +142,14 @@ const inferAirportDirectionLabel = (item: any): string => {
   return '';
 };
 
+const inferCruiseCarDirectionLabel = (item: any): string => {
+  const direction = String(item?.one_way_direction || '').trim().toLowerCase();
+  if (direction === 'dropoff') return '드롭';
+  if (direction === 'pickup') return '픽업';
+  if (item?.segmentType === 'return') return '드롭';
+  return '픽업';
+};
+
 const hasPromotionBreakdown = (value: any): boolean => {
   if (!value) return false;
   if (value.promotion_code) return true;
@@ -872,12 +880,14 @@ export default function SchedulePage() {
 
           const cruiseCarRows = carByRid.get(r.re_id) || [];
           const cruiseCarItems = cruiseCarRows.flatMap((d: any) => {
+            const initialDirection = inferCruiseCarDirectionLabel(d);
             const pickupItem = {
               ...base,
               ...d,
               re_type: 'car',
               serviceType: 'car',
-              segmentType: 'pickup',
+              segmentType: initialDirection === '드롭' ? 'return' : 'pickup',
+              one_way_direction: d.one_way_direction || '',
               carType: d.vehicle_type || d.car_price_code || '',
               carCategory: d.sht_category || d.category || d.way_type || '',
               route: [d.pickup_location, d.dropoff_location].filter(Boolean).join(' → '),
@@ -909,10 +919,12 @@ export default function SchedulePage() {
         if (r.re_type === 'car') {
           const rows = carByRid.get(r.re_id) || [{}];
           return rows.flatMap((d: any) => {
+            const initialDirection = inferCruiseCarDirectionLabel(d);
             const pickupItem = {
               ...base,
               ...d,
-              segmentType: 'pickup',
+              segmentType: initialDirection === '드롭' ? 'return' : 'pickup',
+              one_way_direction: d.one_way_direction || '',
               carType: d.vehicle_type || d.car_price_code || '',
               carCategory: d.sht_category || d.category || d.way_type || '',
               route: [d.pickup_location, d.dropoff_location].filter(Boolean).join(' → '),
@@ -1311,7 +1323,9 @@ export default function SchedulePage() {
     // 방향 배지 계산 (픽업/샌딩/드롭)
     let directionLabel = '';
     if (type === 'car' || type === 'rentcar') {
-      directionLabel = item.segmentType === 'return' ? '드롭' : '픽업';
+      directionLabel = type === 'car'
+        ? inferCruiseCarDirectionLabel(item)
+        : (item.segmentType === 'return' ? '드롭' : '픽업');
     } else if (type === 'airport') {
       directionLabel = inferAirportDirectionLabel(item);
     } else if (type === 'vehicle' || type === 'sht') {
@@ -1420,7 +1434,7 @@ export default function SchedulePage() {
               <Row label="차종" value={item.vehicleType || item.carType} />
               <Row label="인원/차량" value={`👥 ${item.passengerCount}명 / 🚗 ${item.carCount}대`} />
               {item.pickupLocation && <Row label="픽업위치" value={item.pickupLocation} />}
-              {item.dropoffLocation && <Row label="드롭위치" value={item.dropoffLocation} />}
+              {item.dropoffLocation && <Row label="드랍위치" value={item.dropoffLocation} />}
             </>
           )}
           {type === 'hotel' && (

@@ -117,6 +117,15 @@ const normalizeWayType = (value: any): string => {
     return cleanText(value);
 };
 
+const inferCruiseCarDirection = (row: any): 'pickup' | 'dropoff' => {
+    const direction = String(row?.one_way_direction || '').trim().toLowerCase();
+    if (direction === 'dropoff') return 'dropoff';
+    if (direction === 'pickup') return 'pickup';
+    const phase = String(row?._cruise_car_phase || row?.segment_type || row?.segmentType || '').trim().toLowerCase();
+    if (phase === 'return') return 'dropoff';
+    return 'pickup';
+};
+
 const extractBracketValue = (note: any, label: string): string => {
     const text = String(note || '');
     const match = text.match(new RegExp(`\\[${label}\\s*:\\s*([^\\]]+)\\]`));
@@ -597,9 +606,9 @@ export default function ServiceCardBody({
         const cruiseName = row?._rentcar_info?.cruise || row?.cruise_name || row?.cruise || row?.accommodation_info || '-';
         const vehicleName = row?.carType || row?._rentcar_info?.vehicle_type || row?.vehicle_type || '-';
         const wayType = row?.way_type || row?._rentcar_info?.way_type || row?.category || '';
-        const cruiseCarPhase = row?._cruise_car_phase || '';
-        const showPickupBlock = cruiseCarPhase !== 'return';
-        const showDropBlock = cruiseCarPhase === 'return';
+        const cruiseCarDirection = inferCruiseCarDirection(row);
+        const showPickupBlock = cruiseCarDirection === 'pickup';
+        const showDropBlock = cruiseCarDirection === 'dropoff';
 
         return (
             <div className="flex flex-col gap-1 text-sm text-gray-700 mt-1">

@@ -20,20 +20,37 @@ import {
 
 // 한국 시간 오전/오후 포맷 변환 헬퍼
 // DB에 KST로 저장된 값(timezone 정보 없음)을 UTC 변환 없이 직접 파싱하여 표시
-const formatKoreanDateTime = (dateStr: string | null | undefined): string => {
-    if (!dateStr) return '미정';
+const formatKoreanDateTime = (
+    dateStr: string | null | undefined,
+    datePart?: string | null | undefined,
+    timePart?: string | null | undefined,
+): string => {
+    const rawDateStr = String(dateStr || '').trim();
+    const rawDatePart = String(datePart || '').trim();
+    const rawTimePart = String(timePart || '').trim();
+    const mergedDateTime = (() => {
+        if (rawDateStr) {
+            const normalized = rawDateStr.replace(' ', 'T');
+            const hasTime = /T\d{2}:\d{2}/.test(normalized) || /\d{2}:\d{2}/.test(normalized);
+            if (hasTime || (!rawDatePart && !rawTimePart)) return rawDateStr;
+        }
+        if (rawDatePart && rawTimePart) return `${rawDatePart}T${rawTimePart}`;
+        return rawDateStr || rawDatePart || rawTimePart;
+    })();
+
+    if (!mergedDateTime) return '미정';
     try {
         // Z나 +09:00 등 timezone suffix 제거 후 로컬 시간 그대로 파싱
-        const str = dateStr.replace(' ', 'T').replace(/Z$/, '').replace(/[+-]\d{2}:\d{2}$/, '');
+        const str = mergedDateTime.replace(' ', 'T').replace(/Z$/, '').replace(/[+-]\d{2}:\d{2}$/, '');
         const m = str.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
-        if (!m) return dateStr;
+        if (!m) return mergedDateTime;
         const [, yyyy, mm, dd, hh, min] = m;
         const h = parseInt(hh, 10);
         const ampm = h < 12 ? '오전' : '오후';
         const h12 = h % 12 || 12;
         return `${yyyy}. ${mm}. ${dd}. ${ampm} ${h12}:${min}`;
     } catch {
-        return dateStr;
+        return mergedDateTime;
     }
 };
 
@@ -253,12 +270,12 @@ const CruiseDetailSection = ({ reservation }: { reservation: any }) => {
                                             <div><strong>이용방식:</strong> {car.way_type || '정보 없음'}</div>
                                             <div><strong>차량 수:</strong> {car.car_count}대</div>
                                             <div><strong>승객 수:</strong> {car.passenger_count}명</div>
-                                            <div><strong>픽업 일시:</strong> {formatKoreanDateTime(car.pickup_datetime)}</div>
+                                            <div><strong>픽업 일시:</strong> {formatKoreanDateTime(car.pickup_datetime, car.pickup_date, car.pickup_time)}</div>
                                             <div><strong>픽업 장소:</strong> {car.pickup_location || '미정'}</div>
                                             <div><strong>도착 장소:</strong> {car.dropoff_location || '미정'}</div>
                                             {car.return_datetime && (
                                                 <div className="md:col-span-2 bg-orange-50 p-2 rounded border border-orange-100">
-                                                    <strong>🔄 오는 편 날짜:</strong> <span className="text-orange-700 font-medium">{formatKoreanDateTime(car.return_datetime)}</span>
+                                                    <strong>🔄 오는 편 일시:</strong> <span className="text-orange-700 font-medium">{formatKoreanDateTime(car.return_datetime, car.return_date, car.return_time)}</span>
                                                     <span className="ml-2 text-xs text-orange-500">(pier → 숙소)</span>
                                                 </div>
                                             )}
@@ -556,7 +573,7 @@ const ServiceDetailSection = ({ reservation }: { reservation: any }) => {
                                         <div><strong>렌터카 수:</strong> {detail.rentcar_count || 0}대</div>
                                         <div><strong>차량 수:</strong> {detail.car_count || 0}대</div>
                                         <div><strong>승객 수:</strong> {detail.passenger_count || 0}명</div>
-                                        <div><strong>픽업 일시:</strong> {formatKoreanDateTime(detail.pickup_datetime)}</div>
+                                        <div><strong>픽업 일시:</strong> {formatKoreanDateTime(detail.pickup_datetime, detail.pickup_date, detail.pickup_time)}</div>
                                         <div><strong>픽업 위치:</strong> {detail.pickup_location || '미정'}</div>
                                         <div><strong>목적지:</strong> {detail.destination || '미정'}</div>
                                         <div><strong>경유지:</strong> {detail.via_location || '없음'}</div>
@@ -566,7 +583,7 @@ const ServiceDetailSection = ({ reservation }: { reservation: any }) => {
                                                 <div className="md:col-span-2 mt-3 pt-3 border-t border-orange-200">
                                                     <strong className="text-orange-700">🔄 오는 편 (새딩)</strong>
                                                 </div>
-                                                <div><strong>오는 편 일시:</strong> {formatKoreanDateTime(detail.return_datetime)}</div>
+                                                <div><strong>오는 편 일시:</strong> {formatKoreanDateTime(detail.return_datetime, detail.return_date, detail.return_time)}</div>
                                                 <div><strong>오는 편 출발지:</strong> {detail.return_pickup_location || '미정'}</div>
                                                 <div><strong>오는 편 목적지:</strong> {detail.return_destination || '미정'}</div>
                                                 {detail.return_via_location && <div><strong>오는 편 경유지:</strong> {detail.return_via_location}</div>}
@@ -1531,13 +1548,13 @@ export default function ReservationDetailModal({
                                 )}
                                 {data.route && <div><strong>노선:</strong> {data.route}</div>}
                                 {data.pickup_datetime && (
-                                    <div><strong>📍 픽업 일시:</strong> <span className="font-medium text-blue-700">{formatKoreanDateTime(data.pickup_datetime)}</span></div>
+                                    <div><strong>📍 픽업 일시:</strong> <span className="font-medium text-blue-700">{formatKoreanDateTime(data.pickup_datetime, data.pickup_date, data.pickup_time)}</span></div>
                                 )}
                                 {data.return_datetime && (
                                     <>
                                         <div className="mt-2 pt-2 border-t border-orange-200">
                                             <strong className="text-orange-700">🔄 오는 편 일시:</strong>{' '}
-                                            <span className="font-medium text-orange-700">{formatKoreanDateTime(data.return_datetime)}</span>
+                                            <span className="font-medium text-orange-700">{formatKoreanDateTime(data.return_datetime, data.return_date, data.return_time)}</span>
                                         </div>
                                     </>
                                 )}
@@ -1714,7 +1731,7 @@ export default function ReservationDetailModal({
                                 {data.rentcar_price_code && <div><strong>렌터카 가격 코드:</strong> <span className="bg-red-100 text-red-800 px-2 py-1 rounded text-sm">{data.rentcar_price_code}</span></div>}
                                 {data.rentcar_count && <div><strong>렌터카 수:</strong> {data.rentcar_count}대</div>}
                                 {data.passenger_count && <div><strong>승객 수:</strong> {data.passenger_count}명</div>}
-                                {data.pickup_datetime && <div><strong>픽업 일시:</strong> {formatKoreanDateTime(data.pickup_datetime)}</div>}
+                                {data.pickup_datetime && <div><strong>픽업 일시:</strong> {formatKoreanDateTime(data.pickup_datetime, data.pickup_date, data.pickup_time)}</div>}
                                 {data.pickup_location && <div><strong>픽업 장소:</strong> {data.pickup_location}</div>}
                                 {data.destination && <div><strong>목적지:</strong> {data.destination}</div>}
                                 {data.via_location && <div><strong>경유지:</strong> {data.via_location}</div>}
@@ -1723,7 +1740,7 @@ export default function ReservationDetailModal({
                                         <div className="mt-3 pt-3 border-t border-orange-200">
                                             <strong className="text-orange-700">🔄 오는 편 (새딩)</strong>
                                         </div>
-                                        <div><strong>오는 편 일시:</strong> {formatKoreanDateTime(data.return_datetime)}</div>
+                                        <div><strong>오는 편 일시:</strong> {formatKoreanDateTime(data.return_datetime, data.return_date, data.return_time)}</div>
                                         {data.return_pickup_location && <div><strong>오는 편 출발지:</strong> {data.return_pickup_location}</div>}
                                         {data.return_destination && <div><strong>오는 편 목적지:</strong> {data.return_destination}</div>}
                                         {data.return_via_location && <div><strong>오는 편 경유지:</strong> {data.return_via_location}</div>}
@@ -1888,12 +1905,12 @@ export default function ReservationDetailModal({
                                 )}
                                 {details.route && <div><strong>노선:</strong> {details.route}</div>}
                                 {details.pickup_datetime && (
-                                    <div><strong>📍 픽업 일시:</strong> <span className="font-medium text-blue-700">{formatKoreanDateTime(details.pickup_datetime)}</span></div>
+                                    <div><strong>📍 픽업 일시:</strong> <span className="font-medium text-blue-700">{formatKoreanDateTime(details.pickup_datetime, details.pickup_date, details.pickup_time)}</span></div>
                                 )}
                                 {details.return_datetime && (
                                     <div className="pt-2 border-t border-orange-200">
                                         <strong className="text-orange-700">🔄 오는 편 일시:</strong>{' '}
-                                        <span className="font-medium text-orange-700">{formatKoreanDateTime(details.return_datetime)}</span>
+                                        <span className="font-medium text-orange-700">{formatKoreanDateTime(details.return_datetime, details.return_date, details.return_time)}</span>
                                     </div>
                                 )}
                                 {details.vehicle_number && <div><strong>차량번호:</strong> {details.vehicle_number}</div>}
@@ -2071,7 +2088,7 @@ export default function ReservationDetailModal({
                                 <div><strong>렌터카 수:</strong> {details.rentcar_count}대</div>
                                 <div><strong>차량 수:</strong> {details.car_count || '정보 없음'}대</div>
                                 <div><strong>단가:</strong> {details.unit_price?.toLocaleString()}동</div>
-                                <div><strong>픽업 일시:</strong> {formatKoreanDateTime(details.pickup_datetime)}</div>
+                                <div><strong>픽업 일시:</strong> {formatKoreanDateTime(details.pickup_datetime, details.pickup_date, details.pickup_time)}</div>
                             </div>
                             <div className="space-y-3">
                                 <h5 className="font-semibold text-blue-600 border-b pb-2">📍 이동 경로 및 승객</h5>
@@ -2085,7 +2102,7 @@ export default function ReservationDetailModal({
                                         <div className="mt-3 pt-3 border-t border-orange-200">
                                             <strong className="text-orange-700">🔄 오는 편 (샌딩)</strong>
                                         </div>
-                                        <div><strong>오는 편 일시:</strong> {formatKoreanDateTime(details.return_datetime)}</div>
+                                        <div><strong>오는 편 일시:</strong> {formatKoreanDateTime(details.return_datetime, details.return_date, details.return_time)}</div>
                                         {details.return_pickup_location && <div><strong>오는 편 출발지:</strong> {details.return_pickup_location}</div>}
                                         {details.return_destination && <div><strong>오는 편 목적지:</strong> {details.return_destination}</div>}
                                         {details.return_via_location && <div><strong>오는 편 경유지:</strong> {details.return_via_location}</div>}

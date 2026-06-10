@@ -50,6 +50,24 @@ function formatKst(value?: string | null): string {
     });
 }
 
+function formatKstMerged(value?: any, dateValue?: any, timeValue?: any): string {
+    const rawValue = String(value ?? '').trim();
+    const rawDate = String(dateValue ?? '').trim();
+    const rawTime = String(timeValue ?? '').trim();
+
+    const merged = (() => {
+        if (rawValue) {
+            const normalized = rawValue.replace(' ', 'T');
+            const hasTime = /T\d{2}:\d{2}/.test(normalized) || /\d{2}:\d{2}/.test(normalized);
+            if (hasTime || (!rawDate && !rawTime)) return rawValue;
+        }
+        if (rawDate && rawTime) return `${rawDate}T${rawTime}`;
+        return rawValue || rawDate || rawTime;
+    })();
+
+    return formatKst(merged || null);
+}
+
 function isUuidLike(value: string): boolean {
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
@@ -414,7 +432,11 @@ function normalizePackageService(service: any): any {
         tourDate: firstFilled(service?.tourDate, service?.usage_date, service?.usageDate),
         usageDate: firstFilled(service?.usageDate, service?.usage_date, service?.pickup_datetime),
         pickupDatetime: firstFilled(service?.pickupDatetime, service?.pickup_datetime, service?.ra_datetime),
+        pickupDate: firstFilled(service?.pickupDate, service?.pickup_date),
+        pickupTime: firstFilled(service?.pickupTime, service?.pickup_time),
         returnDatetime: firstFilled(service?.returnDatetime, service?.return_datetime),
+        returnDate: firstFilled(service?.returnDate, service?.return_date),
+        returnTime: firstFilled(service?.returnTime, service?.return_time),
         cruise: firstFilled(service?.cruise, service?.cruiseName, roomInfo?.cruise_name),
         cruiseName: firstFilled(service?.cruiseName, service?.cruise, roomInfo?.cruise_name),
         roomType: firstFilled(service?.roomType, roomInfo?.room_type, service?.room_price_code, hotelInfo?.room_name, service?.hotel_price_code),
@@ -841,13 +863,15 @@ export default function PackageReservationDetailModal({
                                             </div>
 
                                             <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-gray-700">
-                                                {(service.checkin || service.checkinDate || service.tourDate || service.usageDate || service.ra_datetime || service.pickupDatetime) && (
+                                                {(service.checkin || service.checkinDate || service.tourDate || service.usageDate || service.ra_datetime || service.pickupDatetime || service.pickupDate || service.pickupTime) && (
                                                     <div>
                                                         <Calendar className="inline w-4 h-4 mr-1 text-gray-500" />
-                                                        일정: {formatKst(service.checkin || service.checkinDate || service.tourDate || service.usageDate || service.ra_datetime || service.pickupDatetime)}
+                                                        일정: {formatKstMerged(service.checkin || service.checkinDate || service.tourDate || service.usageDate || service.ra_datetime || service.pickupDatetime, service.pickupDate || service.pickup_date, service.pickupTime || service.pickup_time)}
                                                     </div>
                                                 )}
-                                                {service.returnDatetime && <div>리턴 일정: {formatKst(service.returnDatetime)}</div>}
+                                                {(service.returnDatetime || service.returnDate || service.returnTime || service.return_date || service.return_time) && (
+                                                    <div>리턴 일정: {formatKstMerged(service.returnDatetime || service.return_datetime, service.returnDate || service.return_date, service.returnTime || service.return_time)}</div>
+                                                )}
                                                 {cruiseNameValue && <div>크루즈: {humanizeServiceName(cruiseNameValue, '크루즈 프로그램')}</div>}
                                                 {roomTypeValue && <div>객실타입: {humanizeServiceName(roomTypeValue, '객실 타입 확정 예정')}</div>}
                                                 {hasTourNameSource && <div>투어명: {getTourDisplayName(service)}</div>}

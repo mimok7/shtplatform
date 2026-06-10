@@ -100,6 +100,25 @@ const emptyRateForm: RateForm = {
   currency: 'VND',
 };
 
+const GP_VEHICLE_PROMOTION_CODE = 'GP-VERANDA-UP-VEHICLE-50-2026-05-30';
+
+const buildDefaultGpVehiclePromotion = () => {
+  const today = new Date().toISOString().slice(0, 10);
+  return {
+    code: GP_VEHICLE_PROMOTION_CODE,
+    name: '그랜드 파이어니스 베란다 스위트 이상 차량 50% 지원',
+    cruise_name: '그랜드 파이어니스 크루즈',
+    booking_from: today,
+    booking_to: null,
+    checkin_from: today,
+    checkin_to: '2099-12-31',
+    quota_total: 999999,
+    is_active: true,
+    notes: '차량 페이지에서 적용 여부를 선택할 수 있는 전용 차량할인 프로모션',
+    updated_at: new Date().toISOString(),
+  };
+};
+
 const toNumberOrNull = (value: unknown) => {
   if (value === '' || value === null || value === undefined) return null;
   const parsed = Number(value);
@@ -189,6 +208,27 @@ export default function PromotionManagementPage() {
   }, [visibleUsageRows]);
 
   const hiddenPastCount = Math.max(filteredUsageRows.length - visibleUsageRows.length, 0);
+
+  const ensureVehicleDiscountPromotionExists = async () => {
+    const { data: exists, error: checkError } = await supabase
+      .from('cruise_promotion')
+      .select('id')
+      .eq('code', GP_VEHICLE_PROMOTION_CODE)
+      .limit(1);
+
+    if (checkError) throw checkError;
+    if ((exists || []).length > 0) return false;
+
+    const { error: insertError } = await supabase
+      .from('cruise_promotion')
+      .insert(buildDefaultGpVehiclePromotion());
+
+    if (insertError) {
+      const duplicateInsert = (insertError as any)?.code === '23505';
+      if (!duplicateInsert) throw insertError;
+    }
+    return true;
+  };
 
   const loadPromotionReservations = async (promotionList?: Promotion[]) => {
     setUsageLoading(true);
@@ -320,6 +360,13 @@ export default function PromotionManagementPage() {
     setLoading(true);
     setError('');
     try {
+      let autoCreated = false;
+      try {
+        autoCreated = await ensureVehicleDiscountPromotionExists();
+      } catch (seedErr) {
+        console.warn('차량할인 프로모션 자동 보정 실패:', seedErr);
+      }
+
       const { data, error: promotionError } = await supabase
         .from('cruise_promotion')
         .select('*')
@@ -357,6 +404,13 @@ export default function PromotionManagementPage() {
       }
 
       await loadPromotionReservations(loadedPromotions);
+
+      const hasVehiclePromotion = loadedPromotions.some((promotion) => promotion.code === GP_VEHICLE_PROMOTION_CODE);
+      if (autoCreated && hasVehiclePromotion) {
+        setMessage('차량할인 프로모션을 DB에 자동 등록했습니다.');
+      } else if (!hasVehiclePromotion) {
+        setError('차량할인 프로모션 코드가 DB(cruise_promotion)에 없습니다. 권한/RLS를 확인해 주세요.');
+      }
     } catch (err) {
       console.error('프로모션 조회 실패:', err);
       setError('프로모션 테이블을 조회하지 못했습니다. 프로모션 SQL 마이그레이션 적용 여부를 확인해 주세요.');
