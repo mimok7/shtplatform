@@ -32,6 +32,7 @@ interface CruiseCarReservation {
     car_price_code: string;
     rentcar_price_code?: string;
     way_type?: string;
+    one_way_direction?: string;
     route?: string;
     vehicle_type?: string;
     car_count: number;
@@ -63,6 +64,7 @@ interface CruiseCarReservation {
 interface VehicleFormData {
     rentcar_price_code: string;
     way_type: string;
+    one_way_direction: string;
     route: string;
     vehicle_type: string;
     car_count: number;
@@ -82,6 +84,7 @@ interface VehicleFormData {
 const createEmptyVehicleForm = (): VehicleFormData => ({
     rentcar_price_code: '',
     way_type: '',
+    one_way_direction: '',
     route: '',
     vehicle_type: '',
     car_count: 0,
@@ -470,6 +473,7 @@ function CruiseCarReservationEditContent() {
                 const form: VehicleFormData = {
                     rentcar_price_code: existingCode,
                     way_type: wayType,
+                    one_way_direction: row.one_way_direction || '',
                     route,
                     vehicle_type: row.vehicle_type || rentcarPriceInfo?.vehicle_type || '',
                     car_count: row.car_count || 0,
@@ -528,6 +532,7 @@ function CruiseCarReservationEditContent() {
                 .filter(item =>
                     item.rentcar_price_code
                     || item.way_type
+                    || item.one_way_direction
                     || item.route
                     || item.vehicle_type
                     || item.car_count > 0
@@ -565,6 +570,7 @@ function CruiseCarReservationEditContent() {
                 ...row,
                 rentcar_price_code: normalizedForms[index].rentcar_price_code,
                 way_type: normalizedForms[index].way_type || null,
+                one_way_direction: normalizedForms[index].one_way_direction || null,
                 route: normalizedForms[index].route || null,
                 vehicle_type: normalizedForms[index].vehicle_type || null,
                 return_datetime: normalizedForms[index].return_datetime || null
@@ -602,6 +608,7 @@ function CruiseCarReservationEditContent() {
                     total: item.car_total_price || 0,
                     metadata: {
                         way_type: item.way_type || null,
+                        one_way_direction: item.one_way_direction || null,
                         route: item.route || null,
                         vehicle_type: item.vehicle_type || null,
                         passenger_count: item.passenger_count || 0,
@@ -788,6 +795,7 @@ function CruiseCarReservationEditContent() {
                                                             const nextWayType = e.target.value;
                                                             updateVehicleFormWithAutoTotal(index, {
                                                                 way_type: nextWayType,
+                                                                one_way_direction: nextWayType === '편도' ? item.one_way_direction : '',
                                                                 route: '',
                                                                 vehicle_type: '',
                                                                 rentcar_price_code: '',
@@ -807,6 +815,22 @@ function CruiseCarReservationEditContent() {
                                                     </select>
                                                 </div>
 
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-1">편도 방향</label>
+                                                    <select
+                                                        value={item.one_way_direction}
+                                                        onChange={(e) => updateVehicleForm(index, { one_way_direction: e.target.value })}
+                                                        disabled={item.way_type !== '편도'}
+                                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-400"
+                                                    >
+                                                        <option value="">방향 선택</option>
+                                                        <option value="pickup">픽업</option>
+                                                        <option value="dropoff">드롭오프</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 mb-1">경로</label>
                                                     <select
@@ -833,9 +857,7 @@ function CruiseCarReservationEditContent() {
                                                         ))}
                                                     </select>
                                                 </div>
-                                            </div>
 
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 mb-1">차량타입</label>
                                                     <select

@@ -549,8 +549,6 @@ function CruiseReservationEditContent() {
             room_price_code: templateRoom.room_price_code,
             room_count: isCatherineHorizonCruise ? 1 : Math.max(1, templateRoom.room_count || 1),
             connecting_room: Boolean(templateRoom.connecting_room),
-            birthday_event: Boolean(templateRoom.birthday_event),
-            birthday_name: templateRoom.birthday_name || '',
         }), templateDetail);
 
         setRoomForms((prev) => [...prev, nextRoom]);

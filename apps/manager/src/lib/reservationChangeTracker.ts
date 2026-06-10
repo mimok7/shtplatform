@@ -28,7 +28,7 @@ export interface RecordChangeInput {
     /** 부가 메타(가격 breakdown 등) - reservation_change_request.snapshot_data 에 저장 */
     snapshotData?: any;
     /** 기본 'approved' (매니저 직접 수정). 'pending' 으로 바꾸면 검토 대기. */
-    status?: 'approved' | 'pending' | 'applied' | 'rejected';
+    status?: 'approved' | 'pending' | 'rejected' | 'cancelled' | 'applied';
 }
 
 const CHILD_TABLE: Record<ChangeServiceType, string> = {
@@ -73,7 +73,8 @@ export async function recordReservationChange(input: RecordChangeInput): Promise
             return { requestId: null, error: 'no_auth_user', childErrors };
         }
 
-        const status = input.status ?? 'approved';
+        const requestedStatus = input.status ?? 'approved';
+        const status = requestedStatus === 'applied' ? 'approved' : requestedStatus;
 
         const { data: req, error: reqErr } = await supabase
             .from('reservation_change_request')
@@ -84,8 +85,8 @@ export async function recordReservationChange(input: RecordChangeInput): Promise
                 status,
                 customer_note: input.customerNote ?? null,
                 manager_note: input.managerNote ?? '매니저 직접 수정',
-                reviewed_at: status === 'approved' || status === 'applied' ? new Date().toISOString() : null,
-                reviewed_by: status === 'approved' || status === 'applied' ? userId : null,
+                reviewed_at: status === 'approved' ? new Date().toISOString() : null,
+                reviewed_by: status === 'approved' ? userId : null,
                 snapshot_data: input.snapshotData ?? null,
             })
             .select('id')

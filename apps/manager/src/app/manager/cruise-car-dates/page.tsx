@@ -417,7 +417,7 @@ export default function CruiseCarDatesPage() {
         .from('reservation_change_request')
         .select('id, reservation_id, re_type, status, manager_note, submitted_at, reviewed_at, snapshot_data')
         .eq('re_type', 'cruise_car')
-        .eq('status', 'applied')
+        .in('status', ['approved', 'applied'])
         .order('submitted_at', { ascending: false });
 
       if (completedRequestError) {
@@ -559,7 +559,7 @@ export default function CruiseCarDatesPage() {
     const changeResult = await recordReservationChange({
       reservationId: row.reservation_id,
       reType: 'cruise_car',
-      status: 'applied',
+      status: 'approved',
       managerNote: '크차 일자 화면 자동수정',
       snapshotData: {
         source: 'manager/cruise-car-dates',
@@ -639,7 +639,7 @@ export default function CruiseCarDatesPage() {
       const changeResult = await recordReservationChange({
         reservationId: row.reservation_id,
         reType: 'cruise_car',
-        status: 'applied',
+        status: 'approved',
         managerNote: '크차 일자 화면 확인 처리',
         snapshotData: {
           source: 'manager/cruise-car-dates',
