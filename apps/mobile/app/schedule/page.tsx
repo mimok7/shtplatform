@@ -1238,16 +1238,6 @@ export default function SchedulePage() {
       const { start, end } = getRange(selectedDate, viewMode);
       return isDateInRange(d, start, end);
     });
-    // 지난 날짜 항목 숨김
-    filtered = filtered.filter(item => {
-      const ds = getDateField(item);
-      if (getServiceType(item) === 'car' && item.source !== 'sh') {
-        // 항상 KST 기준으로 비교 (toKstDateKey(Date)는 Intl로 Asia/Seoul 사용 → 현지 timezone 무관)
-        const kstTodayKey = toKstDateKey(new Date());
-        return (toKstDateKey(ds) ?? '') >= kstTodayKey;
-      }
-      return !isPastDate(ds);
-    });
   }
 
   // 서비스 타입필터

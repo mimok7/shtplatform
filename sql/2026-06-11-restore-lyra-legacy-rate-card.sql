@@ -1,0 +1,70 @@
+BEGIN;
+
+-- Restore deleted legacy Lyra Granjer Cruise rate-card UUID used by an existing
+-- confirmed reservation. The reservation still references the historical UUID,
+-- so reviving the original row is safer than rewriting reservation data.
+
+INSERT INTO public.cruise_rate_card (
+  id,
+  cruise_name,
+  schedule_type,
+  room_type,
+  room_type_en,
+  price_adult,
+  price_child,
+  price_infant,
+  price_extra_bed,
+  price_single,
+  valid_year,
+  valid_from,
+  valid_to,
+  display_order,
+  currency,
+  is_active,
+  notes,
+  created_at,
+  updated_at,
+  price_child_extra_bed,
+  extra_bed_available,
+  includes_vehicle,
+  vehicle_type,
+  infant_policy,
+  season_name,
+  is_promotion,
+  price_child_older,
+  child_age_range,
+  single_available
+) VALUES (
+  'd80798ac-f3d8-44b8-8d48-375c3a647163',
+  '라이라 그랜져 크루즈',
+  '1N2D',
+  '오아시스 스위트 (1층)',
+  NULL,
+  6100000,
+  3100000,
+  0,
+  4650000,
+  10500000,
+  2026,
+  DATE '2026-01-01',
+  DATE '2026-04-30',
+  1,
+  'VND',
+  true,
+  'legacy restore for existing reservation reference',
+  now(),
+  now(),
+  NULL,
+  true,
+  false,
+  NULL,
+  '객실당 1명의 유아 무료 (두번째 유아부터는 성인요금의 30% 부과)',
+  NULL,
+  false,
+  NULL,
+  NULL,
+  true
+)
+ON CONFLICT (id) DO NOTHING;
+
+COMMIT;

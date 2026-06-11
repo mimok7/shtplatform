@@ -66,18 +66,16 @@ SQL 생성 전에 다음을 준비해야 합니다:
 
 ### Step 2: SQL 구조 준비
 
-**기본 구조** (모든 크루즈 동일):
+**기본 구조** (주의: 기존 예약이 있는 운영 DB에는 그대로 사용하면 안 됨):
 
 ```sql
 -- 1. 주석 헤더: 크루즈명, 목적, 입력 기준 데이터
 -- ============================================================================
 
--- 2. DELETE 기존 데이터 정리
-DELETE FROM cruise_rate_card 
-WHERE cruise_name = '크루즈명';
-
-DELETE FROM cruise_holiday_surcharge 
-WHERE cruise_name = '크루즈명';
+-- 2. 운영 DB 주의
+-- cruise_rate_card.id 는 기존 reservation_cruise.room_price_code 에서 직접 참조할 수 있으므로
+-- 운영중인 크루즈 요금표는 DELETE 후 INSERT 방식으로 교체하면 안 됨.
+-- 기존 예약에 연결된 요금행은 유지한 채 UPDATE / INSERT / 비활성화 방식으로 처리해야 함.
 
 -- ============================================================================
 -- 3. INSERT 객실 가격 (시즌별 섹션으로 분류)
@@ -120,6 +118,63 @@ WHERE cruise_name = '크루즈명';
 SELECT MIN(price_adult), MAX(price_adult) FROM cruise_rate_card
 WHERE cruise_name = '크루즈명';
 ```
+
+---
+
+## 운영 DB 안전 원칙
+
+`cruise_rate_card` 는 단순 코드 테이블이 아니라 기존 예약이 참조하는 이력 데이터로 취급해야 합니다.
+
+### 금지
+
+- `DELETE FROM cruise_rate_card WHERE cruise_name = ...`
+- 기존 예약이 참조할 가능성이 있는 요금행의 UUID 재생성
+- 기존 시즌 전체 삭제 후 재삽입
+
+### 권장
+
+- 현재/미래에만 적용할 가격 수정은 기존 행 `UPDATE`
+- 새로운 시즌/새 객실만 `INSERT`
+- 더 이상 판매하지 않을 요금은 `is_active = false` 또는 `valid_to` 조정
+- 요금행 삭제가 꼭 필요하면 먼저 참조 예약 건수 0건 확인
+
+### 운영 전 사전 점검 쿼리
+
+```sql
+-- 1. 수정 대상 요금행 중 기존 예약이 참조중인 건수 확인
+SELECT
+  crc.id,
+  crc.cruise_name,
+  crc.schedule_type,
+  crc.room_type,
+  crc.valid_from,
+  crc.valid_to,
+  COUNT(rc.id) AS reservation_count
+FROM public.cruise_rate_card crc
+LEFT JOIN public.reservation_cruise rc
+  ON rc.room_price_code = crc.id::text
+WHERE crc.cruise_name = '크루즈명'
+GROUP BY crc.id, crc.cruise_name, crc.schedule_type, crc.room_type, crc.valid_from, crc.valid_to
+ORDER BY reservation_count DESC, crc.valid_from, crc.room_type;
+```
+
+### 운영 후 사후 검증 쿼리
+
+```sql
+-- 2. 예약이 참조하지만 요금표에 없는 고아 room_price_code 확인
+SELECT
+  rc.room_price_code,
+  COUNT(*) AS reservation_count
+FROM public.reservation_cruise rc
+LEFT JOIN public.cruise_rate_card crc
+  ON crc.id::text = rc.room_price_code
+WHERE rc.room_price_code IS NOT NULL
+  AND crc.id IS NULL
+GROUP BY rc.room_price_code
+ORDER BY reservation_count DESC;
+```
+
+상세 운영 절차는 [CRUISE-RATE-UPDATE-GUIDELINE.md](/C:/SHT-DATA/sht-platform/docs/CRUISE-RATE-UPDATE-GUIDELINE.md) 문서를 따릅니다.
 
 ---
 
