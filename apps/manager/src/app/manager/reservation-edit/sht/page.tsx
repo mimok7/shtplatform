@@ -296,6 +296,10 @@ function SHTReservationEditContent() {
         Pickup: { fee: 0, detail: '' },
         'Drop-off': { fee: 0, detail: '' },
     });
+    const [additionalFeeInputs, setAdditionalFeeInputs] = useState<Record<'Pickup' | 'Drop-off', string>>({
+        Pickup: '',
+        'Drop-off': '',
+    });
     const [feeTemplates, setFeeTemplates] = useState<{ id: number; name: string; amount: number }[]>([]);
 
     const formData = shtForms[activeCategory];
@@ -307,6 +311,16 @@ function SHTReservationEditContent() {
     const finalReservationTotal = pickupBaseTotal + pickupAdditionalFee + dropoffAdditionalFee;
     const updateActiveForm = (updates: Partial<typeof formData>) => {
         setShtForms(prev => ({ ...prev, [activeCategory]: { ...prev[activeCategory], ...updates } }));
+    };
+    const applyAdditionalFeeValue = (category: 'Pickup' | 'Drop-off', nextValue: number) => {
+        setAdditionalFees(prev => ({
+            ...prev,
+            [category]: { ...prev[category], fee: nextValue },
+        }));
+        setAdditionalFeeInputs(prev => ({
+            ...prev,
+            [category]: nextValue === 0 ? '' : String(nextValue),
+        }));
     };
 
     useEffect(() => {
@@ -493,16 +507,24 @@ function SHTReservationEditContent() {
             if (savedPickupFee === 0 && savedDropoffFee === 0) {
                 const legacyFee = Number.isFinite(Number(pb.additional_fee)) ? Number(pb.additional_fee) : Number(resRow.manual_additional_fee || 0);
                 const legacyDetail = String(resRow.manual_additional_fee_detail || pb.additional_fee_detail || pb.additional_fee_note || '');
-                if (legacyFee > 0) {
+                if (legacyFee !== 0) {
                     setAdditionalFees({
                         Pickup: { fee: legacyFee, detail: legacyDetail },
                         'Drop-off': { fee: 0, detail: '' },
+                    });
+                    setAdditionalFeeInputs({
+                        Pickup: String(legacyFee),
+                        'Drop-off': '',
                     });
                 }
             } else {
                 setAdditionalFees({
                     Pickup: { fee: savedPickupFee, detail: String(pb.pickup_additional_fee_detail || '') },
                     'Drop-off': { fee: savedDropoffFee, detail: String(pb.dropoff_additional_fee_detail || '') },
+                });
+                setAdditionalFeeInputs({
+                    Pickup: savedPickupFee === 0 ? '' : String(savedPickupFee),
+                    'Drop-off': savedDropoffFee === 0 ? '' : String(savedDropoffFee),
                 });
             }
 
@@ -1164,9 +1186,10 @@ function SHTReservationEditContent() {
                                             onChange={(e) => {
                                                 const tpl = feeTemplates.find(t => String(t.id) === e.target.value);
                                                 if (tpl) {
+                                                    applyAdditionalFeeValue(activeCategory, tpl.amount);
                                                     setAdditionalFees(prev => ({
                                                         ...prev,
-                                                        [activeCategory]: { fee: tpl.amount, detail: tpl.name }
+                                                        [activeCategory]: { ...prev[activeCategory], detail: tpl.name }
                                                     }));
                                                 }
                                             }}
@@ -1179,16 +1202,29 @@ function SHTReservationEditContent() {
                                     </div>
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                                            {activeCategory === 'Pickup' ? '픽업' : '드롭'} 추가요금 (VND)
+                                            {activeCategory === 'Pickup' ? '픽업' : '드롭'} 직접입력 추가/차감 금액 (VND)
                                         </label>
                                         <input
                                             type="number"
-                                            value={additionalFees[activeCategory].fee}
-                                            onChange={(e) => setAdditionalFees(prev => ({ ...prev, [activeCategory]: { ...prev[activeCategory], fee: parseInt(e.target.value, 10) || 0 } }))}
-                                            title={`${activeCategory === 'Pickup' ? '픽업' : '드롭'} 추가요금`}
+                                            value={additionalFeeInputs[activeCategory]}
+                                            onChange={(e) => {
+                                                const nextValue = e.target.value;
+                                                setAdditionalFeeInputs(prev => ({ ...prev, [activeCategory]: nextValue }));
+
+                                                if (nextValue === '' || nextValue === '-') {
+                                                    setAdditionalFees(prev => ({ ...prev, [activeCategory]: { ...prev[activeCategory], fee: 0 } }));
+                                                    return;
+                                                }
+
+                                                const parsedValue = Number(nextValue);
+                                                if (Number.isFinite(parsedValue)) {
+                                                    setAdditionalFees(prev => ({ ...prev, [activeCategory]: { ...prev[activeCategory], fee: parsedValue } }));
+                                                }
+                                            }}
+                                            title={`${activeCategory === 'Pickup' ? '픽업' : '드롭'} 직접입력 추가/차감 금액`}
                                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                            min="0"
                                         />
+                                        <p className="text-xs text-gray-500 mt-1">할인은 음수(-)로 입력하면 추가내역 차감으로 저장됩니다.</p>
                                     </div>
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1204,7 +1240,7 @@ function SHTReservationEditContent() {
                                     </div>
                                 </div>
 
-                                {(pickupBaseTotal > 0 || pickupAdditionalFee > 0 || dropoffAdditionalFee > 0) && (
+                                {(pickupBaseTotal > 0 || pickupAdditionalFee !== 0 || dropoffAdditionalFee !== 0) && (
                                     <div className="mt-4 pt-4 border-t border-gray-100 space-y-2">
                                         {/* 픽업 */}
                                         <div className="bg-blue-50 rounded p-3">

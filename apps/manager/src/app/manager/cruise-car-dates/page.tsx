@@ -156,13 +156,13 @@ const buildFixPayload = (row: ValidationRow) => {
       };
     case 'move_pickup_to_return_end':
       return {
-        pickup_datetime: null,
+        pickup_datetime: row.cruise_end_date || row.pickup_datetime || null,
         return_datetime: row.cruise_end_date || row.pickup_datetime || null,
         one_way_direction: 'dropoff',
       };
     case 'set_one_way_dropoff':
       return {
-        pickup_datetime: null,
+        pickup_datetime: row.cruise_end_date || row.pickup_datetime || null,
         return_datetime: row.cruise_end_date || null,
         one_way_direction: 'dropoff',
       };

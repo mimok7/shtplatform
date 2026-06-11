@@ -83,6 +83,7 @@ function RentcarReservationEditContent() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [additionalFee, setAdditionalFee] = useState(0);
+    const [additionalFeeInput, setAdditionalFeeInput] = useState('');
     const [additionalFeeDetail, setAdditionalFeeDetail] = useState('');
     const [feeTemplates, setFeeTemplates] = useState<{ id: number; name: string; amount: number }[]>([]);
     const [formData, setFormData] = useState({
@@ -105,6 +106,11 @@ function RentcarReservationEditContent() {
         return_via_location: '',
         return_via_waiting: ''
     });
+
+    const applyAdditionalFeeValue = (nextValue: number) => {
+        setAdditionalFee(nextValue);
+        setAdditionalFeeInput(nextValue === 0 ? '' : String(nextValue));
+    };
     const hasPickupSectionData = Boolean(
         formData.pickup_datetime ||
         formData.pickup_location ||
@@ -287,7 +293,7 @@ function RentcarReservationEditContent() {
                 return_via_location: rentcarRow?.return_via_location || '',
                 return_via_waiting: rentcarRow?.return_via_waiting || ''
             });
-            setAdditionalFee(Number(resRow.manual_additional_fee || 0));
+            applyAdditionalFeeValue(Number(resRow.manual_additional_fee || 0));
             setAdditionalFeeDetail(String(resRow.manual_additional_fee_detail || ''));
 
         } catch (error) {
@@ -960,7 +966,7 @@ function RentcarReservationEditContent() {
                                             value=""
                                             onChange={(e) => {
                                                 const tpl = feeTemplates.find(t => String(t.id) === e.target.value);
-                                                if (tpl) { setAdditionalFee(tpl.amount); setAdditionalFeeDetail(tpl.name); }
+                                                if (tpl) { applyAdditionalFeeValue(tpl.amount); setAdditionalFeeDetail(tpl.name); }
                                             }}
                                         >
                                             <option value="">-- 추가내역 선택 --</option>
@@ -970,15 +976,28 @@ function RentcarReservationEditContent() {
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">추가요금 (VND)</label>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">직접입력 추가/차감 금액 (VND)</label>
                                         <input
                                             type="number"
-                                            min="0"
-                                            value={additionalFee}
-                                            onChange={(e) => setAdditionalFee(parseInt(e.target.value, 10) || 0)}
-                                            title="추가요금"
+                                            value={additionalFeeInput}
+                                            onChange={(e) => {
+                                                const nextValue = e.target.value;
+                                                setAdditionalFeeInput(nextValue);
+
+                                                if (nextValue === '' || nextValue === '-') {
+                                                    setAdditionalFee(0);
+                                                    return;
+                                                }
+
+                                                const parsedValue = Number(nextValue);
+                                                if (Number.isFinite(parsedValue)) {
+                                                    setAdditionalFee(parsedValue);
+                                                }
+                                            }}
+                                            title="직접입력 추가/차감 금액"
                                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                         />
+                                        <p className="text-xs text-gray-500 mt-1">할인은 음수(-)로 입력하면 추가내역 차감으로 저장됩니다.</p>
                                     </div>
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">추가요금 내역</label>
@@ -991,7 +1010,7 @@ function RentcarReservationEditContent() {
                                         />
                                     </div>
                                 </div>
-                                {(formData.total_price > 0 || additionalFee > 0) && (
+                                {(formData.total_price > 0 || additionalFee !== 0) && (
                                     <div className="pt-4 mt-4 border-t border-gray-100 space-y-2">
                                         <div className="flex justify-between text-sm text-gray-700">
                                             <span>기본 렌터카 금액</span>

@@ -115,6 +115,7 @@ function CruiseCarReservationEditContent() {
     const [vehicleForms, setVehicleForms] = useState<VehicleFormData[]>([createEmptyVehicleForm()]);
     const [cruiseCheckin, setCruiseCheckin] = useState('');
     const [additionalFee, setAdditionalFee] = useState(0);
+    const [additionalFeeInput, setAdditionalFeeInput] = useState('');
     const [additionalFeeDetail, setAdditionalFeeDetail] = useState('');
     const [feeTemplates, setFeeTemplates] = useState<{ id: number; name: string; amount: number }[]>([]);
     const [authChecked, setAuthChecked] = useState(false);
@@ -130,6 +131,11 @@ function CruiseCarReservationEditContent() {
     );
 
     const finalTotalPrice = baseTotalPrice + additionalFee;
+
+    const applyAdditionalFeeValue = (nextValue: number) => {
+        setAdditionalFee(nextValue);
+        setAdditionalFeeInput(nextValue === 0 ? '' : String(nextValue));
+    };
 
     // ✅ 인증 상태 확인 (403 에러 사전 방지)
     useEffect(() => {
@@ -502,8 +508,8 @@ function CruiseCarReservationEditContent() {
             const savedAdditionalFee = Number(resRow.price_breakdown?.additional_fee);
             const derivedAdditionalFee = Number.isFinite(savedAdditionalFee)
                 ? savedAdditionalFee
-                : Math.max(0, Number(resRow.total_amount || 0) - baseTotal);
-            setAdditionalFee(derivedAdditionalFee);
+                : Number(resRow.total_amount || 0) - baseTotal;
+            applyAdditionalFeeValue(derivedAdditionalFee);
             setAdditionalFeeDetail(
                 String(
                     resRow.manual_additional_fee_detail
@@ -1133,7 +1139,7 @@ function CruiseCarReservationEditContent() {
                                             onChange={(e) => {
                                                 const tpl = feeTemplates.find(t => String(t.id) === e.target.value);
                                                 if (tpl) {
-                                                    setAdditionalFee(tpl.amount);
+                                                    applyAdditionalFeeValue(tpl.amount);
                                                     setAdditionalFeeDetail(tpl.name);
                                                 }
                                             }}
@@ -1145,15 +1151,28 @@ function CruiseCarReservationEditContent() {
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">추가요금 (VND)</label>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">직접입력 추가/차감 금액 (VND)</label>
                                         <input
                                             type="number"
-                                            value={additionalFee}
-                                            onChange={(e) => setAdditionalFee(parseInt(e.target.value, 10) || 0)}
-                                            title="추가요금"
+                                            value={additionalFeeInput}
+                                            onChange={(e) => {
+                                                const nextValue = e.target.value;
+                                                setAdditionalFeeInput(nextValue);
+
+                                                if (nextValue === '' || nextValue === '-') {
+                                                    setAdditionalFee(0);
+                                                    return;
+                                                }
+
+                                                const parsedValue = Number(nextValue);
+                                                if (Number.isFinite(parsedValue)) {
+                                                    setAdditionalFee(parsedValue);
+                                                }
+                                            }}
+                                            title="직접입력 추가/차감 금액"
                                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                            min="0"
                                         />
+                                        <p className="text-xs text-gray-500 mt-1">할인은 음수(-)로 입력하면 추가내역 차감으로 저장됩니다.</p>
                                     </div>
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">추가요금 내역</label>
@@ -1167,7 +1186,7 @@ function CruiseCarReservationEditContent() {
                                     </div>
                                 </div>
 
-                                {(baseTotalPrice > 0 || additionalFee > 0) && (
+                                {(baseTotalPrice > 0 || additionalFee !== 0) && (
                                     <div className="mt-4 pt-4 border-t border-gray-100 space-y-2">
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700 mb-1">기본 차량 금액</label>
