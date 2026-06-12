@@ -308,7 +308,7 @@ function SHTReservationEditContent() {
     const pickupAdditionalFee = additionalFees['Pickup'].fee;
     const dropoffAdditionalFee = additionalFees['Drop-off'].fee;
     const overallShtBaseTotal = pickupBaseTotal;
-    const finalReservationTotal = pickupBaseTotal + pickupAdditionalFee + dropoffAdditionalFee;
+    const finalReservationTotal = Math.max(0, pickupBaseTotal + pickupAdditionalFee + dropoffAdditionalFee);
     const updateActiveForm = (updates: Partial<typeof formData>) => {
         setShtForms(prev => ({ ...prev, [activeCategory]: { ...prev[activeCategory], ...updates } }));
     };
@@ -688,7 +688,8 @@ function SHTReservationEditContent() {
             const basePickupTotal = pickupRows.reduce((sum: number, row: any) => sum + Number(row?.car_total_price || 0), 0);
             const totalPax = (allRows || []).reduce((sum: number, row: any) => sum + Number(row?.passenger_count || 0), 0);
             const totalAdditionalFee = pickupAdditionalFee + dropoffAdditionalFee;
-            const finalTotalAmount = basePickupTotal + totalAdditionalFee;
+            const effectiveAdditionalFee = Math.max(-basePickupTotal, totalAdditionalFee);
+            const finalTotalAmount = Math.max(0, basePickupTotal + effectiveAdditionalFee);
 
             const reservationPayload: Record<string, any> = {
                 total_amount: finalTotalAmount,
@@ -700,11 +701,11 @@ function SHTReservationEditContent() {
                     pickup_additional_fee_detail: additionalFees['Pickup'].detail || null,
                     dropoff_additional_fee: dropoffAdditionalFee,
                     dropoff_additional_fee_detail: additionalFees['Drop-off'].detail || null,
-                    additional_fee: totalAdditionalFee,
+                    additional_fee: effectiveAdditionalFee,
                     additional_fee_detail: [additionalFees['Pickup'].detail, additionalFees['Drop-off'].detail].filter(Boolean).join(' / ') || null,
                     grand_total: finalTotalAmount,
                 },
-                manual_additional_fee: totalAdditionalFee,
+                manual_additional_fee: effectiveAdditionalFee,
                 manual_additional_fee_detail: [additionalFees['Pickup'].detail, additionalFees['Drop-off'].detail].filter(Boolean).join(' / ') || null,
                 re_update_at: new Date().toISOString(),
             };
@@ -739,7 +740,7 @@ function SHTReservationEditContent() {
                     snapshotData: {
                         price_breakdown: reservationPayload.price_breakdown,
                         total_amount: finalTotalAmount,
-                        manual_additional_fee: totalAdditionalFee,
+                        manual_additional_fee: effectiveAdditionalFee,
                     },
                 });
             } catch (trackErr) {
@@ -1249,10 +1250,10 @@ function SHTReservationEditContent() {
                                                 <span>차량 금액 (왕복 포함)</span>
                                                 <span className="font-semibold">{pickupBaseTotal.toLocaleString()}동</span>
                                             </div>
-                                            {pickupAdditionalFee > 0 && (
+                                            {pickupAdditionalFee !== 0 && (
                                                 <div className="flex justify-between text-sm text-gray-700 mt-1">
-                                                    <span>추가요금</span>
-                                                    <span className="font-semibold text-orange-600">+{pickupAdditionalFee.toLocaleString()}동</span>
+                                                    <span>{pickupAdditionalFee > 0 ? '추가요금' : '차감금액'}</span>
+                                                    <span className={`font-semibold ${pickupAdditionalFee > 0 ? 'text-orange-600' : 'text-red-600'}`}>{pickupAdditionalFee > 0 ? '+' : ''}{pickupAdditionalFee.toLocaleString()}동</span>
                                                 </div>
                                             )}
                                             {additionalFees['Pickup'].detail.trim() && (
@@ -1266,10 +1267,10 @@ function SHTReservationEditContent() {
                                                 <span>차량 금액</span>
                                                 <span className="font-semibold text-gray-400">0동 (왕복요금 픽업 포함)</span>
                                             </div>
-                                            {dropoffAdditionalFee > 0 && (
+                                            {dropoffAdditionalFee !== 0 && (
                                                 <div className="flex justify-between text-sm text-gray-700 mt-1">
-                                                    <span>추가요금</span>
-                                                    <span className="font-semibold text-orange-600">+{dropoffAdditionalFee.toLocaleString()}동</span>
+                                                    <span>{dropoffAdditionalFee > 0 ? '추가요금' : '차감금액'}</span>
+                                                    <span className={`font-semibold ${dropoffAdditionalFee > 0 ? 'text-orange-600' : 'text-red-600'}`}>{dropoffAdditionalFee > 0 ? '+' : ''}{dropoffAdditionalFee.toLocaleString()}동</span>
                                                 </div>
                                             )}
                                             {additionalFees['Drop-off'].detail.trim() && (
@@ -1281,9 +1282,9 @@ function SHTReservationEditContent() {
                                             <div className="flex justify-between text-sm text-gray-600 mb-1">
                                                 <span>차량 기본</span><span>{pickupBaseTotal.toLocaleString()}동</span>
                                             </div>
-                                            {(pickupAdditionalFee + dropoffAdditionalFee) > 0 && (
-                                                <div className="flex justify-between text-sm text-orange-600 mb-1">
-                                                    <span>추가요금 합계</span><span>+{(pickupAdditionalFee + dropoffAdditionalFee).toLocaleString()}동</span>
+                                            {(pickupAdditionalFee + dropoffAdditionalFee) !== 0 && (
+                                                <div className={`flex justify-between text-sm mb-1 ${(pickupAdditionalFee + dropoffAdditionalFee) > 0 ? 'text-orange-600' : 'text-red-600'}`}>
+                                                    <span>{(pickupAdditionalFee + dropoffAdditionalFee) > 0 ? '추가요금 합계' : '차감금액 합계'}</span><span>{(pickupAdditionalFee + dropoffAdditionalFee) > 0 ? '+' : ''}{(pickupAdditionalFee + dropoffAdditionalFee).toLocaleString()}동</span>
                                                 </div>
                                             )}
                                             <label className="block text-sm font-medium text-gray-700 mb-1">최종 총 금액</label>

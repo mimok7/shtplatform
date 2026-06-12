@@ -84,7 +84,7 @@ function TourReservationEditContent() {
         setAdditionalFee(nextValue);
         setAdditionalFeeInput(nextValue === 0 ? '' : String(nextValue));
     };
-    const tourFinalTotal = (formData.total_price || 0) + additionalFee;
+    const tourFinalTotal = Math.max(0, (formData.total_price || 0) + additionalFee);
 
     useEffect(() => {
         if (reservationId) {
@@ -644,9 +644,9 @@ function TourReservationEditContent() {
                                         <div className="text-xs text-gray-500">
                                             {formData.tour_capacity}명 × {formData.unit_price.toLocaleString()}동
                                         </div>
-                                        <div className="flex justify-between text-sm text-orange-600">
-                                            <span>추가요금</span>
-                                            <span className="font-semibold">+{additionalFee.toLocaleString()}동</span>
+                                        <div className={`flex justify-between text-sm ${additionalFee >= 0 ? 'text-orange-600' : 'text-red-600'}`}>
+                                            <span>{additionalFee >= 0 ? '추가요금' : '차감금액'}</span>
+                                            <span className="font-semibold">{additionalFee > 0 ? '+' : ''}{additionalFee.toLocaleString()}동</span>
                                         </div>
                                         {additionalFeeDetail.trim() && (
                                             <div className="text-xs text-gray-500 whitespace-pre-wrap">{additionalFeeDetail}</div>

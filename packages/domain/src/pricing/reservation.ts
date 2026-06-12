@@ -36,6 +36,12 @@ const asMoney = (value?: number | null): number => {
   return Math.max(0, Math.round(parsed));
 };
 
+const asSignedMoney = (value?: number | null): number => {
+  const parsed = Number(value ?? 0);
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.round(parsed);
+};
+
 const asRate = (value?: number | null): number => {
   const parsed = Number(value ?? 0);
   if (!Number.isFinite(parsed)) return 0;
@@ -44,14 +50,15 @@ const asRate = (value?: number | null): number => {
 
 export function calculateReservationPricing(input: ReservationPricingInput): ReservationPricingResult {
   const base_total = asMoney(input.baseTotal);
-  const additional_fee = asMoney(input.additionalFee);
   const discount_rate = asRate(input.discountRate);
   const discount_rate_amount = Math.min(base_total, Math.round(base_total * (discount_rate / 100)));
   const afterRateDiscount = Math.max(0, base_total - discount_rate_amount);
   const discount_manual_amount = Math.min(afterRateDiscount, asMoney(input.manualDiscountAmount));
   const discount_amount = discount_rate_amount + discount_manual_amount;
   const discounted_subtotal = Math.max(0, base_total - discount_amount);
-  const total_amount = discounted_subtotal + additional_fee;
+  const requestedAdditionalFee = asSignedMoney(input.additionalFee);
+  const additional_fee = Math.max(-discounted_subtotal, requestedAdditionalFee);
+  const total_amount = Math.max(0, discounted_subtotal + additional_fee);
 
   return {
     base_total,

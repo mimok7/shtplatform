@@ -125,7 +125,7 @@ function RentcarReservationEditContent() {
         formData.return_via_location ||
         formData.return_via_waiting
     );
-    const rentcarFinalTotal = (formData.total_price || 0) + additionalFee;
+    const rentcarFinalTotal = Math.max(0, (formData.total_price || 0) + additionalFee);
 
     const toInputDateTime = (value?: string | null) => {
         if (!value) return '';
@@ -1019,9 +1019,9 @@ function RentcarReservationEditContent() {
                                         <div className="text-xs text-gray-500">
                                             {formData.car_count}대 × {formData.rental_days}일 × {formData.unit_price.toLocaleString()}동
                                         </div>
-                                        <div className="flex justify-between text-sm text-orange-600">
-                                            <span>추가요금</span>
-                                            <span className="font-semibold">+{additionalFee.toLocaleString()}동</span>
+                                        <div className={`flex justify-between text-sm ${additionalFee >= 0 ? 'text-orange-600' : 'text-red-600'}`}>
+                                            <span>{additionalFee >= 0 ? '추가요금' : '차감금액'}</span>
+                                            <span className="font-semibold">{additionalFee > 0 ? '+' : ''}{additionalFee.toLocaleString()}동</span>
                                         </div>
                                         {additionalFeeDetail.trim() && (
                                             <div className="text-xs text-gray-500 whitespace-pre-wrap">{additionalFeeDetail}</div>

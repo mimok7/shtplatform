@@ -89,7 +89,7 @@ function HotelReservationEditContent() {
     };
 
     const hotelBaseTotal = getNightsFromSchedule(formData.schedule) * (formData.room_count || 1) * formData.unit_price;
-    const hotelFinalTotal = hotelBaseTotal + additionalFee;
+    const hotelFinalTotal = Math.max(0, hotelBaseTotal + additionalFee);
 
     useEffect(() => {
         if (reservationId) {
@@ -645,9 +645,9 @@ function HotelReservationEditContent() {
                                         <div className="text-xs text-gray-500">
                                             {formData.room_count}실 × {formData.schedule || '-'} × {formData.unit_price.toLocaleString()}동/박
                                         </div>
-                                        <div className="flex justify-between text-sm text-orange-600">
-                                            <span>추가요금</span>
-                                            <span className="font-semibold">+{additionalFee.toLocaleString()}동</span>
+                                        <div className={`flex justify-between text-sm ${additionalFee >= 0 ? 'text-orange-600' : 'text-red-600'}`}>
+                                            <span>{additionalFee >= 0 ? '추가요금' : '차감금액'}</span>
+                                            <span className="font-semibold">{additionalFee > 0 ? '+' : ''}{additionalFee.toLocaleString()}동</span>
                                         </div>
                                         {additionalFeeDetail.trim() && (
                                             <div className="text-xs text-gray-500 whitespace-pre-wrap">{additionalFeeDetail}</div>

@@ -213,7 +213,7 @@ function AirportReservationEditContent() {
         ? fastTrackSummary.storedKrwTotal
         : Math.round(fastTrackUsdTotal * usdRateToKrw);
     const airportBaseTotal = (airportForms.pickup.total_price || 0) + (airportForms.sending.total_price || 0);
-    const airportFinalTotal = airportBaseTotal + additionalFee;
+    const airportFinalTotal = Math.max(0, airportBaseTotal + additionalFee);
 
     const applyAdditionalFeeValue = (nextValue: number) => {
         setAdditionalFee(nextValue);
@@ -1201,9 +1201,9 @@ function AirportReservationEditContent() {
                                         <div className="text-xs text-gray-500">
                                             {activeWay === 'pickup' ? '픽업' : '샌딩'} 현재 선택 금액 {formData.total_price.toLocaleString()}동 · 전체 합계 {airportBaseTotal.toLocaleString()}동
                                         </div>
-                                        <div className="flex justify-between text-sm text-orange-600">
-                                            <span>추가요금</span>
-                                            <span className="font-semibold">+{additionalFee.toLocaleString()}동</span>
+                                        <div className={`flex justify-between text-sm ${additionalFee >= 0 ? 'text-orange-600' : 'text-red-600'}`}>
+                                            <span>{additionalFee >= 0 ? '추가요금' : '차감금액'}</span>
+                                            <span className="font-semibold">{additionalFee > 0 ? '+' : ''}{additionalFee.toLocaleString()}동</span>
                                         </div>
                                         {additionalFeeDetail.trim() && (
                                             <div className="text-xs text-gray-500 whitespace-pre-wrap">{additionalFeeDetail}</div>

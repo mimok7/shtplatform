@@ -131,7 +131,7 @@ function CruiseCarReservationEditContent() {
         [vehicleForms]
     );
 
-    const finalTotalPrice = baseTotalPrice + additionalFee;
+    const finalTotalPrice = Math.max(0, baseTotalPrice + additionalFee);
 
     const applyAdditionalFeeValue = (nextValue: number) => {
         setAdditionalFee(nextValue);
@@ -1266,9 +1266,9 @@ function CruiseCarReservationEditContent() {
                                             </div>
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">추가요금</label>
-                                            <div className="text-lg font-semibold text-gray-900">
-                                                {additionalFee.toLocaleString()}동
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">{additionalFee >= 0 ? '추가요금' : '차감금액'}</label>
+                                            <div className={`text-lg font-semibold ${additionalFee >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
+                                                {additionalFee > 0 ? '+' : ''}{additionalFee.toLocaleString()}동
                                             </div>
                                         </div>
                                         {additionalFeeDetail.trim() && (
