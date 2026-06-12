@@ -6,6 +6,7 @@ import supabase from '@/lib/supabase';
 import { setCachedUser } from '@/lib/authCache';
 import { primeAuthCache } from '@/hooks/useAuth';
 import { clearInvalidSession, isInvalidRefreshTokenError } from '@/lib/authRecovery';
+import { buildProfileCompletionPath, hasRequiredProfileFields } from '@/lib/profileRequirements';
 
 const TAB_SESSION_KEY = 'sht:tab:id';
 const ACTIVE_TAB_KEY = 'sht:active:tab:customer';
@@ -77,6 +78,23 @@ export default function LoginPage() {
       setCachedUser(user);
       primeAuthCache(user);
       markActiveTab(user.id);
+
+      const { data: profile } = await supabase
+        .from('users')
+        .select('email, name, english_name, phone_number')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (!hasRequiredProfileFields({
+        email: profile?.email || user.email || '',
+        name: profile?.name || '',
+        english_name: profile?.english_name || '',
+        phone_number: profile?.phone_number || '',
+      })) {
+        router.replace(buildProfileCompletionPath('/mypage'));
+        return;
+      }
+
       router.replace('/mypage');
 
     } catch (err) {

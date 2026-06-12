@@ -388,6 +388,7 @@ function DetailModal({
 
 // ─── 메인 페이지 ───
 export default function SheetEditPage() {
+    const router = useRouter();
     const [items, setItems] = useState<CardItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [userEmail, setUserEmail] = useState<string | null>(null);

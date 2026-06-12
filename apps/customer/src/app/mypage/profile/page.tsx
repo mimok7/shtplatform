@@ -1,13 +1,14 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import PageWrapper from '@/components/PageWrapper';
 import SectionBox from '@/components/SectionBox';
 import supabase from '@/lib/supabase';
 import { clearInvalidSession, isInvalidRefreshTokenError } from '@/lib/authRecovery';
 import { useLoadingTimeout } from '@/hooks/useLoadingTimeout';
 import { getAuthUserSafe } from '@/lib/authSafe';
+import { getSafeProfileRedirectPath, hasRequiredProfileFields } from '@/lib/profileRequirements';
 import { Camera, Trash2, Ticket } from 'lucide-react';
 
 const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || '';
@@ -48,6 +49,7 @@ interface UploadableCruiseReservation {
 
 export default function ProfilePage() {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const [authUser, setAuthUser] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -64,6 +66,7 @@ export default function ProfilePage() {
     const [notificationEnabled, setNotificationEnabled] = useState<boolean | null>(null);
     const [notificationMessage, setNotificationMessage] = useState<string>('');
     const [vapidPublicKey, setVapidPublicKey] = useState<string>(VAPID_PUBLIC_KEY);
+    const redirectAfterSave = getSafeProfileRedirectPath(searchParams.get('redirect'), '/mypage');
 
     useLoadingTimeout(loading, setLoading, 12000);
 
@@ -544,15 +547,7 @@ export default function ProfilePage() {
 
     // 필수 필드 모두 입력되었는지 확인
     const isFormValid = (): boolean => {
-        if (!profile) return false;
-        if (!profile.email || profile.email.trim() === '') return false;
-        if (!profile.name || profile.name.trim() === '') return false;
-        if (!profile.english_name || profile.english_name.trim() === '') return false;
-        if (!profile.phone_number || profile.phone_number.trim() === '') return false;
-        // 휴대폰 번호 형식 검증 (- 제외한 숫자만, 10-11자리)
-        const phoneDigits = (profile.phone_number || '').replace(/\D/g, '');
-        if (phoneDigits.length < 10 || phoneDigits.length > 11) return false;
-        return true;
+        return hasRequiredProfileFields(profile);
     };
 
     const handleSave = async () => {
@@ -585,7 +580,7 @@ export default function ProfilePage() {
             if (error) throw error;
 
             alert('프로필이 저장되었습니다.');
-            router.push('/mypage');
+            router.push(redirectAfterSave);
         } catch (e: any) {
             console.error('프로필 저장 오류:', e);
             alert(`저장 실패: ${e?.message || '알 수 없는 오류'}`);
@@ -644,12 +639,15 @@ export default function ProfilePage() {
             <div className="space-y-6">
 
                 {/* 회원가입 후 안내 메시지 */}
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                    <p className="text-sm text-blue-700">
-                        💡 <strong>환영합니다!</strong> 아래 정보를 입력하시면 더 편리하게 서비스를 이용하실 수 있습니다.
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                    <p className="text-sm font-semibold text-amber-900">
+                        ⚠️ 예약에 꼭 필요한 정보 이메일, 이름, 영문이름, 휴대폰 번호를 모두 입력해주세요.
                     </p>
-                    <p className="text-sm text-blue-700 mt-2">
-                        ⚠️ <strong>필수 입력 필드:</strong> 이메일, 이름, 영문이름, 휴대폰 번호를 모두 입력해주세요.
+                    <p className="text-sm text-amber-800 mt-2">
+                        필수정보가 입력되어야 예약 진행 가능합니다.
+                    </p>
+                    <p className="text-sm text-amber-800 mt-1">
+                        고객님의 정보는 예약에만 사용됩니다.
                     </p>
                 </div>
 

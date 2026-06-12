@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import PageWrapper from '../../../components/PageWrapper';
 import Link from 'next/link';
 import supabase from '@/lib/supabase';
+import { buildProfileCompletionPath, hasRequiredProfileFields } from '@/lib/profileRequirements';
 import logger from '../../../lib/logger';
 
 function DirectBookingContent() {
@@ -117,17 +118,32 @@ function DirectBookingContent() {
             // 사용자 프로필 정보 조회
             const { data: profile, error: profileError } = await supabase
                 .from('users')
-                .select('name, email')
+                .select('name, email, english_name, phone_number')
                 .eq('id', sessionUser.id)
                 .maybeSingle();
 
             if (profileError) {
                 logger.warn('❌ 사용자 프로필 조회 실패:', profileError);
                 // 프로필이 없어도 계속 진행
-                setUserProfile({ name: null, email: sessionUser.email });
+                const fallbackProfile = {
+                    name: null,
+                    email: sessionUser.email,
+                    english_name: null,
+                    phone_number: null,
+                };
+                setUserProfile(fallbackProfile);
+                router.replace(buildProfileCompletionPath('/mypage/direct-booking'));
             } else {
                 logger.debug('✅ 사용자 프로필:', profile);
                 setUserProfile(profile);
+                if (!hasRequiredProfileFields({
+                    email: profile?.email || sessionUser.email || '',
+                    name: profile?.name || '',
+                    english_name: profile?.english_name || '',
+                    phone_number: profile?.phone_number || '',
+                })) {
+                    router.replace(buildProfileCompletionPath('/mypage/direct-booking'));
+                }
             }
         } catch (error) {
             logger.error('❌ 사용자 정보 로드 실패:', error);

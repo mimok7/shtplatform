@@ -10,6 +10,7 @@ import { clearAuthCache } from '@/hooks/useAuth';
 import { clearInvalidSession, isInvalidRefreshTokenError } from '@/lib/authRecovery';
 import { useLoadingTimeout } from '@/hooks/useLoadingTimeout';
 import { getSessionUser } from '@/lib/authHelpers';
+import { buildProfileCompletionPath, hasRequiredProfileFields } from '@/lib/profileRequirements';
 import { LogOut } from 'lucide-react';
 
 export default function MyPage() {
@@ -63,7 +64,7 @@ export default function MyPage() {
         // 사용자 프로필 정보 조회 (최소 필드만)
         const { data: profile } = await supabase
           .from('users')
-          .select('name')
+          .select('email, name, english_name, phone_number')
           .eq('id', user.id)
           .maybeSingle();
 
@@ -153,6 +154,23 @@ export default function MyPage() {
     }
   }, [router]);
 
+  const handleProtectedNavigation = useCallback((targetHref: string) => {
+    const profileToValidate = {
+      email: userProfile?.email || user?.email || '',
+      name: userProfile?.name || '',
+      english_name: userProfile?.english_name || '',
+      phone_number: userProfile?.phone_number || '',
+    };
+
+    if (!hasRequiredProfileFields(profileToValidate)) {
+      alert('예약 진행 전 내 정보의 필수 항목을 먼저 입력해주세요.');
+      router.push(buildProfileCompletionPath(targetHref));
+      return;
+    }
+
+    router.push(targetHref);
+  }, [router, userProfile, user]);
+
   const quickActions = useMemo(() => [
     { icon: '🎯', label: '예약 하기', desc: '새로운 예약 신청', href: '/mypage/direct-booking', bg: 'bg-blue-100', color: 'text-blue-600' },
     { icon: '📋', label: '예약 내역', desc: '예약 조회 및 관리', href: '/mypage/reservations/list', bg: 'bg-green-100', color: 'text-green-600' },
@@ -215,6 +233,27 @@ export default function MyPage() {
                   type="button"
                   onClick={handleGoPartner}
                   className="w-full text-left p-0 border-0 bg-transparent cursor-pointer"
+                >
+                  <div className="bg-white border border-slate-300 rounded-lg p-2 hover:shadow-md transition shadow-sm flex flex-col gap-1">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-8 h-8 flex items-center justify-center rounded-lg ${action.bg} flex-shrink-0`}>
+                        <span className="text-base">{action.icon}</span>
+                      </div>
+                      <h3 className="text-sm font-semibold text-slate-900">{action.label}</h3>
+                    </div>
+                    <p className="text-xs text-slate-500 ml-10">{action.desc}</p>
+                  </div>
+                </button>
+              );
+            }
+
+            if (action.href === '/mypage/direct-booking') {
+              return (
+                <button
+                  key={index}
+                  type="button"
+                  onClick={() => handleProtectedNavigation(action.href)}
+                  className="text-left block w-full"
                 >
                   <div className="bg-white border border-slate-300 rounded-lg p-2 hover:shadow-md transition shadow-sm flex flex-col gap-1">
                     <div className="flex items-center gap-2">
