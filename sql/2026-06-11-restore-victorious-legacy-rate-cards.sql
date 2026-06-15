@@ -4,6 +4,9 @@ BEGIN;
 -- can resolve their original room_price_code values again.
 -- These IDs were referenced by historical reservation_cruise rows before the
 -- 2026-04-04 promo rate-card reload replaced the rows with new UUIDs.
+-- NOTE:
+--   These legacy rows are for historical reservation lookup only.
+--   Keep them inactive for new price search flows (see 097 migration).
 
 INSERT INTO public.cruise_rate_card (
   id,
