@@ -553,9 +553,21 @@ const getChangeStatusLabel = (status: any): string => {
 
 const pickChangeDetailRow = (service: any, rows: any[]): any => {
   if (!rows || rows.length === 0) return null;
-  if (rows.length === 1) return rows[0];
 
   const type = String(service?.serviceType || '').toLowerCase();
+
+  // SHT: rows.length 체크 전에 먼저 처리 — category 정확 매칭, 불일치 시 null(폴백 금지)
+  if (type === 'sht') {
+    const serviceCategoryRaw = String(service?.sht_category || '').toLowerCase();
+    const matched = rows.find((r: any) => {
+      const rowCategoryRaw = String(r?.sht_category || '').toLowerCase();
+      return rowCategoryRaw === serviceCategoryRaw;
+    });
+    return matched || null;
+  }
+
+  if (rows.length === 1) return rows[0];
+
   if (type === 'cruise') {
     const roomCode = String(service?.room_price_code || '').trim();
     const checkin = String(service?.checkin || '').trim();
@@ -1089,7 +1101,7 @@ export default function ReservationDetailModal({
           .flatMap((s) => [s?.reservation_id, s?.reservationId, s?.reservation?.re_id, s?.re_id])
           .map((id) => String(id || '').trim())
           .filter(Boolean)));
-        const [cruiseRates, airportPrices, hotelPrices, rentPrices, tourPrices, reservationRows, changeRequests] = await Promise.all([
+        const [cruiseRates, airportPrices, hotelPrices, rentPrices, tourPrices, reservationRows, changeRequests, cruiseCarDirections] = await Promise.all([
           cruiseCodes.length > 0
             ? supabase
               .from('cruise_rate_card')
@@ -1108,6 +1120,13 @@ export default function ReservationDetailModal({
               .in('reservation_id', reservationIds)
               .not('status', 'in', '(rejected,cancelled)')
               .order('submitted_at', { ascending: false })
+            : Promise.resolve({ data: [] }),
+          reservationIds.length > 0
+            ? supabase
+              .from('reservation_cruise_car')
+              .select('reservation_id, one_way_direction, way_type, created_at')
+              .in('reservation_id', reservationIds)
+              .order('created_at', { ascending: true })
             : Promise.resolve({ data: [] }),
         ]);
 
@@ -1129,6 +1148,7 @@ export default function ReservationDetailModal({
         }
         const tourPriceMap = new Map((tourPrices.data || []).map((r: any) => [r.pricing_id, r]));
         const reservationMap = new Map((reservationRows.data || []).map((r: any) => [r.re_id, r]));
+
 
         const promoReservationIds = reservationIds.filter((reservationId) => {
           const reservationInfo: any = reservationMap.get(reservationId);
@@ -1379,7 +1399,7 @@ export default function ReservationDetailModal({
               ...baseService,
               usageDate: baseService.usageDate || baseService.usage_date || baseService.pickupDatetime || baseService.pickup_datetime || null,
               pickupDatetime: baseService.pickupDatetime || baseService.pickup_datetime || null,
-              category: baseService.category || baseService.sht_category || '-',
+              category: String(baseService.sht_category || baseService.category || '-'),
               vehicleNumber: baseService.vehicleNumber || baseService.vehicle_number || baseService.dispatch_code || '-',
               seatNumber: baseService.seatNumber || baseService.seat_number || '-',
               pickupLocation: baseService.pickupLocation || baseService.pickup_location || '-',

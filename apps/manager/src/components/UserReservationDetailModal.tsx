@@ -326,9 +326,21 @@ const CHANGE_CHILDREN_BY_RETYPE: Record<string, string[]> = {
 
 const pickChangeDetailRow = (service: any, rows: any[]): any => {
     if (!rows || rows.length === 0) return null;
-    if (rows.length === 1) return rows[0];
 
     const type = String(service?.serviceType || '').toLowerCase();
+
+    // SHT: rows.length 체크 전에 먼저 처리 — category 정확 매칭, 불일치 시 null(폴백 금지)
+    if (type === 'sht') {
+        const serviceCategoryRaw = String(service?.sht_category || '').toLowerCase();
+        const matched = rows.find((r: any) => {
+            const rowCategoryRaw = String(r?.sht_category || '').toLowerCase();
+            return rowCategoryRaw === serviceCategoryRaw;
+        });
+        return matched || null;
+    }
+
+    if (rows.length === 1) return rows[0];
+
     if (type === 'cruise') {
         const roomCode = String(service?.room_price_code || '').trim();
         const checkin = String(service?.checkin || '').trim();
@@ -704,8 +716,9 @@ export default function UserReservationDetailModal({
                     if (normalizedService.serviceType === 'sht') {
                         return {
                             ...normalizedService,
-                            usageDate: normalizedService.usageDate || normalizedService.usage_date || null,
-                            category: normalizedService.category || normalizedService.sht_category || '-',
+                            usageDate: normalizedService.usageDate || normalizedService.usage_date || normalizedService.pickupDatetime || normalizedService.pickup_datetime || null,
+                            pickupDatetime: normalizedService.pickupDatetime || normalizedService.pickup_datetime || null,
+                            category: String(normalizedService.sht_category || normalizedService.category || '-'),
                             vehicleNumber: normalizedService.vehicleNumber || normalizedService.vehicle_number || normalizedService.dispatch_code || '-',
                             seatNumber: normalizedService.seatNumber || normalizedService.seat_number || '-',
                             pickupLocation: normalizedService.pickupLocation || normalizedService.pickup_location || '-',

@@ -63,6 +63,22 @@ function formatDatetimeOffset(value: any, dateValue?: any, timeValue?: any): str
     });
 }
 
+function formatDateOnlyKst(value: any): string {
+    if (!value) return '-';
+    const raw = String(value).trim();
+    if (!raw) return '-';
+    const hasTimezone = /[zZ]$|[+-]\d{2}:?\d{2}$/.test(raw);
+    if (!hasTimezone) {
+        const normalized = raw.replace(' ', 'T');
+        const match = normalized.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (match) return `${match[1]}. ${match[2]}. ${match[3]}.`;
+        return raw;
+    }
+    const d = new Date(raw);
+    if (isNaN(d.getTime())) return raw;
+    return d.toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' });
+}
+
 function formatCruiseScheduleLabel(value: any): string {
     const raw = String(value ?? '').trim();
     if (!raw) return '-';
@@ -326,9 +342,21 @@ const CHANGE_CHILDREN_BY_RETYPE: Record<string, string[]> = {
 
 const pickChangeDetailRow = (service: any, rows: any[]): any => {
     if (!rows || rows.length === 0) return null;
-    if (rows.length === 1) return rows[0];
 
     const type = String(service?.serviceType || '').toLowerCase();
+
+    // SHT: rows.length 체크 전에 먼저 처리 — category 정확 매칭, 불일치 시 null(폴백 금지)
+    if (type === 'sht') {
+        const serviceCategoryRaw = String(service?.sht_category || '').toLowerCase();
+        const matched = rows.find((r: any) => {
+            const rowCategoryRaw = String(r?.sht_category || '').toLowerCase();
+            return rowCategoryRaw === serviceCategoryRaw;
+        });
+        return matched || null;
+    }
+
+    if (rows.length === 1) return rows[0];
+
     if (type === 'cruise') {
         const roomCode = String(service?.room_price_code || '').trim();
         const checkin = String(service?.checkin || '').trim();
@@ -409,7 +437,7 @@ export default function UserReservationDetailModal({
 
                 // 크루즈 서비스의 프로모션 코드 수집
                 // 2. 가격 테이블 조회
-                const [cruiseRates, airportPrices, hotelPrices, rentPrices, tourPrices, reservationRows, changeRequests] = await Promise.all([
+                const [cruiseRates, airportPrices, hotelPrices, rentPrices, tourPrices, reservationRows, changeRequests, cruiseCarDirections] = await Promise.all([
                     cruiseCodes.length > 0
                         ? supabase.from('cruise_rate_card').select('id, cruise_name, room_type, schedule_type, price_adult, price_child, price_child_older, price_child_extra_bed, price_infant, price_extra_bed, price_single').in('id', cruiseCodes)
                         : Promise.resolve({ data: [] }),
@@ -439,6 +467,13 @@ export default function UserReservationDetailModal({
                             .not('status', 'in', '(rejected,cancelled)')
                             .order('submitted_at', { ascending: false })
                         : Promise.resolve({ data: [] }),
+                    reservationIds.length > 0
+                        ? supabase
+                            .from('reservation_cruise_car')
+                            .select('reservation_id, one_way_direction, way_type, created_at')
+                            .in('reservation_id', reservationIds)
+                            .order('created_at', { ascending: true })
+                        : Promise.resolve({ data: [] }),
                 ]);
 
                 // 3. Map 생성
@@ -465,6 +500,7 @@ export default function UserReservationDetailModal({
                 const tourPriceMap = new Map((tourPrices.data || []).map((r: any) => [r.pricing_id, r]));
                 const reservationMap = new Map((reservationRows.data || []).map((r: any) => [r.re_id, r]));
 
+
                 const promoReservationIds = reservationIds.filter((reservationId) => {
                     const reservationInfo: any = reservationMap.get(reservationId);
                     return normalizePricingSource(reservationInfo?.pricing_source) === 'promotion';
@@ -486,18 +522,19 @@ export default function UserReservationDetailModal({
                     latestChangeMap.set(reservationId, req);
                 }
 
-                const requestIdsByReType = new Map<string, string[]>();
+                const requestIdsByReType = new Map<string, Set<string>>();
                 for (const row of latestChangeMap.values()) {
                     const reType = String(row?.re_type || '').toLowerCase();
                     const requestId = String(row?.id || '').trim();
                     if (!reType || !requestId) continue;
-                    if (!requestIdsByReType.has(reType)) requestIdsByReType.set(reType, []);
-                    requestIdsByReType.get(reType)!.push(requestId);
+                    if (!requestIdsByReType.has(reType)) requestIdsByReType.set(reType, new Set());
+                    requestIdsByReType.get(reType)!.add(requestId);
                 }
 
                 const detailEntries = Array.from(requestIdsByReType.entries())
-                    .map(([reType, ids]) => {
+                    .map(([reType, idSet]) => {
                         const tableName = CHANGE_TABLE_BY_TYPE[reType];
+                        const ids = Array.from(idSet);
                         if (!tableName || ids.length === 0) return null;
                         return [
                             reType,
@@ -704,8 +741,9 @@ export default function UserReservationDetailModal({
                     if (normalizedService.serviceType === 'sht') {
                         return {
                             ...normalizedService,
-                            usageDate: normalizedService.usageDate || normalizedService.usage_date || null,
-                            category: normalizedService.category || normalizedService.sht_category || '-',
+                            usageDate: normalizedService.usageDate || normalizedService.usage_date || normalizedService.pickupDatetime || normalizedService.pickup_datetime || null,
+                            pickupDatetime: normalizedService.pickupDatetime || normalizedService.pickup_datetime || null,
+                            category: String(normalizedService.sht_category || normalizedService.category || '-'),
                             vehicleNumber: normalizedService.vehicleNumber || normalizedService.vehicle_number || normalizedService.dispatch_code || '-',
                             seatNumber: normalizedService.seatNumber || normalizedService.seat_number || '-',
                             pickupLocation: normalizedService.pickupLocation || normalizedService.pickup_location || '-',
@@ -777,6 +815,7 @@ export default function UserReservationDetailModal({
         else if (service.checkinDate) dateStr = service.checkinDate;
         else if (service.tourDate) dateStr = service.tourDate;
         else if (service.usageDate) dateStr = service.usageDate.split('T')[0];
+        else if (service.pickup_datetime) dateStr = String(service.pickup_datetime).split('T')[0];
         return dateStr;
     };
 
@@ -785,6 +824,11 @@ export default function UserReservationDetailModal({
         if (value.includes('pickup') || value.includes('픽업')) return 0;
         if (value.includes('sending') || value.includes('샌딩')) return 1;
         return 9;
+    };
+
+    const isShtDropoffCategory = (value: any) => {
+        const normalized = String(value || '').toLowerCase();
+        return normalized.includes('drop') || normalized.includes('드롭') || normalized.includes('도롭') || normalized.includes('샌딩');
     };
 
     const compareServices = (a: any, b: any) => {
@@ -1355,7 +1399,7 @@ export default function UserReservationDetailModal({
                     <>
                         <div className="bg-indigo-50 rounded-lg p-3 mb-2 border border-indigo-100">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
-                                <div><strong>사용일:</strong> {service.usageDate ? formatDatetimeOffset(service.usageDate) : '-'}</div>
+                                <div><strong>사용일:</strong> {service.usageDate ? formatDateOnlyKst(service.usageDate) : '-'}</div>
                                 <div><strong>구분:</strong> {service.category || '-'}</div>
                                 <div><strong>차량번호:</strong> {service.vehicleNumber}</div>
                                 {service.seatNumber && <div><strong>좌석:</strong> {service.seatNumber}</div>}
@@ -1365,7 +1409,7 @@ export default function UserReservationDetailModal({
                         </div>
                         {service.unitPrice && <div>단가: {Number(service.unitPrice || 0).toLocaleString()}동</div>}
                         {(() => {
-                            const isShtDropoff = String(service.category || '').toLowerCase().includes('drop');
+                            const isShtDropoff = isShtDropoffCategory(service.category || service.sht_category);
                             const displayAmt = isShtDropoff ? 0 : Number(service.totalPrice || 0);
                             return (
                                 <div className="border-t border-gray-100 pt-1 mt-1 flex justify-between items-center">
@@ -1391,7 +1435,7 @@ export default function UserReservationDetailModal({
                         </div>
                     </>
                 )}
-                {!isPackageService && !(type === 'sht' && String(service.category || '').toLowerCase().includes('drop')) && (manualAdditionalFee !== 0 || manualAdditionalFeeDetail) && (
+                {!isPackageService && !(type === 'sht' && isShtDropoffCategory(service.category || service.sht_category)) && (manualAdditionalFee !== 0 || manualAdditionalFeeDetail) && (
                     <div className="border-t border-rose-100 pt-2 mt-2 space-y-1 text-xs bg-rose-50/70 rounded p-2">
                         <div className="flex justify-between items-center">
                             <span className="text-rose-700 font-medium">추가/차감 내역</span>
@@ -1598,7 +1642,7 @@ export default function UserReservationDetailModal({
                                     (enrichedServices || []).forEach((s: any) => {
                                         const t = s.serviceType;
                                         // SHT Drop-off 행은 집계 제외 (왕복요금은 픽업에만 포함)
-                                        if (t === 'sht' && String(s.category || '').toLowerCase().includes('drop')) return;
+                                        if (t === 'sht' && isShtDropoffCategory(s.category || s.sht_category)) return;
 
                                         const reservationId = String(s.reservation_id || s.reservationId || '').trim();
                                         if (reservationId && !additionalFeeByReservation.has(reservationId)) {
@@ -1667,9 +1711,9 @@ export default function UserReservationDetailModal({
                         setIsShtSeatModalOpen(false);
                         setSelectedShtService(null);
                     }}
-                    usageDate={selectedShtService.usageDate || undefined}
+                    usageDate={selectedShtService.usageDate || selectedShtService.pickupDatetime || selectedShtService.pickup_datetime || undefined}
                     vehicleNumber={selectedShtService.vehicleNumber || undefined}
-                    initialCategory={String(selectedShtService.category || '').toLowerCase().includes('drop') ? 'dropoff' : 'pickup'}
+                    initialCategory={isShtDropoffCategory(selectedShtService.category || selectedShtService.sht_category) ? 'dropoff' : 'pickup'}
                     saveToDb
                     reservationId={selectedShtService.reservation_id || undefined}
                     pickupLocation={selectedShtService.pickupLocation || undefined}
