@@ -55,6 +55,14 @@ interface HotelReservation {
     } | null;
 }
 
+interface HotelPriceOption {
+    hotel_price_code: string;
+    hotel_name: string | null;
+    room_name: string | null;
+    room_type: string | null;
+    base_price: number | null;
+}
+
 function HotelReservationEditContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -67,7 +75,9 @@ function HotelReservationEditContent() {
     const [additionalFeeInput, setAdditionalFeeInput] = useState('');
     const [additionalFeeDetail, setAdditionalFeeDetail] = useState('');
     const [feeTemplates, setFeeTemplates] = useState<{ id: number; name: string; amount: number }[]>([]);
+    const [hotelOptions, setHotelOptions] = useState<HotelPriceOption[]>([]);
     const [formData, setFormData] = useState({
+        hotel_price_code: '',
         checkin_date: '',
         schedule: '',
         room_count: 1,
@@ -89,6 +99,7 @@ function HotelReservationEditContent() {
 
     const hotelBaseTotal = getNightsFromSchedule(formData.schedule) * (formData.room_count || 1) * formData.unit_price;
     const hotelFinalTotal = Math.max(0, hotelBaseTotal + additionalFee);
+    const selectedHotelOption = hotelOptions.find((option) => option.hotel_price_code === formData.hotel_price_code);
 
     useEffect(() => {
         if (reservationId) {
@@ -106,6 +117,15 @@ function HotelReservationEditContent() {
             .eq('is_active', true)
             .order('sort_order')
             .then(({ data }) => { if (data) setFeeTemplates(data); });
+
+        supabase
+            .from('hotel_price')
+            .select('hotel_price_code, hotel_name, room_name, room_type, base_price')
+            .order('hotel_name', { ascending: true })
+            .order('room_name', { ascending: true })
+            .then(({ data }) => {
+                if (data) setHotelOptions(data as HotelPriceOption[]);
+            });
     }, []);
 
     const loadReservation = async () => {
@@ -205,6 +225,7 @@ function HotelReservationEditContent() {
 
             setReservation(fullReservation);
             setFormData({
+                hotel_price_code: hotelRow.hotel_price_code || '',
                 checkin_date: hotelRow.checkin_date || '',
                 schedule: hotelRow.schedule || '1박',
                 room_count: hotelRow.room_count || 1,
@@ -242,7 +263,7 @@ function HotelReservationEditContent() {
                 additionalFeeDetail,
                 lineItems: [{
                     label: '호텔 객실',
-                    code: formData.checkin_date || reservation.hotel_price_code,
+                    code: formData.hotel_price_code || reservation.hotel_price_code,
                     unit_price: formData.unit_price,
                     quantity: nightsNum * roomCount,
                     total: totalPrice,
@@ -253,7 +274,7 @@ function HotelReservationEditContent() {
                     },
                 }],
                 metadata: {
-                    hotel_price_code: reservation.hotel_price_code,
+                    hotel_price_code: formData.hotel_price_code || reservation.hotel_price_code,
                     checkin_date: formData.checkin_date || null,
                     schedule: formData.schedule || null,
                     request_note: formData.request_note || null,
@@ -264,6 +285,7 @@ function HotelReservationEditContent() {
             const { error: hotelError } = await supabase
                 .from('reservation_hotel')
                 .update({
+                    hotel_price_code: formData.hotel_price_code || null,
                     checkin_date: formData.checkin_date,
                     schedule: formData.schedule,
                     room_count: roomCount,
@@ -315,7 +337,7 @@ function HotelReservationEditContent() {
                     reType: 'hotel',
                     rows: {
                         hotel: [{
-                            hotel_price_code: reservation.hotel_price_code,
+                            hotel_price_code: formData.hotel_price_code || reservation.hotel_price_code,
                             checkin_date: formData.checkin_date,
                             schedule: formData.schedule,
                             room_count: roomCount,
@@ -451,34 +473,51 @@ function HotelReservationEditContent() {
                             </h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">호텔코드</label>
-                                    <div className="text-sm text-gray-500 font-mono">
-                                        {reservation.hotel_price_code}
-                                    </div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">호텔 객실 선택 (수정 가능)</label>
+                                    <select
+                                        value={formData.hotel_price_code}
+                                        onChange={(e) => {
+                                            const nextCode = e.target.value;
+                                            const nextOption = hotelOptions.find((option) => option.hotel_price_code === nextCode);
+                                            setFormData((prev) => ({
+                                                ...prev,
+                                                hotel_price_code: nextCode,
+                                                unit_price: nextOption?.base_price ?? prev.unit_price,
+                                            }));
+                                        }}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    >
+                                        <option value="">선택 안 함</option>
+                                        {hotelOptions.map((option) => (
+                                            <option key={option.hotel_price_code} value={option.hotel_price_code}>
+                                                [{option.hotel_price_code}] {option.hotel_name || '-'} / {option.room_name || option.room_type || '-'}
+                                            </option>
+                                        ))}
+                                    </select>
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">호텔명</label>
                                     <div className="text-gray-900 font-medium">
-                                        {reservation.hotel_price?.hotel_name || '호텔명 정보 없음'}
+                                        {selectedHotelOption?.hotel_name || reservation.hotel_price?.hotel_name || '호텔명 정보 없음'}
                                     </div>
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">객실명</label>
                                     <div className="text-gray-900">
-                                        {reservation.hotel_price?.room_name || '객실명 정보 없음'}
+                                        {selectedHotelOption?.room_name || reservation.hotel_price?.room_name || '객실명 정보 없음'}
                                     </div>
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">객실타입</label>
                                     <div className="text-gray-900">
-                                        {reservation.hotel_price?.room_type || reservation.hotel_price?.room_category || '객실타입 정보 없음'}
+                                        {selectedHotelOption?.room_type || reservation.hotel_price?.room_type || reservation.hotel_price?.room_category || '객실타입 정보 없음'}
                                     </div>
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">기본 1박 가격</label>
                                     <div className="text-gray-900 font-medium text-blue-600">
-                                        {reservation.hotel_price?.base_price ?
-                                            `${reservation.hotel_price.base_price.toLocaleString()}동` :
+                                        {(selectedHotelOption?.base_price ?? reservation.hotel_price?.base_price) ?
+                                            `${Number(selectedHotelOption?.base_price ?? reservation.hotel_price?.base_price).toLocaleString()}동` :
                                             '가격 정보 없음'
                                         }
                                     </div>

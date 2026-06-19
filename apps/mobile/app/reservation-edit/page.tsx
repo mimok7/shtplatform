@@ -262,6 +262,7 @@ function ReservationEditContent() {
                         hotel: ['hotel'],
                         rentcar: ['rentcar'],
                         tour: ['tour'],
+                        ticket: ['ticket'],
                         package: ['package'],
                     };
                     const dbTypeFilters = typeAliases[typeFilter] || [typeFilter];
@@ -409,22 +410,24 @@ function ReservationEditContent() {
                 const hotelIds = baseRows.filter((r: any) => r.re_type === 'hotel').map((r: any) => r.re_id);
                 const rentcarIds = baseRows.filter((r: any) => r.re_type === 'rentcar').map((r: any) => r.re_id);
                 const tourIds = baseRows.filter((r: any) => r.re_type === 'tour').map((r: any) => r.re_id);
+                const ticketIds = baseRows.filter((r: any) => r.re_type === 'ticket').map((r: any) => r.re_id);
                 const cruiseCarIds = baseRows.filter((r: any) => r.re_type === 'cruise_car' || r.re_type === 'vehicle').map((r: any) => r.re_id);
                 const carShtIds = baseRows.filter((r: any) => r.re_type === 'car_sht' || r.re_type === 'sht').map((r: any) => r.re_id);
                 const packageIds = baseRows.filter((r: any) => r.re_type === 'package').map((r: any) => r.re_id);
 
-                const [cruiseRes, airportRes, hotelRes, rentcarRes, tourRes, cruiseCarRes, carShtRes, airportFastTrackRes] = await Promise.all([
+                const [cruiseRes, airportRes, hotelRes, rentcarRes, tourRes, ticketRes, cruiseCarRes, carShtRes, airportFastTrackRes] = await Promise.all([
                     cruiseIds.length ? supabase.from('reservation_cruise').select('*').in('reservation_id', cruiseIds) : { data: [], error: null },
                     airportIds.length ? supabase.from('reservation_airport').select('*').in('reservation_id', airportIds) : { data: [], error: null },
                     hotelIds.length ? supabase.from('reservation_hotel').select('*').in('reservation_id', hotelIds) : { data: [], error: null },
                     rentcarIds.length ? supabase.from('reservation_rentcar').select('*').in('reservation_id', rentcarIds) : { data: [], error: null },
                     tourIds.length ? supabase.from('reservation_tour').select('*').in('reservation_id', tourIds) : { data: [], error: null },
+                    ticketIds.length ? supabase.from('reservation_ticket').select('*').in('reservation_id', ticketIds) : { data: [], error: null },
                     cruiseCarIds.length ? supabase.from('reservation_cruise_car').select('*').in('reservation_id', cruiseCarIds) : { data: [], error: null },
                     carShtIds.length ? supabase.from('reservation_car_sht').select('*').in('reservation_id', carShtIds) : { data: [], error: null },
                     airportIds.length ? supabase.from('reservation_airport_fasttrack').select('reservation_id, way_type').in('reservation_id', airportIds) : { data: [], error: null },
                 ]);
 
-                [cruiseRes, airportRes, hotelRes, rentcarRes, tourRes, cruiseCarRes, carShtRes].forEach((res: any) => {
+                [cruiseRes, airportRes, hotelRes, rentcarRes, tourRes, ticketRes, cruiseCarRes, carShtRes].forEach((res: any) => {
                     if (res?.data) {
                         res.data.forEach((row: any) => {
                             serviceDetailsMap[row.reservation_id] = row;
@@ -570,6 +573,7 @@ function ReservationEditContent() {
                 car: 'reservation_cruise_car',
                 car_sht: 'reservation_car_sht',
                 sht: 'reservation_car_sht',
+                ticket: 'reservation_ticket',
                 package: 'reservation_package',
             };
 
@@ -649,6 +653,7 @@ function ReservationEditContent() {
             'airport': '✈️ 공항',
             'rentcar': '🚗 렌터카',
             'tour': '🚩 투어',
+            'ticket': '🎫 티켓',
             'car': '🚗 크차',
             'vehicle': '🚗 크루즈 차량',
             'sht': '🚌 스하차량',
@@ -689,6 +694,7 @@ function ReservationEditContent() {
             case 'hotel': return <span className="flex items-center gap-1"><Building className="w-5 h-5 text-purple-600" /> 호텔</span>;
             case 'tour': return <span className="flex items-center gap-1"><MapPin className="w-5 h-5 text-orange-600" /> 투어</span>;
             case 'rentcar': return <span className="flex items-center gap-1"><Car className="w-5 h-5 text-red-600" /> 렌터카</span>;
+            case 'ticket': return <span className="flex items-center gap-1"><FileText className="w-5 h-5 text-teal-600" /> 티켓</span>;
             case 'car': return <span className="flex items-center gap-1"><Car className="w-5 h-5 text-blue-600" /> 크차</span>;
             case 'vehicle': return <span className="flex items-center gap-1"><Car className="w-5 h-5 text-blue-600" /> 크루즈 차량</span>;
             case 'sht': return <span className="flex items-center gap-1"><Bus className="w-5 h-5 text-indigo-600" /> 스하차량</span>;
@@ -708,6 +714,7 @@ function ReservationEditContent() {
             'vehicle': 2, // sht와 동일한 순서
             'airport': 3,
             'tour': 4,
+            'ticket': 5,
             'rentcar': 5,
             'hotel': 6
         };

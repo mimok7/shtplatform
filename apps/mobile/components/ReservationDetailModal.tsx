@@ -916,7 +916,6 @@ function ServiceCard({
       {type === 'ticket' && (
         <div className="space-y-0.5">
           <DetailLine label="티켓명" value={service.ticketName || service.ticket_name || service.program_selection || '-'} />
-          <DetailLine label="유형" value={service.ticketType || service.ticket_type || '-'} />
           <DetailLine label="이용일자" value={service.usageDate || service.usage_date || '-'} />
           <DetailLine label="수량" value={`${Number(service.ticketQuantity || service.ticket_quantity || 0)}매`} />
           <DetailLine label="셔틀" value={service.shuttle_required ? '신청함' : '신청 안함'} />

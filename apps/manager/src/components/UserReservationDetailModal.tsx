@@ -1253,30 +1253,29 @@ export default function UserReservationDetailModal({
                     <>
                         <div className="bg-teal-50 rounded-lg p-3 mb-2 border border-teal-100">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
-                                <div><strong>티켓명:</strong> <span className="font-semibold text-teal-800">{service.ticketName || service.program_selection || '-'}</span></div>
-                                {service.ticketType && <div><strong>유형:</strong> {service.ticketType === 'dragon' ? '드래곤펄' : '요코온센/기타'}</div>}
-                                {service.usageDate && <div><strong>이용일자:</strong> {service.usageDate}</div>}
-                                {service.ticketQuantity && <div><strong>수량:</strong> {service.ticketQuantity}매</div>}
+                                <div><strong>티켓명:</strong> <span className="font-semibold text-teal-800">{service.ticketName || service.ticket_name || service.program_selection || '-'}</span></div>
+                                <div><strong>이용일자:</strong> {service.usageDate || service.usage_date || '-'}</div>
+                                <div><strong>수량:</strong> {Number(service.ticketQuantity || service.ticket_quantity || 0)}매</div>
                                 <div><strong>셔틀:</strong> {service.shuttle_required ? '신청함' : '신청 안함'}</div>
-                                {service.pickupLocation && <div><strong>픽업장소:</strong> {service.pickupLocation}</div>}
-                                {service.dropoffLocation && <div><strong>하차장소:</strong> {service.dropoffLocation}</div>}
+                                <div><strong>픽업장소:</strong> {service.pickupLocation || service.pickup_location || '-'}</div>
+                                <div><strong>하차장소:</strong> {service.dropoffLocation || service.dropoff_location || '-'}</div>
                             </div>
                         </div>
                         {(service.unitPrice || service.totalPrice) && (
                             <div className="border-t border-gray-100 pt-2 mt-1 space-y-1">
-                                {service.unitPrice > 0 && (service.ticketQuantity || 0) > 0 && (
+                                {Number(service.unitPrice || service.unit_price || 0) > 0 && Number(service.ticketQuantity || service.ticket_quantity || 0) > 0 && (
                                     <div className="flex justify-between text-sm">
-                                        <span className="text-gray-600">1매 {Number(service.unitPrice).toLocaleString()}동 × {service.ticketQuantity}매</span>
-                                        <span className="font-medium">{(Number(service.unitPrice) * (service.ticketQuantity || 1)).toLocaleString()}동</span>
+                                        <span className="text-gray-600">1매 {Number(service.unitPrice || service.unit_price || 0).toLocaleString()}동 × {Number(service.ticketQuantity || service.ticket_quantity || 0)}매</span>
+                                        <span className="font-medium">{(Number(service.unitPrice || service.unit_price || 0) * Number(service.ticketQuantity || service.ticket_quantity || 1)).toLocaleString()}동</span>
                                     </div>
                                 )}
                                 <div className="flex justify-between items-center border-t border-gray-200 pt-1">
                                     <span className="text-gray-500 font-medium">총 금액</span>
-                                    <span className="font-bold text-blue-600">{Number(service.totalPrice || 0).toLocaleString()}동</span>
+                                    <span className="font-bold text-blue-600">{Number(service.totalPrice || service.total_price || 0).toLocaleString()}동</span>
                                 </div>
                             </div>
                         )}
-                        {renderServiceNote(service.note)}
+                        {renderServiceNote(service.note || service.request_note || service.requestNote)}
                     </>
                 )}
                 {type === 'rentcar' && (
