@@ -337,6 +337,7 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                 hotelResult,
                 rentcarResult,
                 tourResult,
+                ticketResult,
                 carShtResult,
                 cruiseCarResult,
                 packageResult,
@@ -357,6 +358,9 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                     ? supabase.from('reservation_tour').select('*').in('reservation_id', reservationIds)
                     : Promise.resolve({ data: [] }),
                 reservationIds.length > 0
+                    ? supabase.from('reservation_ticket').select('*').in('reservation_id', reservationIds)
+                    : Promise.resolve({ data: [] }),
+                reservationIds.length > 0
                     ? supabase.from('reservation_car_sht').select('*').in('reservation_id', reservationIds)
                     : Promise.resolve({ data: [] }),
                 reservationIds.length > 0
@@ -373,6 +377,7 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
             const packageDetailsRaw = (packageResult.data as any[]) || [];
             const rentcarDetailsRaw = (rentcarResult.data as any[]) || [];
             const tourDetailsRaw = (tourResult.data as any[]) || [];
+            const ticketDetailsRaw = (ticketResult.data as any[]) || [];
             const carDetailsRaw = (carShtResult.data as any[]) || [];
             const cruiseCarDetailsRaw = (cruiseCarResult.data as any[]) || [];
 
@@ -402,6 +407,7 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
             const packageDetails = await applyChangeOverlay('package', packageDetailsRaw, { metaMap: changeMetaMap });
             const rentcarDetails = await applyChangeOverlay('rentcar', rentcarDetailsRaw, { metaMap: changeMetaMap });
             const tourDetails = await applyChangeOverlay('tour', tourDetailsRaw, { metaMap: changeMetaMap });
+            const ticketDetails = ticketDetailsRaw;
             const carDetails = await applyChangeOverlay('car_sht', carDetailsRaw, { metaMap: changeMetaMap });
             const cruiseCarDetails = await applyChangeOverlay('cruise_car', cruiseCarDetailsRaw, { metaMap: changeMetaMap, replaceMultiRow: true });
 
@@ -509,6 +515,7 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                 hotel: hotelDetails,
                 rentcar: rentcarDetails,
                 tour: tourDetails,
+                ticket: ticketDetails,
                 car: cruiseCarMergedDetails,
                 sht: carDetailsWithShtPrice,
                 package: packageDetails,
@@ -520,6 +527,7 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                 hotel: 'hotel_price_code',
                 rentcar: 'rentcar_price_code',
                 tour: 'tour_price_code',
+                ticket: 'ticket_price_code',
                 car: 'car_price_code',
                 sht: 'car_price_code',
                 package: 'package_id',
@@ -530,6 +538,7 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                 hotel: ['hotel_name', 'room_name', 'room_type'],
                 rentcar: [],
                 tour: ['tour_name'],
+                ticket: ['ticket_name', 'program_selection'],
                 car: ['sht_category'],
                 sht: ['sht_category'],
                 package: ['package_name'],
@@ -715,6 +724,11 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                 }
                 return { ...tourPriceObj, tour_name };
             }
+            case 'ticket':
+                table = 'ticket_price';
+                codeField = 'ticket_price_code';
+                selectFields = ['ticket_price_code', 'ticket_type', 'ticket_name', 'price_item', 'official_price_vnd', 'stay_card_price_vnd', 'stay_krw_price_krw', 'valid_from', 'valid_to'];
+                break;
             case 'package':
                 table = 'package_master';
                 codeField = 'id';
@@ -742,6 +756,7 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
             hotel: '호텔',
             rentcar: '렌터카',
             tour: '투어',
+            ticket: '티켓',
             car: '크루즈 차량',
             sht: '스하 차량',
         };
@@ -1174,7 +1189,7 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                                             </thead>
                                             <tbody>
                                                 {(() => {
-                                                    const serviceOrder: Record<string, number> = { cruise: 0, car: 1, sht: 2, airport: 3, hotel: 4, rentcar: 5, tour: 6 };
+                                                    const serviceOrder: Record<string, number> = { cruise: 0, car: 1, sht: 2, airport: 3, hotel: 4, rentcar: 5, tour: 6, ticket: 7 };
                                                     const sortedReservations = [...quoteData.reservations].sort((a, b) =>
                                                         (serviceOrder[a.service_type] ?? 99) - (serviceOrder[b.service_type] ?? 99)
                                                     );
@@ -1195,6 +1210,7 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                                                             hotel: 'bg-indigo-50/50',
                                                             rentcar: 'bg-amber-50/50',
                                                             tour: 'bg-purple-50/50',
+                                                            ticket: 'bg-rose-50/50',
                                                             car: 'bg-teal-50/50',
                                                             sht: 'bg-cyan-50/50',
                                                         };
@@ -1405,6 +1421,28 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                                                                             )}
                                                                         </div>
                                                                     )}
+                                                                    {reservation.service_type === 'ticket' && reservation.service_details && (
+                                                                        <div className="space-y-1 text-xs">
+                                                                            <div><span className="text-gray-500">티켓명:</span> <span className="font-bold text-gray-900">{(reservation.service_details as any).ticket_name || '-'}</span></div>
+                                                                            <div><span className="text-gray-500">프로그램선택:</span> <span className="font-bold text-gray-900">{(reservation.service_details as any).program_selection || '-'}</span></div>
+                                                                            <div><span className="text-gray-500">인원수:</span> <span className="font-bold text-gray-900">{(() => {
+                                                                                const d = reservation.service_details as any;
+                                                                                const parts = [];
+                                                                                if ((d?.adult_count || 0) > 0) parts.push(`성인 ${d.adult_count}명`);
+                                                                                if ((d?.child_count || 0) > 0) parts.push(`아동 ${d.child_count}명`);
+                                                                                if ((d?.shuttle_required || false) && (d?.shuttle_count || 0) > 0) parts.push(`셔틀 ${d.shuttle_count}명`);
+                                                                                if (parts.length > 0) return parts.join(', ');
+                                                                                return `${d?.ticket_quantity || 0}명`;
+                                                                            })()}</span></div>
+                                                                            <div><span className="text-gray-500">사용일자:</span> <span className="font-bold text-gray-900">{formatDate((reservation.service_details as any).usage_date)}</span></div>
+                                                                            <div><span className="text-gray-500">셔틀신청:</span> <span className="font-bold text-gray-900">{(reservation.service_details as any).shuttle_required ? '신청' : '미신청'}</span></div>
+                                                                            <div><span className="text-gray-500">픽업장소:</span> <span className="font-bold text-gray-900">{(reservation.service_details as any).pickup_location || '-'}</span></div>
+                                                                            <div><span className="text-gray-500">드롭장소:</span> <span className="font-bold text-gray-900">{(reservation.service_details as any).dropoff_location || '-'}</span></div>
+                                                                            {(reservation.service_details as any).request_note && getFilteredNoteText((reservation.service_details as any).request_note) && (
+                                                                                <div><span className="text-gray-500">요청사항:</span> <span className="text-gray-700">{getFilteredNoteText((reservation.service_details as any).request_note)}</span></div>
+                                                                            )}
+                                                                        </div>
+                                                                    )}
                                                                     {reservation.service_type === 'car' && reservation.service_details && (
                                                                         <div className="space-y-1 text-xs">
                                                                             <div><span className="text-gray-500">구분:</span> <span className="font-bold text-gray-900">{(reservation.service_details as any).way_type || '-'}</span></div>
@@ -1467,7 +1505,7 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                                                                         );
                                                                     })()}
                                                                     {/* 가격 상세 정보 (병합) - 맞춤 렌더 서비스 제외 (cruise, car, airport, hotel, rentcar, tour, sht) */}
-                                                                    {!['cruise', 'car', 'airport', 'hotel', 'rentcar', 'tour', 'sht'].includes(reservation.service_type) && reservation.priceDetail && (
+                                                                    {!['cruise', 'car', 'airport', 'hotel', 'rentcar', 'tour', 'ticket', 'sht'].includes(reservation.service_type) && reservation.priceDetail && (
                                                                         <div className="mt-2 pt-1 border-t border-gray-200 text-[11px] text-gray-600">
                                                                             {Object.entries(reservation.priceDetail as Record<string, any>)
                                                                                 .filter(([key, value]: [string, any]) =>
@@ -1524,7 +1562,7 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                                             </thead>
                                             <tbody>
                                                 {(() => {
-                                                    const serviceOrder: Record<string, number> = { cruise: 0, car: 1, sht: 2, airport: 3, hotel: 4, rentcar: 5, tour: 6 };
+                                                    const serviceOrder: Record<string, number> = { cruise: 0, car: 1, sht: 2, airport: 3, hotel: 4, rentcar: 5, tour: 6, ticket: 7 };
                                                     const sortedRaw = [...quoteData.reservations].sort((a, b) =>
                                                         (serviceOrder[a.service_type] ?? 99) - (serviceOrder[b.service_type] ?? 99)
                                                     );
@@ -1700,6 +1738,56 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                                                                 const tourUnitPrice = p?.price_per_person || 0;
                                                                 const cap = d?.tour_capacity || d?.participant_count || 1;
                                                                 calcLines.push(`${cap}명 × ${tourUnitPrice.toLocaleString()}동`);
+                                                                break;
+                                                            }
+                                                            case 'ticket': {
+                                                                const ticketName = d?.ticket_name || d?.program_selection || '';
+                                                                if (ticketName) descLines.push(`🎫 티켓명: ${ticketName}`);
+                                                                if (d?.program_selection && d?.program_selection !== ticketName) {
+                                                                    descLines.push(`프로그램선택: ${d.program_selection}`);
+                                                                }
+                                                                if (d?.usage_date) descLines.push(`사용일자: ${formatDate(d.usage_date)}`);
+                                                                descLines.push(`셔틀신청: ${d?.shuttle_required ? '신청' : '미신청'}`);
+                                                                if (d?.pickup_location) descLines.push(`픽업장소: ${d.pickup_location}`);
+                                                                if (d?.dropoff_location) descLines.push(`드롭장소: ${d.dropoff_location}`);
+
+                                                                const ticketPb = r.price_breakdown || d?.price_breakdown || null;
+                                                                const ticketItems = Array.isArray(ticketPb?.line_items) ? ticketPb.line_items : [];
+                                                                if (ticketItems.length > 0) {
+                                                                    ticketItems.forEach((item: any) => {
+                                                                        const labelRaw = String(item?.label || '');
+                                                                        const label = labelRaw.includes('성인')
+                                                                            ? '성인요금'
+                                                                            : labelRaw.includes('아동')
+                                                                                ? '아동요금'
+                                                                                : labelRaw.includes('셔틀')
+                                                                                    ? '셔틀요금'
+                                                                                    : (labelRaw || '티켓요금');
+                                                                        const unitPrice = Number(item?.unit_price || 0);
+                                                                        const quantity = Number(item?.quantity || 0);
+                                                                        const total = Number(item?.total || (unitPrice * quantity) || 0);
+                                                                        calcLines.push(`${label}: ${unitPrice.toLocaleString()}동 × ${quantity}명 = ${total.toLocaleString()}동`);
+                                                                    });
+                                                                } else {
+                                                                    const adultCount = Math.max(0, Number(d?.adult_count || 0));
+                                                                    const childCount = Math.max(0, Number(d?.child_count || 0));
+                                                                    const shuttleCount = d?.shuttle_required ? Math.max(0, Number(d?.shuttle_count || 0)) : 0;
+                                                                    const storedTotal = Number(d?.total_price || r.amount || 0);
+                                                                    const buckets = [
+                                                                        adultCount > 0 ? { label: '성인요금', quantity: adultCount } : null,
+                                                                        childCount > 0 ? { label: '아동요금', quantity: childCount } : null,
+                                                                        shuttleCount > 0 ? { label: '셔틀요금', quantity: shuttleCount } : null,
+                                                                    ].filter(Boolean) as Array<{ label: string; quantity: number }>;
+                                                                    if (buckets.length === 1 && storedTotal > 0) {
+                                                                        const bucket = buckets[0];
+                                                                        const ticketUnitPrice = bucket.quantity > 0 ? Math.round(storedTotal / bucket.quantity) : 0;
+                                                                        calcLines.push(`${bucket.label}: ${ticketUnitPrice.toLocaleString()}동 × ${bucket.quantity}명 = ${storedTotal.toLocaleString()}동`);
+                                                                    } else if (storedTotal > 0) {
+                                                                        calcLines.push(`티켓 합계: ${storedTotal.toLocaleString()}동`);
+                                                                    }
+                                                                }
+                                                                const grandTotal = Number(ticketPb?.grand_total || 0);
+                                                                if (grandTotal > 0) rowAmountOverride = grandTotal;
                                                                 break;
                                                             }
                                                             case 'car':

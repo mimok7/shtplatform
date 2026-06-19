@@ -272,6 +272,89 @@ const getReservationTotalAmount = (service: any): number | null => {
     return amount > 0 ? amount : null;
 };
 
+const getTicketDisplayQuantity = (service: any): number => {
+    const explicitQuantity = Number(service?.ticketQuantity ?? service?.ticket_quantity ?? 0);
+    if (explicitQuantity > 0) return explicitQuantity;
+
+    const peopleQuantity = Number(service?.adult_count ?? 0) + Number(service?.child_count ?? 0);
+    if (peopleQuantity > 0) return peopleQuantity;
+
+    const shuttleQuantity = Number(service?.shuttle_count ?? 0);
+    if (shuttleQuantity > 0) return shuttleQuantity;
+
+    return 0;
+};
+
+const getTicketDisplayTotal = (service: any): number => {
+    const reservationAmount = getReservationTotalAmount(service);
+    if (reservationAmount !== null) return reservationAmount;
+
+    const storedTotal = Number(service?.totalPrice ?? service?.total_price ?? 0);
+    if (storedTotal > 0) return storedTotal;
+
+    const quantity = getTicketDisplayQuantity(service);
+    const unitPrice = Number(service?.unitPrice ?? service?.unit_price ?? 0);
+    if (quantity > 0 && unitPrice > 0) return quantity * unitPrice;
+
+    return 0;
+};
+
+const getTicketDisplayLines = (service: any): Array<{ label: string; quantity: number; unitPrice: number; total: number; quantityUnit: string }> => {
+    const pb = getServicePriceBreakdown(service);
+    const lineItems = Array.isArray(pb?.line_items) ? pb.line_items : [];
+
+    if (lineItems.length > 0) {
+        return lineItems.map((item: any) => {
+            const rawLabel = String(item?.label || '');
+            const label = rawLabel.includes('성인')
+                ? '성인요금'
+                : rawLabel.includes('아동')
+                    ? '아동요금'
+                    : rawLabel.includes('셔틀')
+                        ? '셔틀요금'
+                        : '티켓요금';
+            return {
+                label,
+                quantity: Number(item?.quantity || 0),
+                unitPrice: Number(item?.unit_price || 0),
+                total: Number(item?.total || 0),
+                quantityUnit: '명',
+            };
+        }).filter((line) => line.quantity > 0 && line.total >= 0);
+    }
+
+    const total = getTicketDisplayTotal(service);
+    const adultCount = Math.max(0, Number(service?.adultCount ?? service?.adult_count ?? 0));
+    const childCount = Math.max(0, Number(service?.childCount ?? service?.child_count ?? 0));
+    const shuttleCount = service?.shuttle_required ? Math.max(0, Number(service?.shuttleCount ?? service?.shuttle_count ?? 0)) : 0;
+    const genericQuantity = getTicketDisplayQuantity(service);
+
+    const buckets = [
+        adultCount > 0 ? { label: '성인요금', quantity: adultCount, quantityUnit: '명' } : null,
+        childCount > 0 ? { label: '아동요금', quantity: childCount, quantityUnit: '명' } : null,
+        shuttleCount > 0 ? { label: '셔틀요금', quantity: shuttleCount, quantityUnit: '명' } : null,
+    ].filter(Boolean) as Array<{ label: string; quantity: number; quantityUnit: string }>;
+
+    if (buckets.length === 1 && total > 0) {
+        const bucket = buckets[0];
+        const unitPrice = bucket.quantity > 0 ? Math.round(total / bucket.quantity) : 0;
+        return [{ ...bucket, unitPrice, total }];
+    }
+
+    const fallbackUnitPrice = Number(service?.unitPrice ?? service?.unit_price ?? 0);
+    if (fallbackUnitPrice > 0 && genericQuantity > 0 && total > 0) {
+        return [{
+            label: '티켓요금',
+            quantity: genericQuantity,
+            unitPrice: Math.round(total / genericQuantity),
+            total,
+            quantityUnit: '매',
+        }];
+    }
+
+    return [];
+};
+
 const hasReservationPricingOverride = (service: any, manualAdditionalFee: number, manualAdditionalFeeDetail: string): boolean => {
     return manualAdditionalFee !== 0
         || !!manualAdditionalFeeDetail
@@ -747,6 +830,30 @@ export default function UserReservationDetailModal({
                             dropoffLocation: normalizedService.dropoffLocation || normalizedService.dropoff_location || '-',
                             totalPrice: Number(normalizedService.totalPrice ?? normalizedService.total_price ?? 0),
                             unitPrice: Number(normalizedService.unitPrice ?? normalizedService.unit_price ?? priceInfo?.price_per_person ?? 0),
+                        };
+                    }
+                    if (normalizedService.serviceType === 'ticket') {
+                        const reservationTotalAmount = getReservationTotalAmount(normalizedService);
+                        const ticketQuantity = getTicketDisplayQuantity(normalizedService);
+                        const resolvedTotalPrice = reservationTotalAmount
+                            ?? Number(normalizedService.totalPrice ?? normalizedService.total_price ?? 0);
+                        const derivedUnitPrice = resolvedTotalPrice > 0 && ticketQuantity > 0
+                            ? Math.round(resolvedTotalPrice / ticketQuantity)
+                            : 0;
+                        const resolvedUnitPrice = Number(
+                            normalizedService.unitPrice
+                            ?? (derivedUnitPrice > 0 ? derivedUnitPrice : null)
+                            ?? normalizedService.unit_price
+                            ?? 0
+                        );
+
+                        return {
+                            ...normalizedService,
+                            ticketName: normalizedService.ticketName || normalizedService.ticket_name || normalizedService.program_selection || '-',
+                            usageDate: normalizedService.usageDate || normalizedService.usage_date || '-',
+                            ticketQuantity: ticketQuantity,
+                            totalPrice: resolvedTotalPrice,
+                            unitPrice: resolvedUnitPrice,
                         };
                     }
                     if (normalizedService.serviceType === 'sht') {
@@ -1334,17 +1441,17 @@ export default function UserReservationDetailModal({
                                 <div><strong>하차장소:</strong> {service.dropoffLocation || service.dropoff_location || '-'}</div>
                             </div>
                         </div>
-                        {(service.unitPrice || service.totalPrice) && (
+                        {(service.unitPrice || service.totalPrice || service.total_price) && (
                             <div className="border-t border-gray-100 pt-2 mt-1 space-y-1">
-                                {Number(service.unitPrice || service.unit_price || 0) > 0 && Number(service.ticketQuantity || service.ticket_quantity || 0) > 0 && (
-                                    <div className="flex justify-between text-sm">
-                                        <span className="text-gray-600">1매 {Number(service.unitPrice || service.unit_price || 0).toLocaleString()}동 × {Number(service.ticketQuantity || service.ticket_quantity || 0)}매</span>
-                                        <span className="font-medium">{(Number(service.unitPrice || service.unit_price || 0) * Number(service.ticketQuantity || service.ticket_quantity || 1)).toLocaleString()}동</span>
+                                {getTicketDisplayLines(service).map((line, index) => (
+                                    <div key={`${line.label}-${index}`} className="flex justify-between text-sm">
+                                        <span className="text-gray-600">{line.label} {line.unitPrice.toLocaleString()}동 × {line.quantity}{line.quantityUnit}</span>
+                                        <span className="font-medium">{line.total.toLocaleString()}동</span>
                                     </div>
-                                )}
+                                ))}
                                 <div className="flex justify-between items-center border-t border-gray-200 pt-1">
                                     <span className="text-gray-500 font-medium">총 금액</span>
-                                    <span className="font-bold text-blue-600">{Number(service.totalPrice || service.total_price || 0).toLocaleString()}동</span>
+                                    <span className="font-bold text-blue-600">{getTicketDisplayTotal(service).toLocaleString()}동</span>
                                 </div>
                             </div>
                         )}

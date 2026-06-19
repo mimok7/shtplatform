@@ -280,10 +280,11 @@ const getAmountSummaryLines = (service: any, type: string): string[] => {
   }
 
   if (type === 'ticket') {
-    const qty = Number(service.ticket_quantity || service.ticketQuantity || 0);
-    const unit = Number(service.unit_price || service.unitPrice || calcUnitPrice(service.total_price || service.totalPrice, qty));
+    const qty = getTicketDisplayQuantity(service);
+    const total = getTicketDisplayTotal(service);
+    const unit = Number(service.unit_price || service.unitPrice || calcUnitPrice(total, qty));
     const line = formatLinePrice('티켓', unit, qty, '매');
-    return line ? [line] : (Number(service.total_price || service.totalPrice || 0) > 0 ? [`총액 ${formatMoney(Number(service.total_price || service.totalPrice || 0))}`] : []);
+    return line ? [line] : (total > 0 ? [`총액 ${formatMoney(total)}`] : []);
   }
 
   if (type === 'rentcar') {
@@ -533,6 +534,89 @@ const getReservationTotalAmount = (service: any): number | null => {
       ?? null,
   });
   return amount > 0 ? amount : null;
+};
+
+const getTicketDisplayQuantity = (service: any): number => {
+  const explicitQuantity = Number(service?.ticketQuantity ?? service?.ticket_quantity ?? 0);
+  if (explicitQuantity > 0) return explicitQuantity;
+
+  const peopleQuantity = Number(service?.adult_count ?? 0) + Number(service?.child_count ?? 0);
+  if (peopleQuantity > 0) return peopleQuantity;
+
+  const shuttleQuantity = Number(service?.shuttle_count ?? 0);
+  if (shuttleQuantity > 0) return shuttleQuantity;
+
+  return 0;
+};
+
+const getTicketDisplayTotal = (service: any): number => {
+  const reservationAmount = getReservationTotalAmount(service);
+  if (reservationAmount !== null) return reservationAmount;
+
+  const storedTotal = Number(service?.totalPrice ?? service?.total_price ?? 0);
+  if (storedTotal > 0) return storedTotal;
+
+  const quantity = getTicketDisplayQuantity(service);
+  const unitPrice = Number(service?.unitPrice ?? service?.unit_price ?? 0);
+  if (quantity > 0 && unitPrice > 0) return quantity * unitPrice;
+
+  return 0;
+};
+
+const getTicketDisplayLines = (service: any): Array<{ label: string; quantity: number; unitPrice: number; total: number; quantityUnit: string }> => {
+  const pb = getServicePriceBreakdown(service);
+  const lineItems = Array.isArray(pb?.line_items) ? pb.line_items : [];
+
+  if (lineItems.length > 0) {
+    return lineItems.map((item: any) => {
+      const rawLabel = String(item?.label || '');
+      const label = rawLabel.includes('성인')
+        ? '성인요금'
+        : rawLabel.includes('아동')
+          ? '아동요금'
+          : rawLabel.includes('셔틀')
+            ? '셔틀요금'
+            : '티켓요금';
+      return {
+        label,
+        quantity: Number(item?.quantity || 0),
+        unitPrice: Number(item?.unit_price || 0),
+        total: Number(item?.total || 0),
+        quantityUnit: '명',
+      };
+    }).filter((line: { label: string; quantity: number; unitPrice: number; total: number; quantityUnit: string }) => line.quantity > 0 && line.total >= 0);
+  }
+
+  const total = getTicketDisplayTotal(service);
+  const adultCount = Math.max(0, Number(service?.adultCount ?? service?.adult_count ?? 0));
+  const childCount = Math.max(0, Number(service?.childCount ?? service?.child_count ?? 0));
+  const shuttleCount = service?.shuttle_required ? Math.max(0, Number(service?.shuttleCount ?? service?.shuttle_count ?? 0)) : 0;
+  const genericQuantity = getTicketDisplayQuantity(service);
+
+  const buckets = [
+    adultCount > 0 ? { label: '성인요금', quantity: adultCount, quantityUnit: '명' } : null,
+    childCount > 0 ? { label: '아동요금', quantity: childCount, quantityUnit: '명' } : null,
+    shuttleCount > 0 ? { label: '셔틀요금', quantity: shuttleCount, quantityUnit: '명' } : null,
+  ].filter(Boolean) as Array<{ label: string; quantity: number; quantityUnit: string }>;
+
+  if (buckets.length === 1 && total > 0) {
+    const bucket = buckets[0];
+    const unitPrice = bucket.quantity > 0 ? Math.round(total / bucket.quantity) : 0;
+    return [{ ...bucket, unitPrice, total }];
+  }
+
+  const fallbackUnitPrice = Number(service?.unitPrice ?? service?.unit_price ?? 0);
+  if (fallbackUnitPrice > 0 && genericQuantity > 0 && total > 0) {
+    return [{
+      label: '티켓요금',
+      quantity: genericQuantity,
+      unitPrice: Math.round(total / genericQuantity),
+      total,
+      quantityUnit: '매',
+    }];
+  }
+
+  return [];
 };
 
 const hasReservationPricingOverride = (service: any, manualAdditionalFee: number, manualAdditionalFeeDetail: string): boolean => {
@@ -921,7 +1005,14 @@ function ServiceCard({
           <DetailLine label="셔틀" value={service.shuttle_required ? '신청함' : '신청 안함'} />
           <DetailLine label="픽업장소" value={service.pickupLocation || service.pickup_location || '-'} />
           <DetailLine label="하차장소" value={service.dropoffLocation || service.dropoff_location || '-'} />
-          <DetailLine label="총 금액" value={<span className="font-bold text-blue-700">{formatMoney(Number(service.totalPrice || service.total_price || 0))}</span>} />
+          {getTicketDisplayLines(service).map((line, index) => (
+            <DetailLine
+              key={`${line.label}-${index}`}
+              label={line.label}
+              value={`${formatMoney(line.unitPrice)} × ${line.quantity}${line.quantityUnit} = ${formatMoney(line.total)}`}
+            />
+          ))}
+          <DetailLine label="총 금액" value={<span className="font-bold text-blue-700">{formatMoney(getTicketDisplayTotal(service))}</span>} />
         </div>
       )}
 
@@ -1426,6 +1517,29 @@ export default function ReservationDetailModal({
               dropoffLocation: baseService.dropoffLocation || baseService.dropoff_location || '-',
               totalPrice: Number(baseService.totalPrice ?? baseService.total_price ?? 0),
               unitPrice: Number(baseService.unitPrice ?? baseService.unit_price ?? priceInfo?.price_per_person ?? 0),
+            };
+          }
+
+          if (baseService.serviceType === 'ticket') {
+            const ticketQuantity = getTicketDisplayQuantity(baseService);
+            const resolvedTotalPrice = getTicketDisplayTotal(baseService);
+            const derivedUnitPrice = resolvedTotalPrice > 0 && ticketQuantity > 0
+              ? Math.round(resolvedTotalPrice / ticketQuantity)
+              : 0;
+            const resolvedUnitPrice = Number(
+              baseService.unitPrice
+              ?? (derivedUnitPrice > 0 ? derivedUnitPrice : null)
+              ?? baseService.unit_price
+              ?? 0
+            );
+
+            return {
+              ...baseService,
+              ticketName: baseService.ticketName || baseService.ticket_name || baseService.program_selection || '-',
+              usageDate: baseService.usageDate || baseService.usage_date || '-',
+              ticketQuantity,
+              totalPrice: resolvedTotalPrice,
+              unitPrice: resolvedUnitPrice,
             };
           }
 

@@ -136,6 +136,11 @@ const combineDateAndTime = (date?: string | null, time?: string | null) => {
     return `${date}T${time}:00`;
 };
 
+const formatDateForInput = (value?: string | null) => {
+    if (!value) return '';
+    return String(value).split('T')[0] || '';
+};
+
 const extractTimeFromDateTime = (value?: string | null) => {
     if (!value) return '';
     const match = String(value).match(/T(\d{2}:\d{2})/);
@@ -251,7 +256,6 @@ function CruiseVehicleContent() {
     const [cruisePromotionCode, setCruisePromotionCode] = useState('');
     const [applyGrandPioneersVehicleDiscount, setApplyGrandPioneersVehicleDiscount] = useState(false);
     const [grandPioneersVehiclePromotionActive, setGrandPioneersVehiclePromotionActive] = useState(false);
-    const [grandPioneersVehiclePromotionNote, setGrandPioneersVehiclePromotionNote] = useState('그랜드 파이어니스 베란다 스위트 이상 차량 50% 지원 적용');
 
     // 기존 차량 예약 ID
     const [existingVehicleReservationId, setExistingVehicleReservationId] = useState<string | null>(null);
@@ -411,9 +415,6 @@ function CruiseVehicleContent() {
                 const bookingActive = !!data?.is_active && isDateWithinRange(today, data?.booking_from, data?.booking_to);
                 const checkinActive = !!checkin && isDateWithinRange(checkin, data?.checkin_from, data?.checkin_to);
                 setGrandPioneersVehiclePromotionActive(bookingActive && checkinActive);
-                setGrandPioneersVehiclePromotionNote(
-                    String(data?.notes || data?.name || '그랜드 파이어니스 베란다 스위트 이상 차량 50% 지원 적용').trim()
-                );
             } catch (error) {
                 console.error('그랜드 파이어니스 차량 프로모션 조회 실패:', error);
                 if (!cancelled) {
@@ -452,6 +453,25 @@ function CruiseVehicleContent() {
         setOtherDayRoundTripForm((prev) => ({ ...prev, [field]: sanitized }));
         setLocationInputError(hasInvalidLocationChars(value) ? '영문으로 입력해 주세요 ^^' : '');
     };
+
+    const getOneWayAutoRideDate = useCallback((direction: 'pickup' | 'dropoff') => {
+        if (!checkin) return '';
+        const baseDate = new Date(checkin);
+        if (Number.isNaN(baseDate.getTime())) return '';
+        if (direction === 'dropoff') {
+            baseDate.setDate(baseDate.getDate() + getScheduleReturnOffsetDays(schedule));
+        }
+        return formatDateForInput(baseDate.toISOString());
+    }, [checkin, schedule]);
+
+    const applyOneWayAutoRideDate = useCallback((direction: 'pickup' | 'dropoff') => {
+        const autoDate = getOneWayAutoRideDate(direction);
+        if (!autoDate) {
+            alert('체크인 정보가 없어 자동입력할 수 없습니다.');
+            return;
+        }
+        setOneWayRideDate(autoDate);
+    }, [getOneWayAutoRideDate]);
 
     const applyCruiseFilterToRentcarQuery = useCallback((query: any) => {
         const name = (cruiseName || '').trim();
@@ -1462,24 +1482,6 @@ function CruiseVehicleContent() {
                                 </div>
                             )}
 
-                            {canApplyGrandPioneersVehicleDiscount && (
-                                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                                    <label className="flex items-start gap-2 cursor-pointer text-sm text-amber-800">
-                                        <input
-                                            type="checkbox"
-                                            className="mt-0.5"
-                                            checked={applyGrandPioneersVehicleDiscount}
-                                            onChange={(e) => setApplyGrandPioneersVehicleDiscount(e.target.checked)}
-                                        />
-                                        <span>
-                                            프로모션 관리: GP-VERANDA-UP-VEHICLE-50-2026-05-30 적용
-                                            <br />
-                                            비고: {grandPioneersVehiclePromotionNote}
-                                        </span>
-                                    </label>
-                                </div>
-                            )}
-
                             <div className="mb-4 flex justify-between items-center">
                                 <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
                                     <span>🚗</span>
@@ -1561,7 +1563,11 @@ function CruiseVehicleContent() {
                                     <div className="grid grid-cols-2 gap-2">
                                         <button
                                             type="button"
-                                            onClick={() => setPyongdoDirection('pickup')}
+                                            onClick={() => {
+                                                setPyongdoDirection('pickup');
+                                                const autoDate = getOneWayAutoRideDate('pickup');
+                                                if (autoDate) setOneWayRideDate(autoDate);
+                                            }}
                                             className={`px-4 py-2 border rounded-lg transition-colors ${pyongdoDirection === 'pickup'
                                                 ? 'bg-blue-500 text-white border-blue-500'
                                                 : 'bg-gray-50 border-gray-300 hover:bg-gray-100 text-gray-700'
@@ -1571,7 +1577,11 @@ function CruiseVehicleContent() {
                                         </button>
                                         <button
                                             type="button"
-                                            onClick={() => setPyongdoDirection('dropoff')}
+                                            onClick={() => {
+                                                setPyongdoDirection('dropoff');
+                                                const autoDate = getOneWayAutoRideDate('dropoff');
+                                                if (autoDate) setOneWayRideDate(autoDate);
+                                            }}
                                             className={`px-4 py-2 border rounded-lg transition-colors ${pyongdoDirection === 'dropoff'
                                                 ? 'bg-blue-500 text-white border-blue-500'
                                                 : 'bg-gray-50 border-gray-300 hover:bg-gray-100 text-gray-700'
@@ -1584,28 +1594,45 @@ function CruiseVehicleContent() {
                             )}
 
                             {selectedCarCategory === '편도' && pyongdoDirection && (
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                            {pyongdoDirection === 'dropoff' ? '드롭 일자' : '픽업 일자'}
-                                        </label>
-                                        <input
-                                            type="date"
-                                            value={oneWayRideDate}
-                                            onChange={(e) => setOneWayRideDate(e.target.value)}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        />
+                                <div className="space-y-3">
+                                    <div className="flex flex-wrap items-center gap-2 rounded-lg bg-blue-50 border border-blue-200 px-3 py-2 text-sm text-blue-700">
+                                        <span>
+                                            {pyongdoDirection === 'dropoff'
+                                                ? '드롭 선택 시 하선 일정 기준 날짜를 자동입력할 수 있습니다.'
+                                                : '픽업 선택 시 체크인 날짜를 바로 자동입력할 수 있습니다.'}
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => applyOneWayAutoRideDate(pyongdoDirection)}
+                                            disabled={!checkin}
+                                            className="px-3 py-1 rounded-md border border-blue-300 bg-white text-blue-700 hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            {pyongdoDirection === 'dropoff' ? '드롭일자 자동입력' : '체크인일자 자동입력'}
+                                        </button>
                                     </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                            {pyongdoDirection === 'dropoff' ? '드롭 시간' : '픽업 시간'}
-                                        </label>
-                                        <input
-                                            type="time"
-                                            value={oneWayRideTime}
-                                            onChange={(e) => setOneWayRideTime(e.target.value)}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        />
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                {pyongdoDirection === 'dropoff' ? '드롭 일자' : '픽업 일자'}
+                                            </label>
+                                            <input
+                                                type="date"
+                                                value={oneWayRideDate}
+                                                onChange={(e) => setOneWayRideDate(e.target.value)}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                {pyongdoDirection === 'dropoff' ? '드롭 시간' : '픽업 시간'}
+                                            </label>
+                                            <input
+                                                type="time"
+                                                value={oneWayRideTime}
+                                                onChange={(e) => setOneWayRideTime(e.target.value)}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            />
+                                        </div>
                                     </div>
                                 </div>
                             )}

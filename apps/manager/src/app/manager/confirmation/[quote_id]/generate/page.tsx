@@ -190,7 +190,7 @@ export default function ManagerConfirmationGeneratePage() {
         }]));
         const withReservationMeta = (row: ReservationDetail): ReservationDetail => {
           const baseReservationId = String(row.reservation_id || '')
-            .replace(/_(cruise_car|cruise|airport|hotel|rentcar|tour|sht|car)_?\d*$/, '')
+            .replace(/_(cruise_car|cruise|airport|hotel|rentcar|tour|ticket|sht|car)_?\d*$/, '')
             .replace(/_car$/, '');
           const meta: any = reservationMetaMap.get(baseReservationId);
           return meta ? {
@@ -209,6 +209,7 @@ export default function ManagerConfirmationGeneratePage() {
           hotel: resList.filter(r => r.re_type === 'hotel').map(r => r.re_id),
           rentcar: resList.filter(r => r.re_type === 'rentcar').map(r => r.re_id),
           tour: resList.filter(r => r.re_type === 'tour').map(r => r.re_id),
+          ticket: resList.filter(r => r.re_type === 'ticket').map(r => r.re_id),
           sht: [] as string[]
         } as const;
 
@@ -216,13 +217,14 @@ export default function ManagerConfirmationGeneratePage() {
 
         // 상세 테이블 병렬 조회 - 크루즈 예약에서 객실과 차량 모두 조회
         const reservationIds = resList.map(r => r.re_id);
-        const [cruiseRows, cruiseCarRows, airportRows, hotelRows, rentcarRows, tourRows, shtRows] = await Promise.all([
+        const [cruiseRows, cruiseCarRows, airportRows, hotelRows, rentcarRows, tourRows, ticketRows, shtRows] = await Promise.all([
           reservationIds.length ? supabase.from('reservation_cruise').select(`*`).in('reservation_id', reservationIds) : Promise.resolve({ data: [] }),
           reservationIds.length ? supabase.from('reservation_cruise_car').select(`*`).in('reservation_id', reservationIds) : Promise.resolve({ data: [] }),
           idsByType.airport.length ? supabase.from('reservation_airport').select('*').in('reservation_id', idsByType.airport) : Promise.resolve({ data: [] }),
           idsByType.hotel.length ? supabase.from('reservation_hotel').select('*').in('reservation_id', idsByType.hotel) : Promise.resolve({ data: [] }),
           idsByType.rentcar.length ? supabase.from('reservation_rentcar').select('*').in('reservation_id', idsByType.rentcar) : Promise.resolve({ data: [] }),
           idsByType.tour.length ? supabase.from('reservation_tour').select('*').in('reservation_id', idsByType.tour) : Promise.resolve({ data: [] }),
+          idsByType.ticket.length ? supabase.from('reservation_ticket').select('*').in('reservation_id', idsByType.ticket) : Promise.resolve({ data: [] }),
           idsByType.sht.length ? supabase.from('reservation_car_sht').select('*').in('reservation_id', idsByType.sht) : Promise.resolve({ data: [] })
         ] as any);
 
@@ -235,6 +237,7 @@ export default function ManagerConfirmationGeneratePage() {
         const enrichedHotelData = await enrichDataWithPrices((hotelRows as any).data, 'hotel');
         const enrichedTourData = await enrichDataWithPrices((tourRows as any).data, 'tour');
         const enrichedRentcarData = await enrichDataWithPrices((rentcarRows as any).data, 'rentcar');
+        const enrichedTicketData = ((ticketRows as any).data || []) as any[];
 
         // 크루즈는 한 예약에 여러 객실이 있을 수 있으므로 배열로 그룹화
         const mapByArray = (rows: any[] | null | undefined) => {
@@ -410,6 +413,22 @@ export default function ManagerConfirmationGeneratePage() {
           }
         }
 
+        for (const res of resList.filter(r => r.re_type === 'ticket')) {
+          const ticketDetails = enrichedTicketData.filter((t: any) => t.reservation_id === res.re_id);
+          if (ticketDetails.length > 0) {
+            ticketDetails.forEach((ticket, index) => {
+              const amount = Number(ticket.total_price || 0) || Number(ticket.unit_price || 0);
+              processedReservations.push({
+                reservation_id: `${res.re_id}_ticket_${index}`,
+                service_type: 'ticket',
+                service_details: ticket,
+                amount,
+                status: res.re_status
+              });
+            });
+          }
+        }
+
         // SHT 차량 서비스 처리
         for (const res of resList.filter(r => r.re_type === 'sht' || r.re_type === 'car')) {
           const shtDetail = shtMap.get(res.re_id);
@@ -441,7 +460,7 @@ export default function ManagerConfirmationGeneratePage() {
         const reservationTotalMap = new Map<string, number>();
         displayReservations.forEach((reservation) => {
           const baseReservationId = String(reservation.reservation_id || '')
-            .replace(/_(cruise_car|cruise|airport|hotel|rentcar|tour|sht|car)_?\d*$/, '')
+            .replace(/_(cruise_car|cruise|airport|hotel|rentcar|tour|ticket|sht|car)_?\d*$/, '')
             .replace(/_car$/, '');
           const total = Number(reservation.reservation_total_amount || 0);
           if (baseReservationId && total > 0) reservationTotalMap.set(baseReservationId, total);
@@ -539,6 +558,9 @@ export default function ManagerConfirmationGeneratePage() {
       } else if (reservation.re_type === 'tour') {
         const { data } = await supabase.from('reservation_tour').select('*').eq('reservation_id', reservation.re_id).single();
         serviceDetail = (await enrichDataWithPrices([data], 'tour'))[0];
+      } else if (reservation.re_type === 'ticket') {
+        const { data } = await supabase.from('reservation_ticket').select('*').eq('reservation_id', reservation.re_id).single();
+        serviceDetail = data;
       } else if (reservation.re_type === 'car' || reservation.re_type === 'sht') {
         const { data } = await supabase.from('reservation_car_sht').select('*').eq('reservation_id', reservation.re_id).single();
         serviceDetail = data;

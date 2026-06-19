@@ -40,6 +40,7 @@ const TYPE_LABEL: Record<string, string> = {
   hotel: '호텔',
   rentcar: '렌터카',
   tour: '투어',
+  ticket: '티켓',
   car: '차량(SHT)',
   sht: '차량(SHT)',
 };
@@ -106,6 +107,76 @@ function getAdditionalFeeDetail(reservation: UnifiedReservationDetail): string {
     ?? (details.price_breakdown as AnyMap | undefined)?.additional_fee_detail
     ?? ''
   ).trim();
+}
+
+function formatDong(value: unknown): string {
+  const amount = Number(value || 0);
+  return `${amount.toLocaleString()}동`;
+}
+
+function formatTicketLabel(label: string): string {
+  if (label.includes('성인')) return '성인요금';
+  if (label.includes('아동')) return '아동요금';
+  if (label.includes('셔틀')) return '셔틀요금';
+  return '티켓요금';
+}
+
+function getTicketInfo(reservation: UnifiedReservationDetail): { info: string; details: string } {
+  const details = (reservation.service_details || {}) as AnyMap;
+  const priceBreakdown = (reservation.price_breakdown || details.price_breakdown || {}) as AnyMap;
+  const lineItems = Array.isArray(priceBreakdown?.line_items) ? priceBreakdown.line_items : [];
+  const ticketName = String(details.ticket_name || '').trim();
+  const programSelection = String(details.program_selection || '').trim();
+  const shuttleRequired = details.shuttle_required === true ? '신청' : '미신청';
+  const infoLines = [
+    `티켓명: ${ticketName || '-'}`,
+    `프로그램선택: ${programSelection || '-'}`,
+    `인원수: ${Number(details.adult_count || 0) + Number(details.child_count || 0) || Number(details.ticket_quantity || 0) || '-'}`,
+    `사용일자: ${details.usage_date || '-'}`,
+    `셔틀신청: ${shuttleRequired}`,
+    `픽업장소: ${details.pickup_location || '-'}`,
+    `드롭장소: ${details.dropoff_location || '-'}`,
+  ];
+
+  const priceLines = lineItems.map((item: AnyMap) => {
+    const label = formatTicketLabel(String(item.label || ''));
+    const quantity = Number(item.quantity || 0);
+    const total = Number(item.total || 0);
+    const unitPrice = Number(item.unit_price || 0);
+    return `${label}: ${formatDong(unitPrice)} × ${quantity}명 = ${formatDong(total)}`;
+  });
+
+  if (Number(priceBreakdown?.additional_fee || 0) !== 0) {
+    priceLines.push(`추가/차감: ${formatDong(priceBreakdown.additional_fee)}`);
+  }
+
+  if (priceLines.length === 0) {
+    const adultCount = Math.max(0, Number(details.adult_count || 0));
+    const childCount = Math.max(0, Number(details.child_count || 0));
+    const shuttleCount = details.shuttle_required ? Math.max(0, Number(details.shuttle_count || 0)) : 0;
+    const quantity = adultCount + childCount || Number(details.ticket_quantity || 0);
+    const total = Number(details.total_price || 0) || getReservationAmount(reservation);
+    const buckets = [
+      adultCount > 0 ? { label: '성인요금', quantity: adultCount } : null,
+      childCount > 0 ? { label: '아동요금', quantity: childCount } : null,
+      shuttleCount > 0 ? { label: '셔틀요금', quantity: shuttleCount } : null,
+    ].filter(Boolean) as Array<{ label: string; quantity: number }>;
+    priceLines.push(`티켓명: ${ticketName || programSelection || '-'}`);
+    if (buckets.length === 1 && total > 0) {
+      const bucket = buckets[0];
+      const unitPrice = bucket.quantity > 0 ? Math.round(total / bucket.quantity) : 0;
+      priceLines.push(`${bucket.label}: ${formatDong(unitPrice)} × ${bucket.quantity}명 = ${formatDong(total)}`);
+    } else if (quantity > 0 && total > 0) {
+      priceLines.push(`티켓 합계: ${formatDong(total)}`);
+    }
+  } else {
+    priceLines.unshift(`티켓명: ${ticketName || programSelection || '-'}`);
+  }
+
+  return {
+    info: infoLines.join('\n'),
+    details: priceLines.join('\n'),
+  };
 }
 
 /** 예약 확인서 공용 렌더러. customer/manager 양측에서 동일 마크업으로 출력. */
@@ -204,8 +275,9 @@ export function UnifiedConfirmation({ data }: Props) {
               <tbody>
                 {data.reservations.map((r, idx) => {
                   const d = (r.service_details || {}) as AnyMap;
-                  const info = summarize(d, { exclude: ['price_info'] });
-                  const priceInfo = d?.price_info ? summarize(d.price_info as AnyMap) : '-';
+                  const ticketInfo = r.service_type === 'ticket' ? getTicketInfo(r) : null;
+                  const info = ticketInfo?.info || summarize(d, { exclude: ['price_info'] });
+                  const priceInfo = ticketInfo?.details || (d?.price_info ? summarize(d.price_info as AnyMap) : '-');
                   const displayAmount = getReservationAmount(r);
                   const additionalFeeDetail = getAdditionalFeeDetail(r);
                   return (
@@ -217,7 +289,7 @@ export function UnifiedConfirmation({ data }: Props) {
                         {TYPE_LABEL[r.service_type] || r.service_type}
                       </td>
                       <td className="border border-gray-300 px-3 py-3 text-gray-700">
-                        <div>{info || '-'}</div>
+                        <div className="whitespace-pre-wrap break-words">{info || '-'}</div>
                         <div className="mt-1 text-xs text-gray-400">
                           예약ID: {String(r.reservation_id).slice(-8)}
                         </div>

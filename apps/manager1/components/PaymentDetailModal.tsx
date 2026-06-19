@@ -3,6 +3,7 @@
 import React from 'react';
 import supabase from '@/lib/supabase';
 import { fetchLatestActiveChangeRequests, applyChangeOverlay } from '@/lib/reservationChangeOverlay';
+import { getReservationStoredAmount } from '@sht/domain/reservation';
 import {
     Calendar,
     Clock,
@@ -36,6 +37,14 @@ const ServiceDetailSection = ({ payment }: { payment: any }) => {
     const [loading, setLoading] = React.useState(false);
 
     const formatSignedAmount = (amount: number) => `${amount > 0 ? '+' : ''}${amount.toLocaleString()}동`;
+    const getDisplayAmount = (detail: any) => {
+        const reservationAmount = getReservationStoredAmount({
+            total_amount: detail?.reservation?.total_amount,
+            price_breakdown: detail?.reservation?.price_breakdown ?? null,
+        });
+        if (reservationAmount > 0) return reservationAmount;
+        return Number(detail?.total_price || 0);
+    };
 
     React.useEffect(() => {
         const fetchAllServiceDetails = async () => {
@@ -117,7 +126,10 @@ const ServiceDetailSection = ({ payment }: { payment: any }) => {
                 }
 
                 if (ticketRes.data?.length) {
-                    results.ticket = ticketRes.data;
+                    results.ticket = ticketRes.data.map((item: any) => ({
+                        ...item,
+                        reservation: reservationMap.get(item.reservation_id) || null,
+                    }));
                 }
 
                 // 렌터카 - 가격 정보 enrichment
@@ -309,7 +321,7 @@ const ServiceDetailSection = ({ payment }: { payment: any }) => {
                                         <div><strong>항공편:</strong> {detail.ra_flight_number || '미정'}</div>
                                         <div><strong>일시:</strong> {detail.ra_datetime ? new Date(detail.ra_datetime).toLocaleString('ko-KR') : '미정'}</div>
                                         <div><strong>차량 수:</strong> {detail.ra_car_count || 0}대 / <strong>승객:</strong> {detail.ra_passenger_count || 0}명</div>
-                                        <div><strong>총 금액:</strong> <span className="text-lg font-bold text-green-600">{detail.total_price?.toLocaleString() || 0}동</span></div>
+                                        <div><strong>총 금액:</strong> <span className="text-lg font-bold text-green-600">{getDisplayAmount(detail).toLocaleString() || 0}동</span></div>
                                         {detail.request_note && getFilteredNoteText(detail.request_note) && (
                                             <div className="md:col-span-2 mt-3 pt-3 border-t border-blue-100">
                                                 <strong>요청사항:</strong>
