@@ -249,6 +249,7 @@ function HotelReservationEditContent() {
             if (error) throw error;
             alert('호텔 서비스가 삭제되었습니다.');
             setFormData({
+                hotel_price_code: '',
                 checkin_date: '',
                 schedule: '',
                 room_count: 1,

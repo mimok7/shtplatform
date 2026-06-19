@@ -530,6 +530,26 @@ export default function UserReservationDetailModal({
                     }
                 }
 
+                const missingHotelCodes = Array.from(new Set(
+                    Array.from(changeDetailByRequestId.values())
+                        .flatMap((rows) => rows || [])
+                        .map((row: any) => String(row?.hotel_price_code || '').trim())
+                        .filter(Boolean)
+                )).filter((code) => !hotelPriceMap.has(code));
+
+                if (missingHotelCodes.length > 0) {
+                    const { data: missingHotelPrices } = await supabase
+                        .from('hotel_price')
+                        .select('hotel_price_code, hotel_name, room_type, room_name')
+                        .in('hotel_price_code', missingHotelCodes);
+
+                    for (const row of missingHotelPrices || []) {
+                        if (row?.hotel_price_code) {
+                            hotelPriceMap.set(row.hotel_price_code, row);
+                        }
+                    }
+                }
+
                 console.log('🔍 Modal - Airport Price Map:', airportPriceMap);
                 console.log('🚗 Modal - Rent Price Map:', rentPriceMap);
                 console.log('🗺️ Modal - Tour Price Map:', tourPriceMap);
@@ -680,9 +700,24 @@ export default function UserReservationDetailModal({
                         const priceInfo: any = hotelPriceMap.get(normalizedService.hotel_price_code);
                         const scheduleRaw = String(normalizedService.schedule ?? '').trim();
                         const scheduleNights = Number.parseInt(scheduleRaw, 10);
+                        const roomCount = Number(normalizedService.roomCount ?? normalizedService.room_count ?? 0);
                         const normalizedNights = Number.isFinite(scheduleNights)
                             ? scheduleNights
                             : Number(normalizedService.nights ?? normalizedService.days ?? normalizedService.room_count ?? 0);
+                        const reservationTotalAmount = getReservationTotalAmount(normalizedService);
+                        const resolvedTotalPrice = Number(
+                            normalizedService.totalPrice
+                            ?? normalizedService.total_price
+                            ?? reservationTotalAmount
+                            ?? 0
+                        );
+                        const resolvedUnitPrice = Number(
+                            normalizedService.unitPrice
+                            ?? normalizedService.unit_price
+                            ?? (resolvedTotalPrice > 0 && normalizedNights > 0 && roomCount > 0
+                                ? Math.round(resolvedTotalPrice / (normalizedNights * roomCount))
+                                : 0)
+                        );
                         return {
                             ...normalizedService,
                             hotelName: priceInfo?.hotel_name || normalizedService.hotelName || normalizedService.hotel_name || normalizedService.hotel_category || '-',
@@ -692,11 +727,12 @@ export default function UserReservationDetailModal({
                             days: normalizedNights,
                             nights: normalizedNights,
                             guestCount: Number(normalizedService.guestCount ?? normalizedService.guest_count ?? 0),
-                            roomCount: Number(normalizedService.roomCount ?? normalizedService.room_count ?? 0),
+                            roomCount,
                             adultCount: Number(normalizedService.adultCount ?? normalizedService.adult_count ?? 0),
                             childCount: Number(normalizedService.childCount ?? normalizedService.child_count ?? 0),
                             infantCount: Number(normalizedService.infantCount ?? normalizedService.infant_count ?? 0),
-                            totalPrice: Number(normalizedService.totalPrice ?? normalizedService.total_price ?? 0),
+                            unitPrice: resolvedUnitPrice,
+                            totalPrice: resolvedTotalPrice,
                         };
                     }
                     if (normalizedService.serviceType === 'tour') {
@@ -1192,13 +1228,22 @@ export default function UserReservationDetailModal({
                             const nights = Number.isFinite(parsedNights)
                                 ? parsedNights
                                 : Number(service.nights || service.days || 0);
+                            const roomCount = Number(service.roomCount ?? service.room_count ?? 0);
+                            const totalPrice = Number(service.totalPrice || service.total_price || 0);
+                            const unitPrice = Number(
+                                service.unitPrice
+                                || service.unit_price
+                                || (totalPrice > 0 && nights > 0 && roomCount > 0
+                                    ? Math.round(totalPrice / (nights * roomCount))
+                                    : 0)
+                            );
                             return (
                         <div className="bg-orange-50 rounded-lg p-3 mb-2 border border-orange-100">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
                                 <div><strong>호텔명:</strong> <span className="font-semibold text-orange-800">{service.hotelName}</span></div>
                                 <div><strong>객실타입:</strong> {service.roomType}</div>
                                 <div><strong>체크인:</strong> {service.checkinDate}</div>
-                                <div><strong>객실수:</strong> {Number(service.roomCount ?? service.room_count ?? 0)}실</div>
+                                <div><strong>객실수:</strong> {roomCount}실</div>
                                 {service.checkinDate && nights > 0 ? (
                                     <>
                                         <div><strong>체크아웃:</strong> {(() => {
@@ -1217,6 +1262,34 @@ export default function UserReservationDetailModal({
                         </div>
                             );
                         })()}
+                        {(service.unitPrice || service.unit_price || service.totalPrice || service.total_price) && (
+                            <div className="border-t border-gray-100 pt-2 mt-1 space-y-1">
+                                {(() => {
+                                    const nights = Number(service.nights || service.days || 0);
+                                    const roomCount = Number(service.roomCount ?? service.room_count ?? 0);
+                                    const totalPrice = Number(service.totalPrice || service.total_price || 0);
+                                    const unitPrice = Number(
+                                        service.unitPrice
+                                        || service.unit_price
+                                        || (totalPrice > 0 && nights > 0 && roomCount > 0
+                                            ? Math.round(totalPrice / (nights * roomCount))
+                                            : 0)
+                                    );
+                                    return unitPrice > 0 && roomCount > 0 ? (
+                                        <div className="flex justify-between text-sm">
+                                            <span className="text-gray-600">
+                                                {unitPrice.toLocaleString()}동 × {roomCount}실{nights > 0 ? ` × ${nights}박` : ''}
+                                            </span>
+                                            <span className="font-medium">{totalPrice.toLocaleString()}동</span>
+                                        </div>
+                                    ) : null;
+                                })()}
+                                <div className="flex justify-between items-center border-t border-gray-200 pt-1">
+                                    <span className="text-gray-500 font-medium">총 금액</span>
+                                    <span className="font-bold text-blue-600">{Number(service.totalPrice || service.total_price || 0).toLocaleString()}동</span>
+                                </div>
+                            </div>
+                        )}
                         {renderServiceNote(service.note)}
                     </>
                 )}

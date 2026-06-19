@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import ManagerLayout from '@/components/ManagerLayout';
 import PaymentDetailModal from '../../../components/PaymentDetailModal';
 import supabase from '@/lib/supabase';
-import { getPreferredPaymentAmount } from '@sht/domain/reservation';
+import { getPreferredPaymentAmount, getReservationStoredAmount } from '@sht/domain/reservation';
 import {
   CreditCard,
   DollarSign,
@@ -90,6 +90,13 @@ export default function ManagerPaymentsPage() {
 
   const formatQuantityUnit = (unit?: string) => {
     return unit === '대' ? '' : (unit || '');
+  };
+
+  const getHotelNightCount = (row: any) => {
+    const scheduleRaw = String(row?.schedule || '').trim();
+    const parsedNights = Number.parseInt(scheduleRaw, 10);
+    if (Number.isFinite(parsedNights) && parsedNights > 0) return parsedNights;
+    return 1;
   };
 
   // 대량 IN 쿼리/업데이트를 분할 처리하기 위한 유틸
@@ -284,9 +291,15 @@ export default function ManagerPaymentsPage() {
 
         if (hotelData && hotelData.length > 0) {
           for (const hotel of hotelData) {
-            // total_price가 있으면 사용
-            if (hotel.total_price && Number(hotel.total_price) > 0) {
-              total += Number(hotel.total_price);
+            const nights = getHotelNightCount(hotel);
+            const rooms = Number(hotel.room_count) || 1;
+            const storedTotalPrice = Number(hotel.total_price) || 0;
+            const storedUnitPrice = Number(hotel.unit_price) || 0;
+
+            if (storedTotalPrice > 0) {
+              total += storedTotalPrice;
+            } else if (storedUnitPrice > 0) {
+              total += storedUnitPrice * nights * rooms;
             } else if (hotel.hotel_price_code) {
               const { data: hotelPrice } = await supabase
                 .from('hotel_price')
@@ -294,8 +307,6 @@ export default function ManagerPaymentsPage() {
                 .eq('hotel_price_code', hotel.hotel_price_code)
                 .maybeSingle();
               if (hotelPrice?.base_price) {
-                const nights = Number(hotel.schedule?.match(/\d+/)?.[0]) || 1;
-                const rooms = Number(hotel.room_count) || 1;
                 total += Number(hotelPrice.base_price) * nights * rooms;
               }
             }
@@ -1202,6 +1213,29 @@ export default function ManagerPaymentsPage() {
       } else if (hotelData && hotelData.length > 0) {
         console.log('🏨 호텔 데이터:', hotelData);
         for (const hotel of hotelData) {
+          const nights = getHotelNightCount(hotel);
+          const rooms = Number(hotel.room_count) || 1;
+          const storedTotalPrice = Number(hotel.total_price) || 0;
+          const storedUnitPrice = Number(hotel.unit_price) || 0;
+          const resolvedUnitPriceFromStoredTotal = storedTotalPrice > 0 && nights > 0 && rooms > 0
+            ? Math.round(storedTotalPrice / (nights * rooms))
+            : 0;
+
+          if (storedTotalPrice > 0 || storedUnitPrice > 0) {
+            const hotelAmount = storedTotalPrice > 0 ? storedTotalPrice : storedUnitPrice * nights * rooms;
+            const unitPrice = storedUnitPrice > 0 ? storedUnitPrice : resolvedUnitPriceFromStoredTotal;
+            services.push({
+              type: `호텔 (${hotel.hotel_price_code || '직접입력'})`,
+              unitPrice,
+              quantity: nights,
+              quantityUnit: `박 ${rooms}실`,
+              amount: hotelAmount
+            });
+            total += hotelAmount;
+            console.log('✅ 호텔 서비스 (저장값):', hotelAmount, '동');
+            continue;
+          }
+
           if (hotel.hotel_price_code) {
             const { data: hotelPrice, error: hotelPriceError } = await supabase
               .from('hotel_price')
@@ -1213,8 +1247,6 @@ export default function ManagerPaymentsPage() {
               console.error('호텔 가격 조회 오류:', hotelPriceError);
             } else if (hotelPrice?.base_price) {
               const unitPrice = Number(hotelPrice.base_price);
-              const nights = Number(hotel.schedule?.match(/\d+/)?.[0]) || 1; // schedule에서 숫자 추출
-              const rooms = Number(hotel.room_count) || 1;
               const quantity = nights;
               const hotelAmount = unitPrice * nights * rooms;
               services.push({
@@ -1227,21 +1259,18 @@ export default function ManagerPaymentsPage() {
               total += hotelAmount;
               console.log('✅ 호텔 서비스:', hotelAmount, '동');
             }
-          } else if (hotel.total_price && Number(hotel.total_price) > 0) {
-            // 가격 코드가 없고 total_price가 있는 경우
-            const hotelAmount = Number(hotel.total_price);
-            const quantity = Number(hotel.room_count) || 1;
-            services.push({
-              type: `호텔 (코드없음)`,
-              unitPrice: hotelAmount, // total_price를 단가로 사용
-              quantity: quantity,
-              quantityUnit: '실',
-              amount: hotelAmount
-            });
-            total += hotelAmount;
-            console.log('✅ 호텔 서비스 (총액):', hotelAmount, '동');
           }
         }
+      }
+
+      if (total <= 0) {
+        const reservationTotal = reservationIds
+          .map((reservationId) => getReservationStoredAmount({
+            total_amount: 0,
+            price_breakdown: pbMap.get(reservationId) ?? null,
+          }))
+          .reduce((sum, amount) => sum + Number(amount || 0), 0);
+        if (reservationTotal > 0) total = reservationTotal;
       }
 
       // 5. 렌터카 서비스 조회 (rentcar_price 테이블 사용)

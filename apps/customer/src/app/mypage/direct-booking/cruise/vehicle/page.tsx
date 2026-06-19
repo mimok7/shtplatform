@@ -147,16 +147,31 @@ const extractDateFromDateTime = (value?: string | null) => {
     return String(value).split('T')[0] || '';
 };
 
+const isDateWithinRange = (target?: string | null, from?: string | null, to?: string | null) => {
+    const value = String(target || '').trim();
+    if (!value) return false;
+    if (from && value < from) return false;
+    if (to && value > to) return false;
+    return true;
+};
+
 const getOneWayDirectionFromCruiseCar = (row: any): 'pickup' | 'dropoff' => {
     if (row?.one_way_direction === 'dropoff') return 'dropoff';
     return 'pickup';
 };
 
-const getCruiseCarRideDatetime = (row: any) => {
+const getCruiseCarRideDate = (row: any) => {
     const direction = getOneWayDirectionFromCruiseCar(row);
     return direction === 'dropoff'
         ? (row?.return_datetime || null)
         : (row?.pickup_datetime || null);
+};
+
+const getCruiseCarRideTime = (row: any) => {
+    const direction = getOneWayDirectionFromCruiseCar(row);
+    return direction === 'dropoff'
+        ? (row?.return_time || null)
+        : (row?.pickup_time || null);
 };
 
 const buildOtherDayRequestNote = (form: OtherDayRoundTripForm) => {
@@ -235,6 +250,8 @@ function CruiseVehicleContent() {
     const [selectedRateCardPromotion, setSelectedRateCardPromotion] = useState(false);
     const [cruisePromotionCode, setCruisePromotionCode] = useState('');
     const [applyGrandPioneersVehicleDiscount, setApplyGrandPioneersVehicleDiscount] = useState(false);
+    const [grandPioneersVehiclePromotionActive, setGrandPioneersVehiclePromotionActive] = useState(false);
+    const [grandPioneersVehiclePromotionNote, setGrandPioneersVehiclePromotionNote] = useState('그랜드 파이어니스 베란다 스위트 이상 차량 50% 지원 적용');
 
     // 기존 차량 예약 ID
     const [existingVehicleReservationId, setExistingVehicleReservationId] = useState<string | null>(null);
@@ -252,6 +269,8 @@ function CruiseVehicleContent() {
     const [locationInputError, setLocationInputError] = useState('');
     // 편도 방향: 'pickup' (선착장으로 픽업) 또는 'dropoff' (선착장에서 드롭)
     const [pyongdoDirection, setPyongdoDirection] = useState<'pickup' | 'dropoff' | ''>('');
+    const [oneWayRideDate, setOneWayRideDate] = useState('');
+    const [oneWayRideTime, setOneWayRideTime] = useState('');
     const [otherDayRoundTripForm, setOtherDayRoundTripForm] = useState<OtherDayRoundTripForm>(createEmptyOtherDayRoundTripForm());
 
     const [carTypeOptions, setCarTypeOptions] = useState<string[]>([]);
@@ -364,11 +383,50 @@ function CruiseVehicleContent() {
         return isGrandPioneers && roomTypes.some(isGrandPioneersVehicleDiscountRoom);
     }, [cruiseName, selectedRoomType, selectedRoomTypes]);
 
+    const canApplyGrandPioneersVehicleDiscount = useMemo(() => {
+        return grandPioneersVehicleDiscountEligible && grandPioneersVehiclePromotionActive;
+    }, [grandPioneersVehicleDiscountEligible, grandPioneersVehiclePromotionActive]);
+
     useEffect(() => {
-        if (!grandPioneersVehicleDiscountEligible && applyGrandPioneersVehicleDiscount) {
+        if (!canApplyGrandPioneersVehicleDiscount && applyGrandPioneersVehicleDiscount) {
             setApplyGrandPioneersVehicleDiscount(false);
         }
-    }, [grandPioneersVehicleDiscountEligible, applyGrandPioneersVehicleDiscount]);
+    }, [canApplyGrandPioneersVehicleDiscount, applyGrandPioneersVehicleDiscount]);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        const loadGrandPioneersVehiclePromotion = async () => {
+            try {
+                const today = new Date().toISOString().slice(0, 10);
+                const { data, error } = await supabase
+                    .from('cruise_promotion')
+                    .select('is_active, booking_from, booking_to, checkin_from, checkin_to, notes, name')
+                    .eq('code', GRAND_PIONEERS_VEHICLE_DISCOUNT_CODE)
+                    .maybeSingle();
+
+                if (cancelled) return;
+                if (error) throw error;
+
+                const bookingActive = !!data?.is_active && isDateWithinRange(today, data?.booking_from, data?.booking_to);
+                const checkinActive = !!checkin && isDateWithinRange(checkin, data?.checkin_from, data?.checkin_to);
+                setGrandPioneersVehiclePromotionActive(bookingActive && checkinActive);
+                setGrandPioneersVehiclePromotionNote(
+                    String(data?.notes || data?.name || '그랜드 파이어니스 베란다 스위트 이상 차량 50% 지원 적용').trim()
+                );
+            } catch (error) {
+                console.error('그랜드 파이어니스 차량 프로모션 조회 실패:', error);
+                if (!cancelled) {
+                    setGrandPioneersVehiclePromotionActive(false);
+                }
+            }
+        };
+
+        loadGrandPioneersVehiclePromotion();
+        return () => {
+            cancelled = true;
+        };
+    }, [checkin]);
 
     const hasShtSeatRequiredVehicle = useMemo(
         () => vehicleForm.some(v =>
@@ -732,9 +790,10 @@ function CruiseVehicleContent() {
                             if (!firstRoute) firstRoute = carData.route || rentcarData?.route || '';
                             if (!firstPickup && carData.pickup_location) firstPickup = carData.pickup_location;
                             if (!firstDropoff && carData.dropoff_location) firstDropoff = carData.dropoff_location;
-                            const rideDatetime = getCruiseCarRideDatetime(carData);
-                            if (!firstRideDate && rideDatetime) firstRideDate = extractDateFromDateTime(rideDatetime);
-                            if (!firstRideTime && rideDatetime) firstRideTime = extractTimeFromDateTime(rideDatetime);
+                            const rideDate = getCruiseCarRideDate(carData);
+                            const rideTime = getCruiseCarRideTime(carData);
+                            if (!firstRideDate && rideDate) firstRideDate = extractDateFromDateTime(rideDate);
+                            if (!firstRideTime && rideTime) firstRideTime = extractTimeFromDateTime(rideTime) || String(rideTime || '');
                             if (!firstOneWayDirection && (carData.way_type || rentcarData?.way_type || '') === '편도') {
                                 firstOneWayDirection = getOneWayDirectionFromCruiseCar(carData);
                             }
@@ -744,7 +803,11 @@ function CruiseVehicleContent() {
                         if (loadedVehicles.length > 0) {
                             setVehicleForm(loadedVehicles);
                             if (firstWayType) setSelectedCarCategory(firstWayType);
-                            if (firstWayType === '편도') setPyongdoDirection(firstOneWayDirection || 'pickup');
+                            if (firstWayType === '편도') {
+                                setPyongdoDirection(firstOneWayDirection || 'pickup');
+                                setOneWayRideDate(firstRideDate || '');
+                                setOneWayRideTime(firstRideTime || '');
+                            }
                             if (firstRoute) setSelectedRoute(firstRoute);
                             if (firstPickup) setPickupLocation(firstPickup);
                             if (firstDropoff) setDropoffLocation(firstDropoff);
@@ -797,9 +860,10 @@ function CruiseVehicleContent() {
                                 if (!firstRoute) firstRoute = carData.route || rentcarData?.route || '';
                                 if (!firstPickup && carData.pickup_location) firstPickup = carData.pickup_location;
                                 if (!firstDropoff && carData.dropoff_location) firstDropoff = carData.dropoff_location;
-                                const rideDatetime = getCruiseCarRideDatetime(carData);
-                                if (!firstRideDate && rideDatetime) firstRideDate = extractDateFromDateTime(rideDatetime);
-                                if (!firstRideTime && rideDatetime) firstRideTime = extractTimeFromDateTime(rideDatetime);
+                                const rideDate = getCruiseCarRideDate(carData);
+                                const rideTime = getCruiseCarRideTime(carData);
+                                if (!firstRideDate && rideDate) firstRideDate = extractDateFromDateTime(rideDate);
+                                if (!firstRideTime && rideTime) firstRideTime = extractTimeFromDateTime(rideTime) || String(rideTime || '');
                                 if (!firstOneWayDirection && (carData.way_type || rentcarData?.way_type || '') === '편도') {
                                     firstOneWayDirection = getOneWayDirectionFromCruiseCar(carData);
                                 }
@@ -807,7 +871,11 @@ function CruiseVehicleContent() {
                             }
                             setVehicleForm(loaded);
                             if (firstWayType) setSelectedCarCategory(firstWayType);
-                            if (firstWayType === '편도') setPyongdoDirection(firstOneWayDirection || 'pickup');
+                            if (firstWayType === '편도') {
+                                setPyongdoDirection(firstOneWayDirection || 'pickup');
+                                setOneWayRideDate(firstRideDate || '');
+                                setOneWayRideTime(firstRideTime || '');
+                            }
                             if (firstRoute) setSelectedRoute(firstRoute);
                             if (firstPickup) setPickupLocation(firstPickup);
                             if (firstDropoff) setDropoffLocation(firstDropoff);
@@ -919,6 +987,16 @@ function CruiseVehicleContent() {
             alert('편도 방향(픽업/드롭)을 선택해주세요.');
             return false;
         }
+        if (selectedCarCategory === '편도') {
+            if (!oneWayRideDate) {
+                alert(pyongdoDirection === 'dropoff' ? '드롭 일자를 입력해주세요.' : '픽업 일자를 입력해주세요.');
+                return false;
+            }
+            if (!oneWayRideTime) {
+                alert(pyongdoDirection === 'dropoff' ? '드롭 시간을 입력해주세요.' : '픽업 시간을 입력해주세요.');
+                return false;
+            }
+        }
         if (isCustomOtherDayRoundTripCategory(selectedCarCategory)) {
             const effectiveUsageOption = getEffectiveOtherDayUsageOption(selectedCarCategory, otherDayRoundTripForm);
             if (selectedCarCategory === '다른날왕복' && !effectiveUsageOption) {
@@ -975,6 +1053,9 @@ function CruiseVehicleContent() {
             resolved.push({ row: v, carCode, priceData: carPriceData, isSht, isShuttle });
         }
 
+        const oneWayRideDateValue = oneWayRideDate || null;
+        const oneWayRideTimeValue = oneWayRideTime || null;
+
         const getVehicleDiscountRate = (r: ResolvedVehicle) => {
             if (cruisePromotionCode === LYRA_GRANZER_VEHICLE_DISCOUNT_CODE) return VEHICLE_DISCOUNT_RATE;
             const vehicleType = [r.row.car_type, r.priceData?.vehicle_type, r.priceData?.rental_type].filter(Boolean).join(' ');
@@ -984,7 +1065,7 @@ function CruiseVehicleContent() {
                 || vehicleType.includes('리무진')
                 || vehicleType.includes('단독')
                 || r.priceData?.rental_type === '단독대여';
-            return grandPioneersVehicleDiscountEligible && applyGrandPioneersVehicleDiscount && eligibleGrandPioneersVehicle
+            return canApplyGrandPioneersVehicleDiscount && applyGrandPioneersVehicleDiscount && eligibleGrandPioneersVehicle
                 ? VEHICLE_DISCOUNT_RATE
                 : 0;
         };
@@ -1190,9 +1271,15 @@ function CruiseVehicleContent() {
                 } else if (carCat === '편도') {
                     const isPickupDir = pyongdoDirection === 'pickup';
                     if (isPickupDir) {
+                        finalPickupDatetime = oneWayRideDateValue;
+                        pickupTime = oneWayRideTimeValue;
                         returnDatetime = null;
+                        returnTime = null;
                     } else {
-                        returnDatetime = finalPickupDatetime;
+                        finalPickupDatetime = null;
+                        pickupTime = null;
+                        returnDatetime = oneWayRideDateValue;
+                        returnTime = oneWayRideTimeValue;
                         finalPickupDatetime = null;
                     }
                 }
@@ -1375,7 +1462,7 @@ function CruiseVehicleContent() {
                                 </div>
                             )}
 
-                            {grandPioneersVehicleDiscountEligible && (
+                            {canApplyGrandPioneersVehicleDiscount && (
                                 <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
                                     <label className="flex items-start gap-2 cursor-pointer text-sm text-amber-800">
                                         <input
@@ -1387,7 +1474,7 @@ function CruiseVehicleContent() {
                                         <span>
                                             프로모션 관리: GP-VERANDA-UP-VEHICLE-50-2026-05-30 적용
                                             <br />
-                                            비고: 그랜드 파이어니스 베란다 스위트 이상 차량 50% 지원 적용
+                                            비고: {grandPioneersVehiclePromotionNote}
                                         </span>
                                     </label>
                                 </div>
@@ -1492,6 +1579,33 @@ function CruiseVehicleContent() {
                                         >
                                             드롭 (선착장 → 공항/호텔)
                                         </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {selectedCarCategory === '편도' && pyongdoDirection && (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            {pyongdoDirection === 'dropoff' ? '드롭 일자' : '픽업 일자'}
+                                        </label>
+                                        <input
+                                            type="date"
+                                            value={oneWayRideDate}
+                                            onChange={(e) => setOneWayRideDate(e.target.value)}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            {pyongdoDirection === 'dropoff' ? '드롭 시간' : '픽업 시간'}
+                                        </label>
+                                        <input
+                                            type="time"
+                                            value={oneWayRideTime}
+                                            onChange={(e) => setOneWayRideTime(e.target.value)}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        />
                                     </div>
                                 </div>
                             )}

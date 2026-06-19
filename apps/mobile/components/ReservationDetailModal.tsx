@@ -1198,6 +1198,26 @@ export default function ReservationDetailModal({
           }
         }
 
+        const missingHotelCodes = Array.from(new Set(
+          Array.from(changeDetailByRequestId.values())
+            .flatMap((rows) => rows || [])
+            .map((row: any) => String(row?.hotel_price_code || '').trim())
+            .filter(Boolean)
+        )).filter((code) => !hotelPriceMap.has(code));
+
+        if (missingHotelCodes.length > 0) {
+          const { data: missingHotelPrices } = await supabase
+            .from('hotel_price')
+            .select('hotel_price_code, hotel_name, room_type, room_name')
+            .in('hotel_price_code', missingHotelCodes);
+
+          for (const row of missingHotelPrices || []) {
+            if (row?.hotel_price_code) {
+              hotelPriceMap.set(row.hotel_price_code, row);
+            }
+          }
+        }
+
         const enriched = groupedItems.map((service) => {
           const reservationId = String(service.reservation_id || service.reservationId || '').trim();
           const promoSeqFromMap = reservationId ? promotionSequenceMap.get(reservationId) : undefined;
@@ -1347,9 +1367,24 @@ export default function ReservationDetailModal({
             const rawHotelName = String(baseService.hotelName || baseService.hotel_name || '').trim() || null;
             const scheduleRaw = String(baseService.schedule ?? '').trim();
             const scheduleNights = Number.parseInt(scheduleRaw, 10);
+            const roomCount = Number(baseService.roomCount ?? baseService.room_count ?? 0);
             const normalizedNights = Number.isFinite(scheduleNights)
               ? scheduleNights
               : Number(baseService.nights ?? baseService.days ?? baseService.room_count ?? 0);
+            const reservationTotalAmount = getReservationTotalAmount(baseService);
+            const resolvedTotalPrice = Number(
+              baseService.totalPrice
+              ?? baseService.total_price
+              ?? reservationTotalAmount
+              ?? 0
+            );
+            const resolvedUnitPrice = Number(
+              baseService.unitPrice
+              ?? baseService.unit_price
+              ?? (resolvedTotalPrice > 0 && normalizedNights > 0 && roomCount > 0
+                ? Math.round(resolvedTotalPrice / (normalizedNights * roomCount))
+                : 0)
+            );
             return {
               ...baseService,
               hotelName: priceInfo?.hotel_name || baseService.hotelName || baseService.hotel_name || baseService.hotel_category || '-',
@@ -1361,8 +1396,9 @@ export default function ReservationDetailModal({
               days: normalizedNights,
               nights: normalizedNights,
               guestCount: Number(baseService.guestCount ?? baseService.guest_count ?? 0),
-              roomCount: Number(baseService.roomCount ?? baseService.room_count ?? 0),
-              totalPrice: Number(baseService.totalPrice ?? baseService.total_price ?? 0),
+              roomCount,
+              unitPrice: resolvedUnitPrice,
+              totalPrice: resolvedTotalPrice,
             };
           }
 
