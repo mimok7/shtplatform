@@ -87,8 +87,16 @@ export function isIosWebKit(): boolean {
 export function isStandaloneDisplayMode(): boolean {
   if (typeof window === 'undefined') return false;
 
-  return (
-    window.matchMedia?.('(display-mode: standalone)').matches === true ||
-    (window.navigator as Navigator & { standalone?: boolean }).standalone === true
-  );
+  try {
+    const mediaQuery = typeof window.matchMedia === 'function'
+      ? window.matchMedia('(display-mode: standalone)')
+      : null;
+
+    return (
+      mediaQuery?.matches === true ||
+      (window.navigator as Navigator & { standalone?: boolean }).standalone === true
+    );
+  } catch {
+    return (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
+  }
 }

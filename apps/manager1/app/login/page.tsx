@@ -12,20 +12,28 @@ const ACTIVE_TAB_PREFIX = 'sht:active:tab:user:manager1:';
 
 function getOrCreateTabId() {
   if (typeof window === 'undefined') return '';
-  let tabId = sessionStorage.getItem(TAB_SESSION_KEY);
-  if (!tabId) {
-    tabId = `tab_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
-    sessionStorage.setItem(TAB_SESSION_KEY, tabId);
+  try {
+    let tabId = sessionStorage.getItem(TAB_SESSION_KEY);
+    if (!tabId) {
+      tabId = `tab_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+      sessionStorage.setItem(TAB_SESSION_KEY, tabId);
+    }
+    return tabId;
+  } catch {
+    return `tab_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
   }
-  return tabId;
 }
 
 function markActiveTab(userId?: string) {
   if (typeof window === 'undefined') return;
   const tabId = getOrCreateTabId();
-  localStorage.setItem(ACTIVE_TAB_KEY, JSON.stringify({ tabId, ts: Date.now() }));
-  if (userId) {
-    localStorage.setItem(`${ACTIVE_TAB_PREFIX}${userId}`, JSON.stringify({ tabId, ts: Date.now() }));
+  try {
+    localStorage.setItem(ACTIVE_TAB_KEY, JSON.stringify({ tabId, ts: Date.now() }));
+    if (userId) {
+      localStorage.setItem(`${ACTIVE_TAB_PREFIX}${userId}`, JSON.stringify({ tabId, ts: Date.now() }));
+    }
+  } catch {
+    // Safari private mode / restricted webviews can block storage writes.
   }
 }
 
