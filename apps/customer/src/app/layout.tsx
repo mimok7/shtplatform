@@ -1,4 +1,5 @@
 import React from 'react';
+import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import NewHomeHeader from '../components/new-home/NewHomeHeader';
 import NewHomeFooter from '../components/new-home/NewHomeFooter';
@@ -13,15 +14,27 @@ import '../styles/globals.css';
 
 const inter = Inter({ subsets: ['latin'] });
 
-export const metadata = {
+export const metadata: Metadata = {
   title: '스테이하롱 - 고객예약',
   description: '스테이하롱 크루즈 예약 시스템',
   manifest: '/manifest.json',
-  icons: {
-    icon: '/sht-2.png',
-    shortcut: '/sht-2.png',
-    apple: '/sht-2.png',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: '스하고객',
   },
+  icons: {
+    icon: [
+      { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/icon-512.png', sizes: '512x512', type: 'image/png' },
+    ],
+    shortcut: ['/icon-192.png'],
+    apple: [{ url: '/icon-192.png', sizes: '192x192', type: 'image/png' }],
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: '#1f3a93',
 };
 
 export default function RootLayout({
