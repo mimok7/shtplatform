@@ -280,11 +280,13 @@ const getAmountSummaryLines = (service: any, type: string): string[] => {
   }
 
   if (type === 'ticket') {
-    const qty = getTicketDisplayQuantity(service);
+    const ticketLines = getTicketDisplayLines(service).map((line) => (
+      `${line.label}: ${formatMoney(line.unitPrice)} × ${line.quantity}${line.quantityUnit} = ${formatMoney(line.total)}`
+    ));
+    if (ticketLines.length > 0) return ticketLines;
+
     const total = getTicketDisplayTotal(service);
-    const unit = Number(service.unit_price || service.unitPrice || calcUnitPrice(total, qty));
-    const line = formatLinePrice('티켓', unit, qty, '매');
-    return line ? [line] : (total > 0 ? [`총액 ${formatMoney(total)}`] : []);
+    return total > 0 ? [`총액 ${formatMoney(total)}`] : [];
   }
 
   if (type === 'rentcar') {
@@ -1005,13 +1007,6 @@ function ServiceCard({
           <DetailLine label="셔틀" value={service.shuttle_required ? '신청함' : '신청 안함'} />
           <DetailLine label="픽업장소" value={service.pickupLocation || service.pickup_location || '-'} />
           <DetailLine label="하차장소" value={service.dropoffLocation || service.dropoff_location || '-'} />
-          {getTicketDisplayLines(service).map((line, index) => (
-            <DetailLine
-              key={`${line.label}-${index}`}
-              label={line.label}
-              value={`${formatMoney(line.unitPrice)} × ${line.quantity}${line.quantityUnit} = ${formatMoney(line.total)}`}
-            />
-          ))}
           <DetailLine label="총 금액" value={<span className="font-bold text-blue-700">{formatMoney(getTicketDisplayTotal(service))}</span>} />
         </div>
       )}

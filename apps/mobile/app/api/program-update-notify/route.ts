@@ -65,7 +65,7 @@ function buildUrlForApp(appName: string | null | undefined, rawUrl?: string) {
 
 function buildIconForApp(appName: string | null | undefined) {
   const appConfig = APP_ROUTE_CONFIG[appName || ''] || APP_ROUTE_CONFIG.mobile;
-  return `${normalizeBaseUrl(appConfig.baseUrl)}/icon-192.png`;
+  return `${normalizeBaseUrl(appConfig.baseUrl)}/sht-3.png`;
 }
 
 async function resolveAllowedAppNames(eventKey: string, requestedAppNames: string[]) {

@@ -24,6 +24,12 @@ interface TicketPriceOption {
     sort_order: number;
 }
 
+const PRICE_CHANNEL_LABEL: Record<PriceChannel, string> = {
+    official: '공식가 (VND)',
+    card: '스테이카드가 (VND)',
+    krw: '스테이크루즈가 (KRW)',
+};
+
 
 function TicketBookingContent() {
     const router = useRouter();
@@ -49,6 +55,8 @@ function TicketBookingContent() {
     const [formData, setFormData] = useState({
         ticket_name: '',           // 드래곤펄 투어명 또는 기타 티켓명
         ticket_quantity: 1,        // 인원/매수
+        adult_count: 1,            // 드래곤펄 성인 수
+        child_count: 0,            // 드래곤펄 아동 수
         ticket_date: '',           // 이용 날짜
         program_selection: '',     // 요코온센 프로그램 선택
         shuttle_required: false,   // 셔틀 차량 필요 여부
@@ -57,6 +65,7 @@ function TicketBookingContent() {
         ticket_details: '',        // 상세 내용 (기타만)
         special_requests: ''       // 요청사항
     });
+    const [priceInfoText, setPriceInfoText] = useState('');
 
     // 드래곤펄 메인 메뉴 선택 (인원수)
     const [menuSelections, setMenuSelections] = useState<{ lobster: number; fish: number }>({ lobster: 0, fish: 0 });
@@ -107,19 +116,37 @@ function TicketBookingContent() {
         const priceChannel: PriceChannel = 'card';
         const ticketPriceOptions = await loadTicketPriceOptions();
 
-        const adultCount = Math.max(0, Number(formData.ticket_quantity || 0));
-        const childCount = 0;
-        const shuttleCount = ticketType === 'dragon' && formData.shuttle_required ? adultCount : 0;
+        const adultCount = ticketType === 'dragon'
+            ? Math.max(0, Number(formData.adult_count || 0))
+            : Math.max(0, Number(formData.ticket_quantity || 0));
+        const childCount = ticketType === 'dragon'
+            ? Math.max(0, Number(formData.child_count || 0))
+            : 0;
+        const ticketQuantity = ticketType === 'dragon'
+            ? adultCount + childCount
+            : adultCount;
+        const shuttleCount = ticketType === 'dragon' && formData.shuttle_required ? ticketQuantity : 0;
 
         const adultOption = findTicketPriceOption(ticketPriceOptions, ticketType, 'adult', effectiveDate);
+        const childOption = findTicketPriceOption(ticketPriceOptions, ticketType, 'child_under_1_2m', effectiveDate);
         const shuttleOption = findTicketPriceOption(ticketPriceOptions, ticketType, 'shuttle', effectiveDate);
 
         const adultUnitPrice = adultOption ? getUnitByChannel(adultOption, priceChannel) : 0;
+        const childUnitPrice = childOption ? getUnitByChannel(childOption, priceChannel) : 0;
         const shuttleUnitPrice = shuttleOption ? getUnitByChannel(shuttleOption, priceChannel) : 0;
 
-        const baseTotal = adultUnitPrice * adultCount + shuttleUnitPrice * shuttleCount;
-        const representativeCode = adultOption?.ticket_price_code || shuttleOption?.ticket_price_code || null;
-        const representativeName = formData.ticket_name || adultOption?.ticket_name || formData.program_selection || null;
+        const baseTotal = adultUnitPrice * adultCount + childUnitPrice * childCount + shuttleUnitPrice * shuttleCount;
+        const representativeCode =
+            (adultCount > 0 ? adultOption?.ticket_price_code : null) ||
+            (childCount > 0 ? childOption?.ticket_price_code : null) ||
+            (shuttleCount > 0 ? shuttleOption?.ticket_price_code : null) ||
+            null;
+        const representativeName =
+            formData.ticket_name ||
+            (adultCount > 0 ? adultOption?.ticket_name : null) ||
+            (childCount > 0 ? childOption?.ticket_name : null) ||
+            formData.program_selection ||
+            null;
 
         const pricing = calculateReservationPricing({
             serviceType: 'ticket',
@@ -131,6 +158,13 @@ function TicketBookingContent() {
                     unit_price: adultUnitPrice,
                     quantity: adultCount,
                     total: adultUnitPrice * adultCount,
+                },
+                {
+                    label: '티켓(아동)',
+                    code: childOption?.ticket_price_code || 'child_under_1_2m',
+                    unit_price: childUnitPrice,
+                    quantity: childCount,
+                    total: childUnitPrice * childCount,
                 },
                 {
                     label: '티켓(셔틀)',
@@ -150,15 +184,21 @@ function TicketBookingContent() {
         return {
             pricing,
             ticketPayload: {
-                ticket_quantity: adultCount,
+                ticket_quantity: ticketQuantity,
                 adult_count: adultCount,
                 child_count: childCount,
                 shuttle_count: shuttleCount,
                 price_channel: priceChannel,
-                ticket_price_item: 'adult' as TicketPriceItem,
+                ticket_price_item: (
+                    adultCount > 0
+                        ? 'adult'
+                        : childCount > 0
+                            ? 'child_under_1_2m'
+                            : 'shuttle'
+                ) as TicketPriceItem,
                 ticket_price_code: representativeCode,
                 ticket_name: representativeName,
-                unit_price: adultUnitPrice,
+                unit_price: ticketQuantity > 0 ? baseTotal / ticketQuantity : 0,
                 total_price: pricing.base_total,
             },
         };
@@ -237,6 +277,8 @@ function TicketBookingContent() {
             let parsedData = {
                 ticket_name: sourceRow.ticket_name || '',
                 ticket_quantity: sourceRow.ticket_quantity || sourceRow.tour_capacity || 1,
+                adult_count: sourceRow.adult_count ?? sourceRow.ticket_quantity ?? sourceRow.tour_capacity ?? 1,
+                child_count: sourceRow.child_count ?? 0,
                 ticket_date: sourceRow.usage_date || sourceRow.ticket_date || '',
                 program_selection: sourceRow.program_selection || '',
                 shuttle_required: !!sourceRow.shuttle_required || requestNote.includes('[셔틀] 신청함'),
@@ -256,6 +298,8 @@ function TicketBookingContent() {
                     if (line.includes('[상세내용]')) parsedData.ticket_details = line.replace('[상세내용]', '').trim();
                     if (line.includes('[요청사항]')) parsedData.special_requests = line.replace('[요청사항]', '').trim();
                 });
+                parsedData.adult_count = parsedData.ticket_quantity;
+                parsedData.child_count = 0;
             } else if (requestNote.includes('[티켓명]')) {
                 // 기존 호환성: 이전 방식의 기타 티켓
                 setTicketType('other');
@@ -266,6 +310,8 @@ function TicketBookingContent() {
                     if (line.includes('[상세내용]')) parsedData.ticket_details = line.replace('[상세내용]', '').trim();
                     if (line.includes('[요청사항]')) parsedData.special_requests = line.replace('[요청사항]', '').trim();
                 });
+                parsedData.adult_count = parsedData.ticket_quantity;
+                parsedData.child_count = 0;
             } else {
                 // 드래곤펄 투어인 경우
                 setTicketType('dragon');
@@ -280,6 +326,7 @@ function TicketBookingContent() {
                     });
                 }
                 parsedData.special_requests = requestNote.replace(/\[셔틀\].*?\n?/g, '').replace(/\[메인메뉴\].*?\n?/g, '').trim();
+                parsedData.ticket_quantity = parsedData.adult_count + parsedData.child_count;
             }
 
             setFormData(parsedData);
@@ -308,6 +355,70 @@ function TicketBookingContent() {
         };
         checkAuth();
     }, []);
+
+    useEffect(() => {
+        if (!formData.ticket_date) {
+            setPriceInfoText('');
+            return;
+        }
+
+        let cancelled = false;
+
+        const syncPriceInfo = async () => {
+            try {
+                const options = await loadTicketPriceOptions();
+                if (cancelled) return;
+
+                const effectiveDate = formData.ticket_date;
+                const adultCount = ticketType === 'dragon'
+                    ? Math.max(0, Number(formData.adult_count || 0))
+                    : Math.max(0, Number(formData.ticket_quantity || 0));
+                const childCount = ticketType === 'dragon'
+                    ? Math.max(0, Number(formData.child_count || 0))
+                    : 0;
+                const shuttleCount = ticketType === 'dragon' && formData.shuttle_required
+                    ? adultCount + childCount
+                    : 0;
+                const adultOption = findTicketPriceOption(options, ticketType, 'adult', effectiveDate);
+                const childOption = findTicketPriceOption(options, ticketType, 'child_under_1_2m', effectiveDate);
+                const shuttleOption = findTicketPriceOption(options, ticketType, 'shuttle', effectiveDate);
+                const hasRequiredPrice = (!!adultOption || adultCount === 0)
+                    && (!!childOption || childCount === 0)
+                    && (!!shuttleOption || shuttleCount === 0);
+
+                if (!hasRequiredPrice) {
+                    setPriceInfoText('선택 조건과 일치하는 요금표가 없습니다');
+                    return;
+                }
+
+                if (ticketType === 'dragon') {
+                    setPriceInfoText(`성인 ${adultCount}명 / 아동 ${childCount}명 / 셔틀 ${formData.shuttle_required ? `${shuttleCount}명` : '미사용'} / ${PRICE_CHANNEL_LABEL.card}`);
+                    return;
+                }
+
+                setPriceInfoText(`수량 ${Math.max(0, Number(formData.ticket_quantity || 0))}매 / ${PRICE_CHANNEL_LABEL.card}`);
+            } catch (error) {
+                console.error('티켓 가격 매칭 정보 생성 실패:', error);
+                if (!cancelled) {
+                    setPriceInfoText('요금표 로딩 실패');
+                }
+            }
+        };
+
+        void syncPriceInfo();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [
+        ticketType,
+        formData.ticket_date,
+        formData.ticket_quantity,
+        formData.adult_count,
+        formData.child_count,
+        formData.shuttle_required,
+        loadTicketPriceOptions,
+    ]);
 
     // 제출 핸들러
     const handleSubmit = async (e: React.FormEvent) => {
@@ -359,6 +470,7 @@ function TicketBookingContent() {
                 ].filter(Boolean);
                 requestNote = [
                     `[셔틀] ${formData.shuttle_required ? '신청함' : '신청 안함'}`,
+                    `[인원] 성인 ${formData.adult_count}명, 아동 ${formData.child_count}명`,
                     menuNotes.length > 0 ? `[메인메뉴] ${menuNotes.join(', ')}` : '',
                     formData.special_requests
                 ].filter(Boolean).join('\n');
@@ -517,10 +629,13 @@ function TicketBookingContent() {
         }
     };
 
-    const isMenuOverLimit = ticketType === 'dragon' && menuTotal > formData.ticket_quantity;
+    const totalParticipants = ticketType === 'dragon'
+        ? Math.max(0, Number(formData.adult_count || 0)) + Math.max(0, Number(formData.child_count || 0))
+        : Math.max(0, Number(formData.ticket_quantity || 0));
+    const isMenuOverLimit = ticketType === 'dragon' && menuTotal > totalParticipants;
     const isFormValid = formData.ticket_date && !isMenuOverLimit && (
         ticketType === 'dragon'
-            ? formData.ticket_name
+            ? formData.ticket_name && totalParticipants > 0
             : formData.program_selection
     );
 
@@ -631,33 +746,74 @@ function TicketBookingContent() {
                                     />
                                 </div>
 
-                                {/* 인원수 */}
+                                {/* 성인/아동 인원 */}
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">👥 참가 인원 *</label>
-                                    <div className="flex items-center justify-center gap-3 rounded-lg border border-gray-300 p-2 bg-white">
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                const qty = Math.max(0, formData.ticket_quantity - 1);
-                                                setFormData({ ...formData, ticket_quantity: qty });
-                                                setMenuSelections(prev => ({
-                                                    lobster: Math.min(prev.lobster, qty),
-                                                    fish: Math.min(prev.fish, Math.max(0, qty - Math.min(prev.lobster, qty)))
-                                                }));
-                                            }}
-                                            className="w-9 h-9 rounded-full border border-gray-300 flex items-center justify-center text-gray-600 hover:bg-gray-100 text-lg"
-                                            aria-label="참가 인원 감소"
-                                        >−</button>
-                                        <span className="w-10 text-center font-semibold text-gray-800">{formData.ticket_quantity}</span>
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                const qty = Math.min(50, formData.ticket_quantity + 1);
-                                                setFormData({ ...formData, ticket_quantity: qty });
-                                            }}
-                                            className="w-9 h-9 rounded-full border border-gray-300 flex items-center justify-center text-gray-600 hover:bg-gray-100 text-lg"
-                                            aria-label="참가 인원 증가"
-                                        >+</button>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div>
+                                            <div className="text-sm font-medium text-gray-700 mb-2">성인</div>
+                                            <div className="flex items-center justify-center gap-3 rounded-lg border border-gray-300 p-2 bg-white">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const nextAdult = Math.max(0, formData.adult_count - 1);
+                                                        const nextTotal = nextAdult + formData.child_count;
+                                                        setFormData({ ...formData, adult_count: nextAdult, ticket_quantity: nextTotal });
+                                                        setMenuSelections(prev => ({
+                                                            lobster: Math.min(prev.lobster, nextTotal),
+                                                            fish: Math.min(prev.fish, Math.max(0, nextTotal - Math.min(prev.lobster, nextTotal)))
+                                                        }));
+                                                    }}
+                                                    className="w-9 h-9 rounded-full border border-gray-300 flex items-center justify-center text-gray-600 hover:bg-gray-100 text-lg"
+                                                    aria-label="성인 인원 감소"
+                                                >−</button>
+                                                <span className="w-10 text-center font-semibold text-gray-800">{formData.adult_count}</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const nextAdult = Math.min(50, formData.adult_count + 1);
+                                                        setFormData({ ...formData, adult_count: nextAdult, ticket_quantity: nextAdult + formData.child_count });
+                                                    }}
+                                                    className="w-9 h-9 rounded-full border border-gray-300 flex items-center justify-center text-gray-600 hover:bg-gray-100 text-lg"
+                                                    aria-label="성인 인원 증가"
+                                                >+</button>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <div className="text-sm font-medium text-gray-700 mb-2">아동 (1.2m 미만)</div>
+                                            <div className="flex items-center justify-center gap-3 rounded-lg border border-gray-300 p-2 bg-white">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const nextChild = Math.max(0, formData.child_count - 1);
+                                                        const nextTotal = formData.adult_count + nextChild;
+                                                        setFormData({ ...formData, child_count: nextChild, ticket_quantity: nextTotal });
+                                                        setMenuSelections(prev => ({
+                                                            lobster: Math.min(prev.lobster, nextTotal),
+                                                            fish: Math.min(prev.fish, Math.max(0, nextTotal - Math.min(prev.lobster, nextTotal)))
+                                                        }));
+                                                    }}
+                                                    className="w-9 h-9 rounded-full border border-gray-300 flex items-center justify-center text-gray-600 hover:bg-gray-100 text-lg"
+                                                    aria-label="아동 인원 감소"
+                                                >−</button>
+                                                <span className="w-10 text-center font-semibold text-gray-800">{formData.child_count}</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const nextChild = Math.min(50, formData.child_count + 1);
+                                                        setFormData({ ...formData, child_count: nextChild, ticket_quantity: formData.adult_count + nextChild });
+                                                    }}
+                                                    className="w-9 h-9 rounded-full border border-gray-300 flex items-center justify-center text-gray-600 hover:bg-gray-100 text-lg"
+                                                    aria-label="아동 인원 증가"
+                                                >+</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="mt-3 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-3 text-sm text-gray-700">
+                                        총 참가 인원: <strong>{totalParticipants}</strong>명
+                                    </div>
+                                    <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+                                        요금표 매칭: {priceInfoText || '이용 날짜를 선택하면 요금을 확인할 수 있습니다'}
                                     </div>
                                 </div>
 
@@ -665,7 +821,7 @@ function TicketBookingContent() {
                                 <div className="bg-amber-50 p-4 rounded-lg border border-amber-200">
                                     <h4 className="text-sm font-semibold text-gray-800 mb-1">🍽️ 메인 메뉴 선택</h4>
                                     <p className="text-xs text-gray-500 mb-3">
-                                        메뉴별 인원수를 선택하세요 (합계 <strong>{menuTotal}</strong>명 / 참가 인원 <strong>{formData.ticket_quantity}</strong>명)
+                                        메뉴별 인원수를 선택하세요 (합계 <strong>{menuTotal}</strong>명 / 참가 인원 <strong>{totalParticipants}</strong>명)
                                     </p>
                                     {isMenuOverLimit && (
                                         <p className="text-xs text-red-600 mb-2">⚠️ 메뉴 인원 합계가 참가 인원을 초과합니다.</p>
@@ -687,11 +843,11 @@ function TicketBookingContent() {
                                                 <button
                                                     type="button"
                                                     onClick={() => {
-                                                        if (menuTotal < formData.ticket_quantity) {
+                                                        if (menuTotal < totalParticipants) {
                                                             setMenuSelections(prev => ({ ...prev, lobster: prev.lobster + 1 }));
                                                         }
                                                     }}
-                                                    disabled={menuTotal >= formData.ticket_quantity}
+                                                    disabled={menuTotal >= totalParticipants}
                                                     className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed text-lg"
                                                 >+</button>
                                             </div>
@@ -712,11 +868,11 @@ function TicketBookingContent() {
                                                 <button
                                                     type="button"
                                                     onClick={() => {
-                                                        if (menuTotal < formData.ticket_quantity) {
+                                                        if (menuTotal < totalParticipants) {
                                                             setMenuSelections(prev => ({ ...prev, fish: prev.fish + 1 }));
                                                         }
                                                     }}
-                                                    disabled={menuTotal >= formData.ticket_quantity}
+                                                    disabled={menuTotal >= totalParticipants}
                                                     className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed text-lg"
                                                 >+</button>
                                             </div>
@@ -855,7 +1011,7 @@ function TicketBookingContent() {
                                     {ticketType === 'dragon' && (
                                         <>
                                             <div><strong>투어:</strong> {formData.ticket_name}</div>
-                                            <div><strong>참가 인원:</strong> {formData.ticket_quantity}명</div>
+                                            <div><strong>참가 인원:</strong> 성인 {formData.adult_count}명 / 아동 {formData.child_count}명 / 총 {totalParticipants}명</div>
                                             {(menuSelections.lobster > 0 || menuSelections.fish > 0) && (
                                                 <div><strong>메인 메뉴:</strong> {[
                                                     menuSelections.lobster > 0 ? `🦞 랍스터 ${menuSelections.lobster}명` : '',

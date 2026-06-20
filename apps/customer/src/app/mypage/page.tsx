@@ -11,7 +11,54 @@ import { clearInvalidSession, isInvalidRefreshTokenError } from '@/lib/authRecov
 import { useLoadingTimeout } from '@/hooks/useLoadingTimeout';
 import { getSessionUser } from '@/lib/authHelpers';
 import { buildProfileCompletionPath, hasRequiredProfileFields } from '@/lib/profileRequirements';
-import { LogOut } from 'lucide-react';
+import { BadgeCheck, Briefcase, CircleDollarSign, FileText, LogOut, Mail, Phone, User } from 'lucide-react';
+
+function stripPaymentMethodLines(value: string | null | undefined): string {
+  if (!value) return '';
+
+  return String(value)
+    .split(/\r?\n/)
+    .filter((line) => {
+      const normalized = line.replace(/\s+/g, '').toLowerCase();
+      return !normalized.startsWith('결제방법:') && !normalized.startsWith('결제방식:');
+    })
+    .join('\n')
+    .trim();
+}
+
+function getNotificationLineIcon(line: string) {
+  const label = line.split(':')[0]?.trim();
+
+  if (label.includes('고객명')) return User;
+  if (label.includes('이메일')) return Mail;
+  if (label.includes('연락처')) return Phone;
+  if (label.includes('서비스')) return Briefcase;
+  if (label.includes('견적명')) return FileText;
+  if (label.includes('예약 금액')) return CircleDollarSign;
+  if (label.includes('예약 상태')) return BadgeCheck;
+  return null;
+}
+
+function renderNotificationDescription(description: string, className: string) {
+  const lines = description
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  return (
+    <div className={className}>
+      {lines.map((line, index) => {
+        const Icon = getNotificationLineIcon(line);
+        return (
+          <div key={`${line}-${index}`} className="flex items-start gap-1.5">
+            {Icon ? <Icon className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-slate-400" /> : null}
+            <span className="break-words">{line}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 export default function MyPage() {
   const router = useRouter();
@@ -32,7 +79,7 @@ export default function MyPage() {
       return {
         ...row,
         is_read: isRead,
-        description: row?.description ?? row?.message ?? '',
+        description: stripPaymentMethodLines(row?.description ?? row?.message ?? ''),
       };
     })
   ), []);
@@ -294,9 +341,9 @@ export default function MyPage() {
         {/* 알림 섹션 */}
         {notifications.length > 0 && (
           <div id="notifications-section" className="mt-6">
-            <h2 className="text-sm font-semibold text-slate-900 mb-2.5">나에게 온 알림 (최근 5개)</h2>
+            <h2 className="text-sm font-semibold text-slate-900 mb-2.5">나에게 온 알림 (최근 1개)</h2>
             <div className="space-y-2">
-              {notifications.slice(0, 5).map((notification: any) => (
+              {notifications.slice(0, 1).map((notification: any) => (
                 <div
                   key={notification.id}
                   className={`border rounded-lg p-3 text-sm ${
@@ -314,7 +361,7 @@ export default function MyPage() {
                         {notification.title}
                       </p>
                       {notification.description && (
-                        <p className="text-xs text-slate-500 mt-1">{notification.description}</p>
+                        renderNotificationDescription(notification.description, 'mt-1 space-y-1 text-xs text-slate-500')
                       )}
                       <p className="text-xs text-slate-400 mt-1">
                         {new Date(notification.created_at).toLocaleDateString('ko-KR', {

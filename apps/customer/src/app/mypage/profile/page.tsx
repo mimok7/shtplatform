@@ -90,8 +90,11 @@ export default function ProfilePage() {
 
     const ensureServiceWorkerRegistration = async (): Promise<ServiceWorkerRegistration> => {
         const existing = await navigator.serviceWorker.getRegistration();
-        if (existing) return existing;
-        return navigator.serviceWorker.register('/sw.js');
+        if (existing) {
+            void existing.update().catch(() => undefined);
+            return existing;
+        }
+        return navigator.serviceWorker.register('/sw.js?v=20260620-2');
     };
 
     const resolveVapidPublicKey = async (): Promise<string> => {

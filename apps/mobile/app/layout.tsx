@@ -23,16 +23,17 @@ export const metadata: Metadata = {
     telephone: false,
   },
   icons: {
-    icon: "/icon-192.png",
-    apple: "/icon-192.png",
+    icon: "/sht-3.png",
+    shortcut: "/sht-3.png",
+    apple: "/sht-3.png",
     other: [
       {
         rel: "icon",
-        url: "/icon-192.png",
+        url: "/sht-3.png",
       },
       {
         rel: "apple-touch-icon",
-        url: "/icon-192.png",
+        url: "/sht-3.png",
       },
     ],
   },

@@ -18,9 +18,9 @@ export const metadata = {
   description: '스테이하롱 크루즈 예약 시스템',
   manifest: '/manifest.json',
   icons: {
-    icon: '/icon-192.png',
-    shortcut: '/icon-192.png',
-    apple: '/icon-192.png',
+    icon: '/sht-2.png',
+    shortcut: '/sht-2.png',
+    apple: '/sht-2.png',
   },
 };
 

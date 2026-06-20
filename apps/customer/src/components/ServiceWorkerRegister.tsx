@@ -6,22 +6,24 @@ export default function ServiceWorkerRegister() {
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return;
 
-    // Dev에서는 기존 SW 캐시가 최신 번들과 충돌할 수 있으므로 등록하지 않는다.
+    const clearStaleServiceWorkerState = async () => {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map((registration) => registration.unregister().catch(() => undefined)));
+
+      const cacheNames = await caches.keys();
+      await Promise.all(cacheNames.map((name) => caches.delete(name).catch(() => false)));
+    };
+
     if (process.env.NODE_ENV !== 'production') {
-      navigator.serviceWorker.getRegistrations().then(registrations => {
-        registrations.forEach(reg => {
-          reg.unregister().catch(() => {
-            // noop
-          });
-        });
-      });
+      void clearStaleServiceWorkerState();
       return;
     }
 
     navigator.serviceWorker
-      .register('/sw.js')
+      .register('/sw.js?v=20260620-2')
       .then(registration => {
         console.log('✅ Service Worker registered (customer):', registration);
+        void registration.update().catch(() => undefined);
       })
       .catch(error => {
         console.warn('⚠️ Service Worker registration failed (customer):', error);
