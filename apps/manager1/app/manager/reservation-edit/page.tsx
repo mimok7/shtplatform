@@ -6,6 +6,7 @@ import Link from 'next/link';
 import supabase from '@/lib/supabase';
 import { fetchTableInBatches } from '../../../lib/fetchInBatches';
 import ManagerLayout from '@/components/ManagerLayout';
+import { safeWriteClipboard } from '@/lib/browserCompat';
 import {
     Search,
     Edit3,
@@ -602,7 +603,8 @@ function ReservationEditContent() {
     const handleCopyQuoteId = async (quoteId: string | null) => {
         if (!quoteId) return;
         try {
-            await navigator.clipboard.writeText(quoteId);
+            const copied = await safeWriteClipboard(quoteId);
+            if (!copied) throw new Error('clipboard_unavailable');
             alert('견적 ID가 복사되었습니다.');
         } catch (error) {
             console.error('견적 ID 복사 실패:', error);

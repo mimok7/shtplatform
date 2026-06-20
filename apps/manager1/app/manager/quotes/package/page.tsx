@@ -3,6 +3,7 @@
 import React, { useEffect, useState, Suspense, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import ManagerLayout from '@/components/ManagerLayout';
+import { safeWriteClipboard } from '@/lib/browserCompat';
 import supabase from '@/lib/supabase';
 import { PackageWithItems } from '@/lib/types';
 import {
@@ -162,7 +163,8 @@ function PackageQuoteForm() {
 
     const copyNaturalSummary = async () => {
         try {
-            await navigator.clipboard.writeText(naturalSummary);
+            const copied = await safeWriteClipboard(naturalSummary);
+            if (!copied) throw new Error('clipboard_unavailable');
             alert('자연어 요약을 클립보드에 복사했습니다.');
         } catch (e) {
             console.error('복사 실패:', e);

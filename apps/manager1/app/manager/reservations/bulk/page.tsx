@@ -34,6 +34,7 @@ import {
     Bus,
     Package
 } from 'lucide-react';
+import { safeRandomUUID } from '@/lib/browserCompat';
 
 interface ServiceReservation {
     re_id: string;
@@ -1270,7 +1271,7 @@ function BulkReservationContent() {
                 const status = String(r.re_status || '').toLowerCase();
                 const paymentStatus = status === 'approved' ? 'completed' : 'pending';
                 return {
-                    id: crypto.randomUUID(),
+                    id: safeRandomUUID(),
                     reservation_id: r.re_id,
                     quote_id: r.re_quote_id || null,
                     user_id: r.re_user_id,

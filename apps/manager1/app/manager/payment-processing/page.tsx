@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import ManagerLayout from '@/components/ManagerLayout';
+import { safeRandomUUID, safeWriteClipboard } from '@/lib/browserCompat';
 import PaymentDetailModal from '../../../components/PaymentDetailModal';
 import supabase from '@/lib/supabase';
 import { getPreferredPaymentAmount, getReservationStoredAmount } from '@sht/domain/reservation';
@@ -662,7 +663,7 @@ export default function ManagerPaymentsPage() {
       const paymentRecords = newReservations.map(reservation => {
         const isQuote = !!reservation.re_quote_id;
         return {
-          id: crypto.randomUUID(),
+          id: safeRandomUUID(),
           reservation_id: reservation.re_id,
           quote_id: reservation.re_quote_id || null,
           user_id: reservation.re_user_id,
@@ -781,7 +782,7 @@ export default function ManagerPaymentsPage() {
 
       const nowIso = new Date().toISOString();
       const records = targets.map((reservation: any) => ({
-        id: crypto.randomUUID(),
+        id: safeRandomUUID(),
         reservation_id: reservation.re_id,
         quote_id: reservation.re_quote_id || null,
         user_id: reservation.re_user_id,
@@ -1983,7 +1984,8 @@ export default function ManagerPaymentsPage() {
 
   const copyToClipboard = async (text: string) => {
     try {
-      await navigator.clipboard.writeText(text);
+      const copied = await safeWriteClipboard(text);
+      if (!copied) throw new Error('clipboard_unavailable');
       alert('링크가 클립보드에 복사되었습니다.');
     } catch {
       alert('클립보드 복사에 실패했습니다.');

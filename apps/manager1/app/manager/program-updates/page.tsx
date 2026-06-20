@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Check, CheckCircle2, Copy, Loader2, Pencil, Wrench } from 'lucide-react';
 import ManagerLayout from '@/components/ManagerLayout';
+import { safeWriteClipboard } from '@/lib/browserCompat';
 import supabase from '@/lib/supabase';
 
 type ProgramUpdateRow = {
@@ -501,7 +502,8 @@ export default function ManagerProgramUpdatesPage() {
 
   const handleCopyContent = async (row: ProgramUpdateRow) => {
     try {
-      await navigator.clipboard.writeText(row.content || '');
+      const copied = await safeWriteClipboard(row.content || '');
+      if (!copied) throw new Error('clipboard_unavailable');
       setCopiedRowId(row.id);
       window.setTimeout(() => {
         setCopiedRowId((current) => (current === row.id ? null : current));

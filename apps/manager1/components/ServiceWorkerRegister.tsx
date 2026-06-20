@@ -4,12 +4,19 @@ import { useEffect } from 'react';
 
 export default function ServiceWorkerRegister() {
   useEffect(() => {
+    if (typeof window === 'undefined') return;
     if (!('serviceWorker' in navigator)) return;
 
     const isLocalHost =
       window.location.hostname === 'localhost' ||
       window.location.hostname === '127.0.0.1';
     const isDev = process.env.NODE_ENV !== 'production' || isLocalHost;
+    const isSecureOrigin = window.isSecureContext || isLocalHost;
+
+    if (!isSecureOrigin) {
+      console.info('ℹ️ Service Worker skipped on insecure origin (manager1)');
+      return;
+    }
 
     if (isDev) {
       navigator.serviceWorker

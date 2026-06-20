@@ -8,12 +8,16 @@ const ACTIVE_TAB_KEY = 'sht:active:tab:manager1';
 
 function getOrCreateTabId() {
   if (typeof window === 'undefined') return '';
-  let tabId = sessionStorage.getItem(TAB_SESSION_KEY);
-  if (!tabId) {
-    tabId = `tab_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
-    sessionStorage.setItem(TAB_SESSION_KEY, tabId);
+  try {
+    let tabId = sessionStorage.getItem(TAB_SESSION_KEY);
+    if (!tabId) {
+      tabId = `tab_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+      sessionStorage.setItem(TAB_SESSION_KEY, tabId);
+    }
+    return tabId;
+  } catch {
+    return `tab_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
   }
-  return tabId;
 }
 
 function readTabId(raw: string | null) {
@@ -27,7 +31,11 @@ function readTabId(raw: string | null) {
 }
 
 function claimActiveTab(tabId: string) {
-  localStorage.setItem(ACTIVE_TAB_KEY, JSON.stringify({ tabId, ts: Date.now() }));
+  try {
+    localStorage.setItem(ACTIVE_TAB_KEY, JSON.stringify({ tabId, ts: Date.now() }));
+  } catch {
+    // Ignore storage write failures on restricted/private browsers.
+  }
 }
 
 export default function TabSessionGuard({ loginPath }: { loginPath: string }) {

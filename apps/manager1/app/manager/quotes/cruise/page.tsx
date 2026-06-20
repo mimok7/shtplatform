@@ -2,6 +2,7 @@
 import { useEffect, useState, Suspense, useRef, useMemo, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import ManagerLayout from '@/components/ManagerLayout';
+import { safeWriteClipboard } from '@/lib/browserCompat';
 import supabase from '@/lib/supabase';
 import { getExchangeRate, formatExchangeRate } from '../../../../lib/exchangeRate';
 import { vndToKrw, roundKrwToHundred } from '../../../../lib/exchangeRate';
@@ -193,7 +194,8 @@ function ManagerCruiseQuoteForm() {
                 alert('복사할 자연어 요약이 없습니다.');
                 return;
             }
-            await navigator.clipboard.writeText(naturalText);
+            const copied = await safeWriteClipboard(naturalText);
+            if (!copied) throw new Error('clipboard_unavailable');
             alert('자연어 요약을 클립보드에 복사했습니다.');
         } catch (e) {
             console.error('복사 실패:', e);

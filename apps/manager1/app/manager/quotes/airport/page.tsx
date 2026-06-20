@@ -3,6 +3,7 @@
 import React, { Suspense, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import ManagerLayout from '@/components/ManagerLayout';
+import { safeWriteClipboard } from '@/lib/browserCompat';
 import supabase from '@/lib/supabase';
 import { getExchangeRate, vndToKrw, roundKrwToHundred } from '../../../../lib/exchangeRate';
 import AirportFormLite from '@/components/AirportFormLite';
@@ -172,7 +173,8 @@ function RightDetailsCard() {
             const el = naturalTextRef.current || naturalRef.current;
             const text = el?.innerText || '';
             if (!text) return alert('복사할 자연어 요약이 없습니다.');
-            await navigator.clipboard.writeText(text);
+            const copied = await safeWriteClipboard(text);
+            if (!copied) throw new Error('clipboard_unavailable');
             alert('자연어 요약을 복사했습니다.');
         } catch (e) {
             console.error('복사 실패:', e);
