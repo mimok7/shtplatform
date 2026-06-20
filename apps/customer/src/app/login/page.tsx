@@ -12,6 +12,16 @@ const TAB_SESSION_KEY = 'sht:tab:id';
 const ACTIVE_TAB_KEY = 'sht:active:tab:customer';
 const ACTIVE_TAB_PREFIX = 'sht:active:tab:user:customer:';
 
+function isMobileOrStandalone() {
+  if (typeof window === 'undefined') return false;
+  const userAgent = window.navigator.userAgent || '';
+  const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+  const isStandalone =
+    window.matchMedia?.('(display-mode: standalone)').matches ||
+    (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
+  return isMobileDevice || isStandalone;
+}
+
 function getOrCreateTabId() {
   if (typeof window === 'undefined') return '';
   let tabId = sessionStorage.getItem(TAB_SESSION_KEY);
@@ -24,6 +34,7 @@ function getOrCreateTabId() {
 
 function markActiveTab(userId?: string) {
   if (typeof window === 'undefined') return;
+  if (isMobileOrStandalone()) return;
   const tabId = getOrCreateTabId();
   localStorage.setItem(ACTIVE_TAB_KEY, JSON.stringify({ tabId, ts: Date.now() }));
   if (userId) {

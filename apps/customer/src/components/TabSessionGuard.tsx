@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 const TAB_SESSION_KEY = 'sht:tab:id';
 const ACTIVE_TAB_KEY = 'sht:active:tab:customer';
 
-function shouldAvoidWindowClose() {
+function isMobileOrStandalone() {
   if (typeof window === 'undefined') return true;
 
   const userAgent = window.navigator.userAgent || '';
@@ -47,11 +47,12 @@ export default function TabSessionGuard({ loginPath }: { loginPath: string }) {
   const currentTabIdRef = useRef('');
   const blockedRef = useRef(false);
   const [blocked, setBlocked] = useState(false);
-  const avoidWindowClose = shouldAvoidWindowClose();
+  const avoidWindowClose = isMobileOrStandalone();
 
   useEffect(() => {
     // 로그인 페이지에서는 차단하지 않음 — 새 로그인이 우선되어야 함
     if (pathname.startsWith(loginPath)) return;
+    if (isMobileOrStandalone()) return;
 
     currentTabIdRef.current = getOrCreateTabId();
 
@@ -76,7 +77,7 @@ export default function TabSessionGuard({ loginPath }: { loginPath: string }) {
   }, [pathname, loginPath]);
 
   const handleClose = () => {
-    if (shouldAvoidWindowClose()) {
+    if (isMobileOrStandalone()) {
       window.location.replace(loginPath);
       return;
     }

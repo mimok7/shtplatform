@@ -24,12 +24,9 @@ export const metadata: Metadata = {
     title: '스하고객',
   },
   icons: {
-    icon: [
-      { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
-      { url: '/icon-512.png', sizes: '512x512', type: 'image/png' },
-    ],
-    shortcut: ['/icon-192.png'],
-    apple: [{ url: '/icon-192.png', sizes: '192x192', type: 'image/png' }],
+    icon: '/sht-2.png',
+    shortcut: '/sht-2.png',
+    apple: '/sht-2.png',
   },
 };
 
