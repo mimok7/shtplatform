@@ -14,7 +14,8 @@ export async function GET(request: Request) {
       .select('ticket_price_code,ticket_type,ticket_name,price_item,official_price_vnd,stay_card_price_vnd,stay_krw_price_krw,valid_from,valid_to,sort_order')
       .eq('is_active', true)
       .order('ticket_type', { ascending: true })
-      .order('sort_order', { ascending: true });
+      .order('sort_order', { ascending: true })
+      .order('ticket_price_code', { ascending: true });
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });

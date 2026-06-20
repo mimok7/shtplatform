@@ -88,7 +88,12 @@ function TicketBookingContent() {
                 return true;
             })
             .sort((a, b) => {
-                if (a.valid_from === b.valid_from) return a.sort_order - b.sort_order;
+                if (a.valid_from === b.valid_from) {
+                    if (a.sort_order === b.sort_order) {
+                        return a.ticket_price_code.localeCompare(b.ticket_price_code);
+                    }
+                    return a.sort_order - b.sort_order;
+                }
                 return a.valid_from < b.valid_from ? 1 : -1;
             })[0];
     };
