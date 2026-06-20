@@ -1,8 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import AuthGate from './_components/AuthGate';
-import ServiceWorkerRegister from '@/components/ServiceWorkerRegister';
-import PushNotificationManager from '@/components/PushNotificationManager';
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -23,17 +21,20 @@ export const metadata: Metadata = {
     telephone: false,
   },
   icons: {
-    icon: "/sht-3.png",
-    shortcut: "/sht-3.png",
-    apple: "/sht-3.png",
+    icon: [
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    shortcut: "/icon-192.png",
+    apple: "/icon-192.png",
     other: [
       {
         rel: "icon",
-        url: "/sht-3.png",
+        url: "/icon-192.png",
       },
       {
         rel: "apple-touch-icon",
-        url: "/sht-3.png",
+        url: "/icon-192.png",
       },
     ],
   },
@@ -56,8 +57,6 @@ export default function RootLayout({
           />
         </header>
         
-        <ServiceWorkerRegister />
-        <PushNotificationManager />
         <AuthGate>{children}</AuthGate>
       </body>
     </html>
