@@ -8,7 +8,7 @@ Write-Host ""
 
 # 1. Smithery CLI 버전 확인
 Write-Host "[1/4] Smithery CLI 버전 확인..." -ForegroundColor Yellow
-$version = npx -y smithery --version 2>&1
+$version = npx.cmd -y smithery --version 2>&1
 if ($version -match "^\d+\.\d+\.\d+") {
     Write-Host "✓ Smithery CLI 설치됨: v$version" -ForegroundColor Green
 } else {
@@ -21,7 +21,7 @@ Write-Host ""
 Write-Host "[2/4] Smithery 계정 로그인 (수동)" -ForegroundColor Yellow
 Write-Host "아래 명령을 실행하여 Smithery에 로그인하세요:" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "  npx -y smithery login" -ForegroundColor White
+Write-Host "  npx.cmd -y smithery login" -ForegroundColor White
 Write-Host ""
 Write-Host "그 후 다음 단계를 계속하세요." -ForegroundColor Yellow
 Write-Host ""
@@ -36,7 +36,7 @@ Write-Host ""
 Write-Host "[3/4] Google Sheets MCP 추가..." -ForegroundColor Yellow
 Write-Host "아래 명령을 실행하세요:" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "  npx -y smithery mcp add googlesheets" -ForegroundColor White
+Write-Host "  npx.cmd -y smithery mcp add googlesheets" -ForegroundColor White
 Write-Host ""
 Write-Host "Google OAuth 인증 창이 열립니다. 인증을 완료하세요." -ForegroundColor Yellow
 Write-Host ""
@@ -51,7 +51,7 @@ Write-Host ""
 Write-Host "[4/4] 설치 확인..." -ForegroundColor Yellow
 Write-Host "아래 명령으로 설치된 도구를 확인하세요:" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "  npx -y smithery tool list" -ForegroundColor White
+Write-Host "  npx.cmd -y smithery tool list" -ForegroundColor White
 Write-Host ""
 Write-Host "Google Sheets 관련 도구가 표시되면 설정 완료입니다." -ForegroundColor Green
 Write-Host ""
