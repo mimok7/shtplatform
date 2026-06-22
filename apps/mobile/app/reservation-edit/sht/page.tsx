@@ -462,146 +462,6 @@ function SHTReservationEditContent() {
             if (shtResult.error) {
             }
             if (cruiseCarResult.error) {
-
-    useEffect(() => {
-        loadShtSeatPrices();
-        supabase
-            .from('additional_fee_template')
-            .select('id, name, amount')
-            .or('service_type.is.null,service_type.eq.sht')
-            .eq('is_active', true)
-            .order('sort_order')
-            .then(({ data }) => { if (data) setFeeTemplates(data); });
-    }, []);
-
-    useEffect(() => {
-        if (reservationId) {
-            loadReservation();
-        } else {
-            router.push('/reservation-edit');
-        }
-    }, [reservationId]);
-
-    const loadShtSeatPrices = async () => {
-        try {
-            const { data, error } = await supabase
-                .from('rentcar_price')
-                .select('rent_code, category, vehicle_type, description, price')
-                .or('vehicle_type.ilike.%스테이하롱 셔틀 리무진%,vehicle_type.in.(A,B,C,ALL),vehicle_type.ilike.%단독%,description.ilike.%스테이하롱 셔틀 리무진%,category.ilike.%sht%')
-                .limit(200);
-
-            if (error) {
-                setSeatPriceMap(SHT_SEAT_PRICES);
-                setSeatPriceByCode({});
-                setSeatCodeByType({});
-                return;
-            }
-
-            const mapped: Record<string, number> = {};
-            const priceByCode: Record<string, number> = {};
-            const codeByType: Record<string, string> = {};
-            let allPriceFallback = 0;
-            let allPriceSolo = 0;
-            let allCodeFallback = '';
-            let allCodeSolo = '';
-            for (const row of data || []) {
-                const sourceText = [row.vehicle_type, row.category, row.description, row.rent_code]
-                    .filter(Boolean)
-                    .join(' ');
-                const seatType = resolveShtSeatTypeFromText(sourceText);
-                const price = Number(row.price || 0);
-                const rentCode = String(row.rent_code || '').trim().toUpperCase();
-
-                if (rentCode && price > 0) {
-                    priceByCode[rentCode] = price;
-                }
-
-                if (seatType && price > 0) {
-                    if (seatType === 'ALL') {
-                        const normalizedSource = sourceText.toUpperCase();
-                        const isSolo = normalizedSource.includes('SOLO') || normalizedSource.includes('단독') || normalizedSource.includes('ALL');
-                        allPriceFallback = Math.max(allPriceFallback, price);
-                        if (!allCodeFallback && rentCode) allCodeFallback = rentCode;
-                        if (isSolo) {
-                            if (price >= allPriceSolo) {
-                                allPriceSolo = price;
-                                if (rentCode) allCodeSolo = rentCode;
-                            }
-                        }
-                    } else {
-                        mapped[seatType] = price;
-                        if (rentCode && !codeByType[seatType]) codeByType[seatType] = rentCode;
-                    }
-                }
-            }
-
-            if (allPriceSolo > 0) {
-                mapped.ALL = allPriceSolo;
-                if (allCodeSolo) codeByType.ALL = allCodeSolo;
-            } else if (allPriceFallback > 0) {
-                mapped.ALL = allPriceFallback;
-                if (allCodeFallback) codeByType.ALL = allCodeFallback;
-            }
-
-            const merged = {
-                ...SHT_SEAT_PRICES,
-                ...mapped,
-            };
-
-            setSeatPriceMap(merged);
-            setSeatPriceByCode(priceByCode);
-            setSeatCodeByType(codeByType);
-        } catch (err) {
-            setSeatPriceMap(SHT_SEAT_PRICES);
-            setSeatPriceByCode({});
-            setSeatCodeByType({});
-        }
-    };
-
-    const loadReservation = async () => {
-        try {
-            setLoading(true);
-
-            // 1) 예약 기본 정보 조회
-            const { data: resRow, error: resErr } = await supabase
-                .from('reservation')
-                .select('re_id, re_type, re_status, re_created_at, re_quote_id, re_user_id, total_amount, price_breakdown, manual_additional_fee, manual_additional_fee_detail')
-                .eq('re_id', reservationId)
-                .single();
-
-            if (resErr || !resRow) throw resErr || new Error('예약 기본 정보 접근 실패');
-
-            // 2) 고객 정보 조회
-            let customerInfo = { name: '정보 없음', email: '', phone: '' };
-            if (resRow.re_user_id) {
-                const { data: userRow } = await supabase
-                    .from('users')
-                    .select('name, email, phone_number')
-                    .eq('id', resRow.re_user_id)
-                    .single();
-                if (userRow) {
-                    customerInfo = { ...customerInfo, ...userRow, phone: userRow.phone_number };
-                }
-            }
-
-            // 3) 서비스 상세 (스하차량 + 크루즈차량 폴백)
-            const [shtResult, cruiseCarResult] = await Promise.all([
-                supabase
-                    .from('reservation_car_sht')
-                    .select('*')
-                    .eq('reservation_id', reservationId)
-                    .order('created_at', { ascending: true }),
-                supabase
-                    .from('reservation_cruise_car')
-                    .select('*')
-                    .eq('reservation_id', reservationId)
-                    .limit(1)
-                    .maybeSingle(),
-            ]);
-
-            if (shtResult.error) {
-            }
-            if (cruiseCarResult.error) {
             }
 
             const shtRows = Array.isArray(shtResult.data) ? shtResult.data : [];
@@ -615,13 +475,16 @@ function SHTReservationEditContent() {
             const dropoffForm = buildFormFromRows(dropoffRow, null, reservationId);
             dropoffForm.sht_category = 'Drop-off';
 
-            // 왕복 코드인 경우, 드롭 가격 코드는 픽업과 동일하게 설정하되 단가와 가격은 0원으로 강제
+            // 왕복 코드인데 드롭 데이터가 없거나 금액이 0이면 픽업 금액/코드를 드롭에 보정
             if (isRoundTripPriceCode(pickupForm.car_price_code)) {
-                dropoffForm.car_price_code = pickupForm.car_price_code;
-                dropoffForm.unit_price = 0;
-                dropoffForm.car_total_price = 0;
-                if (!dropoffForm.passenger_count && pickupForm.passenger_count) {
-                    dropoffForm.passenger_count = pickupForm.passenger_count;
+                const dropMissingOrZero = !dropoffRow || Number(dropoffForm.car_total_price || 0) <= 0;
+                if (dropMissingOrZero) {
+                    dropoffForm.car_price_code = pickupForm.car_price_code;
+                    dropoffForm.unit_price = Number(pickupForm.unit_price || 0);
+                    dropoffForm.car_total_price = Number(pickupForm.car_total_price || 0);
+                    if (!dropoffForm.passenger_count && pickupForm.passenger_count) {
+                        dropoffForm.passenger_count = pickupForm.passenger_count;
+                    }
                 }
             }
 
@@ -711,14 +574,13 @@ function SHTReservationEditContent() {
         const normalizedSeat = String(seatInfo.seat || '').trim().toUpperCase();
         const autoCode = normalizedSeat === 'ALL' ? (seatCodeByType.ALL || formData.car_price_code) : formData.car_price_code;
         const calculated = getShtCalculatedPrice(seatInfo.seat, seatPriceMap, autoCode, seatPriceByCode);
-        const isDropoffRoundTrip = activeCategory === 'Drop-off' && (isRoundTripPriceCode(autoCode) || isRoundTripPriceCode(shtForms.Pickup.car_price_code));
         updateActiveForm({
             vehicle_number: seatInfo.vehicle,
             seat_number: seatInfo.seat,
             pickup_datetime: seatInfo.usageDate || formData.pickup_datetime,
             car_price_code: autoCode,
-            car_total_price: isDropoffRoundTrip ? 0 : calculated.totalPrice,
-            unit_price: isDropoffRoundTrip ? 0 : calculated.unitPrice,
+            car_total_price: calculated.totalPrice,
+            unit_price: calculated.unitPrice,
             passenger_count: calculated.passengerCount,
         });
         setIsSeatMapOpen(false);
@@ -777,10 +639,6 @@ function SHTReservationEditContent() {
 
             // 저장할 데이터 (reservation_id는 필수)
             const normalizedCategory = activeCategory;
-            const isRoundTrip = isRoundTripPriceCode(formData.car_price_code) || isRoundTripPriceCode(shtForms.Pickup.car_price_code);
-            const finalUnitPrice = (normalizedCategory === 'Drop-off' && isRoundTrip) ? 0 : (formData.unit_price || 0);
-            const finalTotalPrice = (normalizedCategory === 'Drop-off' && isRoundTrip) ? 0 : (formData.car_total_price || 0);
-
             const payload: Record<string, any> = {
                 reservation_id: reservationId,
                 vehicle_number: formData.vehicle_number || null,
@@ -792,13 +650,14 @@ function SHTReservationEditContent() {
                 pickup_datetime: formData.pickup_datetime || null,
                 pickup_location: formData.pickup_location || null,
                 dropoff_location: formData.dropoff_location || null,
-                car_total_price: finalTotalPrice,
-                unit_price: finalUnitPrice,
+                car_total_price: formData.car_total_price || 0,
+                unit_price: formData.unit_price || 0,
                 request_note: formData.request_note || null,
                 dispatch_code: formData.dispatch_code || null,
                 dispatch_memo: formData.dispatch_memo || null,
                 pickup_confirmed_at: formData.pickup_confirmed_at || null,
             };
+
 
             // 1. 현재 카테고리(Pickup/Drop-off) 데이터만 삭제
             const { error: deleteError } = await supabase
@@ -897,6 +756,327 @@ function SHTReservationEditContent() {
                         price_breakdown: reservationPayload.price_breakdown,
                         total_amount: finalTotalAmount,
                         manual_additional_fee: effectiveAdditionalFee,
+                    },
+                });
+            } catch (trackErr) {
+            }
+
+            alert('스하차량 예약이 성공적으로 수정되었습니다.');
+
+            // 데이터 다시 로드 + Next.js 라우터 캐시 무효화 (상세 모달 최신화)
+            router.refresh();
+            await loadReservation();
+
+        } catch (error) {
+            console.error('❌ 저장 오류:', error);
+            const errorMessage = error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.';
+            alert(`저장 중 오류가 발생했습니다: ${errorMessage}`);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    if (loading) {
+        return (
+            <ManagerLayout title="🚌 스하차량 예약 수정" activeTab="reservation-edit-sht">
+                <div className="flex justify-center items-center h-64">
+                    <div className="text-center">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+                        <p className="mt-4 text-gray-600">스하차량 예약 데이터를 불러오는 중...</p>
+                    </div>
+                </div>
+            </ManagerLayout>
+        );
+    }
+
+    if (!reservation) {
+        return (
+            <ManagerLayout title="🚌 스하차량 예약 수정" activeTab="reservation-edit-sht">
+                <div className="text-center py-12">
+                    <Bus className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">예약을 찾을 수 없습니다</h3>
+                    <p className="text-gray-600 mb-4">요청하신 스하차량 예약 정보를 찾을 수 없습니다.</p>
+                    <button
+                        onClick={() => router.push('/reservation-edit')}
+                        className="inline-flex items-center gap-1 px-2 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-xs"
+                    >
+                        <ArrowLeft className="w-3 h-3" />
+                        목록
+                    </button>
+                </div>
+            </ManagerLayout>
+        );
+    }
+
+    return (
+        <ManagerLayout title="🚌 스하차량 예약 수정" activeTab="reservation-edit-sht">
+            <div className="space-y-6">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* 좌측: 예약 정보 */}
+                    <div className="lg:col-span-2 space-y-6">
+{/* 수정 가능한 필드들 */}
+                        <div className="bg-white rounded-lg shadow-sm p-4">
+                            <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center justify-between">
+                                <span className="flex items-center gap-2">
+                                    <Bus className="w-5 h-5" />
+                                    스하차량 세부사항 수정
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsSeatMapOpen(true)}
+                                    className="inline-flex items-center gap-1 px-2 py-1 bg-indigo-600 text-white text-xs font-medium rounded-lg hover:bg-indigo-700 transition-colors"
+                                >
+                                    <LayoutGrid className="w-3 h-3" />
+                                    좌석
+                                </button>
+                            </h3>
+                            <div className="mb-4 flex gap-1 flex-wrap items-center">
+                                <button
+                                    type="button"
+                                    onClick={() => setActiveCategory('Pickup')}
+                                    className={`px-2 py-1 rounded-lg border text-xs whitespace-nowrap ${activeCategory === 'Pickup'
+                                        ? 'bg-blue-50 border-blue-400 text-blue-700'
+                                        : 'bg-white border-gray-200 text-gray-600'
+                                        }`}
+                                >
+                                    픽업 수정
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setActiveCategory('Drop-off')}
+                                    className={`px-2 py-1 rounded-lg border text-xs whitespace-nowrap ${activeCategory === 'Drop-off'
+                                        ? 'bg-blue-50 border-blue-400 text-blue-700'
+                                        : 'bg-white border-gray-200 text-gray-600'
+                                        }`}
+                                >
+                                    드롭오프 수정
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={copyPickupSeatToDropoff}
+                                    className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-700 text-xs hover:bg-emerald-100 whitespace-nowrap"
+                                >
+                                    <Copy className="w-3.5 h-3.5" />
+                                    좌석복사
+                                </button>
+                                <span className="text-xs text-gray-500 self-center whitespace-nowrap">
+                                    현재 수정: {activeCategory === 'Pickup' ? '픽업' : '드롭오프'}
+                                </span>
+                            </div>
+                            <div className="space-y-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            <Car className="inline w-4 h-4 mr-1" />
+                                            차량 번호
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={formData.vehicle_number}
+                                            onChange={(e) => updateActiveForm({ vehicle_number: e.target.value })}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                            placeholder="예: Vehicle 1"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            좌석 번호
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={formData.seat_number}
+                                            onChange={(e) => {
+                                                const seatStr = e.target.value;
+                                                const calculated = getShtCalculatedPrice(seatStr, seatPriceMap, formData.car_price_code, seatPriceByCode);
+                                                updateActiveForm({
+                                                    seat_number: seatStr,
+                                                    car_total_price: calculated.totalPrice,
+                                                    unit_price: calculated.unitPrice,
+                                                    passenger_count: calculated.passengerCount,
+                                                });
+                                            }}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                            placeholder="예: A1, B2"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            <Users className="inline w-4 h-4 mr-1" />
+                                            차량 대수
+                                        </label>
+                                        <input
+                                            type="number"
+                                            value={formData.car_count}
+                                            onChange={(e) => updateActiveForm({ car_count: parseInt(e.target.value) || 0 })}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                            min="0"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            승객 수
+                                        </label>
+                                        <input
+                                            type="number"
+                                            value={formData.passenger_count}
+                                            onChange={(e) => updateActiveForm({ passenger_count: parseInt(e.target.value) || 0 })}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                            min="0"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        <Calendar className="inline w-4 h-4 mr-1" />
+                                        픽업 일시
+                                    </label>
+                                    <input
+                                        type="date"
+                                        value={formData.pickup_datetime}
+                                        onChange={(e) => updateActiveForm({ pickup_datetime: e.target.value })}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            <MapPin className="inline w-4 h-4 mr-1" />
+                                            픽업 장소
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={formData.pickup_location}
+                                            onChange={(e) => updateActiveForm({ pickup_location: e.target.value })}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                            placeholder="픽업 위치 입력"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            <MapPin className="inline w-4 h-4 mr-1" />
+                                            드롭오프 장소
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={formData.dropoff_location}
+                                            onChange={(e) => updateActiveForm({ dropoff_location: e.target.value })}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                            placeholder="드롭오프 위치 입력"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        요청 사항
+                                    </label>
+                                    <textarea
+                                        value={formData.request_note}
+                                        onChange={(e) => updateActiveForm({ request_note: e.target.value })}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                        rows={3}
+                                        placeholder="특별 요청사항을 입력하세요"
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="md:col-span-2">
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            배차 코드
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={formData.dispatch_code}
+                                            onChange={(e) => updateActiveForm({ dispatch_code: e.target.value })}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            단가 (VND)
+                                        </label>
+                                        <input
+                                            type="number"
+                                            value={formData.unit_price}
+                                            onChange={(e) => updateActiveForm({ unit_price: parseFloat(e.target.value) || 0 })}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                            min="0"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            총 가격 (VND)
+                                        </label>
+                                        <input
+                                            type="number"
+                                            value={formData.car_total_price}
+                                            onChange={(e) => updateActiveForm({ car_total_price: parseFloat(e.target.value) || 0 })}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                            min="0"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* 좌석별 단가 내역 표시 */}
+                                {formData.seat_number && (
+                                    <div className="bg-white rounded-lg p-4 border border-gray-100 shadow-sm">
+                                        <h4 className="text-sm font-medium text-blue-800 mb-3 flex items-center gap-2">
+                                            <DollarSign className="w-4 h-4" />
+                                            좌석별 단가 내역
+                                        </h4>
+                                        <div className="space-y-2">
+                                            {calcSeatPriceBreakdown(formData.seat_number).map((group) => (
+                                                <div key={group.type} className="flex items-center justify-between bg-white rounded px-3 py-2 text-sm">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold text-white ${group.type === 'A' ? 'bg-blue-500' :
+                                                            group.type === 'B' ? 'bg-purple-500' :
+                                                                group.type === 'C' ? 'bg-amber-500' :
+                                                                    'bg-red-500'
+                                                            }`}>
+                                                            {group.type === 'ALL' ? '단독' : group.type}
+                                                        </span>
+                                                        <span className="text-gray-700">
+                                                            {group.type === 'ALL' ? '전 좌석 단독' : `${group.seats.join(', ')}`}
+                                                        </span>
+                                                        <span className="text-gray-400 text-xs">
+                                                            ({group.type === 'ALL' ? '1건' : `${group.seats.length}석`})
+                                                        </span>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <span className="text-gray-500 text-xs mr-2">
+                                                            @{(seatPriceMap[group.type] || 0).toLocaleString()}동
+                                                        </span>
+                                                        <span className="font-semibold text-blue-700">
+                                                            {((seatPriceMap[group.type] || 0) * group.seats.length).toLocaleString()}동
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <div className="mt-3 pt-3 border-t border-blue-200 flex justify-between items-center">
+                                            <span className="text-sm font-medium text-blue-800">계산된 총 가격</span>
+                                            <span className="text-lg font-bold text-red-600">
+                                                {calcSeatPriceBreakdown(formData.seat_number).reduce((sum, g) => {
+                                                    const unitPrice = seatPriceMap[g.type] || 0;
+                                                    return sum + unitPrice * g.seats.length;
+                                                }, 0).toLocaleString()}동
+                                            </span>
+                                        </div>
+                                        {formData.car_total_price !== calcSeatPriceBreakdown(formData.seat_number).reduce((sum, g) => {
+                                            const unitPrice = seatPriceMap[g.type] || 0;
+                                            return sum + unitPrice * g.seats.length;
                                         }, 0) && (
                                                 <button
                                                     type="button"
