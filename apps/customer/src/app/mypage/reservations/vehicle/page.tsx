@@ -49,6 +49,22 @@ function VehicleReservationContent() {
         checkExistingReservation();
     }, [quoteId, router]);
 
+    const getReservationPricing = () => {
+        const firstVehicle = vehicleData[0];
+        const quoteItem = firstVehicle?.quoteItem;
+        const passengerCount = Number(form.passenger_count || 1);
+        const totalPrice = Number(quoteItem?.total_price || 0);
+        const derivedUnitPrice = passengerCount > 0
+            ? Math.round(totalPrice / passengerCount)
+            : 0;
+
+        return {
+            passengerCount,
+            totalPrice,
+            unitPrice: Number(quoteItem?.unit_price || derivedUnitPrice || 0)
+        };
+    };
+
     // 견적 정보 로드
     const loadQuote = async () => {
         try {
@@ -205,16 +221,22 @@ function VehicleReservationContent() {
 
             // 중복 예약 방지: 기존 예약이 있으면 업데이트, 없으면 새로 생성
             if (existingReservation) {
+                const pricing = getReservationPricing();
+
                 // 기존 예약 업데이트
                 const reservationVehicleData = {
                     vehicle_number: form.vehicle_number || null,
                     seat_number: form.seat_number || null,
                     sht_category: form.sht_category || null,
                     pickup_datetime: form.usage_date ? new Date(form.usage_date).toISOString() : null,
+                    usage_date: form.usage_date || null,
                     car_price_code: form.car_price_code || null,
                     pickup_location: form.pickup_location || null,
                     dropoff_location: form.dropoff_location || null,
-                    passenger_count: form.passenger_count || 1
+                    passenger_count: pricing.passengerCount,
+                    car_count: 1,
+                    unit_price: pricing.unitPrice,
+                    car_total_price: pricing.totalPrice
                 };
 
                 // reservation_car_sht 테이블 업데이트
@@ -229,10 +251,25 @@ function VehicleReservationContent() {
                     return;
                 }
 
+                const { error: reservationUpdateError } = await supabase
+                    .from('reservation')
+                    .update({
+                        total_amount: pricing.totalPrice
+                    })
+                    .eq('re_id', existingReservation.re_id);
+
+                if (reservationUpdateError) {
+                    console.error('메인 예약 총액 업데이트 오류:', reservationUpdateError);
+                    alert('예약 총액 업데이트 중 오류가 발생했습니다.');
+                    return;
+                }
+
                 alert('차량 예약이 성공적으로 수정되었습니다!');
                 router.push(`/mypage/reservations?quoteId=${quoteId}`);
                 return;
             }
+
+            const pricing = getReservationPricing();
 
             // reservation 테이블에 메인 예약 생성
             const { data: reservationData, error: reservationError } = await supabase
@@ -242,7 +279,8 @@ function VehicleReservationContent() {
                     re_quote_id: quoteId,
                     re_type: 'sht',
                     re_status: 'pending',
-                    re_created_at: new Date().toISOString()
+                    re_created_at: new Date().toISOString(),
+                    total_amount: pricing.totalPrice
                 })
                 .select()
                 .single();
@@ -260,10 +298,14 @@ function VehicleReservationContent() {
                 seat_number: form.seat_number || null,
                 sht_category: form.sht_category || null,
                 pickup_datetime: form.usage_date ? new Date(form.usage_date).toISOString() : null,
+                usage_date: form.usage_date || null,
                 car_price_code: form.car_price_code || null,
                 pickup_location: form.pickup_location || null,
                 dropoff_location: form.dropoff_location || null,
-                passenger_count: form.passenger_count || 1
+                passenger_count: pricing.passengerCount,
+                car_count: 1,
+                unit_price: pricing.unitPrice,
+                car_total_price: pricing.totalPrice
             };
 
             // reservation_car_sht 테이블에 삽입
