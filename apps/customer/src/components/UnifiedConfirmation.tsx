@@ -33,6 +33,11 @@ interface UnifiedConfirmationProps {
 
 // 예약자 확인서 양식(고객 화면 기준) - 공용 렌더러
 export default function UnifiedConfirmation({ data }: UnifiedConfirmationProps) {
+    const visibleReservations = (data.reservations || []).filter((reservation) => {
+        const status = String(reservation.status || '').trim().toLowerCase();
+        return status === 'approved' || status === 'confirmed';
+    });
+
     const formatDateTime = (dateString?: string) => {
         if (!dateString) return '';
         try {
@@ -173,10 +178,10 @@ export default function UnifiedConfirmation({ data }: UnifiedConfirmationProps) 
         };
     };
 
-    const displayedTotal = data.reservations?.length
-        ? data.reservations.reduce((sum, reservation) => sum + getReservationAmount(reservation), 0)
+    const displayedTotal = visibleReservations.length
+        ? visibleReservations.reduce((sum, reservation) => sum + getReservationAmount(reservation), 0)
         : 0;
-    const confirmationTotal = displayedTotal > 0 ? displayedTotal : (data.total_price || 0);
+    const confirmationTotal = displayedTotal > 0 ? displayedTotal : 0;
 
     return (
         <div id="confirmation-letter" className="bg-white">
@@ -230,7 +235,7 @@ export default function UnifiedConfirmation({ data }: UnifiedConfirmationProps) 
                     <span className="w-1 h-6 bg-green-500 mr-3"></span>
                     예약 서비스 상세 내역
                 </h3>
-                {data.reservations?.length ? (
+                {visibleReservations.length ? (
                     <div className="overflow-x-auto">
                         <table className="w-full border-collapse border border-gray-300">
                             <thead>
@@ -244,7 +249,7 @@ export default function UnifiedConfirmation({ data }: UnifiedConfirmationProps) 
                                 </tr>
                             </thead>
                             <tbody>
-                                {data.reservations.map((r, idx) => {
+                                {visibleReservations.map((r, idx) => {
                                     const d: any = r.service_details || {};
                                     const displayAmount = getReservationAmount(r);
                                     const additionalFeeDetail = getAdditionalFeeDetail(r);

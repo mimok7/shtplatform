@@ -27,6 +27,11 @@ interface QuoteData {
     reservations: ReservationDetail[];
 }
 
+const isConfirmationVisibleStatus = (status: string | null | undefined) => {
+    const normalized = String(status || '').trim().toLowerCase();
+    return normalized === 'approved' || normalized === 'confirmed';
+};
+
 function CustomerConfirmationClient() {
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -313,8 +318,8 @@ function CustomerConfirmationClient() {
                     }
                 });
 
-            // 최종 데이터 설정
-            const rowsTotal = processedReservations.reduce((sum, reservation) => sum + (reservation.amount || 0), 0);
+            const visibleReservations = processedReservations.filter((reservation) => isConfirmationVisibleStatus(reservation.status));
+            const rowsTotal = visibleReservations.reduce((sum, reservation) => sum + (reservation.amount || 0), 0);
 
             // 결제 정보에서 총액 합산 시도 (fallback용)
             let paymentTotal = 0;
@@ -340,7 +345,7 @@ function CustomerConfirmationClient() {
                 total_price: finalTotal,
                 payment_status: quote.payment_status || 'pending',
                 created_at: quote.created_at,
-                reservations: processedReservations
+                reservations: visibleReservations
             });
 
         } catch (error) {

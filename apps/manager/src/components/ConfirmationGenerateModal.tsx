@@ -45,6 +45,11 @@ interface QuoteData {
     reservations: ReservationDetail[];
 }
 
+const isConfirmationVisibleStatus = (status: string | null | undefined) => {
+    const normalized = String(status || '').trim().toLowerCase();
+    return normalized === 'approved' || normalized === 'confirmed';
+};
+
 interface ConfirmationGenerateModalProps {
     isOpen: boolean;
     onClose: () => void;
@@ -610,16 +615,18 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                 return res;
             }));
 
+            const visibleReservations = processedReservations.filter((reservation) => isConfirmationVisibleStatus(reservation.status));
+
             // 총 금액 계산 (SHT는 reservation_id 기준 중복 제거 + 추가요금 포함)
             const shtPickedMap = new Map<string, any>();
-            for (const r of processedReservations) {
+            for (const r of visibleReservations) {
                 if (r.service_type !== 'sht') continue;
                 const prev = shtPickedMap.get(r.reservation_id);
                 if (!prev || Number(r.amount || 0) > Number(prev.amount || 0)) {
                     shtPickedMap.set(r.reservation_id, r);
                 }
             }
-            const calculatedTotal = processedReservations.reduce((sum, reservation) => {
+            const calculatedTotal = visibleReservations.reduce((sum, reservation) => {
                 if (reservation.service_type === 'sht') {
                     if (shtPickedMap.get(reservation.reservation_id) !== reservation) return sum;
                     const sd = reservation.service_details as any;
@@ -630,7 +637,7 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
             }, 0);
 
             const reservationTotalMap = new Map<string, number>();
-            processedReservations.forEach((reservation) => {
+            visibleReservations.forEach((reservation) => {
                 const reservationId = String(reservation.reservation_id || '').trim();
                 if (!reservationId) return;
                 const total = Number(reservation.reservation_total_amount);
@@ -650,7 +657,7 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                 total_price: hasReservationTotals ? reservationTotalSum : (calculatedTotal || finalQuoteData.total_price || 0),
                 payment_status: finalQuoteData.payment_status || 'pending',
                 created_at: finalQuoteData.created_at,
-                reservations: processedReservations,
+                reservations: visibleReservations,
             });
         } catch (e) {
             console.error('견적 데이터 로드 실패:', e);

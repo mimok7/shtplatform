@@ -712,9 +712,34 @@ const getServiceIcon = (serviceType: string) => {
 const getStatusBadge = (status: string) => {
   if (status === 'confirmed') return <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-medium text-green-700 whitespace-nowrap"><CheckCircle className="h-3 w-3" />확정</span>;
   if (status === 'completed') return <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-700 whitespace-nowrap"><CheckCircle className="h-3 w-3" />완료</span>;
-  if (status === 'pending') return <span className="inline-flex items-center gap-1 rounded-full bg-yellow-100 px-2 py-0.5 text-[11px] font-medium text-yellow-700 whitespace-nowrap"><AlertCircle className="h-3 w-3" />대기</span>;
+  if (status === 'pending') return <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-3 py-1 text-sm font-semibold text-red-700 whitespace-nowrap"><AlertCircle className="h-4 w-4" />대기(결제전)</span>;
+  if (status === 'approved') return <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-3 py-1 text-sm font-semibold text-amber-800 whitespace-nowrap"><CheckCircle className="h-4 w-4" />승인(결제완료)</span>;
   if (status === 'cancelled') return <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700 whitespace-nowrap"><XCircle className="h-3 w-3" />취소</span>;
   return <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-500 whitespace-nowrap">{status || '-'}</span>;
+};
+
+const getResolvedServiceStatus = (service: any): string => {
+  const rawStatus = service?.status || service?.re_status || service?.reservation_status || service?.reservation?.re_status || '';
+  return String(rawStatus).trim().toLowerCase();
+};
+
+const renderPricingBadge = (service: any) => {
+  const pricingSource = getServicePricingSource(service);
+  if (pricingSource === 'manual_override') {
+    return (
+      <span className="inline-flex items-center rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-medium text-rose-700 whitespace-nowrap">
+        수정 요금 적용 ({getChangeStatusLabel(service?._changeStatus)})
+      </span>
+    );
+  }
+  if (pricingSource === 'normal') {
+    return (
+      <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-700 whitespace-nowrap">
+        정상 요금
+      </span>
+    );
+  }
+  return null;
 };
 
 const getDateStr = (service: any) => {
@@ -821,6 +846,7 @@ function ServiceCard({
   deletingReservationId?: string | null;
 }) {
   const type = String(service?.serviceType || '').toLowerCase();
+  const resolvedStatus = getResolvedServiceStatus(service);
   const reservationId = String(service?.reservation_id || service?.reservationId || service?.re_id || '').trim();
   const airportDirectionBadge = type === 'airport' ? getAirportDirectionBadge(service) : null;
   const shtDirectionBadge = type === 'sht' ? getShtDirectionBadge(service) : null;
@@ -846,7 +872,7 @@ function ServiceCard({
   );
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-3">
+    <div className={`rounded-lg border p-3 ${resolvedStatus === 'pending' ? 'border-gray-200 bg-gray-50' : 'border-gray-200 bg-white'}`}>
       <div className="mb-1 flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-1.5">
           {getServiceIcon(type)}
@@ -856,9 +882,10 @@ function ServiceCard({
               {titleBadge}
             </span>
           )}
+          {renderPricingBadge(service)}
         </div>
         <div className="flex items-center gap-1.5">
-          {getStatusBadge(String(service?.status || ''))}
+          {getStatusBadge(resolvedStatus)}
           {canDelete && (
             <button
               type="button"
@@ -872,26 +899,6 @@ function ServiceCard({
           )}
         </div>
       </div>
-
-      {(() => {
-        const pricingSource = getServicePricingSource(service);
-        if (pricingSource === 'manual_override') {
-          return (
-            <div className="mb-1 inline-flex items-center rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-medium text-rose-700">
-              수정 요금 적용 ({getChangeStatusLabel(service?._changeStatus)})
-            </div>
-          );
-        }
-        if (pricingSource === 'normal') {
-          return (
-            <div className="mb-1 inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-700">
-              정상 요금
-            </div>
-          );
-        }
-        return null;
-      })()}
-
       {type === 'cruise' && (() => {
         const pricingSource = getServicePricingSource(service);
         const isPromotionPricing = pricingSource === 'promotion';
@@ -1755,27 +1762,32 @@ export default function ReservationDetailModal({
             </div>
           ) : (
             <div className="space-y-3">
-              {sortedGroups.map((group) => (
-                <div key={group.key} className="rounded-lg border border-gray-200 bg-white p-2.5">
-                  <div className="mb-2 flex items-center justify-between">
-                    <div className="flex min-w-0 items-center gap-1.5">
-                      {sortMode === 'date' ? <Clock className="h-4 w-4 text-gray-500" /> : getServiceIcon(group.key)}
-                      <h3 className="truncate whitespace-nowrap text-sm font-semibold text-gray-800">{group.title}</h3>
+              {sortedGroups.map((group) => {
+                const showGroupHeader = !(sortMode === 'type' && group.items.length === 1);
+                return (
+                  <div key={group.key} className={showGroupHeader ? 'rounded-lg border border-gray-200 bg-white p-2.5' : ''}>
+                    {showGroupHeader && (
+                      <div className="mb-2 flex items-center justify-between">
+                        <div className="flex min-w-0 items-center gap-1.5">
+                          {sortMode === 'date' ? <Clock className="h-4 w-4 text-gray-500" /> : getServiceIcon(group.key)}
+                          <h3 className="truncate whitespace-nowrap text-sm font-semibold text-gray-800">{group.title}</h3>
+                        </div>
+                        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-600 whitespace-nowrap">{group.items.length}건</span>
+                      </div>
+                    )}
+                    <div className="space-y-2">
+                      {group.items.map((service, idx) => (
+                        <ServiceCard
+                          key={`${service?.reservation_id || service?.reservationId || 'service'}-${idx}`}
+                          service={service}
+                          onDeleteService={onDeleteService ? handleDeleteService : undefined}
+                          deletingReservationId={deletingReservationId}
+                        />
+                      ))}
                     </div>
-                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-600 whitespace-nowrap">{group.items.length}건</span>
                   </div>
-                  <div className="space-y-2">
-                    {group.items.map((service, idx) => (
-                      <ServiceCard
-                        key={`${service?.reservation_id || service?.reservationId || 'service'}-${idx}`}
-                        service={service}
-                        onDeleteService={onDeleteService ? handleDeleteService : undefined}
-                        deletingReservationId={deletingReservationId}
-                      />
-                    ))}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
 
               <div className="rounded-lg border border-blue-200 bg-blue-50 p-2.5">
                 <div className="mb-1 flex items-center gap-1 text-blue-700">

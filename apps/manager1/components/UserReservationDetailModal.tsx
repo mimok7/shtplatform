@@ -945,9 +945,34 @@ export default function UserReservationDetailModal({
     const getStatusBadge = (status: string) => {
         if (status === 'confirmed') return <span className="flex items-center gap-1 text-xs font-medium text-green-700 bg-green-100 px-2 py-0.5 rounded-full"><CheckCircle className="w-3 h-3" />확정</span>;
         if (status === 'completed') return <span className="flex items-center gap-1 text-xs font-medium text-gray-700 bg-gray-100 px-2 py-0.5 rounded-full"><CheckCircle className="w-3 h-3" />완료</span>;
-        if (status === 'pending') return <span className="flex items-center gap-1 text-xs font-medium text-yellow-700 bg-yellow-100 px-2 py-0.5 rounded-full"><AlertCircle className="w-3 h-3" />대기</span>;
+        if (status === 'pending') return <span className="flex items-center gap-1 text-sm font-semibold text-red-700 bg-red-100 px-3 py-1 rounded-full"><AlertCircle className="w-4 h-4" />대기(결제전)</span>;
+        if (status === 'approved') return <span className="flex items-center gap-1 text-sm font-semibold text-amber-800 bg-amber-100 px-3 py-1 rounded-full"><CheckCircle className="w-4 h-4" />승인(결제완료)</span>;
         if (status === 'cancelled') return <span className="flex items-center gap-1 text-xs font-medium text-red-700 bg-red-100 px-2 py-0.5 rounded-full"><XCircle className="w-3 h-3" />취소</span>;
         return <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{status}</span>;
+    };
+
+    const getResolvedServiceStatus = (service: any) => {
+        const rawStatus = service?.status || service?.re_status || service?.reservation_status || service?.reservation?.re_status || '';
+        return String(rawStatus).trim().toLowerCase();
+    };
+
+    const renderPricingBadge = (service: any) => {
+        const pricingSource = getServicePricingSource(service);
+        if (pricingSource === 'manual_override') {
+            return (
+                <span className="inline-flex items-center gap-1 text-xs font-medium text-rose-700 bg-rose-100 px-2 py-0.5 rounded-full whitespace-nowrap">
+                    수정 요금 적용 ({getChangeStatusLabel(service?._changeStatus)})
+                </span>
+            );
+        }
+        if (pricingSource === 'normal') {
+            return (
+                <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-700 bg-gray-100 px-2 py-0.5 rounded-full whitespace-nowrap">
+                    정상 요금
+                </span>
+            );
+        }
+        return null;
     };
 
     const getDateStr = (service: any) => {
@@ -1080,28 +1105,6 @@ export default function UserReservationDetailModal({
 
         return (
             <div className="flex flex-col gap-1 text-sm text-gray-700 mt-2">
-                {(() => {
-                    const pricingSource = getServicePricingSource(service);
-                    if (pricingSource === 'manual_override') {
-                        return (
-                            <div className="mb-1">
-                                <span className="inline-flex items-center gap-1 text-xs font-medium text-rose-700 bg-rose-100 px-2 py-0.5 rounded-full">
-                                    수정 요금 적용 ({getChangeStatusLabel(service?._changeStatus)})
-                                </span>
-                            </div>
-                        );
-                    }
-                    if (pricingSource === 'normal') {
-                        return (
-                            <div className="mb-1">
-                                <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-700 bg-gray-100 px-2 py-0.5 rounded-full">
-                                    정상 요금
-                                </span>
-                            </div>
-                        );
-                    }
-                    return null;
-                })()}
                 {isPackageService && (
                     <div className="mb-1">
                         <span className="inline-flex items-center gap-1 text-xs font-medium text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full">
@@ -1725,9 +1728,12 @@ export default function UserReservationDetailModal({
                         </div>
                     ) : (
                         <div className="space-y-8 flex-1">
-                            {sortedGroups.map((group) => (
-                                <div key={group.originalKey} className="relative pl-4 sm:pl-0">
+                            {sortedGroups.map((group) => {
+                                const showGroupHeader = !(sortMode === 'type' && group.items.length === 1);
+                                return (
+                                <div key={group.originalKey} className={showGroupHeader ? 'relative pl-4 sm:pl-0' : ''}>
                                     {/* 그룹 헤더 */}
+                                    {showGroupHeader && (
                                     <div className="sticky top-0 z-10 flex items-center mb-4 bg-gray-50 py-2">
                                         {sortMode === 'date' ? (
                                             <div className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-600 font-bold text-xs ring-4 ring-gray-50 mr-3">
@@ -1745,13 +1751,16 @@ export default function UserReservationDetailModal({
                                             {group.items.length}건
                                         </span>
                                     </div>
+                                    )}
 
                                     {/* 해당 그룹의 서비스 목록 */}
-                                    <div className="space-y-3 pl-4 border-l-2 border-gray-200 ml-4">
-                                        {group.items.map((service: any, idx: number) => (
-                                            <div key={`${service.reservation_id}-${service.serviceType}-${idx}`} className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow relative group">
+                                    <div className={showGroupHeader ? 'space-y-3 pl-4 border-l-2 border-gray-200 ml-4' : 'space-y-3'}>
+                                        {group.items.map((service: any, idx: number) => {
+                                            const resolvedStatus = getResolvedServiceStatus(service);
+                                            return (
+                                            <div key={`${service.reservation_id}-${service.serviceType}-${idx}`} className={`rounded-lg border p-4 hover:shadow-md transition-shadow relative group ${resolvedStatus === 'pending' ? 'bg-gray-50 border-gray-200' : 'bg-white border-gray-200'}`}>
                                                 <div className="flex items-start justify-between mb-2">
-                                                    <div className="flex items-center gap-2">
+                                                    <div className="flex items-center gap-2 flex-wrap">
                                                         <div className={`p-1.5 rounded-lg ${service.serviceType === 'cruise' ? 'bg-blue-50' :
                                                             service.serviceType === 'hotel' ? 'bg-orange-50' :
                                                                 'bg-gray-50'
@@ -1776,6 +1785,7 @@ export default function UserReservationDetailModal({
                                                                 <span className="text-sm font-normal text-blue-600 ml-1">(왕복)</span>
                                                             )}
                                                         </span>
+                                                        {renderPricingBadge(service)}
                                                     </div>
                                                     <div className="flex items-center gap-2">
                                                         {service.serviceType === 'sht' && (
@@ -1787,7 +1797,7 @@ export default function UserReservationDetailModal({
                                                                 좌석 수정
                                                             </button>
                                                         )}
-                                                        {getStatusBadge(service.status)}
+                                                        {getStatusBadge(resolvedStatus)}
                                                     </div>
                                                 </div>
 
@@ -1797,10 +1807,10 @@ export default function UserReservationDetailModal({
                                                     <span className="text-[10px] text-gray-300">#{service.reservation_id}</span>
                                                 </div>
                                             </div>
-                                        ))}
+                                        )})}
                                     </div>
                                 </div>
-                            ))}
+                            )})}
                         </div>
                     )}
 
