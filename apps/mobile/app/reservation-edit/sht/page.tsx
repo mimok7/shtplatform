@@ -303,6 +303,7 @@ function SHTReservationEditContent() {
     const [feeTemplates, setFeeTemplates] = useState<{ id: number; name: string; amount: number }[]>([]);
 
     const formData = shtForms[activeCategory];
+    const isDropoffRoundTrip = activeCategory === 'Drop-off' && (isRoundTripPriceCode(formData.car_price_code) || isRoundTripPriceCode(shtForms.Pickup.car_price_code));
     // 차량가격은 왕복요금이므로 픽업에만 총액 반영, 드롭은 0원 처리
     const pickupBaseTotal = Number(shtForms['Pickup'].car_total_price || 0);
     const pickupAdditionalFee = additionalFees['Pickup'].fee;
@@ -310,7 +311,19 @@ function SHTReservationEditContent() {
     const overallShtBaseTotal = pickupBaseTotal;
     const finalReservationTotal = Math.max(0, pickupBaseTotal + pickupAdditionalFee + dropoffAdditionalFee);
     const updateActiveForm = (updates: Partial<typeof formData>) => {
-        setShtForms(prev => ({ ...prev, [activeCategory]: { ...prev[activeCategory], ...updates } }));
+        setShtForms(prev => {
+            const nextForms = { ...prev, [activeCategory]: { ...prev[activeCategory], ...updates } };
+            const isPickupRoundTrip = isRoundTripPriceCode(nextForms.Pickup.car_price_code);
+            const isDropoffRoundTrip = isRoundTripPriceCode(nextForms['Drop-off'].car_price_code);
+            if (isPickupRoundTrip || isDropoffRoundTrip) {
+                nextForms['Drop-off'].unit_price = 0;
+                nextForms['Drop-off'].car_total_price = 0;
+                if (isPickupRoundTrip) {
+                    nextForms['Drop-off'].car_price_code = nextForms.Pickup.car_price_code;
+                }
+            }
+            return nextForms;
+        });
     };
     const applyAdditionalFeeValue = (category: 'Pickup' | 'Drop-off', nextValue: number) => {
         setAdditionalFees(prev => ({
@@ -475,16 +488,13 @@ function SHTReservationEditContent() {
             const dropoffForm = buildFormFromRows(dropoffRow, null, reservationId);
             dropoffForm.sht_category = 'Drop-off';
 
-            // 왕복 코드인데 드롭 데이터가 없거나 금액이 0이면 픽업 금액/코드를 드롭에 보정
+            // 왕복 코드일 경우, 드롭 가격 코드는 픽업과 동일하게 설정되되 단가와 가격은 0원으로 강제
             if (isRoundTripPriceCode(pickupForm.car_price_code)) {
-                const dropMissingOrZero = !dropoffRow || Number(dropoffForm.car_total_price || 0) <= 0;
-                if (dropMissingOrZero) {
-                    dropoffForm.car_price_code = pickupForm.car_price_code;
-                    dropoffForm.unit_price = Number(pickupForm.unit_price || 0);
-                    dropoffForm.car_total_price = Number(pickupForm.car_total_price || 0);
-                    if (!dropoffForm.passenger_count && pickupForm.passenger_count) {
-                        dropoffForm.passenger_count = pickupForm.passenger_count;
-                    }
+                dropoffForm.car_price_code = pickupForm.car_price_code;
+                dropoffForm.unit_price = 0;
+                dropoffForm.car_total_price = 0;
+                if (!dropoffForm.passenger_count && pickupForm.passenger_count) {
+                    dropoffForm.passenger_count = pickupForm.passenger_count;
                 }
             }
 
@@ -574,13 +584,14 @@ function SHTReservationEditContent() {
         const normalizedSeat = String(seatInfo.seat || '').trim().toUpperCase();
         const autoCode = normalizedSeat === 'ALL' ? (seatCodeByType.ALL || formData.car_price_code) : formData.car_price_code;
         const calculated = getShtCalculatedPrice(seatInfo.seat, seatPriceMap, autoCode, seatPriceByCode);
+        const isDropoffRoundTrip = activeCategory === 'Drop-off' && (isRoundTripPriceCode(autoCode) || isRoundTripPriceCode(shtForms.Pickup.car_price_code));
         updateActiveForm({
             vehicle_number: seatInfo.vehicle,
             seat_number: seatInfo.seat,
             pickup_datetime: seatInfo.usageDate || formData.pickup_datetime,
             car_price_code: autoCode,
-            car_total_price: calculated.totalPrice,
-            unit_price: calculated.unitPrice,
+            car_total_price: isDropoffRoundTrip ? 0 : calculated.totalPrice,
+            unit_price: isDropoffRoundTrip ? 0 : calculated.unitPrice,
             passenger_count: calculated.passengerCount,
         });
         setIsSeatMapOpen(false);
@@ -639,6 +650,10 @@ function SHTReservationEditContent() {
 
             // 저장할 데이터 (reservation_id는 필수)
             const normalizedCategory = activeCategory;
+            const isRoundTrip = isRoundTripPriceCode(formData.car_price_code) || isRoundTripPriceCode(shtForms.Pickup.car_price_code);
+            const finalUnitPrice = (normalizedCategory === 'Drop-off' && isRoundTrip) ? 0 : (formData.unit_price || 0);
+            const finalTotalPrice = (normalizedCategory === 'Drop-off' && isRoundTrip) ? 0 : (formData.car_total_price || 0);
+
             const payload: Record<string, any> = {
                 reservation_id: reservationId,
                 vehicle_number: formData.vehicle_number || null,
@@ -650,8 +665,8 @@ function SHTReservationEditContent() {
                 pickup_datetime: formData.pickup_datetime || null,
                 pickup_location: formData.pickup_location || null,
                 dropoff_location: formData.dropoff_location || null,
-                car_total_price: formData.car_total_price || 0,
-                unit_price: formData.unit_price || 0,
+                car_total_price: finalTotalPrice,
+                unit_price: finalUnitPrice,
                 request_note: formData.request_note || null,
                 dispatch_code: formData.dispatch_code || null,
                 dispatch_memo: formData.dispatch_memo || null,
@@ -891,8 +906,8 @@ function SHTReservationEditContent() {
                                                 const calculated = getShtCalculatedPrice(seatStr, seatPriceMap, formData.car_price_code, seatPriceByCode);
                                                 updateActiveForm({
                                                     seat_number: seatStr,
-                                                    car_total_price: calculated.totalPrice,
-                                                    unit_price: calculated.unitPrice,
+                                                    car_total_price: isDropoffRoundTrip ? 0 : calculated.totalPrice,
+                                                    unit_price: isDropoffRoundTrip ? 0 : calculated.unitPrice,
                                                     passenger_count: calculated.passengerCount,
                                                 });
                                             }}
@@ -1010,8 +1025,11 @@ function SHTReservationEditContent() {
                                             type="number"
                                             value={formData.unit_price}
                                             onChange={(e) => updateActiveForm({ unit_price: parseFloat(e.target.value) || 0 })}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                                                isDropoffRoundTrip ? 'bg-gray-100 cursor-not-allowed text-gray-400' : ''
+                                            }`}
                                             min="0"
+                                            disabled={isDropoffRoundTrip}
                                         />
                                     </div>
 
@@ -1023,8 +1041,11 @@ function SHTReservationEditContent() {
                                             type="number"
                                             value={formData.car_total_price}
                                             onChange={(e) => updateActiveForm({ car_total_price: parseFloat(e.target.value) || 0 })}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                                                isDropoffRoundTrip ? 'bg-gray-100 cursor-not-allowed text-gray-400' : ''
+                                            }`}
                                             min="0"
+                                            disabled={isDropoffRoundTrip}
                                         />
                                     </div>
                                 </div>
@@ -1074,7 +1095,7 @@ function SHTReservationEditContent() {
                                                 }, 0).toLocaleString()}동
                                             </span>
                                         </div>
-                                        {formData.car_total_price !== calcSeatPriceBreakdown(formData.seat_number).reduce((sum, g) => {
+                                        {!isDropoffRoundTrip && formData.car_total_price !== calcSeatPriceBreakdown(formData.seat_number).reduce((sum, g) => {
                                             const unitPrice = seatPriceMap[g.type] || 0;
                                             return sum + unitPrice * g.seats.length;
                                         }, 0) && (

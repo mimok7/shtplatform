@@ -1,5 +1,9 @@
 # Copilot Instructions for AI Agents
 
+## 🌐 AI 에이전트 소통 및 언어 원칙 (AI Agent Language Rules)
+- **항상 한국어 사용**: 사용자와의 모든 대화, 답변, 분석 보고서, 설명은 반드시 한국어로 작성해야 합니다.
+- **한글화 우선**: 모든 한글로 표시 가능한 영역이나 텍스트는 한국어를 최우선으로 사용하여 표시합니다.
+
 ## 📌 프로젝트 개요
 **스테이하롱 크루즈 예약 시스템** — Next.js 15.5.15 App Router + Supabase PostgreSQL 기반 견적/예약 관리 웹앱.  
 **모노레포**: `c:\Users\saint\SH_DATA\sht-platform` (GitHub: `mimok7/shtplatform`)
