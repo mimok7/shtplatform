@@ -35,4 +35,5 @@ SHT 단가 오표시 이슈 조사 시작.
 - 적용 파일: `apps/manager/src/components/PackageReservationDetailModal.tsx`, `apps/manager1/components/PackageReservationDetailModal.tsx`
 - `apps/manager1/components/UserReservationDetailModal.tsx` 내 패키지 총액 표시 로직이 `service.total_amount`로만 되어 있어 `getReservationTotalAmount(service)`를 우선 체크하는 로직이 누락되어 있던 것을 발견하여 타 앱(매니저, 모바일)과 동일하게 수정 및 동기화 완료함.
 - 예약확인서 모달(`ConfirmationGenerateModal.tsx` 3곳)에서 스하 차량 요금의 단가가 0동으로 노출되던 버그를 수정함. 기존 `rentcar_price` 재조회 맵의 매핑 누락 대신, DB에 확정되어 저장된 `seat_pricing_breakdown` JSONB 데이터를 파싱하여 우선 적용하도록 보완함.
+- 고객앱 예약확인서 모달(`apps/customer/src/components/ConfirmationGenerateModal.tsx`)에서도 스하 차량 요금의 단가가 0동으로 노출되던 버그를 동일하게 보완 조치함.
 
