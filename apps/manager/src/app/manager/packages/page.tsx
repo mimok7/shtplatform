@@ -372,8 +372,8 @@ export default function PackagesPage() {
                                 value={data.room_code || ''} onChange={e => updateItemData(idx, 'room_code', e.target.value)}
                                 disabled={!data.cruise_name}>
                                 <option value="">선택</option>
-                                {availableRooms.filter(r => r.cruise === data.cruise_name).map(r => (
-                                    <option key={r.room_code} value={r.room_code}>{r.room_type} ({r.room_category})</option>
+                                {availableRooms.filter(r => r.cruise_name === data.cruise_name).map(r => (
+                                    <option key={r.id} value={r.id}>{r.room_type}</option>
                                 ))}
                             </select>
                         </div>
