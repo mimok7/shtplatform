@@ -1178,7 +1178,7 @@ function ServiceCard({
           <DetailLine label="패키지" value={service.package_name || service.package_code || '-'} />
           <DetailLine label="인원" value={`성인 ${Number(service.re_adult_count || 0)} / 아동 ${Number(service.re_child_count || 0)}`} />
           <DetailLine label="등록일" value={service.re_created_at ? formatDateOnlyKst(service.re_created_at) : '-'} />
-          <DetailLine label="패키지 총액" value={<span className="font-bold text-indigo-700">{formatMoney(getReservationStoredAmount(service))}</span>} />
+          <DetailLine label="패키지 총액" value={<span className="font-bold text-indigo-700">{formatMoney(getReservationTotalAmount(service) || getReservationStoredAmount(service))}</span>} />
         </div>
       )}
 

@@ -1,6 +1,6 @@
 import supabase from '@/lib/supabase';
 
-type AdditionalFeeServiceType = 'cruise' | 'airport' | 'hotel' | 'rentcar' | 'tour' | 'sht' | 'vehicle' | 'ticket';
+type AdditionalFeeServiceType = 'cruise' | 'airport' | 'hotel' | 'rentcar' | 'tour' | 'sht' | 'vehicle' | 'ticket' | 'package';
 
 interface SaveAdditionalFeeTemplateParams {
     serviceType: AdditionalFeeServiceType;

@@ -667,8 +667,6 @@ function SHTReservationEditContent() {
             // 저장할 데이터 (reservation_id는 필수)
             const normalizedCategory = activeCategory;
             const isRoundTrip = isRoundTripPriceCode(formData.car_price_code) || isRoundTripPriceCode(shtForms.Pickup.car_price_code);
-            const finalUnitPrice = (normalizedCategory === 'Drop-off' && isRoundTrip) ? 0 : (formData.unit_price || 0);
-            const finalTotalPrice = (normalizedCategory === 'Drop-off' && isRoundTrip) ? 0 : (formData.car_total_price || 0);
 
             // 좌석군별 요금 내역 JSONB 계산 (드롭오프 왕복은 빈 배열)
             const seatBreakdown = (normalizedCategory === 'Drop-off' && isRoundTrip)
@@ -678,6 +676,17 @@ function SHTReservationEditContent() {
                     seatPriceMap,
                     seatCodeByType,
                   );
+
+            const computedTotal = seatBreakdown.reduce((sum, item) => sum + item.total_price, 0);
+            const totalPax = (normalizedCategory === 'Drop-off' && isRoundTrip) ? 0 : (formData.passenger_count || 0);
+
+            const finalTotalPrice = (normalizedCategory === 'Drop-off' && isRoundTrip)
+                ? 0
+                : (computedTotal > 0 ? computedTotal : (formData.car_total_price || 0));
+
+            const finalUnitPrice = (normalizedCategory === 'Drop-off' && isRoundTrip)
+                ? 0
+                : (computedTotal > 0 && totalPax > 0 ? Math.round(computedTotal / totalPax) : (formData.unit_price || 0));
 
             const payload: Record<string, any> = {
                 reservation_id: reservationId,
@@ -745,14 +754,14 @@ function SHTReservationEditContent() {
             // 차량가격은 왕복요금이므로 픽업 행의 금액만 합산
             const pickupRows = (allRows || []).filter((row: any) => normalizeShtCategory(row?.sht_category) === 'Pickup');
             const basePickupTotal = pickupRows.reduce((sum: number, row: any) => sum + Number(row?.car_total_price || 0), 0);
-            const totalPax = (allRows || []).reduce((sum: number, row: any) => sum + Number(row?.passenger_count || 0), 0);
+            const totalPaxSum = (allRows || []).reduce((sum: number, row: any) => sum + Number(row?.passenger_count || 0), 0);
             const totalAdditionalFee = pickupAdditionalFee + dropoffAdditionalFee;
             const effectiveAdditionalFee = Math.max(-basePickupTotal, totalAdditionalFee);
             const finalTotalAmount = Math.max(0, basePickupTotal + effectiveAdditionalFee);
 
             const reservationPayload: Record<string, any> = {
                 total_amount: finalTotalAmount,
-                pax_count: totalPax,
+                pax_count: totalPaxSum,
                 price_breakdown: {
                     type: 'sht',
                     base_total: basePickupTotal,

@@ -153,7 +153,7 @@ async function buildPackageShtInsertRows(params: {
         passenger_count: totalPassengerCount,
         car_count: 1,
         car_price_code: firstItem.price_code,
-        unit_price: firstItem.unit_price || null,
+        unit_price: (totalComputedPrice > 0 && totalPassengerCount > 0) ? Math.round(totalComputedPrice / totalPassengerCount) : (firstItem.unit_price || null),
         car_total_price: totalComputedPrice || 0,
         request_note: `[${params.noteLabel}] 차량: ${params.vehicleNumber || ''}, 좌석: ${allSeats.join(',')}\n${params.additionalRequests || ''}`,
         created_at: new Date().toISOString(),

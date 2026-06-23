@@ -10,7 +10,7 @@ const client = createClient(SUPABASE_URL, SERVICE_ROLE);
 async function run() {
   console.log('🚀 Running database migration via exec_sql RPC...');
   
-  const sqlFile = path.join(__dirname, 'sql', '111-fix-sht-pricing-trigger-and-data-patch.sql');
+  const sqlFile = path.join(__dirname, 'sql', '113-add-package-to-reservation-change-request-constraint.sql');
   const sqlContent = fs.readFileSync(sqlFile, 'utf-8');
 
   const { data, error } = await client.rpc('exec_sql', { sql: sqlContent });

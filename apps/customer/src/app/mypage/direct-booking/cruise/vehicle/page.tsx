@@ -167,7 +167,7 @@ const buildShtReservationRows = async (params: {
         seat_number: allSeats.join(','),
         car_price_code: firstItem.price_code,
         passenger_count: totalPassengerCount,
-        unit_price: firstItem.unit_price,
+        unit_price: (carTotalPrice > 0 && totalPassengerCount > 0) ? Math.round(carTotalPrice / totalPassengerCount) : firstItem.unit_price,
         request_note: params.requestNote || null,
         usage_date: params.usageDate,
         sht_category: params.shtCategory,

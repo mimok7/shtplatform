@@ -300,6 +300,52 @@ const getTicketDisplayTotal = (service: any): number => {
     return 0;
 };
 
+const getServiceDisplayTotal = (service: any): number => {
+    const type = service?.serviceType;
+    if (type === 'cruise') {
+        return getCruiseDisplayTotal(service);
+    }
+    if (type === 'sht') {
+        const isShtDropoff = String(service.category || service.sht_category || '').toLowerCase().includes('drop');
+        if (isShtDropoff) return 0;
+        
+        const breakdown = parseSeatPricingBreakdown(service.seat_pricing_breakdown || service.seatPricingBreakdown);
+        let priceLines: any[] = [];
+        if (breakdown && breakdown.length > 0) {
+            priceLines = breakdown.map((b: any) => ({
+                total: b.total_price,
+            }));
+        } else {
+            priceLines = Array.isArray(service.shtPriceLines) && service.shtPriceLines.length > 0
+                ? service.shtPriceLines
+                : buildShtPriceLines([service]);
+        }
+        return priceLines.reduce((sum: number, line: any) => sum + Number(line.total || 0), 0);
+    }
+    if (type === 'ticket') {
+        return getTicketDisplayTotal(service);
+    }
+    if (type === 'package') {
+        return Number(service.total_amount || 0);
+    }
+    if (type === 'hotel') {
+        return Number(service.totalPrice || service.total_price || 0);
+    }
+    if (type === 'tour') {
+        return Number(service.totalPrice || 0);
+    }
+    if (type === 'rentcar') {
+        return Number(service.totalPrice || service.car_total_price || service.total_amount || 0);
+    }
+    if (type === 'airport') {
+        return Number(service.totalPrice || 0);
+    }
+    if (type === 'vehicle' || type === 'car') {
+        return Number(service.totalPrice || 0);
+    }
+    return Number(service.totalPrice || service.total_price || service.total_amount || 0);
+};
+
 const getShtPriceLineLabel = (service: any): string => {
     const priceCode = String(service?.car_price_code || service?.rentcar_price_code || '').trim().toUpperCase();
     if (priceCode.includes('_SOLO_')) return '단독';
@@ -1745,7 +1791,7 @@ export default function UserReservationDetailModal({
                         <div>등록일: {service.re_created_at ? new Date(service.re_created_at).toLocaleDateString() : '-'}</div>
                         <div className="border-t border-gray-100 pt-1 mt-1 flex justify-between items-center">
                             <span className="text-gray-500 font-medium">패키지 총액</span>
-                            <span className="font-bold text-indigo-600">{Number(service.total_amount || 0).toLocaleString()}동</span>
+                            <span className="font-bold text-indigo-600">{(getReservationTotalAmount(service) || Number(service.total_amount || 0)).toLocaleString()}동</span>
                         </div>
                     </>
                 )}
@@ -1972,16 +2018,8 @@ export default function UserReservationDetailModal({
                                         // 이미 집계된 예약 ID는 건너맜
                                         if (reservationId && reservationTotalByReservation.has(reservationId)) return;
 
-                                        // 크루즈는 변경 데이터가 반영된 getCruiseDisplayTotal 우선
-                                        let rowTotal: number;
-                                        if (t === 'cruise') {
-                                            rowTotal = getCruiseDisplayTotal(s);
-                                        } else {
-                                            const reservationTotalAmount = getReservationTotalAmount(s);
-                                            rowTotal = reservationTotalAmount !== null
-                                                ? reservationTotalAmount
-                                                : Number(s.room_total_price || s.totalPrice || s.total_amount || 0);
-                                        }
+                                        // UI에 표시되는 개별 서비스의 총액을 가져온다
+                                        const rowTotal = getServiceDisplayTotal(s);
 
                                         if (reservationId) {
                                             reservationTotalByReservation.set(reservationId, rowTotal);
