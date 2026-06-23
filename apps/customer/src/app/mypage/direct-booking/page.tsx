@@ -1483,12 +1483,26 @@ function DirectBookingContent() {
                     <>
                         {/* 완료 메시지 */}
                         {showCompletionMessage && completedService && (
-                            <div className="mb-4 p-4 bg-green-100 border border-green-300 rounded-lg animate-pulse">
+                            <div className="mb-4 p-4 bg-green-100 border border-green-300 rounded-lg">
                                 <div className="flex items-center">
                                     <span className="text-green-600 text-xl mr-2">🎉</span>
                                     <div>
                                         <h3 className="text-green-800 font-semibold">예약 신청이 완료되었습니다.</h3>
                                         <p className="text-green-700 text-sm mt-1">카카오 채널로 연락주세요.<br />담당자의 안내에 따라 결제를 진행하셔야 예약이 완료됩니다.</p>
+                                        <div className="mt-3 pt-3 border-t border-green-200 text-xs text-green-800">
+                                            <p className="font-semibold">※ 신청서 제출 후 24시간 이내에 카카오톡 채널로 연락주지 않으시면, 신청서는 삭제됩니다.</p>
+                                            <p className="mt-1">
+                                                카카오채널 -{' '}
+                                                <a
+                                                    href="http://pf.kakao.com/_zvsxaG/chat"
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="underline font-semibold hover:text-green-950"
+                                                >
+                                                    http://pf.kakao.com/_zvsxaG/chat
+                                                </a>
+                                            </p>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

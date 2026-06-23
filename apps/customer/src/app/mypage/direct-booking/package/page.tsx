@@ -353,7 +353,7 @@ function PackageBookingContent() {
 
             if (result.success) {
                 console.log('저장된 총액:', result.totalAmount);
-                alert(`패키지 예약 신청이 완료되었습니다!\n총액: ${(result.totalAmount || 0).toLocaleString()}동`);
+                alert(`패키지 예약 신청이 완료되었습니다!\n총액: ${(result.totalAmount || 0).toLocaleString()}동\n\n※ 신청서 제출 후 24시간 이내에 카카오톡 채널로 연락주지 않으시면, 신청서는 삭제됩니다.\n\n카카오채널 - http://pf.kakao.com/_zvsxaG/chat`);
                 router.push('/mypage/direct-booking?completed=package');
             } else {
                 console.error('예약 실패:', result.error, result.details);

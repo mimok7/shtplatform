@@ -214,7 +214,7 @@ function ReservationHomeContent() {
         throw updateError;
       }
 
-      alert('예약 신청이 완료되었습니다! 매니저가 확인 후 연락드리겠습니다.');
+      alert('예약 신청이 완료되었습니다! 매니저가 확인 후 연락드리겠습니다.\n\n※ 신청서 제출 후 24시간 이내에 카카오톡 채널로 연락주지 않으시면, 신청서는 삭제됩니다.\n\n카카오채널 - http://pf.kakao.com/_zvsxaG/chat');
       router.push('/mypage/quotes');
 
     } catch (error) {
