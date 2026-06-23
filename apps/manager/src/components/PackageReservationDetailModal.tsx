@@ -365,7 +365,7 @@ function normalizePackageRoot(pkg: any): any {
     const infantTourPrice = toAmount(pkg?.infant_tour_price, packageMaster?.price_infant_tour);
     const infantExtraBedPrice = toAmount(pkg?.infant_extra_bed_price, packageMaster?.price_infant_extra_bed);
     const infantSeatPrice = toAmount(pkg?.infant_seat_price, packageMaster?.price_infant_seat);
-    const explicitTotalPrice = toAmount(pkg?.total_price, pkg?.total_amount, pkg?.totalPrice, service?.total_amount, service?.totalPrice);
+    const explicitTotalPrice = toAmount(pkg?.total_amount, pkg?.total_price, pkg?.totalPrice, service?.total_amount, service?.totalPrice);
     const calculatedPackagePrice =
         (adultCount * adultPrice) +
         (childExtraBed * childExtraBedPrice) +

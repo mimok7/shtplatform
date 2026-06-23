@@ -27,3 +27,10 @@ SHT 단가 오표시 이슈 조사 시작.
 
 - 확인서/상세 출력용 `ConfirmationGenerateModal` 3곳에서 `rentcar_price`의 `category` 또는 `vehicle_type` 값이 `BC`처럼 복합 좌석군일 때 `B`, `C` 양쪽으로 단가가 매핑되도록 수정했다.
 - 이제 좌석명이 `A`이면 A 단가, `B`/`C`이면 각 좌석군 단가가 확인 모달 계산에도 동일하게 반영된다.
+
+추가 수정 메모 (2026. 06. 23)
+
+- 패키지 예약 통합 상세 모달(`PackageReservationDetailModal.tsx`)에서 매니저가 패키지 요금을 수정(할인/추가금 반영)하여 `reservation` 테이블의 `total_amount`가 업데이트되었음에도 불구하고, UI에서는 `reservation_package` 테이블의 `total_price`(순수 인원 단가 합계)가 우선 반영되어 수정요금이 노출되지 않는 버그 발견.
+- `normalizePackageRoot` 함수에서 요금을 결정할 때 `pkg?.total_amount`가 `pkg?.total_price`보다 우선하여 적용되도록 `toAmount` 인자 순서를 변경함.
+- 적용 파일: `apps/manager/src/components/PackageReservationDetailModal.tsx`, `apps/manager1/components/PackageReservationDetailModal.tsx`
+
