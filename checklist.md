@@ -9,6 +9,7 @@
 - [x] 고객앱 예약확인서 인쇄/PDF 모달(ConfirmationGenerateModal) 스하 차량 요금 JSONB(seat_pricing_breakdown) 파싱 기반 단가 표시 보정
 - [ ] 매니저 앱의 ManagerSidebar에 패키지 상품 관리 메뉴 추가
 - [ ] 매니저 앱의 ManagerNav에 패키지 상품 메뉴 추가
+- [ ] 고객앱 패키지 예약 페이지에서 크루즈 드랍 장소 및 복사 버튼 제거
+- [ ] 고객앱 패키지 예약 페이지에서 하노이 투어 픽업 장소 및 복사 버튼 숨김 처리
+- [ ] 고객앱 서버 액션 packageReservation.ts에서 하노이 투어 픽업 장소를 빈 값으로 강제 보정 처리
 - [ ] 수정 사항에 대한 타입 체크 및 빌드 정상 여부 검증
-
-
