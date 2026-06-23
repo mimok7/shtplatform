@@ -1065,20 +1065,9 @@ function PackageBookingContent() {
                                                         /* 크루즈 서비스 - 스하차량 좌석 선택 포함 */
                                                         <div className="mt-2 space-y-3">
                                                             <div className="p-3 rounded-xl border bg-blue-50 border-blue-200">
-                                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                                                <div className="grid grid-cols-1 gap-2">
                                                                     <div>
-                                                                        <div className="flex justify-between items-center mb-0.5 ml-1">
-                                                                            <label className="block text-[11px] font-black uppercase text-blue-700">픽업 장소 (영문대문자)</label>
-                                                                            <button
-                                                                                onClick={(e) => {
-                                                                                    e.preventDefault();
-                                                                                    handleBulkApply(item.id, 'idxOthers');
-                                                                                }}
-                                                                                className="text-[10px] font-extrabold hover:underline px-1 text-blue-600"
-                                                                            >
-                                                                                픽업을 드랍으로 복사
-                                                                            </button>
-                                                                        </div>
+                                                                        <label className="block text-[11px] font-black uppercase text-blue-700 mb-0.5 ml-1">픽업 장소 (영문대문자)</label>
                                                                         <input
                                                                             type="text"
                                                                             required
@@ -1088,20 +1077,6 @@ function PackageBookingContent() {
                                                                             onChange={(e) => setItemDetails({
                                                                                 ...itemDetails,
                                                                                 [item.id]: { ...itemDetails[item.id], accommodation: normalizeLocationInput(e.target.value) }
-                                                                            })}
-                                                                        />
-                                                                    </div>
-                                                                    <div>
-                                                                        <label className="block text-[11px] font-black uppercase mb-0.5 ml-1 text-blue-700">드랍 장소 (영문대문자)</label>
-                                                                        <input
-                                                                            type="text"
-                                                                            required
-                                                                            placeholder="영문 대문자로 입력해 주세요"
-                                                                            className="w-full bg-white border-gray-200 rounded-lg py-1.5 px-3 text-sm font-bold placeholder:text-gray-400 focus:ring-1 focus:ring-blue-500"
-                                                                            value={itemDetails[item.id]?.roomType || ''}
-                                                                            onChange={(e) => setItemDetails({
-                                                                                ...itemDetails,
-                                                                                [item.id]: { ...itemDetails[item.id], roomType: normalizeLocationInput(e.target.value) }
                                                                             })}
                                                                         />
                                                                     </div>
@@ -1163,67 +1138,61 @@ function PackageBookingContent() {
                                                         </div>
                                                     ) : (
                                                         /* 투어 서비스 (닌빈/하노이) */
-                                                        <div className={`mt-2 p-3 rounded-xl border ${(item.description?.includes('닌빈') || item.description?.toLowerCase().includes('ninh binh')) ? 'bg-purple-50 border-purple-200' :
-                                                            (item.description?.includes('하노이') || item.description?.toLowerCase().includes('hanoi')) ? 'bg-teal-50 border-teal-200' :
-                                                                'bg-gray-50 border-gray-200'
-                                                            }`}>
-                                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                                                                <div>
-                                                                    <div className="flex justify-between items-center mb-0.5 ml-1">
-                                                                        <label className={`block text-[11px] font-black uppercase ${(item.description?.includes('닌빈') || item.description?.toLowerCase().includes('ninh binh')) ? 'text-purple-700' :
-                                                                            (item.description?.includes('하노이') || item.description?.toLowerCase().includes('hanoi')) ? 'text-teal-700' :
-                                                                                'text-gray-600'
-                                                                            }`}>픽업 장소 (영문대문자)</label>
-                                                                        <button
-                                                                            onClick={(e) => {
-                                                                                e.preventDefault();
-                                                                                handleBulkApply(item.id, 'idxOthers');
-                                                                            }}
-                                                                            className={`text-[10px] font-extrabold hover:underline px-1 ${(item.description?.includes('닌빈') || item.description?.toLowerCase().includes('ninh binh')) ? 'text-purple-600' :
-                                                                                (item.description?.includes('하노이') || item.description?.toLowerCase().includes('hanoi')) ? 'text-teal-600' :
-                                                                                    'text-gray-600'
-                                                                                }`}
-                                                                        >
-                                                                            픽업을 드랍으로 복사
-                                                                        </button>
+                                                        (() => {
+                                                            const isHanoiTour = item.service_type === 'tour' && (item.description?.includes('하노이') || item.description?.toLowerCase().includes('hanoi'));
+                                                            const isNinhBinhTour = item.service_type === 'tour' && (item.description?.includes('닌빈') || item.description?.toLowerCase().includes('ninh binh'));
+                                                            
+                                                            return (
+                                                                <div className={`mt-2 p-3 rounded-xl border ${isNinhBinhTour ? 'bg-purple-50 border-purple-200' :
+                                                                    isHanoiTour ? 'bg-teal-50 border-teal-200' :
+                                                                        'bg-gray-50 border-gray-200'
+                                                                    }`}>
+                                                                    <div className={`grid grid-cols-1 ${isHanoiTour ? '' : 'md:grid-cols-2'} gap-2`}>
+                                                                        {!isHanoiTour && (
+                                                                            <div>
+                                                                                <div className="flex justify-between items-center mb-0.5 ml-1">
+                                                                                    <label className={`block text-[11px] font-black uppercase ${isNinhBinhTour ? 'text-purple-700' : 'text-gray-600'}`}>픽업 장소 (영문대문자)</label>
+                                                                                    <button
+                                                                                        onClick={(e) => {
+                                                                                            e.preventDefault();
+                                                                                            handleBulkApply(item.id, 'idxOthers');
+                                                                                        }}
+                                                                                        className={`text-[10px] font-extrabold hover:underline px-1 ${isNinhBinhTour ? 'text-purple-600' : 'text-gray-600'}`}
+                                                                                    >
+                                                                                        픽업을 드랍으로 복사
+                                                                                    </button>
+                                                                                </div>
+                                                                                <input
+                                                                                    type="text"
+                                                                                    required
+                                                                                    placeholder="영문 대문자로 입력해 주세요"
+                                                                                    className={`w-full bg-white border-gray-200 rounded-lg py-1.5 px-3 text-sm font-bold placeholder:text-gray-400 focus:ring-1 ${isNinhBinhTour ? 'focus:ring-purple-500' : 'focus:ring-gray-500'}`}
+                                                                                    value={itemDetails[item.id]?.accommodation || ''}
+                                                                                    onChange={(e) => setItemDetails({
+                                                                                        ...itemDetails,
+                                                                                        [item.id]: { ...itemDetails[item.id], accommodation: normalizeLocationInput(e.target.value) }
+                                                                                    })}
+                                                                                />
+                                                                            </div>
+                                                                        )}
+                                                                        <div>
+                                                                            <label className={`block text-[11px] font-black uppercase mb-0.5 ml-1 ${isNinhBinhTour ? 'text-purple-700' : isHanoiTour ? 'text-teal-700' : 'text-gray-600'}`}>드랍 장소 (영문대문자)</label>
+                                                                            <input
+                                                                                type="text"
+                                                                                required
+                                                                                placeholder="영문 대문자로 입력해 주세요"
+                                                                                className={`w-full bg-white border-gray-200 rounded-lg py-1.5 px-3 text-sm font-bold placeholder:text-gray-400 focus:ring-1 ${isNinhBinhTour ? 'focus:ring-purple-500' : isHanoiTour ? 'focus:ring-teal-500' : 'focus:ring-gray-500'}`}
+                                                                                value={itemDetails[item.id]?.roomType || ''}
+                                                                                onChange={(e) => setItemDetails({
+                                                                                    ...itemDetails,
+                                                                                    [item.id]: { ...itemDetails[item.id], roomType: normalizeLocationInput(e.target.value) }
+                                                                                })}
+                                                                            />
+                                                                        </div>
                                                                     </div>
-                                                                    <input
-                                                                        type="text"
-                                                                        required
-                                                                        placeholder="영문 대문자로 입력해 주세요"
-                                                                        className={`w-full bg-white border-gray-200 rounded-lg py-1.5 px-3 text-sm font-bold placeholder:text-gray-400 focus:ring-1 ${(item.description?.includes('닌빈') || item.description?.toLowerCase().includes('ninh binh')) ? 'focus:ring-purple-500' :
-                                                                            (item.description?.includes('하노이') || item.description?.toLowerCase().includes('hanoi')) ? 'focus:ring-teal-500' :
-                                                                                'focus:ring-gray-500'
-                                                                            }`}
-                                                                        value={itemDetails[item.id]?.accommodation || ''}
-                                                                        onChange={(e) => setItemDetails({
-                                                                            ...itemDetails,
-                                                                            [item.id]: { ...itemDetails[item.id], accommodation: normalizeLocationInput(e.target.value) }
-                                                                        })}
-                                                                    />
                                                                 </div>
-                                                                <div>
-                                                                    <label className={`block text-[11px] font-black uppercase mb-0.5 ml-1 ${(item.description?.includes('닌빈') || item.description?.toLowerCase().includes('ninh binh')) ? 'text-purple-700' :
-                                                                        (item.description?.includes('하노이') || item.description?.toLowerCase().includes('hanoi')) ? 'text-teal-700' :
-                                                                            'text-gray-600'
-                                                                        }`}>드랍 장소 (영문대문자)</label>
-                                                                    <input
-                                                                        type="text"
-                                                                        required
-                                                                        placeholder="영문 대문자로 입력해 주세요"
-                                                                        className={`w-full bg-white border-gray-200 rounded-lg py-1.5 px-3 text-sm font-bold placeholder:text-gray-400 focus:ring-1 ${(item.description?.includes('닌빈') || item.description?.toLowerCase().includes('ninh binh')) ? 'focus:ring-purple-500' :
-                                                                            (item.description?.includes('하노이') || item.description?.toLowerCase().includes('hanoi')) ? 'focus:ring-teal-500' :
-                                                                                'focus:ring-gray-500'
-                                                                            }`}
-                                                                        value={itemDetails[item.id]?.roomType || ''}
-                                                                        onChange={(e) => setItemDetails({
-                                                                            ...itemDetails,
-                                                                            [item.id]: { ...itemDetails[item.id], roomType: normalizeLocationInput(e.target.value) }
-                                                                        })}
-                                                                    />
-                                                                </div>
-                                                            </div>
-                                                        </div>
+                                                            );
+                                                        })()
                                                     )}
                                                 </div>
                                             );

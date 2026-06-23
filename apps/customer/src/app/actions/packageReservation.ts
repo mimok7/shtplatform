@@ -665,6 +665,8 @@ export async function createPackageReservation({
 
                     console.log(`Tour: ${tourName}, Guests: ${totalGuests}, Code: ${tourPriceCode}, Vehicle: ${tourVehicle}`);
 
+                    const isHanoi = desc.includes('하노이') || desc.includes('hanoi');
+
                     const { error: tourError } = await supabase.from('reservation_tour').insert({
                         reservation_id: reservationId,
                         tour_price_code: tourPriceCode,
@@ -675,7 +677,7 @@ export async function createPackageReservation({
                         infant_count: totalInfants,
                         usage_date: usageDate,
                         tour_capacity: totalGuests || 1,
-                        pickup_location: details.accommodation || '',
+                        pickup_location: isHanoi ? '' : (details.accommodation || ''),
                         dropoff_location: details.roomType || details.accommodation || ''
                     });
                     if (tourError) {
