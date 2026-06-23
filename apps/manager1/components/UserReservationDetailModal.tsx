@@ -1750,7 +1750,7 @@ export default function UserReservationDetailModal({
                                     <div className="flex justify-between items-center border-t border-gray-200 pt-1">
                                         <span className="text-gray-500 font-medium">총 합계</span>
                                         <span className="font-bold text-blue-600">
-                                            {isShtDropoffCategory(service.category || service.sht_category) ? '0동' : `${Number(service.totalPrice || 0).toLocaleString()}동`}
+                                            {isShtDropoffCategory(service.category || service.sht_category) ? '0동' : `${priceLines.reduce((sum: number, line: any) => sum + Number(line.total || 0), 0).toLocaleString()}동`}
                                             {isShtDropoffCategory(service.category || service.sht_category) && <span className="text-xs text-gray-400 ml-1">(왕복요금은 픽업에 포함)</span>}
                                         </span>
                                     </div>

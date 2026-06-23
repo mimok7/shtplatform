@@ -1726,7 +1726,7 @@ export default function UserReservationDetailModal({
                                         <span className="font-bold text-blue-600">
                                             {String(service.category || '').toLowerCase().includes('drop')
                                                 ? '0동'
-                                                : `${Number(service.totalPrice || 0).toLocaleString()}동`}
+                                                : `${priceLines.reduce((sum: number, line: any) => sum + Number(line.total || 0), 0).toLocaleString()}동`}
                                             {String(service.category || '').toLowerCase().includes('drop') && (
                                                 <span className="text-xs text-gray-400 ml-1">(왕복요금은 픽업에 포함)</span>
                                             )}
