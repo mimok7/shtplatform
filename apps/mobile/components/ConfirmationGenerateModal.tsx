@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import supabase from '@/lib/supabase';
 import { fetchLatestActiveChangeRequests, applyChangeOverlay } from '@/lib/reservationChangeOverlay';
 import { getReservationStoredAmount } from '@sht/domain/reservation';
+import { parseSeatPricingBreakdown } from '@sht/domain/sht';
 
 // 변경 추적 맵
 const CHANGE_TABLE_BY_TYPE: Record<string, string> = {
@@ -105,6 +106,22 @@ const getShtSeatList = (seatNumber: string) => String(seatNumber || '')
     .filter(Boolean);
 
 const getShtSeatPriceSummary = (detail: any, fallbackAmount = 0) => {
+    // 0. JSONB 컬럼(seat_pricing_breakdown)이 존재하고 유효한 데이터가 들어있다면, 이를 파싱하여 우선 사용
+    const breakdown = parseSeatPricingBreakdown(detail?.seat_pricing_breakdown || detail?.seatPricingBreakdown);
+    if (breakdown && breakdown.length > 0) {
+        let total = 0;
+        const calcLines: string[] = [];
+        breakdown.forEach((b) => {
+            const label = b.bucket === 'ALL' ? '단독(ALL)' : `${b.bucket}좌석`;
+            total += Number(b.total_price || 0);
+            calcLines.push(`${label} ${Number(b.quantity || 0)}인 × ${Number(b.unit_price || 0).toLocaleString()}동`);
+        });
+        return {
+            amount: total > 0 ? total : fallbackAmount,
+            calcLines: calcLines.length > 0 ? calcLines : [fallbackAmount > 0 ? `${fallbackAmount.toLocaleString()}동` : '-'],
+        };
+    }
+
     const seatPriceMap = (detail?._shtSeatPrices || {}) as Record<string, number>;
     const seatList = getShtSeatList(String(detail?.seat_number || ''));
     const passengerCount = Math.max(

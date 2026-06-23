@@ -5,4 +5,5 @@
 - [x] 확인/출력 모달에서 `BC` 같은 복합 좌석군 가격 매핑 보정
 - [x] 패키지 예약 통합 상세 모달에서 수정 요금(total_amount) 미반영 오류 수정
 - [x] 매니저, 매니저1, 모바일앱 예약 상세의 패키지 총액 표시 방식 정합성 검증 및 동기화
+- [x] 예약확인서 인쇄/PDF 모달(ConfirmationGenerateModal) 스하 차량 요금 JSONB(seat_pricing_breakdown) 파싱 기반 단가 표시 보정
 
