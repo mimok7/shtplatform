@@ -22,6 +22,7 @@ export default function ManagerNav({ activeTab, embedded = false }: ManagerNavPr
         { id: 'services', label: '서비스 관리', path: '/manager/services', icon: '🛠️' },
         { id: 'pricing', label: '가격 관리', path: '/manager/pricing', icon: '💰' },
         { id: 'notifications', label: '알림 관리', path: '/manager/notifications', icon: '🔔' },
+        { id: 'packages', label: '패키지 상품', path: '/manager/packages', icon: '📦' },
         { id: 'dashboard', label: '대시보드', path: '/manager/dashboard', icon: '🏠' },
     ];
 

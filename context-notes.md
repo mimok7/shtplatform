@@ -37,3 +37,9 @@ SHT 단가 오표시 이슈 조사 시작.
 - 예약확인서 모달(`ConfirmationGenerateModal.tsx` 3곳)에서 스하 차량 요금의 단가가 0동으로 노출되던 버그를 수정함. 기존 `rentcar_price` 재조회 맵의 매핑 누락 대신, DB에 확정되어 저장된 `seat_pricing_breakdown` JSONB 데이터를 파싱하여 우선 적용하도록 보완함.
 - 고객앱 예약확인서 모달(`apps/customer/src/components/ConfirmationGenerateModal.tsx`)에서도 스하 차량 요금의 단가가 0동으로 노출되던 버그를 동일하게 보완 조치함.
 
+추가 작업 메모 (2026. 06. 23)
+
+- 매니저 앱의 관리도구 메뉴에 "패키지 상품 관리" 페이지(/manager/packages)를 연동하는 작업을 시작함.
+- 사이드바(ManagerSidebar.tsx) 및 상단 탭(ManagerNav.tsx)에 패키지 상품 관리 접근 경로를 추가하여 관리 편의성을 제고할 예정임.
+
+

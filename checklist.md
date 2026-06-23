@@ -7,4 +7,8 @@
 - [x] 매니저, 매니저1, 모바일앱 예약 상세의 패키지 총액 표시 방식 정합성 검증 및 동기화
 - [x] 예약확인서 인쇄/PDF 모달(ConfirmationGenerateModal) 스하 차량 요금 JSONB(seat_pricing_breakdown) 파싱 기반 단가 표시 보정
 - [x] 고객앱 예약확인서 인쇄/PDF 모달(ConfirmationGenerateModal) 스하 차량 요금 JSONB(seat_pricing_breakdown) 파싱 기반 단가 표시 보정
+- [ ] 매니저 앱의 ManagerSidebar에 패키지 상품 관리 메뉴 추가
+- [ ] 매니저 앱의 ManagerNav에 패키지 상품 메뉴 추가
+- [ ] 수정 사항에 대한 타입 체크 및 빌드 정상 여부 검증
+
 
