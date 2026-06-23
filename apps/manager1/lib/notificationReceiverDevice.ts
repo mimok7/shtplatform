@@ -53,18 +53,32 @@ export function getOrCreateNotificationDeviceId() {
 
   const cookieValue = readCookie(DEVICE_ID_COOKIE_KEY);
   if (cookieValue) {
-    window.localStorage.setItem(DEVICE_ID_STORAGE_KEY, cookieValue);
+    try {
+      window.localStorage.setItem(DEVICE_ID_STORAGE_KEY, cookieValue);
+    } catch {
+      // Safari private mode / restricted storage environments can throw.
+    }
     return cookieValue;
   }
 
-  const existing = window.localStorage.getItem(DEVICE_ID_STORAGE_KEY);
+  let existing: string | null = null;
+  try {
+    existing = window.localStorage.getItem(DEVICE_ID_STORAGE_KEY);
+  } catch {
+    existing = null;
+  }
+
   if (existing) {
     writeCookie(DEVICE_ID_COOKIE_KEY, existing);
     return existing;
   }
 
   const generated = `device-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-  window.localStorage.setItem(DEVICE_ID_STORAGE_KEY, generated);
+  try {
+    window.localStorage.setItem(DEVICE_ID_STORAGE_KEY, generated);
+  } catch {
+    // Cookie fallback below is enough when storage is unavailable.
+  }
   writeCookie(DEVICE_ID_COOKIE_KEY, generated);
   return generated;
 }

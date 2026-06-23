@@ -17,12 +17,16 @@ let authCache: { user: any | null; role: string | null; timestamp: number } | nu
 
 function getOrCreateTabId() {
     if (typeof window === 'undefined') return '';
-    let tabId = sessionStorage.getItem(TAB_SESSION_KEY);
-    if (!tabId) {
-        tabId = `tab_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
-        sessionStorage.setItem(TAB_SESSION_KEY, tabId);
+    try {
+        let tabId = sessionStorage.getItem(TAB_SESSION_KEY);
+        if (!tabId) {
+            tabId = `tab_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+            sessionStorage.setItem(TAB_SESSION_KEY, tabId);
+        }
+        return tabId;
+    } catch {
+        return `tab_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
     }
-    return tabId;
 }
 
 function parseActiveTabValue(raw: string | null): string | null {
@@ -37,7 +41,12 @@ function parseActiveTabValue(raw: string | null): string | null {
 
 function isActiveTabOwner(userId: string): boolean {
     if (typeof window === 'undefined') return true;
-    const activeRaw = localStorage.getItem(`${ACTIVE_TAB_PREFIX}${userId}`);
+    let activeRaw: string | null = null;
+    try {
+        activeRaw = localStorage.getItem(`${ACTIVE_TAB_PREFIX}${userId}`);
+    } catch {
+        return true;
+    }
     const activeTabId = parseActiveTabValue(activeRaw);
     if (!activeTabId) return true;
     return activeTabId === getOrCreateTabId();

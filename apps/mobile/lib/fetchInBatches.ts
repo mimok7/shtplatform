@@ -23,7 +23,6 @@ export async function fetchTableInBatches<T = any>(
     const batchPromises = batches.map(async (batch, idx) => {
         const { data, error } = await supabase.from(table).select(select).in(column, batch);
         if (error) {
-            console.warn(`⚠️ ${table} 배치(${idx + 1}) 조회 실패:`, error.message);
             return [];
         }
         return data || [];
@@ -73,7 +72,6 @@ export async function fetchMultipleTablesParallel<T extends Record<string, any>>
 
         const { data, error } = await query;
         if (error) {
-            console.warn(`⚠️ ${q.table} 조회 실패:`, error.message);
             return { key: q.key, data: [] };
         }
         return { key: q.key, data: data || [] };

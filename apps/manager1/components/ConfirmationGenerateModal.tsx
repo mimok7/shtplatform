@@ -45,6 +45,11 @@ interface QuoteData {
     reservations: ReservationDetail[];
 }
 
+const isConfirmationVisibleStatus = (status: string | null | undefined) => {
+    const normalized = String(status || '').trim().toLowerCase();
+    return normalized === 'approved' || normalized === 'confirmed';
+};
+
 interface ConfirmationGenerateModalProps {
     isOpen: boolean;
     onClose: () => void;
@@ -336,6 +341,7 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                 hotelResult,
                 rentcarResult,
                 tourResult,
+                ticketResult,
                 carShtResult,
                 cruiseCarResult,
                 packageResult,
@@ -356,6 +362,9 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                     ? supabase.from('reservation_tour').select('*').in('reservation_id', reservationIds)
                     : Promise.resolve({ data: [] }),
                 reservationIds.length > 0
+                    ? supabase.from('reservation_ticket').select('*').in('reservation_id', reservationIds)
+                    : Promise.resolve({ data: [] }),
+                reservationIds.length > 0
                     ? supabase.from('reservation_car_sht').select('*').in('reservation_id', reservationIds)
                     : Promise.resolve({ data: [] }),
                 reservationIds.length > 0
@@ -372,6 +381,7 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
             const packageDetailsRaw = (packageResult.data as any[]) || [];
             const rentcarDetailsRaw = (rentcarResult.data as any[]) || [];
             const tourDetailsRaw = (tourResult.data as any[]) || [];
+            const ticketDetailsRaw = (ticketResult.data as any[]) || [];
             const carDetailsRaw = (carShtResult.data as any[]) || [];
             const cruiseCarDetailsRaw = (cruiseCarResult.data as any[]) || [];
 
@@ -401,6 +411,7 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
             const packageDetails = await applyChangeOverlay('package', packageDetailsRaw, { metaMap: changeMetaMap });
             const rentcarDetails = await applyChangeOverlay('rentcar', rentcarDetailsRaw, { metaMap: changeMetaMap });
             const tourDetails = await applyChangeOverlay('tour', tourDetailsRaw, { metaMap: changeMetaMap });
+            const ticketDetails = ticketDetailsRaw;
             const carDetails = await applyChangeOverlay('car_sht', carDetailsRaw, { metaMap: changeMetaMap });
             const cruiseCarDetails = await applyChangeOverlay('cruise_car', cruiseCarDetailsRaw, { metaMap: changeMetaMap, replaceMultiRow: true });
 
@@ -508,6 +519,7 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                 hotel: hotelDetails,
                 rentcar: rentcarDetails,
                 tour: tourDetails,
+                ticket: ticketDetails,
                 car: cruiseCarMergedDetails,
                 sht: carDetailsWithShtPrice,
                 package: packageDetails,
@@ -519,6 +531,7 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                 hotel: 'hotel_price_code',
                 rentcar: 'rentcar_price_code',
                 tour: 'tour_price_code',
+                ticket: 'ticket_price_code',
                 car: 'car_price_code',
                 sht: 'car_price_code',
                 package: 'package_id',
@@ -529,6 +542,7 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                 hotel: ['hotel_name', 'room_name', 'room_type'],
                 rentcar: [],
                 tour: ['tour_name'],
+                ticket: ['ticket_name', 'program_selection'],
                 car: ['sht_category'],
                 sht: ['sht_category'],
                 package: ['package_name'],
@@ -601,16 +615,18 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                 return res;
             }));
 
+            const visibleReservations = processedReservations.filter((reservation) => isConfirmationVisibleStatus(reservation.status));
+
             // 총 금액 계산 (SHT는 reservation_id 기준 중복 제거 + 추가요금 포함)
             const shtPickedMap = new Map<string, any>();
-            for (const r of processedReservations) {
+            for (const r of visibleReservations) {
                 if (r.service_type !== 'sht') continue;
                 const prev = shtPickedMap.get(r.reservation_id);
                 if (!prev || Number(r.amount || 0) > Number(prev.amount || 0)) {
                     shtPickedMap.set(r.reservation_id, r);
                 }
             }
-            const calculatedTotal = processedReservations.reduce((sum, reservation) => {
+            const calculatedTotal = visibleReservations.reduce((sum, reservation) => {
                 if (reservation.service_type === 'sht') {
                     // 선택된 SHT 행만 합산 (중복 제거)
                     if (shtPickedMap.get(reservation.reservation_id) !== reservation) return sum;
@@ -622,7 +638,7 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
             }, 0);
 
             const reservationTotalMap = new Map<string, number>();
-            processedReservations.forEach((reservation) => {
+            visibleReservations.forEach((reservation) => {
                 const reservationId = String(reservation.reservation_id || '').trim();
                 if (!reservationId) return;
                 const total = Number(reservation.reservation_total_amount);
@@ -642,7 +658,7 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                 total_price: hasReservationTotals ? reservationTotalSum : (calculatedTotal || finalQuoteData.total_price || 0),
                 payment_status: finalQuoteData.payment_status || 'pending',
                 created_at: finalQuoteData.created_at,
-                reservations: processedReservations,
+                reservations: visibleReservations,
             });
         } catch (e) {
             console.error('견적 데이터 로드 실패:', e);
@@ -714,6 +730,11 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                 }
                 return { ...tourPriceObj, tour_name };
             }
+            case 'ticket':
+                table = 'ticket_price';
+                codeField = 'ticket_price_code';
+                selectFields = ['ticket_price_code', 'ticket_type', 'ticket_name', 'price_item', 'official_price_vnd', 'stay_card_price_vnd', 'stay_krw_price_krw', 'valid_from', 'valid_to'];
+                break;
             case 'package':
                 table = 'package_master';
                 codeField = 'id';
@@ -741,6 +762,7 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
             hotel: '호텔',
             rentcar: '렌터카',
             tour: '투어',
+            ticket: '티켓',
             car: '크루즈 차량',
             sht: '스하 차량',
         };
@@ -1173,7 +1195,7 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                                             </thead>
                                             <tbody>
                                                 {(() => {
-                                                    const serviceOrder: Record<string, number> = { cruise: 0, car: 1, sht: 2, airport: 3, hotel: 4, rentcar: 5, tour: 6 };
+                                                    const serviceOrder: Record<string, number> = { cruise: 0, car: 1, sht: 2, airport: 3, hotel: 4, rentcar: 5, tour: 6, ticket: 7 };
                                                     const sortedReservations = [...quoteData.reservations].sort((a, b) =>
                                                         (serviceOrder[a.service_type] ?? 99) - (serviceOrder[b.service_type] ?? 99)
                                                     );
@@ -1194,6 +1216,7 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                                                             hotel: 'bg-indigo-50/50',
                                                             rentcar: 'bg-amber-50/50',
                                                             tour: 'bg-purple-50/50',
+                                                            ticket: 'bg-rose-50/50',
                                                             car: 'bg-teal-50/50',
                                                             sht: 'bg-cyan-50/50',
                                                         };
@@ -1350,13 +1373,13 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                                                                             <div><span className="text-gray-500">탑승인원:</span> <span className="font-bold text-gray-900">{(reservation.service_details as any).passenger_count || reservation.priceDetail?.capacity ? `${(reservation.service_details as any).passenger_count || reservation.priceDetail?.capacity}인` : '-'}</span></div>
                                                                             <div><span className="text-gray-500">수하물:</span> <span className="font-bold text-gray-900">{(reservation.service_details as any).luggage_count || 0}개</span></div>
                                                                             {(reservation.service_details as any).return_datetime && (
-                                                                                <div><span className="text-gray-500">드롭:</span> <span className="font-bold text-gray-900">{formatDateTimeAmPm((reservation.service_details as any).return_datetime)}</span></div>
+                                                                                <div><span className="text-gray-500">드랍:</span> <span className="font-bold text-gray-900">{formatDateTimeAmPm((reservation.service_details as any).return_datetime)}</span></div>
                                                                             )}
                                                                             {(reservation.service_details as any).return_pickup_location && (
-                                                                                <div><span className="text-gray-500">드롭위치:</span> <span className="font-bold text-gray-900">{(reservation.service_details as any).return_pickup_location}</span></div>
+                                                                                <div><span className="text-gray-500">드랍위치:</span> <span className="font-bold text-gray-900">{(reservation.service_details as any).return_pickup_location}</span></div>
                                                                             )}
                                                                             {(reservation.service_details as any).return_destination && (
-                                                                                <div><span className="text-gray-500">드롭목적지:</span> <span className="font-bold text-gray-900">{(reservation.service_details as any).return_destination}</span></div>
+                                                                                <div><span className="text-gray-500">드랍목적지:</span> <span className="font-bold text-gray-900">{(reservation.service_details as any).return_destination}</span></div>
                                                                             )}
                                                                             {(reservation.service_details as any).return_via_location && (
                                                                                 <div><span className="text-gray-500">반납경유지:</span> <span className="font-bold text-gray-900">{(reservation.service_details as any).return_via_location}</span></div>
@@ -1404,6 +1427,28 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                                                                             )}
                                                                         </div>
                                                                     )}
+                                                                    {reservation.service_type === 'ticket' && reservation.service_details && (
+                                                                        <div className="space-y-1 text-xs">
+                                                                            <div><span className="text-gray-500">티켓명:</span> <span className="font-bold text-gray-900">{(reservation.service_details as any).ticket_name || '-'}</span></div>
+                                                                            <div><span className="text-gray-500">프로그램선택:</span> <span className="font-bold text-gray-900">{(reservation.service_details as any).program_selection || '-'}</span></div>
+                                                                            <div><span className="text-gray-500">인원수:</span> <span className="font-bold text-gray-900">{(() => {
+                                                                                const d = reservation.service_details as any;
+                                                                                const parts = [];
+                                                                                if ((d?.adult_count || 0) > 0) parts.push(`성인 ${d.adult_count}명`);
+                                                                                if ((d?.child_count || 0) > 0) parts.push(`아동 ${d.child_count}명`);
+                                                                                if ((d?.shuttle_required || false) && (d?.shuttle_count || 0) > 0) parts.push(`셔틀 ${d.shuttle_count}명`);
+                                                                                if (parts.length > 0) return parts.join(', ');
+                                                                                return `${d?.ticket_quantity || 0}명`;
+                                                                            })()}</span></div>
+                                                                            <div><span className="text-gray-500">사용일자:</span> <span className="font-bold text-gray-900">{formatDate((reservation.service_details as any).usage_date)}</span></div>
+                                                                            <div><span className="text-gray-500">셔틀신청:</span> <span className="font-bold text-gray-900">{(reservation.service_details as any).shuttle_required ? '신청' : '미신청'}</span></div>
+                                                                            <div><span className="text-gray-500">픽업장소:</span> <span className="font-bold text-gray-900">{(reservation.service_details as any).pickup_location || '-'}</span></div>
+                                                                            <div><span className="text-gray-500">드롭장소:</span> <span className="font-bold text-gray-900">{(reservation.service_details as any).dropoff_location || '-'}</span></div>
+                                                                            {(reservation.service_details as any).request_note && getFilteredNoteText((reservation.service_details as any).request_note) && (
+                                                                                <div><span className="text-gray-500">요청사항:</span> <span className="text-gray-700">{getFilteredNoteText((reservation.service_details as any).request_note)}</span></div>
+                                                                            )}
+                                                                        </div>
+                                                                    )}
                                                                     {reservation.service_type === 'car' && reservation.service_details && (
                                                                         <div className="space-y-1 text-xs">
                                                                             <div><span className="text-gray-500">구분:</span> <span className="font-bold text-gray-900">{(reservation.service_details as any).way_type || '-'}</span></div>
@@ -1411,7 +1456,7 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                                                                             <div><span className="text-gray-500">승객수:</span> <span className="font-bold text-gray-900">{(reservation.service_details as any).passenger_count ?? reservation.priceDetail?.passenger_count ?? 0}명</span></div>
                                                                             <div><span className="text-gray-500">픽업일시:</span> <span className="font-bold text-gray-900">{formatDate((reservation.service_details as any).pickup_datetime)}</span></div>
                                                                             {((reservation.service_details as any).return_datetime || (reservation.service_details as any).dropoff_datetime) && (
-                                                                                <div><span className="text-gray-500">드롭일시:</span> <span className="font-bold text-gray-900">{formatDate((reservation.service_details as any).return_datetime || (reservation.service_details as any).dropoff_datetime)}</span></div>
+                                                                                <div><span className="text-gray-500">드랍일시:</span> <span className="font-bold text-gray-900">{formatDate((reservation.service_details as any).return_datetime || (reservation.service_details as any).dropoff_datetime)}</span></div>
                                                                             )}
                                                                             <div><span className="text-gray-500">픽업위치:</span> <span className="font-bold text-gray-900">{(reservation.service_details as any).pickup_location || '-'}</span></div>
                                                                             <div><span className="text-gray-500">드랍위치:</span> <span className="font-bold text-gray-900">{(reservation.service_details as any).dropoff_location || '-'}</span></div>
@@ -1446,6 +1491,15 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                                                                         const isShtDropoff = reservation.service_type === 'sht' &&
                                                                             (shtCat.includes('drop') || shtCat.includes('sending') || shtCat.includes('샌딩'));
                                                                         if (isShtDropoff) return null;
+                                                                        const reservationKey = String(reservation.reservation_id || '').trim();
+                                                                        const firstCruiseRow = reservation.service_type === 'cruise'
+                                                                            ? quoteData.reservations.find((row: any) =>
+                                                                                row.service_type === 'cruise' &&
+                                                                                String(row.reservation_id || '').trim() === reservationKey
+                                                                            )
+                                                                            : null;
+                                                                        const shouldShowAdditionalFee = reservation.service_type !== 'cruise' || firstCruiseRow === reservation;
+                                                                        if (!shouldShowAdditionalFee) return null;
                                                                         const fee = Number(reservation.manual_additional_fee || 0);
                                                                         const detail = String(reservation.manual_additional_fee_detail || '').trim();
                                                                         if (fee === 0 && !detail) return null;
@@ -1457,7 +1511,7 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                                                                         );
                                                                     })()}
                                                                     {/* 가격 상세 정보 (병합) - 맞춤 렌더 서비스 제외 (cruise, car, airport, hotel, rentcar, tour, sht) */}
-                                                                    {!['cruise', 'car', 'airport', 'hotel', 'rentcar', 'tour', 'sht'].includes(reservation.service_type) && reservation.priceDetail && (
+                                                                    {!['cruise', 'car', 'airport', 'hotel', 'rentcar', 'tour', 'ticket', 'sht'].includes(reservation.service_type) && reservation.priceDetail && (
                                                                         <div className="mt-2 pt-1 border-t border-gray-200 text-[11px] text-gray-600">
                                                                             {Object.entries(reservation.priceDetail as Record<string, any>)
                                                                                 .filter(([key, value]: [string, any]) =>
@@ -1514,7 +1568,7 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                                             </thead>
                                             <tbody>
                                                 {(() => {
-                                                    const serviceOrder: Record<string, number> = { cruise: 0, car: 1, sht: 2, airport: 3, hotel: 4, rentcar: 5, tour: 6 };
+                                                    const serviceOrder: Record<string, number> = { cruise: 0, car: 1, sht: 2, airport: 3, hotel: 4, rentcar: 5, tour: 6, ticket: 7 };
                                                     const sortedRaw = [...quoteData.reservations].sort((a, b) =>
                                                         (serviceOrder[a.service_type] ?? 99) - (serviceOrder[b.service_type] ?? 99)
                                                     );
@@ -1561,6 +1615,14 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                                                     return displaySorted.map((r, i) => {
                                                         const d = r.service_details as any;
                                                         const p = r.priceDetail as any;
+                                                        const reservationKey = String(r.reservation_id || '').trim();
+                                                        const firstCruiseRow = r.service_type === 'cruise'
+                                                            ? sorted.find((row) =>
+                                                                row.service_type === 'cruise' &&
+                                                                String(row.reservation_id || '').trim() === reservationKey
+                                                            )
+                                                            : null;
+                                                        const shouldShowReservationAdditionalFee = r.service_type !== 'cruise' || firstCruiseRow === r;
                                                         let rowAmountOverride: number | null = null;
 
                                                         // 서비스 상세명 줄 + 인원별 계산식 줄 목록 생성
@@ -1616,8 +1678,8 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                                                                 if (childExtraBedCount > 0) calcLines.push(`아동 엑스트라베드 ${childExtraBedPrice.toLocaleString()}동 × ${childExtraBedCount}명`);
                                                                 if (infantCount > 0) calcLines.push(`유아 ${infantPrice.toLocaleString()}동 × ${infantCount}명`);
                                                                 if (singleCount > 0) calcLines.push(`싱글차액 ${singlePrice.toLocaleString()}동 × ${singleCount}명`);
-                                                                const pbGrandTotal = Number(cruisePb?.grand_total || 0);
-                                                                if (pbGrandTotal > 0) rowAmountOverride = pbGrandTotal;
+                                                                const roomTotal = Number(storedRoom?.total || d?.room_total_price || 0);
+                                                                if (roomTotal > 0) rowAmountOverride = roomTotal;
                                                                 break;
                                                             }
                                                             case 'airport': {
@@ -1684,6 +1746,56 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                                                                 calcLines.push(`${cap}명 × ${tourUnitPrice.toLocaleString()}동`);
                                                                 break;
                                                             }
+                                                            case 'ticket': {
+                                                                const ticketName = d?.ticket_name || d?.program_selection || '';
+                                                                if (ticketName) descLines.push(`🎫 티켓명: ${ticketName}`);
+                                                                if (d?.program_selection && d?.program_selection !== ticketName) {
+                                                                    descLines.push(`프로그램선택: ${d.program_selection}`);
+                                                                }
+                                                                if (d?.usage_date) descLines.push(`사용일자: ${formatDate(d.usage_date)}`);
+                                                                descLines.push(`셔틀신청: ${d?.shuttle_required ? '신청' : '미신청'}`);
+                                                                if (d?.pickup_location) descLines.push(`픽업장소: ${d.pickup_location}`);
+                                                                if (d?.dropoff_location) descLines.push(`드롭장소: ${d.dropoff_location}`);
+
+                                                                const ticketPb = r.price_breakdown || d?.price_breakdown || null;
+                                                                const ticketItems = Array.isArray(ticketPb?.line_items) ? ticketPb.line_items : [];
+                                                                if (ticketItems.length > 0) {
+                                                                    ticketItems.forEach((item: any) => {
+                                                                        const labelRaw = String(item?.label || '');
+                                                                        const label = labelRaw.includes('성인')
+                                                                            ? '성인요금'
+                                                                            : labelRaw.includes('아동')
+                                                                                ? '아동요금'
+                                                                                : labelRaw.includes('셔틀')
+                                                                                    ? '셔틀요금'
+                                                                                    : (labelRaw || '티켓요금');
+                                                                        const unitPrice = Number(item?.unit_price || 0);
+                                                                        const quantity = Number(item?.quantity || 0);
+                                                                        const total = Number(item?.total || (unitPrice * quantity) || 0);
+                                                                        calcLines.push(`${label}: ${unitPrice.toLocaleString()}동 × ${quantity}명 = ${total.toLocaleString()}동`);
+                                                                    });
+                                                                } else {
+                                                                    const adultCount = Math.max(0, Number(d?.adult_count || 0));
+                                                                    const childCount = Math.max(0, Number(d?.child_count || 0));
+                                                                    const shuttleCount = d?.shuttle_required ? Math.max(0, Number(d?.shuttle_count || 0)) : 0;
+                                                                    const storedTotal = Number(d?.total_price || r.amount || 0);
+                                                                    const buckets = [
+                                                                        adultCount > 0 ? { label: '성인요금', quantity: adultCount } : null,
+                                                                        childCount > 0 ? { label: '아동요금', quantity: childCount } : null,
+                                                                        shuttleCount > 0 ? { label: '셔틀요금', quantity: shuttleCount } : null,
+                                                                    ].filter(Boolean) as Array<{ label: string; quantity: number }>;
+                                                                    if (buckets.length === 1 && storedTotal > 0) {
+                                                                        const bucket = buckets[0];
+                                                                        const ticketUnitPrice = bucket.quantity > 0 ? Math.round(storedTotal / bucket.quantity) : 0;
+                                                                        calcLines.push(`${bucket.label}: ${ticketUnitPrice.toLocaleString()}동 × ${bucket.quantity}명 = ${storedTotal.toLocaleString()}동`);
+                                                                    } else if (storedTotal > 0) {
+                                                                        calcLines.push(`티켓 합계: ${storedTotal.toLocaleString()}동`);
+                                                                    }
+                                                                }
+                                                                const grandTotal = Number(ticketPb?.grand_total || 0);
+                                                                if (grandTotal > 0) rowAmountOverride = grandTotal;
+                                                                break;
+                                                            }
                                                             case 'car':
                                                             case 'sht': {
                                                                 if (r.service_type === 'sht') {
@@ -1713,19 +1825,22 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                                                         const additionalFeeItems = Array.isArray(priceBreakdown?.additional_fee_items) ? priceBreakdown.additional_fee_items : [];
                                                         const additionalFeeDetail = String(priceBreakdown?.additional_fee_detail || r.manual_additional_fee_detail || '').trim();
                                                         const manualAdditionalFee = Number(priceBreakdown?.additional_fee_manual ?? r.manual_additional_fee ?? 0);
+                                                        const reservationAdditionalFeeAmount = additionalFeeItems.length > 0
+                                                            ? additionalFeeItems.reduce((sum: number, item: any) => sum + Number(item?.amount || 0), 0)
+                                                            : manualAdditionalFee;
 
-                                                        if (additionalFeeItems.length > 0) {
+                                                        if (shouldShowReservationAdditionalFee && additionalFeeItems.length > 0) {
                                                             // 추가/차감 항목별 상세 표시
                                                             additionalFeeItems.forEach((item: any) => {
                                                                 const amount = Number(item?.amount || 0);
                                                                 if (!amount) return;
                                                                 calcLines.push(`${item?.name || '추가내역'} ${formatSignedDong(amount)}`);
                                                             });
-                                                        } else if (manualAdditionalFee !== 0) {
+                                                        } else if (shouldShowReservationAdditionalFee && manualAdditionalFee !== 0) {
                                                             // 직접 추가/차감만 있는 경우
                                                             calcLines.push(additionalFeeDetail ? `${additionalFeeDetail} ${formatSignedDong(manualAdditionalFee)}` : `추가/차감: ${formatSignedDong(manualAdditionalFee)}`);
                                                         }
-                                                        if (additionalFeeDetail && additionalFeeItems.length === 0 && manualAdditionalFee === 0) {
+                                                        if (shouldShowReservationAdditionalFee && additionalFeeDetail && additionalFeeItems.length === 0 && manualAdditionalFee === 0) {
                                                             calcLines.push(additionalFeeDetail);
                                                         }
 
@@ -1764,15 +1879,14 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                                                             ).reduce((sum, value) => sum + Number(value || 0), 0)
                                                             : null;
 
-                                                        const rowAmountFallback = r.service_type === 'sht'
-                                                            ? baseRowAmount + manualAdditionalFee
-                                                            : baseRowAmount;
+                                                        const rowAmountAdditional = r.service_type === 'sht'
+                                                            ? manualAdditionalFee
+                                                            : (shouldShowReservationAdditionalFee ? reservationAdditionalFeeAmount : 0);
+                                                        const rowAmountFallback = baseRowAmount + rowAmountAdditional;
 
                                                         const rowAmount = mergedAirportReservationTotal !== null && Number.isFinite(mergedAirportReservationTotal)
                                                             ? mergedAirportReservationTotal
-                                                            : (rowAmountOverride !== null
-                                                                ? Number(rowAmountOverride)
-                                                                : (hasReservationTotal && reservationRowCount <= 1 ? reservationRowTotal : rowAmountFallback));
+                                                            : (hasReservationTotal && reservationRowCount <= 1 ? reservationRowTotal : rowAmountFallback);
 
                                                         return (
                                                             <tr key={`pay-row-${i}`} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>

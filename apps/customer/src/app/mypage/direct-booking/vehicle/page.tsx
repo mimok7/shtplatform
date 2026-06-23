@@ -227,6 +227,9 @@ function DirectBookingVehicleContent() {
             const reservationNumber = (count || 0) + 1;
             const userName = existingUser?.name || user.email?.split('@')[0] || '사용자';
             const reservationTitle = `${userName} 예약 ${reservationNumber}`;
+            const passengerCount = Number(quoteForm.passenger_count || 1);
+            const reservationUnitPrice = Number(vehicleData.priceInfo?.price || 0);
+            const reservationTotalPrice = reservationUnitPrice * passengerCount;
 
             // 새 예약 생성
             const { data: newReservation, error: reservationError } = await supabase
@@ -236,7 +239,8 @@ function DirectBookingVehicleContent() {
                     re_quote_id: quoteId,
                     re_type: 'sht',
                     re_status: 'pending',
-                    re_created_at: new Date().toISOString()
+                    re_created_at: new Date().toISOString(),
+                    total_amount: reservationTotalPrice
                 })
                 .select()
                 .single();
@@ -262,9 +266,18 @@ function DirectBookingVehicleContent() {
             const vehicleReservationData = {
                 reservation_id: newReservation.re_id,
                 vehicle_number: vehicleData.priceInfo.car_code.replace('차량', 'Vehicle '),
-                seat_number: quoteForm.passenger_count,
+                seat_number: String(passengerCount),
                 color_label: vehicleData.priceInfo.car_type,
                 sht_category: shtCategory,
+                car_price_code: vehicleData.priceInfo.car_code || null,
+                car_count: 1,
+                passenger_count: passengerCount,
+                unit_price: reservationUnitPrice,
+                car_total_price: reservationTotalPrice,
+                pickup_datetime: quoteForm.service_date || null,
+                usage_date: quoteForm.service_date || null,
+                pickup_location: quoteForm.pickup_location || null,
+                dropoff_location: quoteForm.destination || null,
                 request_note: fullRequestNote || null
             };
 

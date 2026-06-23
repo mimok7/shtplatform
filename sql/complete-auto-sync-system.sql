@@ -103,6 +103,10 @@ BEGIN
                  ) 
                  FROM reservation_rentcar 
                  WHERE reservation_id = p_reservation_id), 0 )
+    -- 스하 차량 서비스
+    + COALESCE( (SELECT SUM(COALESCE(car_total_price, 0))
+                 FROM reservation_car_sht
+                 WHERE reservation_id = p_reservation_id), 0 )
   INTO v_total;
 
   -- reservation 테이블의 total_amount 업데이트
@@ -170,6 +174,12 @@ FOR EACH ROW EXECUTE FUNCTION trg_after_service_change_update_total();
 DROP TRIGGER IF EXISTS trg_reservation_rentcar_total ON reservation_rentcar;
 CREATE TRIGGER trg_reservation_rentcar_total
 AFTER INSERT OR UPDATE OR DELETE ON reservation_rentcar
+FOR EACH ROW EXECUTE FUNCTION trg_after_service_change_update_total();
+
+-- 스하 차량 서비스
+DROP TRIGGER IF EXISTS trg_reservation_car_sht_total ON reservation_car_sht;
+CREATE TRIGGER trg_reservation_car_sht_total
+AFTER INSERT OR UPDATE OR DELETE ON reservation_car_sht
 FOR EACH ROW EXECUTE FUNCTION trg_after_service_change_update_total();
 
 -- ========================================

@@ -78,7 +78,7 @@ const SERVICE_CONFIGS: Record<string, ServiceConfig> = {
     table: 'reservation_tour',
     fields: [
       { key: 'pickup_location', label: '픽업위치' },
-      { key: 'dropoff_location', label: '드롭위치' }
+      { key: 'dropoff_location', label: '드랍위치' }
     ]
   },
   car: {
@@ -99,21 +99,21 @@ const SERVICE_CONFIGS: Record<string, ServiceConfig> = {
     table: 'reservation_car_sht',
     fields: [
       { key: 'pickup_location', label: '픽업위치' },
-      { key: 'dropoff_location', label: '드롭위치' }
+      { key: 'dropoff_location', label: '드랍위치' }
     ]
   },
   sht: {
     table: 'reservation_car_sht',
     fields: [
       { key: 'pickup_location', label: '픽업위치' },
-      { key: 'dropoff_location', label: '드롭위치' }
+      { key: 'dropoff_location', label: '드랍위치' }
     ]
   },
   car_sht: {
     table: 'reservation_car_sht',
     fields: [
       { key: 'pickup_location', label: '픽업위치' },
-      { key: 'dropoff_location', label: '드롭위치' }
+      { key: 'dropoff_location', label: '드랍위치' }
     ]
   }
 };

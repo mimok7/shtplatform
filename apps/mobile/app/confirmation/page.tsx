@@ -241,7 +241,6 @@ export default function MobileConfirmationPage() {
         .select('reservation_id');
 
       if (updateError) {
-        console.warn('확인서 상태 업데이트 실패(삽입 시도로 진행):', updateError.message);
       }
 
       const updatedSet = new Set((updatedRows || []).map((r: any) => String(r.reservation_id)));
@@ -255,7 +254,6 @@ export default function MobileConfirmationPage() {
         }));
         const { error: insertError } = await supabase.from('confirmation_status').insert(payload);
         if (insertError) {
-          console.warn('확인서 상태 삽입 실패:', insertError.message);
         }
       }
 

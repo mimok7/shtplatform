@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import ManagerLayout from '@/components/ManagerLayout';
+import { safeWriteClipboard } from '@/lib/browserCompat';
 import supabase from '@/lib/supabase';
 
 interface PendingReservationRow {
@@ -821,7 +822,8 @@ ${totalAmount > 0 ? `${formatAmount(totalAmount)}동` : '-'}
     const copyTitle = async () => {
         if (!generatedTitle) return;
         try {
-            await navigator.clipboard.writeText(generatedTitle);
+            const copied = await safeWriteClipboard(generatedTitle);
+            if (!copied) throw new Error('clipboard_unavailable');
             setCopiedTitle(true);
         } catch {
             setCopiedTitle(false);
@@ -832,7 +834,8 @@ ${totalAmount > 0 ? `${formatAmount(totalAmount)}동` : '-'}
     const copyBody = async () => {
         if (!generatedBody) return;
         try {
-            await navigator.clipboard.writeText(generatedBody);
+            const copied = await safeWriteClipboard(generatedBody);
+            if (!copied) throw new Error('clipboard_unavailable');
             setCopiedBody(true);
         } catch {
             setCopiedBody(false);

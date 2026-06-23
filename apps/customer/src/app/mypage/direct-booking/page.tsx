@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import PageWrapper from '../../../components/PageWrapper';
 import Link from 'next/link';
 import supabase from '@/lib/supabase';
+import { buildProfileCompletionPath, hasRequiredProfileFields } from '@/lib/profileRequirements';
 import logger from '../../../lib/logger';
 
 function DirectBookingContent() {
@@ -117,17 +118,32 @@ function DirectBookingContent() {
             // 사용자 프로필 정보 조회
             const { data: profile, error: profileError } = await supabase
                 .from('users')
-                .select('name, email')
+                .select('name, email, english_name, phone_number')
                 .eq('id', sessionUser.id)
                 .maybeSingle();
 
             if (profileError) {
                 logger.warn('❌ 사용자 프로필 조회 실패:', profileError);
                 // 프로필이 없어도 계속 진행
-                setUserProfile({ name: null, email: sessionUser.email });
+                const fallbackProfile = {
+                    name: null,
+                    email: sessionUser.email,
+                    english_name: null,
+                    phone_number: null,
+                };
+                setUserProfile(fallbackProfile);
+                router.replace(buildProfileCompletionPath('/mypage/direct-booking'));
             } else {
                 logger.debug('✅ 사용자 프로필:', profile);
                 setUserProfile(profile);
+                if (!hasRequiredProfileFields({
+                    email: profile?.email || sessionUser.email || '',
+                    name: profile?.name || '',
+                    english_name: profile?.english_name || '',
+                    phone_number: profile?.phone_number || '',
+                })) {
+                    router.replace(buildProfileCompletionPath('/mypage/direct-booking'));
+                }
             }
         } catch (error) {
             logger.error('❌ 사용자 정보 로드 실패:', error);
@@ -371,7 +387,8 @@ function DirectBookingContent() {
     const getServiceDisplayName = (serviceType: string) => {
         const names: { [key: string]: string } = {
             cruise: '크루즈',
-            airport: '공항 서비스',
+            cruise_vehicle: '크루즈 차량',
+            airport: '공항 서비스 예약',
             hotel: '호텔',
             rentcar: '렌터카',
             tour: '투어',
@@ -597,14 +614,25 @@ function DirectBookingContent() {
             label: '크루즈 예약',
             href: '/mypage/direct-booking/cruise',
             description: '크루즈 여행 객실 및 차량 직접 예약',
+            bg: 'bg-blue-100',
             color: 'from-blue-500 to-cyan-500',
             type: 'cruise'
         },
         {
+            icon: '🚗',
+            label: '크루즈 차량만 추가',
+            href: '/mypage/direct-booking/cruise/vehicle',
+            description: '기존 크루즈 예약에 선착장 차량만 추가 예약',
+            bg: 'bg-indigo-100',
+            color: 'from-indigo-500 to-blue-500',
+            type: 'cruise_vehicle'
+        },
+        {
             icon: '✈️',
-            label: '공항 서비스',
+            label: '공항 서비스 예약',
             href: '/mypage/direct-booking/airport',
             description: '공항 픽업/샌딩 서비스 직접 예약',
+            bg: 'bg-sky-100',
             color: 'from-sky-500 to-blue-500',
             type: 'airport'
         },
@@ -613,6 +641,7 @@ function DirectBookingContent() {
             label: '호텔 예약',
             href: '/mypage/direct-booking/hotel',
             description: '호텔 숙박 서비스 직접 예약',
+            bg: 'bg-purple-100',
             color: 'from-purple-500 to-pink-500',
             type: 'hotel'
         },
@@ -621,6 +650,7 @@ function DirectBookingContent() {
             label: '렌터카 예약',
             href: '/mypage/direct-booking/rentcar',
             description: '렌터카 서비스 직접 예약',
+            bg: 'bg-green-100',
             color: 'from-green-500 to-emerald-500',
             type: 'rentcar'
         },
@@ -629,6 +659,7 @@ function DirectBookingContent() {
             label: '투어 예약',
             href: '/mypage/direct-booking/tour',
             description: '관광 투어 서비스 직접 예약',
+            bg: 'bg-orange-100',
             color: 'from-orange-500 to-red-500',
             type: 'tour'
         },
@@ -637,6 +668,7 @@ function DirectBookingContent() {
             label: '패키지 예약',
             href: '/mypage/direct-booking/package',
             description: '크루즈, 공항 픽업/샌딩, 투어가 포함된 패키지 예약',
+            bg: 'bg-amber-100',
             color: 'from-amber-500 to-orange-500',
             type: 'package'
         },
@@ -645,6 +677,7 @@ function DirectBookingContent() {
             label: '티켓 예약',
             href: '/mypage/direct-booking/ticket',
             description: '드래곤펄 동굴 투어 및 기타 티켓 구매대행',
+            bg: 'bg-teal-100',
             color: 'from-teal-500 to-cyan-500',
             type: 'ticket'
         }

@@ -113,6 +113,7 @@ function CruiseCarReservationEditContent() {
     const [vehicleForms, setVehicleForms] = useState<VehicleFormData[]>([createEmptyVehicleForm()]);
     const [cruiseCheckin, setCruiseCheckin] = useState('');
     const [additionalFee, setAdditionalFee] = useState(0);
+    const [additionalFeeInput, setAdditionalFeeInput] = useState('');
     const [additionalFeeDetail, setAdditionalFeeDetail] = useState('');
     const [feeTemplates, setFeeTemplates] = useState<{ id: number; name: string; amount: number }[]>([]);
     const [authChecked, setAuthChecked] = useState(false);
@@ -127,7 +128,12 @@ function CruiseCarReservationEditContent() {
         [vehicleForms]
     );
 
-    const finalTotalPrice = baseTotalPrice + additionalFee;
+    const finalTotalPrice = Math.max(0, baseTotalPrice + additionalFee);
+
+    const applyAdditionalFeeValue = (nextValue: number) => {
+        setAdditionalFee(nextValue);
+        setAdditionalFeeInput(nextValue === 0 ? '' : String(nextValue));
+    };
 
     // ✅ 인증 상태 확인 (403 에러 사전 방지)
     useEffect(() => {
@@ -143,7 +149,6 @@ function CruiseCarReservationEditContent() {
                 setAuthChecked(true);
             } catch (err) {
                 if (cancelled) return;
-                console.warn('인증 확인 오류:', err);
                 router.replace('/login');
             }
         };
@@ -315,7 +320,6 @@ function CruiseCarReservationEditContent() {
             .maybeSingle();
 
         if (error) {
-            console.warn('⚠️ rentcar_price 코드 조회 실패:', error);
             return null;
         }
         return data as RentcarPriceOption | null;
@@ -339,7 +343,6 @@ function CruiseCarReservationEditContent() {
         }
 
         if (!data) {
-            console.warn('⚠️ 일치하는 rentcar_price 데이터가 없습니다:', { wayType, route, vehicleType });
             return null;
         }
 
@@ -411,7 +414,6 @@ function CruiseCarReservationEditContent() {
                 .order('created_at', { ascending: true });
 
             if (carErr) {
-                console.warn('⚠️ 크루즈 차량 예약 상세 조회 실패:', carErr);
             }
 
             let quoteInfo = null as { title: string } | null;
@@ -499,8 +501,8 @@ function CruiseCarReservationEditContent() {
             const savedAdditionalFee = Number(resRow.price_breakdown?.additional_fee);
             const derivedAdditionalFee = Number.isFinite(savedAdditionalFee)
                 ? savedAdditionalFee
-                : Math.max(0, Number(resRow.total_amount || 0) - baseTotal);
-            setAdditionalFee(derivedAdditionalFee);
+                : Number(resRow.total_amount || 0) - baseTotal;
+            applyAdditionalFeeValue(derivedAdditionalFee);
             setAdditionalFeeDetail(
                 String(
                     resRow.manual_additional_fee_detail
@@ -582,7 +584,6 @@ function CruiseCarReservationEditContent() {
                 .insert(extendedRows);
 
             if (insertResult.error && /does not exist|column/i.test(insertResult.error.message || '')) {
-                console.warn('⚠️ 확장 컬럼 미지원, 기본 컬럼으로 저장 재시도');
                 insertResult = await supabase
                     .from('reservation_cruise_car')
                     .insert(basicRows);
@@ -628,7 +629,6 @@ function CruiseCarReservationEditContent() {
                 .eq('re_id', reservationId);
 
             if (reservationError) {
-                console.warn('⚠️ reservation 동기화 실패:', reservationError);
             }
 
             await saveAdditionalFeeTemplateFromInput({
@@ -651,7 +651,6 @@ function CruiseCarReservationEditContent() {
                     },
                 });
             } catch (trackErr) {
-                console.warn('⚠️ 변경 추적 기록 실패(저장은 계속):', trackErr);
             }
 
             alert('크루즈 차량 예약이 성공적으로 수정되었습니다.');
@@ -1050,7 +1049,7 @@ function CruiseCarReservationEditContent() {
                                             onChange={(e) => {
                                                 const tpl = feeTemplates.find(t => String(t.id) === e.target.value);
                                                 if (tpl) {
-                                                    setAdditionalFee(tpl.amount);
+                                                    applyAdditionalFeeValue(tpl.amount);
                                                     setAdditionalFeeDetail(tpl.name);
                                                 }
                                             }}
@@ -1062,15 +1061,28 @@ function CruiseCarReservationEditContent() {
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">추가요금 (VND)</label>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">직접입력 추가/차감 금액 (VND)</label>
                                         <input
                                             type="number"
-                                            value={additionalFee}
-                                            onChange={(e) => setAdditionalFee(parseInt(e.target.value, 10) || 0)}
-                                            title="추가요금"
+                                            value={additionalFeeInput}
+                                            onChange={(e) => {
+                                                const nextValue = e.target.value;
+                                                setAdditionalFeeInput(nextValue);
+
+                                                if (nextValue === '' || nextValue === '-') {
+                                                    setAdditionalFee(0);
+                                                    return;
+                                                }
+
+                                                const parsedValue = Number(nextValue);
+                                                if (Number.isFinite(parsedValue)) {
+                                                    setAdditionalFee(parsedValue);
+                                                }
+                                            }}
+                                            title="직접입력 추가/차감 금액"
                                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                            min="0"
                                         />
+                                        <p className="text-xs text-gray-500 mt-1">할인은 음수(-)로 입력하면 추가내역 차감으로 저장됩니다.</p>
                                     </div>
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">추가요금 내역</label>
@@ -1084,7 +1096,7 @@ function CruiseCarReservationEditContent() {
                                     </div>
                                 </div>
 
-                                {(baseTotalPrice > 0 || additionalFee > 0) && (
+                                {(baseTotalPrice > 0 || additionalFee !== 0) && (
                                     <div className="mt-4 pt-4 border-t border-gray-100 space-y-2">
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700 mb-1">기본 차량 금액</label>
@@ -1093,9 +1105,9 @@ function CruiseCarReservationEditContent() {
                                             </div>
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">추가요금</label>
-                                            <div className="text-lg font-semibold text-gray-900">
-                                                {additionalFee.toLocaleString()}동
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">{additionalFee >= 0 ? '추가요금' : '차감금액'}</label>
+                                            <div className={`text-lg font-semibold ${additionalFee >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
+                                                {additionalFee > 0 ? '+' : ''}{additionalFee.toLocaleString()}동
                                             </div>
                                         </div>
                                         {additionalFeeDetail.trim() && (

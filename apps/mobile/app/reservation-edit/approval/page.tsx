@@ -936,7 +936,6 @@ export default function ReservationEditApprovalPage() {
                         break;
                 }
             } catch (e) {
-                console.warn('사용일자 조회 실패:', e);
             }
 
             setReservationContext({ cruiseName, checkin, usageDate, usageDateLabel, vehicleTypes });
@@ -1266,14 +1265,12 @@ export default function ReservationEditApprovalPage() {
                     const { error } = await supabase.from(mapping.baseTable).update(payload).eq('id', target.id);
                     if (error) throw error;
                 } else {
-                    console.warn('⚠️ 매칭되는 기존 행을 찾지 못해 스킵:', { way_type: requestedRow?.way_type, id: requestedRow?.id });
                 }
             }
 
             // ✅ 기존 행 중 처리되지 않은 행 보존 확인
             const unprocessedRows = baseRows.filter((r: any) => !processedIds.has(r?.id));
             if (unprocessedRows.length > 0) {
-                console.log(`ℹ️ ${unprocessedRows.length}개 기존 행 유지:`, unprocessedRows.map(r => ({ id: r.id, way_type: r.way_type })));
             }
         } else {
             // 임시 테이블에서 직접 로드
@@ -1465,14 +1462,12 @@ export default function ReservationEditApprovalPage() {
                             const { error: updateErr } = await supabase.from(mapping.baseTable).update(payload).eq('id', target.id);
                             if (updateErr) throw updateErr;
                         } else {
-                            console.warn('⚠️ 매칭되는 기존 행을 찾지 못해 스킵:', { way_type: requestedRow?.way_type, id: requestedRow?.id });
                         }
                     }
 
                     // ✅ 기존 행 중 처리되지 않은 행(드롭 수정 시 픽업, 픽업 수정 시 드롭) 보존 확인
                     const unprocessedRows = baseRows.filter((r: any) => !processedIds.has(r?.id));
                     if (unprocessedRows.length > 0) {
-                        console.log(`ℹ️ ${unprocessedRows.length}개 기존 행 유지:`, unprocessedRows.map(r => ({ id: r.id, way_type: r.way_type })));
                     }
                 } else {
                     const payload: Record<string, any> = {};

@@ -5,29 +5,6 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import supabase, { hasSupabaseEnv } from '@/lib/supabase';
 import { canAccessManagerApp } from '@/lib/auth';
 
-const TAB_SESSION_KEY = 'sht:tab:id';
-const ACTIVE_TAB_KEY = 'sht:active:tab:mobile';
-const ACTIVE_TAB_PREFIX = 'sht:active:tab:user:mobile:';
-
-function getOrCreateTabId(): string {
-  if (typeof window === 'undefined') return '';
-  let tabId = sessionStorage.getItem(TAB_SESSION_KEY);
-  if (!tabId) {
-    tabId = `tab_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
-    sessionStorage.setItem(TAB_SESSION_KEY, tabId);
-  }
-  return tabId;
-}
-
-function markActiveTab(userId?: string): void {
-  if (typeof window === 'undefined') return;
-  const tabId = getOrCreateTabId();
-  localStorage.setItem(ACTIVE_TAB_KEY, JSON.stringify({ tabId, ts: Date.now() }));
-  if (userId) {
-    localStorage.setItem(`${ACTIVE_TAB_PREFIX}${userId}`, JSON.stringify({ tabId, ts: Date.now() }));
-  }
-}
-
 export default function LoginPage() {
   return (
     <Suspense fallback={<LoginFallback />}>
@@ -60,7 +37,6 @@ function LoginPageContent() {
       if (!data.session) return;
 
       if (await canAccessManagerApp(data.session.user)) {
-        markActiveTab(data.session.user.id);
         router.replace('/');
         return;
       }
@@ -100,7 +76,6 @@ function LoginPageContent() {
       return;
     }
 
-    markActiveTab(data.user.id);
     router.replace('/');
     setLoading(false);
   };

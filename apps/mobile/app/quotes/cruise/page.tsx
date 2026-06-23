@@ -912,9 +912,7 @@ function ManagerCruiseQuoteForm() {
 
     const handleSelectTitle = async (id: string) => {
         try {
-            console.log('handleSelectTitle start', id);
             const { data: items, error: itemsErr } = await supabase.from('quote_item').select('service_type,service_ref_id,quantity').eq('quote_id', id);
-            console.log('quote_item result', items, itemsErr);
             if (itemsErr) throw itemsErr;
 
             const roomItems = (items || []).filter((it: any) => it.service_type === 'room');
@@ -925,7 +923,6 @@ function ManagerCruiseQuoteForm() {
             for (const it of roomItems) {
                 const { data: r, error: rErr } = await supabase.from('room').select('room_code,extra_count,person_count,single_charge_count').eq('id', it.service_ref_id).maybeSingle();
                 if (rErr) {
-                    console.log('room load failed for', it.service_ref_id, rErr);
                     continue;
                 }
                 // create categories for the labels; data uses single extra_count
@@ -942,20 +939,17 @@ function ManagerCruiseQuoteForm() {
             for (const it of carItems) {
                 const { data: c, error: cErr } = await supabase.from('car').select('car_code,car_count').eq('id', it.service_ref_id).single();
                 if (cErr) {
-                    console.log('car load failed for', it.service_ref_id, cErr);
                     continue;
                 }
                 vehicles.push({ car_type: c.car_code, car_category: '', car_code: c.car_code, count: c.car_count || it.quantity || 1 });
             }
 
-            console.log('mapped rooms/vehicles', rooms, vehicles);
 
             // also load the quote meta (title/status) for display in the right card
             try {
                 const { data: quoteData, error: quoteErr } = await supabase.from('quote').select('title,status,created_at').eq('id', id).single();
                 if (!quoteErr && quoteData) setQuote(quoteData);
             } catch (qe) {
-                console.log('quote load failed', qe);
             }
 
             // set quoteRooms/quoteCars for the right info card (flat rows)
@@ -1229,7 +1223,6 @@ function ManagerCruiseQuoteForm() {
                         }
                     }
                 } catch (innerErr) {
-                    console.warn('서비스 상세 로드 실패:', innerErr);
                 }
             }
 
@@ -1525,7 +1518,6 @@ function ManagerCruiseQuoteForm() {
                             .maybeSingle();
                         if (priceRow && priceRow.price != null) unitPrice = Number(priceRow.price) || 0;
                     } catch (pe) {
-                        console.warn('rentcar price lookup failed', pe);
                     }
 
                     const originalUnitPrice = unitPrice;
@@ -1565,7 +1557,6 @@ function ManagerCruiseQuoteForm() {
                 const summary = generateNaturalSummary(detailed || detailedServices, exchangeRate, selectedDiscount, isComparisonMode, isCarComparisonMode);
                 setNaturalSummary(summary);
             } catch (e) {
-                console.warn('저장 후 상세 갱신 실패:', e);
             }
 
             alert('크루즈 견적이 저장되었습니다.');

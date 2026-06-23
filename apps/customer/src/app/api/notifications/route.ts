@@ -1,6 +1,45 @@
 import { NextRequest, NextResponse } from 'next/server';
 import serviceSupabase from '../../../lib/serviceSupabase';
 
+function toYmdInKst(value: string | null | undefined): string | null {
+  if (!value) return null;
+
+  const plainYmd = String(value).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(plainYmd)) return plainYmd;
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+
+  return formatter.format(date);
+}
+
+function todayYmdInKst(): string {
+  return toYmdInKst(new Date().toISOString()) || new Date().toISOString().slice(0, 10);
+}
+
+function isExpiredCustomerReminder(row: any, todayYmd: string): boolean {
+  if (String(row?.category || '') !== 'customer_reminder') return false;
+
+  const metadata = row?.metadata && typeof row.metadata === 'object' ? row.metadata : {};
+  const serviceDate = toYmdInKst(
+    metadata.serviceDate
+    || metadata.service_date
+    || metadata.notification_date
+    || metadata.usageDate
+    || metadata.usage_date
+  );
+
+  if (!serviceDate) return false;
+  return serviceDate < todayYmd;
+}
+
 async function authenticateUser(req: NextRequest) {
   if (!serviceSupabase) {
     return { ok: false as const, status: 500, error: '서버 설정 오류' };
@@ -37,7 +76,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: `알림 조회 실패: ${error.message}` }, { status: 500 });
   }
 
-  return NextResponse.json({ rows: data || [] });
+  const todayYmd = todayYmdInKst();
+  const rows = (data || []).filter((row: any) => !isExpiredCustomerReminder(row, todayYmd));
+
+  return NextResponse.json({ rows });
 }
 
 export async function PATCH(req: NextRequest) {

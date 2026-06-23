@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import supabase from '@/lib/supabase';
+import { clearInvalidSession, isInvalidRefreshTokenError } from '@/lib/authRecovery';
 
 interface AuthState {
     user: any | null;
@@ -13,6 +14,16 @@ const AUTH_CACHE_KEY = 'app:auth:cache';
 const TAB_SESSION_KEY = 'sht:tab:id';
 const ACTIVE_TAB_PREFIX = 'sht:active:tab:user:customer:';
 let authCache: { user: any | null; timestamp: number } | null = null;
+
+function isMobileOrStandalone(): boolean {
+    if (typeof window === 'undefined') return false;
+    const userAgent = window.navigator.userAgent || '';
+    const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+    const isStandalone =
+        window.matchMedia?.('(display-mode: standalone)').matches ||
+        (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
+    return isMobileDevice || isStandalone;
+}
 
 function getOrCreateTabId() {
     if (typeof window === 'undefined') return '';
@@ -36,6 +47,7 @@ function parseActiveTabValue(raw: string | null): string | null {
 
 function isActiveTabOwner(userId: string): boolean {
     if (typeof window === 'undefined') return true;
+    if (isMobileOrStandalone()) return true;
     const activeRaw = localStorage.getItem(`${ACTIVE_TAB_PREFIX}${userId}`);
     const activeTabId = parseActiveTabValue(activeRaw);
     if (!activeTabId) return true;
@@ -132,6 +144,13 @@ export function useAuth(redirectOnFail: string = '/login') {
                 }
             } catch (err) {
                 if (cancelled) return;
+                if (isInvalidRefreshTokenError(err)) {
+                    await clearInvalidSession();
+                    writeSessionCache(null);
+                    setAuthState({ user: null, loading: false, error: err as Error });
+                    router.replace(redirectOnFail);
+                    return;
+                }
                 // 오류 발생 시 캐시된 사용자를 유지 (강제 로그아웃 금지)
                 setAuthState(prev => ({ ...prev, loading: false, error: err as Error }));
             }
@@ -155,6 +174,7 @@ export function useAuth(redirectOnFail: string = '/login') {
         });
 
         const handleStorage = (e: StorageEvent) => {
+            if (isMobileOrStandalone()) return;
             if (cancelled || !e.key || !e.key.startsWith(ACTIVE_TAB_PREFIX)) return;
             const cachedUser = readSessionCache();
             if (!cachedUser?.id) return;
@@ -190,6 +210,13 @@ export function useAuth(redirectOnFail: string = '/login') {
                 setAuthState({ user: null, loading: false, error: null });
             }
         } catch (err) {
+            if (isInvalidRefreshTokenError(err)) {
+                await clearInvalidSession();
+                writeSessionCache(null);
+                setAuthState({ user: null, loading: false, error: err as Error });
+                router.replace(redirectOnFail);
+                return;
+            }
             setAuthState(prev => ({ ...prev, error: err as Error }));
         }
     };

@@ -154,7 +154,6 @@ export default function ReservationsPage() {
             reservationCountByEmail[email] = (reservationCountByEmail[email] || 0) + (countByUserId[uid] || 0);
           });
         } catch (countErr) {
-          console.warn('이메일별 전체 예약 건수 조회 실패:', countErr);
         }
       }
       setEmailReservationCountMap(reservationCountByEmail);
@@ -243,7 +242,6 @@ export default function ReservationsPage() {
           }
         }
       } catch (seqErr) {
-        console.warn('프로모션 순번 계산 실패:', seqErr);
       }
 
       // 정렬

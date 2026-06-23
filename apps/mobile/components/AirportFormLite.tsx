@@ -201,7 +201,6 @@ export default function AirportFormLite({ quoteId, onSuccess }: Props) {
                         .maybeSingle();
                     if (priceRow && priceRow.price != null) unitPrice = Number(priceRow.price) || 0;
                 } catch (e) {
-                    console.warn('공항 단가 조회 실패, 0 사용', e);
                     unitPrice = 0;
                 }
 

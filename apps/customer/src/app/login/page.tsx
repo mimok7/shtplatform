@@ -6,10 +6,21 @@ import supabase from '@/lib/supabase';
 import { setCachedUser } from '@/lib/authCache';
 import { primeAuthCache } from '@/hooks/useAuth';
 import { clearInvalidSession, isInvalidRefreshTokenError } from '@/lib/authRecovery';
+import { buildProfileCompletionPath, hasRequiredProfileFields } from '@/lib/profileRequirements';
 
 const TAB_SESSION_KEY = 'sht:tab:id';
 const ACTIVE_TAB_KEY = 'sht:active:tab:customer';
 const ACTIVE_TAB_PREFIX = 'sht:active:tab:user:customer:';
+
+function isMobileOrStandalone() {
+  if (typeof window === 'undefined') return false;
+  const userAgent = window.navigator.userAgent || '';
+  const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+  const isStandalone =
+    window.matchMedia?.('(display-mode: standalone)').matches ||
+    (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
+  return isMobileDevice || isStandalone;
+}
 
 function getOrCreateTabId() {
   if (typeof window === 'undefined') return '';
@@ -23,6 +34,7 @@ function getOrCreateTabId() {
 
 function markActiveTab(userId?: string) {
   if (typeof window === 'undefined') return;
+  if (isMobileOrStandalone()) return;
   const tabId = getOrCreateTabId();
   localStorage.setItem(ACTIVE_TAB_KEY, JSON.stringify({ tabId, ts: Date.now() }));
   if (userId) {
@@ -77,6 +89,23 @@ export default function LoginPage() {
       setCachedUser(user);
       primeAuthCache(user);
       markActiveTab(user.id);
+
+      const { data: profile } = await supabase
+        .from('users')
+        .select('email, name, english_name, phone_number')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (!hasRequiredProfileFields({
+        email: profile?.email || user.email || '',
+        name: profile?.name || '',
+        english_name: profile?.english_name || '',
+        phone_number: profile?.phone_number || '',
+      })) {
+        router.replace(buildProfileCompletionPath('/mypage'));
+        return;
+      }
+
       router.replace('/mypage');
 
     } catch (err) {

@@ -97,7 +97,6 @@ export default function ShtCarReservationStatusPage() {
         .order('vehicle_number', { ascending: true });
 
       if (carError) {
-        console.warn('reservation_car_sht 조회 실패:', carError);
         setRows([]);
         return;
       }

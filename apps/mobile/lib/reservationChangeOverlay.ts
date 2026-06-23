@@ -63,7 +63,6 @@ export async function fetchLatestActiveChangeRequests(
         .order('submitted_at', { ascending: false });
 
     if (error || !data) {
-        if (error) console.warn('[overlay] change_request 조회 실패:', error);
         return map;
     }
 
@@ -124,7 +123,6 @@ export async function applyChangeOverlay<T extends { reservation_id: string }>(
         .in('request_id', requestIds);
 
     if (error) {
-        console.warn(`[overlay] ${tbl} 조회 실패:`, error);
         return rows as T[];
     }
 

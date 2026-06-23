@@ -2,16 +2,24 @@ import './../styles/globals.css';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import HeaderLogoutIcon from '@/components/HeaderLogoutIcon';
+import ServiceWorkerRegister from '@/components/ServiceWorkerRegister';
 
 export const metadata: Metadata = {
     title: '예약 취소 신청 | Stay Halong',
     description: '스테이하롱 예약 취소 전용 페이지',
+    manifest: '/manifest.json',
+    icons: {
+        icon: '/icon-192.png',
+        shortcut: '/icon-192.png',
+        apple: '/icon-192.png',
+    },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
     return (
         <html lang="ko">
             <body suppressHydrationWarning className="bg-background text-foreground antialiased flex flex-col min-h-screen">
+                <ServiceWorkerRegister />
                 <header
                     className="w-full relative bg-[#0052cc] bg-cover bg-center"
                     style={{ backgroundImage: "url('/images/index_15.gif')" }}

@@ -28,7 +28,7 @@ export interface RecordChangeInput {
     /** 부가 메타(가격 breakdown 등) - reservation_change_request.snapshot_data 에 저장 */
     snapshotData?: any;
     /** 기본 'approved' (매니저 직접 수정). 'pending' 으로 바꾸면 검토 대기. */
-    status?: 'approved' | 'pending' | 'applied' | 'rejected';
+    status?: 'approved' | 'pending' | 'rejected' | 'cancelled' | 'applied';
 }
 
 const CHILD_TABLE: Record<ChangeServiceType, string> = {
@@ -43,11 +43,40 @@ const CHILD_TABLE: Record<ChangeServiceType, string> = {
 };
 
 const STRIP_FIELDS = new Set(['id', 'created_at', 'updated_at']);
+const CHILD_ALLOWED_FIELDS: Partial<Record<ChangeServiceType, Set<string>>> = {
+    cruise_car: new Set([
+        'car_price_code',
+        'car_count',
+        'passenger_count',
+        'pickup_datetime',
+        'pickup_location',
+        'dropoff_location',
+        'car_total_price',
+        'request_note',
+        'unit_price',
+        'dispatch_code',
+        'pickup_confirmed_at',
+        'dispatch_memo',
+        'rentcar_price_code',
+        'way_type',
+        'route',
+        'vehicle_type',
+        'rental_type',
+        'return_datetime',
+    ]),
+};
 
-function sanitizeRow(row: any, requestId: string, reservationId: string) {
+function sanitizeRow(
+    type: ChangeServiceType,
+    row: any,
+    requestId: string,
+    reservationId: string
+) {
     const out: Record<string, any> = {};
+    const allowedFields = CHILD_ALLOWED_FIELDS[type];
     for (const [k, v] of Object.entries(row || {})) {
         if (STRIP_FIELDS.has(k)) continue;
+        if (allowedFields && !allowedFields.has(k)) continue;
         out[k] = v;
     }
     out.request_id = requestId;
@@ -73,7 +102,8 @@ export async function recordReservationChange(input: RecordChangeInput): Promise
             return { requestId: null, error: 'no_auth_user', childErrors };
         }
 
-        const status = input.status ?? 'approved';
+        const requestedStatus = input.status ?? 'approved';
+        const status = requestedStatus === 'applied' ? 'approved' : requestedStatus;
 
         const { data: req, error: reqErr } = await supabase
             .from('reservation_change_request')
@@ -84,8 +114,8 @@ export async function recordReservationChange(input: RecordChangeInput): Promise
                 status,
                 customer_note: input.customerNote ?? null,
                 manager_note: input.managerNote ?? '매니저 직접 수정',
-                reviewed_at: status === 'approved' || status === 'applied' ? new Date().toISOString() : null,
-                reviewed_by: status === 'approved' || status === 'applied' ? userId : null,
+                reviewed_at: status === 'approved' ? new Date().toISOString() : null,
+                reviewed_by: status === 'approved' ? userId : null,
                 snapshot_data: input.snapshotData ?? null,
             })
             .select('id')
@@ -102,7 +132,7 @@ export async function recordReservationChange(input: RecordChangeInput): Promise
             if (!rows || rows.length === 0) continue;
             const tbl = CHILD_TABLE[type as ChangeServiceType];
             if (!tbl) continue;
-            const payload = rows.map((r) => sanitizeRow(r, requestId, input.reservationId));
+            const payload = rows.map((r) => sanitizeRow(type as ChangeServiceType, r, requestId, input.reservationId));
             const { error: childErr } = await supabase.from(tbl).insert(payload);
             if (childErr) {
                 console.error(`[change-tracker] ${tbl} INSERT 실패:`, childErr);

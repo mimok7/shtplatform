@@ -1,8 +1,8 @@
 // Service Worker for PWA offline support - mobile
-const CACHE_NAME = 'sht-mobile-cache-v3';
+const CACHE_NAME = 'sht-mobile-cache-v4';
 const ASSETS_TO_CACHE = [
   '/',
-  '/icon-192.png',
+  '/sht-3.png',
   '/offline.html'
 ];
 
@@ -101,8 +101,8 @@ self.addEventListener('push', event => {
   event.waitUntil(
     self.registration.showNotification(data.title, {
       body: data.body,
-      icon: data.icon || '/icon-192.png',
-      badge: data.badge || '/icon-192.png',
+      icon: data.icon || '/sht-3.png',
+      badge: data.badge || '/sht-3.png',
       tag: data.tag || 'sht-notification',
       data: { url: data.url || '/manager/dashboard' },
       requireInteraction: data.requireInteraction || false

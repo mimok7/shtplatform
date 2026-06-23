@@ -6,6 +6,7 @@ import Link from 'next/link';
 import supabase from '@/lib/supabase';
 import { fetchTableInBatches } from '../../../lib/fetchInBatches';
 import ManagerLayout from '@/components/ManagerLayout';
+import { safeWriteClipboard } from '@/lib/browserCompat';
 import {
     Search,
     Edit3,
@@ -245,6 +246,7 @@ function ReservationEditContent() {
                         hotel: ['hotel'],
                         rentcar: ['rentcar'],
                         tour: ['tour'],
+                        ticket: ['ticket'],
                         package: ['package'],
                     };
                     const dbTypeFilters = typeAliases[typeFilter] || [typeFilter];
@@ -601,7 +603,8 @@ function ReservationEditContent() {
     const handleCopyQuoteId = async (quoteId: string | null) => {
         if (!quoteId) return;
         try {
-            await navigator.clipboard.writeText(quoteId);
+            const copied = await safeWriteClipboard(quoteId);
+            if (!copied) throw new Error('clipboard_unavailable');
             alert('견적 ID가 복사되었습니다.');
         } catch (error) {
             console.error('견적 ID 복사 실패:', error);
@@ -633,6 +636,7 @@ function ReservationEditContent() {
             'airport': '✈️ 공항',
             'rentcar': '🚗 렌터카',
             'tour': '🚩 투어',
+            'ticket': '🎫 티켓',
             'car': '🚗 크차',
             'vehicle': '🚗 크루즈 차량',
             'sht': '🚌 스하차량',
@@ -672,6 +676,7 @@ function ReservationEditContent() {
             case 'airport': return <span className="flex items-center gap-1"><Plane className="w-5 h-5 text-green-600" /> 공항</span>;
             case 'hotel': return <span className="flex items-center gap-1"><Building className="w-5 h-5 text-purple-600" /> 호텔</span>;
             case 'tour': return <span className="flex items-center gap-1"><MapPin className="w-5 h-5 text-orange-600" /> 투어</span>;
+            case 'ticket': return <span className="flex items-center gap-1"><FileText className="w-5 h-5 text-teal-600" /> 티켓</span>;
             case 'rentcar': return <span className="flex items-center gap-1"><Car className="w-5 h-5 text-red-600" /> 렌터카</span>;
             case 'car': return <span className="flex items-center gap-1"><Car className="w-5 h-5 text-blue-600" /> 크차</span>;
             case 'vehicle': return <span className="flex items-center gap-1"><Car className="w-5 h-5 text-blue-600" /> 크루즈 차량</span>;
@@ -692,8 +697,9 @@ function ReservationEditContent() {
             'vehicle': 2, // sht와 동일한 순서
             'airport': 3,
             'tour': 4,
-            'rentcar': 5,
-            'hotel': 6
+            'ticket': 5,
+            'rentcar': 6,
+            'hotel': 7
         };
         return order[type] || 999;
     };
@@ -715,6 +721,25 @@ function ReservationEditContent() {
     return (
         <ManagerLayout title="📝 예약 수정" activeTab="reservation-edit">
             <div className="space-y-6">
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-2">
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={() => router.push('/manager/reservation-edit')}
+                            className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium"
+                        >
+                            NEW 수정
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => router.push('/manager/schedule/sheet-edit')}
+                            className="px-4 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 text-sm font-medium transition-colors"
+                        >
+                            OLD 수정
+                        </button>
+                    </div>
+                </div>
+
                 {/* 필터 및 검색 */}
                 <div className="bg-white rounded-lg shadow-sm p-6">
                     <div className="flex flex-wrap gap-4 items-center mb-4">
@@ -738,7 +763,7 @@ function ReservationEditContent() {
                         {/* 서비스 필터 카드 */}
                         <div className="bg-green-50 rounded-lg px-4 py-3 flex flex-wrap gap-2 items-center border border-green-100">
                             <span className="text-sm font-medium text-gray-700">서비스:</span>
-                            {['all', 'cruise', 'hotel', 'airport', 'rentcar', 'tour', 'car', 'sht', 'package'].map((type) => (
+                            {['all', 'cruise', 'hotel', 'airport', 'rentcar', 'tour', 'ticket', 'car', 'sht', 'package'].map((type) => (
                                 <button
                                     key={type}
                                     onClick={() => setTypeFilter(type)}
@@ -970,7 +995,9 @@ function ReservationEditContent() {
                                                                         ? 'sht'
                                                                         : service.re_type === 'car'
                                                                             ? 'vehicle'
-                                                                            : service.re_type;
+                                                                            : service.re_type === 'ticket'
+                                                                                ? 'ticket'
+                                                                                : service.re_type;
                                                                     router.push(`/manager/reservation-edit/${editRoute}?id=${service.re_id}`);
                                                                 }}
                                                                 className="flex-1 inline-flex items-center justify-center gap-1 px-3 py-2 text-xs bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 transition-colors"

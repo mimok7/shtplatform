@@ -1,10 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import PageWrapper from '@/components/PageWrapper';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
+import { BadgeCheck, Briefcase, CircleDollarSign, FileText, Mail, Phone, User } from 'lucide-react';
 
 type ReminderServiceType = 'cruise' | 'airport' | 'rentcar' | 'hotel' | 'tour' | 'ticket' | 'package';
 
@@ -42,6 +42,8 @@ type RuntimeReminder = {
   serviceDate: string;
   daysBefore: number;
 };
+
+type NotificationFilter = 'all' | 'unread' | 'read';
 
 function toYmdInKst(value: string | null | undefined): string | null {
   if (!value) return null;
@@ -92,13 +94,60 @@ function applyTemplate(template: string, serviceLabel: string, days: number, ser
     .replaceAll('{date}', formatDate(serviceDate));
 }
 
+function stripPaymentMethodLines(value: string | null | undefined): string {
+  if (!value) return '';
+
+  return String(value)
+    .split(/\r?\n/)
+    .filter((line) => {
+      const normalized = line.replace(/\s+/g, '').toLowerCase();
+      return !normalized.startsWith('결제방법:') && !normalized.startsWith('결제방식:');
+    })
+    .join('\n')
+    .trim();
+}
+
+function getNotificationLineIcon(line: string) {
+  const label = line.split(':')[0]?.trim();
+
+  if (label.includes('고객명')) return User;
+  if (label.includes('이메일')) return Mail;
+  if (label.includes('연락처')) return Phone;
+  if (label.includes('서비스')) return Briefcase;
+  if (label.includes('견적명')) return FileText;
+  if (label.includes('예약 금액')) return CircleDollarSign;
+  if (label.includes('예약 상태')) return BadgeCheck;
+  return null;
+}
+
+function renderNotificationDescription(description: string, className: string) {
+  const lines = description
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  return (
+    <div className={className}>
+      {lines.map((line, index) => {
+        const Icon = getNotificationLineIcon(line);
+        return (
+          <div key={`${line}-${index}`} className="flex items-start gap-1.5">
+            {Icon ? <Icon className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-slate-400" /> : null}
+            <span className="break-words">{line}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function NotificationsPage() {
-  const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   const [notifications, setNotifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [runtimeReminders, setRuntimeReminders] = useState<RuntimeReminder[]>([]);
   const [runtimeLoading, setRuntimeLoading] = useState(true);
+  const [filter, setFilter] = useState<NotificationFilter>('unread');
 
   const normalizeNotifications = (rows: any[]) => (
     (rows || []).map((row: any) => {
@@ -108,7 +157,7 @@ export default function NotificationsPage() {
       return {
         ...row,
         is_read: isRead,
-        description: row?.description ?? row?.message ?? '',
+        description: stripPaymentMethodLines(row?.description ?? row?.message ?? ''),
       };
     })
   );
@@ -406,6 +455,17 @@ export default function NotificationsPage() {
   }
 
   const unreadCount = notifications.filter(n => !n.is_read).length;
+  const readCount = notifications.length - unreadCount;
+  const filteredNotifications = notifications.filter((notification) => {
+    if (filter === 'unread') return !notification.is_read;
+    if (filter === 'read') return notification.is_read;
+    return true;
+  });
+  const filterButtons: Array<{ key: NotificationFilter; label: string; count: number }> = [
+    { key: 'all', label: '전체', count: notifications.length },
+    { key: 'unread', label: '읽지 않음', count: unreadCount },
+    { key: 'read', label: '읽음', count: readCount },
+  ];
 
   return (
     <PageWrapper title="알림">
@@ -425,22 +485,40 @@ export default function NotificationsPage() {
                 <div className="flex items-start gap-3">
                   <p className="text-sm font-semibold text-indigo-900">{reminder.title}</p>
                 </div>
-                <p className="mt-1 text-xs text-indigo-800">{reminder.body}</p>
+                <p className="mt-1 text-xs text-indigo-800 whitespace-pre-line break-words">{reminder.body}</p>
                 <p className="mt-1 text-[11px] text-indigo-600">서비스일: {formatDate(reminder.serviceDate)} · {reminder.daysBefore}일 전 안내 (0시 기준)</p>
               </div>
             ))}
           </div>
         ) : null}
 
-        {/* 헤더: 전체 읽음 버튼 */}
-        {unreadCount > 0 && (
-          <div className="flex justify-end">
-            <button
-              onClick={handleMarkAllAsRead}
-              className="px-3 py-1.5 text-xs font-medium text-blue-600 hover:text-blue-700 transition"
-            >
-              모두 읽음
-            </button>
+        {/* 헤더: 필터 + 전체 읽음 버튼 */}
+        {(notifications.length > 0 || unreadCount > 0) && (
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-wrap gap-2">
+              {filterButtons.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => setFilter(item.key)}
+                  className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                    filter === item.key
+                      ? 'border-blue-600 bg-blue-600 text-white'
+                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-800'
+                  }`}
+                >
+                  {item.label} {item.count}
+                </button>
+              ))}
+            </div>
+            {unreadCount > 0 && (
+              <button
+                onClick={handleMarkAllAsRead}
+                className="px-3 py-1.5 text-xs font-medium text-blue-600 hover:text-blue-700 transition"
+              >
+                모두 읽음
+              </button>
+            )}
           </div>
         )}
 
@@ -449,13 +527,15 @@ export default function NotificationsPage() {
           <div className="flex justify-center items-center h-72">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
           </div>
-        ) : notifications.length === 0 ? (
+        ) : filteredNotifications.length === 0 ? (
           <div className="text-center py-8">
-            <p className="text-slate-500 text-sm">받은 알림이 없습니다</p>
+            <p className="text-slate-500 text-sm">
+              {notifications.length === 0 ? '받은 알림이 없습니다' : '선택한 조건의 알림이 없습니다'}
+            </p>
           </div>
         ) : (
           <div className="space-y-2">
-            {notifications.map((notification: any) => (
+            {filteredNotifications.map((notification: any) => (
               <div
                 key={notification.id}
                 className={`border rounded-lg p-3 cursor-pointer transition ${
@@ -477,9 +557,7 @@ export default function NotificationsPage() {
                       {notification.title}
                     </p>
                     {notification.description && (
-                      <p className="text-xs text-slate-500 mt-1">
-                        {notification.description}
-                      </p>
+                      renderNotificationDescription(notification.description, 'mt-1 space-y-1 text-xs text-slate-500')
                     )}
                     <p className="text-xs text-slate-400 mt-1.5">
                       {new Date(notification.created_at).toLocaleDateString('ko-KR', {

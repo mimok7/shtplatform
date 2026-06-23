@@ -27,6 +27,11 @@ interface QuoteData {
     reservations: ReservationDetail[];
 }
 
+const isConfirmationVisibleStatus = (status: string | null | undefined) => {
+    const normalized = String(status || '').trim().toLowerCase();
+    return normalized === 'approved' || normalized === 'confirmed';
+};
+
 function CustomerConfirmationClient() {
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -313,8 +318,8 @@ function CustomerConfirmationClient() {
                     }
                 });
 
-            // 최종 데이터 설정
-            const rowsTotal = processedReservations.reduce((sum, reservation) => sum + (reservation.amount || 0), 0);
+            const visibleReservations = processedReservations.filter((reservation) => isConfirmationVisibleStatus(reservation.status));
+            const rowsTotal = visibleReservations.reduce((sum, reservation) => sum + (reservation.amount || 0), 0);
 
             // 결제 정보에서 총액 합산 시도 (fallback용)
             let paymentTotal = 0;
@@ -340,7 +345,7 @@ function CustomerConfirmationClient() {
                 total_price: finalTotal,
                 payment_status: quote.payment_status || 'pending',
                 created_at: quote.created_at,
-                reservations: processedReservations
+                reservations: visibleReservations
             });
 
         } catch (error) {
@@ -502,7 +507,7 @@ function CustomerConfirmationClient() {
                 <div className="space-y-1 text-xs">
                     {details.pickup_datetime != null && <div><span className="text-gray-500">픽업일시:</span> <span className="font-medium">{formatDate(details.pickup_datetime)}</span></div>}
                     {(details.return_datetime != null || details.dropoff_datetime != null) && (
-                        <div><span className="text-gray-500">드롭일시:</span> <span className="font-medium">{formatDate(details.return_datetime || details.dropoff_datetime)}</span></div>
+                        <div><span className="text-gray-500">드랍일시:</span> <span className="font-medium">{formatDate(details.return_datetime || details.dropoff_datetime)}</span></div>
                     )}
                     {(details.pickup_location != null || details.dropoff_location != null) && <div><span className="text-gray-500">픽업/드랍:</span> <span className="font-medium">{details.pickup_location || '-'} → {details.dropoff_location || '-'}</span></div>}
                     {details.car_count != null && <div><span className="text-gray-500">차량수:</span> <span>{details.car_count}대</span></div>}

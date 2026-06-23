@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import ManagerLayout from '@/components/ManagerLayout';
 import PaymentDetailModal from '../../../components/PaymentDetailModal';
 import supabase from '@/lib/supabase';
-import { getPreferredPaymentAmount } from '@sht/domain/reservation';
+import { getPreferredPaymentAmount, getReservationStoredAmount } from '@sht/domain/reservation';
 import {
   CreditCard,
   DollarSign,
@@ -17,6 +17,22 @@ import {
   Eye,
   RotateCcw,
 } from 'lucide-react';
+
+type TicketPriceItem = 'adult' | 'child_under_1_2m' | 'shuttle';
+type PriceChannel = 'official' | 'card' | 'krw';
+
+interface TicketPriceOption {
+  ticket_price_code: string;
+  ticket_type: string;
+  ticket_name: string;
+  price_item: TicketPriceItem;
+  official_price_vnd: number;
+  stay_card_price_vnd: number;
+  stay_krw_price_krw: number;
+  valid_from: string;
+  valid_to: string | null;
+  sort_order: number;
+}
 
 // 결제 상태/수단 텍스트 변환
 const getPaymentStatusText = (status: string) => {
@@ -41,6 +57,34 @@ const getPaymentMethodText = (method: string) => {
     case 'CASH': case 'cash': return '현금';
     default: return method || '신용카드';
   }
+};
+
+const getReservationServiceLabel = (reservationType?: string) => {
+  const labels: Record<string, string> = {
+    cruise: '크루즈',
+    car: '차량',
+    sht: '크루즈 차량',
+    airport: '공항',
+    tour: '투어',
+    hotel: '호텔',
+    ticket: '티켓',
+    rentcar: '렌터카',
+  };
+  return labels[String(reservationType || '').trim()] || String(reservationType || '').trim() || '예약';
+};
+
+const getReservationSortPriority = (reservationType?: string) => {
+  const priorities: Record<string, number> = {
+    cruise: 0,
+    car: 10,
+    sht: 10,
+    airport: 20,
+    tour: 30,
+    hotel: 40,
+    ticket: 50,
+    rentcar: 70,
+  };
+  return priorities[String(reservationType || '').trim()] ?? 999;
 };
 
 const debugLog = (...args: any[]) => {
@@ -71,6 +115,7 @@ export default function ManagerPaymentsPage() {
     totalCount: 0,
     zeroAmountCount: 0
   });
+  const ticketPriceCacheRef = useRef<TicketPriceOption[] | null>(null);
 
   const resolveVehicleQuantity = (row: any, unitPrice = 0) => {
     const carCount = Number(row?.car_count) || 0;
@@ -92,6 +137,13 @@ export default function ManagerPaymentsPage() {
     return unit === '대' ? '' : (unit || '');
   };
 
+  const getHotelNightCount = (row: any) => {
+    const scheduleRaw = String(row?.schedule || '').trim();
+    const parsedNights = Number.parseInt(scheduleRaw, 10);
+    if (Number.isFinite(parsedNights) && parsedNights > 0) return parsedNights;
+    return 1;
+  };
+
   // 대량 IN 쿼리/업데이트를 분할 처리하기 위한 유틸
   const chunkArray = <T,>(arr: T[], size: number): T[][] => {
     const res: T[][] = [];
@@ -104,11 +156,148 @@ export default function ManagerPaymentsPage() {
   const [selectedReservation, setSelectedReservation] = useState<any>(null);
 
   const getPreferredAmount = (payment: any, serviceTotal?: number) => {
+    const resolvedServiceTotal = Number(serviceTotal ?? payment?.serviceData?.total ?? 0);
+    const reservationAmount = getReservationStoredAmount(payment?.reservation);
+    if (
+      payment?.reservation?.re_type === 'ticket' &&
+      resolvedServiceTotal > 0 &&
+      reservationAmount > 0 &&
+      Math.abs(resolvedServiceTotal - reservationAmount) >= 1
+    ) {
+      return resolvedServiceTotal;
+    }
+
     return getPreferredPaymentAmount({
       reservation: payment?.reservation,
       paymentAmount: payment?.amount,
-      serviceAmount: serviceTotal ?? payment?.serviceData?.total ?? 0,
+      serviceAmount: resolvedServiceTotal,
     });
+  };
+
+  const getTicketRowQuantity = (ticket: any): number => {
+    const explicitQuantity = Number(ticket?.ticket_quantity) || 0;
+    if (explicitQuantity > 0) return explicitQuantity;
+
+    const peopleQuantity = (Number(ticket?.adult_count) || 0) + (Number(ticket?.child_count) || 0);
+    if (peopleQuantity > 0) return peopleQuantity;
+
+    const shuttleQuantity = Number(ticket?.shuttle_count) || 0;
+    if (shuttleQuantity > 0) return shuttleQuantity;
+
+    return 0;
+  };
+
+  const getTicketRowAmount = (ticket: any): number => {
+    const storedTotal = Number(ticket?.total_price) || 0;
+    if (storedTotal > 0) return storedTotal;
+
+    const unitPrice = Number(ticket?.unit_price) || 0;
+    const quantity = getTicketRowQuantity(ticket);
+    if (unitPrice > 0 && quantity > 0) return unitPrice * quantity;
+
+    return 0;
+  };
+
+  const getTicketDisplayName = (ticket: any) => {
+    return String(ticket?.ticket_name || ticket?.program_selection || '티켓').trim() || '티켓';
+  };
+
+  const loadTicketPriceOptions = async (): Promise<TicketPriceOption[]> => {
+    if (ticketPriceCacheRef.current) return ticketPriceCacheRef.current;
+
+    const res = await fetch('/api/ticket-price');
+    const json = await res.json();
+    if (!res.ok || json?.error) {
+      throw new Error(json?.error || '티켓 가격 정보를 불러오지 못했습니다.');
+    }
+
+    ticketPriceCacheRef.current = Array.isArray(json?.data) ? json.data : [];
+    return ticketPriceCacheRef.current;
+  };
+
+  const getTicketUnitByChannel = (option: TicketPriceOption, channel: PriceChannel) => {
+    if (channel === 'official') return Number(option.official_price_vnd || 0);
+    if (channel === 'krw') return Number(option.stay_krw_price_krw || 0);
+    return Number(option.stay_card_price_vnd || 0);
+  };
+
+  const findTicketPriceOption = (
+    options: TicketPriceOption[],
+    ticketType: string,
+    priceItem: TicketPriceItem,
+    effectiveDate: string,
+  ) => {
+    return options
+      .filter((option) => {
+        if (option.ticket_type !== ticketType) return false;
+        if (option.price_item !== priceItem) return false;
+        if (option.valid_from > effectiveDate) return false;
+        if (option.valid_to && option.valid_to < effectiveDate) return false;
+        return true;
+      })
+      .sort((a, b) => {
+        if (a.valid_from === b.valid_from) {
+          if (a.sort_order === b.sort_order) {
+            return a.ticket_price_code.localeCompare(b.ticket_price_code);
+          }
+          return a.sort_order - b.sort_order;
+        }
+        return a.valid_from < b.valid_from ? 1 : -1;
+      })[0];
+  };
+
+  const buildTicketFallbackLines = async (ticket: any) => {
+    const options = await loadTicketPriceOptions();
+    const ticketType = String(ticket?.ticket_type || '').trim();
+    const effectiveDate = String(ticket?.usage_date || '').trim();
+    const priceChannel = String(ticket?.price_channel || 'card').trim() as PriceChannel;
+    const ticketName = getTicketDisplayName(ticket);
+
+    const adultCount = Math.max(0, Number(ticket?.adult_count ?? ticket?.ticket_quantity ?? 0));
+    const childCount = Math.max(0, Number(ticket?.child_count ?? 0));
+    const shuttleCount = ticket?.shuttle_required
+      ? Math.max(0, Number(ticket?.shuttle_count ?? adultCount))
+      : 0;
+
+    const adultOption = findTicketPriceOption(options, ticketType, 'adult', effectiveDate);
+    const childOption = findTicketPriceOption(options, ticketType, 'child_under_1_2m', effectiveDate);
+    const shuttleOption = findTicketPriceOption(options, ticketType, 'shuttle', effectiveDate);
+
+    return [
+      adultCount > 0 && adultOption ? {
+        type: `티켓 (${ticketName}) 성인`,
+        unitPrice: getTicketUnitByChannel(adultOption, priceChannel),
+        quantity: adultCount,
+        quantityUnit: '매',
+        amount: getTicketUnitByChannel(adultOption, priceChannel) * adultCount,
+      } : null,
+      childCount > 0 && childOption ? {
+        type: `티켓 (${ticketName}) 아동`,
+        unitPrice: getTicketUnitByChannel(childOption, priceChannel),
+        quantity: childCount,
+        quantityUnit: '매',
+        amount: getTicketUnitByChannel(childOption, priceChannel) * childCount,
+      } : null,
+      shuttleCount > 0 && shuttleOption ? {
+        type: `티켓 (${ticketName}) 셔틀`,
+        unitPrice: getTicketUnitByChannel(shuttleOption, priceChannel),
+        quantity: shuttleCount,
+        quantityUnit: '매',
+        amount: getTicketUnitByChannel(shuttleOption, priceChannel) * shuttleCount,
+      } : null,
+    ].filter(Boolean) as Array<{ type: string; unitPrice: number; quantity: number; quantityUnit: string; amount: number }>;
+  };
+
+  const normalizeTicketLineLabel = (rawLabel: any, ticketName: string) => {
+    const label = String(rawLabel || '').trim();
+    if (!label) return `티켓 (${ticketName})`;
+
+    const stripped = label
+      .replace(/^티켓\s*/i, '')
+      .replace(/^\((.*)\)$/, '$1')
+      .trim();
+
+    return stripped ? `티켓 (${ticketName}) ${stripped}` : `티켓 (${ticketName})`;
   };
 
   // 상세보기 모달 열기
@@ -275,6 +464,40 @@ export default function ManagerPaymentsPage() {
         }
       }
 
+      // 4-1. 티켓 서비스
+      if (reservationType === 'ticket') {
+        const [{ data: reservationData }, { data: ticketData }] = await Promise.all([
+          supabase
+            .from('reservation')
+            .select('total_amount, price_breakdown')
+            .eq('re_id', reservationId)
+            .maybeSingle(),
+          supabase
+            .from('reservation_ticket')
+            .select('*')
+            .eq('reservation_id', reservationId),
+        ]);
+
+        const reservationAmount = getReservationStoredAmount({
+          total_amount: reservationData?.total_amount ?? 0,
+          price_breakdown: reservationData?.price_breakdown ?? null,
+        });
+        if (reservationAmount > 0) {
+          return reservationAmount;
+        }
+
+        if (ticketData && ticketData.length > 0) {
+          for (const ticket of ticketData) {
+            const fallbackLines = await buildTicketFallbackLines(ticket);
+            if (fallbackLines.length > 0) {
+              total += fallbackLines.reduce((sum, line) => sum + Number(line.amount || 0), 0);
+              continue;
+            }
+            total += getTicketRowAmount(ticket);
+          }
+        }
+      }
+
       // 5. 호텔 서비스
       if (reservationType === 'hotel') {
         const { data: hotelData } = await supabase
@@ -284,9 +507,15 @@ export default function ManagerPaymentsPage() {
 
         if (hotelData && hotelData.length > 0) {
           for (const hotel of hotelData) {
-            // total_price가 있으면 사용
-            if (hotel.total_price && Number(hotel.total_price) > 0) {
-              total += Number(hotel.total_price);
+            const nights = getHotelNightCount(hotel);
+            const rooms = Number(hotel.room_count) || 1;
+            const storedTotalPrice = Number(hotel.total_price) || 0;
+            const storedUnitPrice = Number(hotel.unit_price) || 0;
+
+            if (storedTotalPrice > 0) {
+              total += storedTotalPrice;
+            } else if (storedUnitPrice > 0) {
+              total += storedUnitPrice * nights * rooms;
             } else if (hotel.hotel_price_code) {
               const { data: hotelPrice } = await supabase
                 .from('hotel_price')
@@ -294,8 +523,6 @@ export default function ManagerPaymentsPage() {
                 .eq('hotel_price_code', hotel.hotel_price_code)
                 .maybeSingle();
               if (hotelPrice?.base_price) {
-                const nights = Number(hotel.schedule?.match(/\d+/)?.[0]) || 1;
-                const rooms = Number(hotel.room_count) || 1;
                 total += Number(hotelPrice.base_price) * nights * rooms;
               }
             }
@@ -765,6 +992,7 @@ export default function ManagerPaymentsPage() {
       });
 
       setPayments(enrichedWithQuote);
+      setSelectedPayments(new Set(enrichedWithQuote.map((p: any) => p.id)));
       setHasMore((enrichedWithQuote?.length || 0) === PAGE_SIZE);
       console.log('💾 결제 목록 로드 완료:', enrichedWithQuote.length, '건');
     } catch (e) {
@@ -916,6 +1144,7 @@ export default function ManagerPaymentsPage() {
       });
 
       setPayments(prev => prev.concat(enrichedNextWithQuote));
+      setSelectedPayments(prev => new Set([...Array.from(prev), ...enrichedNextWithQuote.map((p: any) => p.id)]));
       if ((enrichedNextWithQuote?.length || 0) < PAGE_SIZE) setHasMore(false);
     } catch (e) {
       console.error('다음 페이지 로드 실패:', e);
@@ -941,9 +1170,16 @@ export default function ManagerPaymentsPage() {
       // reservation의 price_breakdown 조회 (수정된 단가 반영용)
       const { data: resPbData } = await supabase
         .from('reservation')
-        .select('re_id, price_breakdown')
+        .select('re_id, total_amount, price_breakdown')
         .in('re_id', reservationIds);
       const pbMap = new Map<string, any>((resPbData || []).map((r: any) => [r.re_id, r.price_breakdown] as [string, any]));
+      const reservationAmountMap = new Map<string, number>((resPbData || []).map((r: any) => [
+        r.re_id,
+        getReservationStoredAmount({
+          total_amount: r.total_amount ?? 0,
+          price_breakdown: r.price_breakdown ?? null,
+        }),
+      ] as [string, number]));
       const pbUsedIndex = new Map<string, Set<number>>();
 
       // 1. 크루즈 객실 서비스 조회 (카테고리별 분리)
@@ -1202,6 +1438,29 @@ export default function ManagerPaymentsPage() {
       } else if (hotelData && hotelData.length > 0) {
         console.log('🏨 호텔 데이터:', hotelData);
         for (const hotel of hotelData) {
+          const nights = getHotelNightCount(hotel);
+          const rooms = Number(hotel.room_count) || 1;
+          const storedTotalPrice = Number(hotel.total_price) || 0;
+          const storedUnitPrice = Number(hotel.unit_price) || 0;
+          const resolvedUnitPriceFromStoredTotal = storedTotalPrice > 0 && nights > 0 && rooms > 0
+            ? Math.round(storedTotalPrice / (nights * rooms))
+            : 0;
+
+          if (storedTotalPrice > 0 || storedUnitPrice > 0) {
+            const hotelAmount = storedTotalPrice > 0 ? storedTotalPrice : storedUnitPrice * nights * rooms;
+            const unitPrice = storedUnitPrice > 0 ? storedUnitPrice : resolvedUnitPriceFromStoredTotal;
+            services.push({
+              type: `호텔 (${hotel.hotel_price_code || '직접입력'})`,
+              unitPrice,
+              quantity: nights,
+              quantityUnit: `박 ${rooms}실`,
+              amount: hotelAmount
+            });
+            total += hotelAmount;
+            console.log('✅ 호텔 서비스 (저장값):', hotelAmount, '동');
+            continue;
+          }
+
           if (hotel.hotel_price_code) {
             const { data: hotelPrice, error: hotelPriceError } = await supabase
               .from('hotel_price')
@@ -1213,8 +1472,6 @@ export default function ManagerPaymentsPage() {
               console.error('호텔 가격 조회 오류:', hotelPriceError);
             } else if (hotelPrice?.base_price) {
               const unitPrice = Number(hotelPrice.base_price);
-              const nights = Number(hotel.schedule?.match(/\d+/)?.[0]) || 1; // schedule에서 숫자 추출
-              const rooms = Number(hotel.room_count) || 1;
               const quantity = nights;
               const hotelAmount = unitPrice * nights * rooms;
               services.push({
@@ -1227,21 +1484,151 @@ export default function ManagerPaymentsPage() {
               total += hotelAmount;
               console.log('✅ 호텔 서비스:', hotelAmount, '동');
             }
-          } else if (hotel.total_price && Number(hotel.total_price) > 0) {
-            // 가격 코드가 없고 total_price가 있는 경우
-            const hotelAmount = Number(hotel.total_price);
-            const quantity = Number(hotel.room_count) || 1;
-            services.push({
-              type: `호텔 (코드없음)`,
-              unitPrice: hotelAmount, // total_price를 단가로 사용
-              quantity: quantity,
-              quantityUnit: '실',
-              amount: hotelAmount
-            });
-            total += hotelAmount;
-            console.log('✅ 호텔 서비스 (총액):', hotelAmount, '동');
           }
         }
+      }
+
+      // 4-1. 티켓 서비스 조회
+      const { data: ticketData, error: ticketError } = await supabase
+        .from('reservation_ticket')
+        .select('*')
+        .in('reservation_id', reservationIds);
+
+      if (ticketError) {
+        console.error('티켓 예약 조회 오류:', ticketError);
+      } else if (ticketData && ticketData.length > 0) {
+        const groupedTickets = new Map<string, any[]>();
+        for (const ticket of ticketData) {
+          const reservationId = String(ticket.reservation_id || '');
+          if (!groupedTickets.has(reservationId)) groupedTickets.set(reservationId, []);
+          groupedTickets.get(reservationId)?.push(ticket);
+        }
+
+        for (const [reservationId, tickets] of groupedTickets.entries()) {
+          const ticketName = getTicketDisplayName(tickets[0]);
+          const reservationPb = pbMap.get(reservationId) ?? null;
+          const reservationAmount = reservationAmountMap.get(reservationId) ?? 0;
+          const pbLineItems = Array.isArray(reservationPb?.line_items) ? reservationPb.line_items : [];
+          const pbAdditionalFee = Number(reservationPb?.additional_fee || 0);
+          const pbLineTotal = pbLineItems.reduce((sum: number, item: any) => sum + Number(item?.total || 0), 0);
+          const derivedTicketLines: Array<{
+            type: string;
+            unitPrice: number;
+            quantity: number;
+            quantityUnit: string;
+            amount: number;
+          }> = [];
+
+          for (const ticket of tickets) {
+            const fallbackLines = await buildTicketFallbackLines(ticket);
+            if (fallbackLines.length > 0) {
+              fallbackLines.forEach((line) => {
+                derivedTicketLines.push({
+                  type: line.type,
+                  unitPrice: Number(line.unitPrice || 0),
+                  quantity: Number(line.quantity || 0) || 1,
+                  quantityUnit: line.quantityUnit || '매',
+                  amount: Number(line.amount || 0),
+                });
+              });
+              continue;
+            }
+
+            const quantity = getTicketRowQuantity(ticket);
+            const amount = getTicketRowAmount(ticket);
+            const fallbackUnitPrice = quantity > 0 && amount > 0
+              ? Math.round(amount / quantity)
+              : Number(ticket.unit_price) || 0;
+
+            derivedTicketLines.push({
+              type: `티켓 (${getTicketDisplayName(ticket)})`,
+              unitPrice: fallbackUnitPrice,
+              quantity: quantity || 1,
+              quantityUnit: '매',
+              amount,
+            });
+          }
+
+          const derivedTotal = derivedTicketLines.reduce((sum, line) => sum + Number(line.amount || 0), 0);
+          const shouldPreferDerivedLines =
+            derivedTotal > 0 &&
+            (
+              pbLineItems.length === 0 ||
+              Math.abs(derivedTotal - pbLineTotal) >= 1 ||
+              Math.abs(derivedTotal - reservationAmount) >= 1
+            );
+
+          if (shouldPreferDerivedLines) {
+            derivedTicketLines.forEach((line) => {
+              services.push(line);
+              total += Number(line.amount || 0);
+            });
+
+            if (pbAdditionalFee !== 0) {
+              services.push({
+                type: `티켓 (${ticketName}) 추가/차감`,
+                unitPrice: pbAdditionalFee,
+                quantity: 1,
+                quantityUnit: '식',
+                amount: pbAdditionalFee,
+              });
+              total += pbAdditionalFee;
+            }
+
+            continue;
+          }
+
+          if (pbLineItems.length > 0) {
+            pbLineItems.forEach((item: any, index: number) => {
+              const amount = Number(item?.total || 0);
+              const quantity = Number(item?.quantity || 0);
+              const unitPrice = Number(item?.unit_price || 0);
+
+              services.push({
+                type: normalizeTicketLineLabel(item?.label || `항목 ${index + 1}`, ticketName),
+                unitPrice,
+                quantity: quantity || 1,
+                quantityUnit: '매',
+                amount,
+              });
+              total += amount;
+            });
+
+            if (pbAdditionalFee !== 0) {
+              services.push({
+                type: `티켓 (${ticketName}) 추가/차감`,
+                unitPrice: pbAdditionalFee,
+                quantity: 1,
+                quantityUnit: '식',
+                amount: pbAdditionalFee,
+              });
+              total += pbAdditionalFee;
+            }
+
+            continue;
+          }
+
+          if (reservationAmount > 0) {
+            services.push({
+              type: `티켓 (${ticketName})`,
+              unitPrice: reservationAmount,
+              quantity: 1,
+              quantityUnit: '식',
+              amount: reservationAmount,
+            });
+            total += reservationAmount;
+          }
+        }
+      }
+
+      if (total <= 0) {
+        const reservationTotal = reservationIds
+          .map((reservationId) => getReservationStoredAmount({
+            total_amount: reservationAmountMap.get(reservationId) ?? 0,
+            price_breakdown: pbMap.get(reservationId) ?? null,
+          }))
+          .reduce((sum, amount) => sum + Number(amount || 0), 0);
+        if (reservationTotal > 0) total = reservationTotal;
       }
 
       // 5. 렌터카 서비스 조회 (rentcar_price 테이블 사용)
@@ -1494,6 +1881,18 @@ export default function ManagerPaymentsPage() {
         g.pendingCount++;
         g.pendingAmount += amt;
       }
+    });
+
+    groups.forEach((group) => {
+      group.payments.sort((a: any, b: any) => {
+        const priorityDiff =
+          getReservationSortPriority(a.reservation?.re_type || a.re_type)
+          - getReservationSortPriority(b.reservation?.re_type || b.re_type);
+        if (priorityDiff !== 0) return priorityDiff;
+        const aDate = a.created_at || '';
+        const bDate = b.created_at || '';
+        return new Date(aDate).getTime() - new Date(bDate).getTime();
+      });
     });
 
     // 정렬: 대기 중인 결제가 있는 견적 우선, 그 다음 최신 순
@@ -2027,7 +2426,7 @@ export default function ManagerPaymentsPage() {
                             <td className="px-6 py-4">
                               <div className="flex flex-col">
                                 <span className="font-bold text-gray-900">
-                                  {payment.reservation_id ? String(payment.reservation_id).slice(0, 8).toUpperCase() : '-'}
+                                  {getReservationServiceLabel(payment.reservation?.re_type || payment.re_type)}
                                 </span>
                                 <span className="text-xs text-gray-500">
                                   {new Date(payment.created_at).toLocaleDateString()}

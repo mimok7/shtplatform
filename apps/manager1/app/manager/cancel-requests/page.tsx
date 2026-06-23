@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import ManagerLayout from '@/components/ManagerLayout';
+import { safeWriteClipboard } from '@/lib/browserCompat';
 import supabase from '@/lib/supabase';
 import { logStatusChange } from '@/lib/statusLog';
 import { openCentralReservationDetailModal } from '@/contexts/reservationDetailModalEvents';
@@ -794,7 +795,8 @@ export default function ManagerCancelRequestsPage() {
     const copyLink = async () => {
         if (!linkResult?.url) return;
         try {
-            await navigator.clipboard.writeText(linkResult.url);
+            const copied = await safeWriteClipboard(linkResult.url);
+            if (!copied) throw new Error('clipboard_unavailable');
             setLinkCopied(true);
             setTimeout(() => setLinkCopied(false), 2000);
         } catch {

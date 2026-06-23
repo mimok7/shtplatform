@@ -1,8 +1,8 @@
 // Service Worker for PWA offline support
-const CACHE_NAME = 'sht-customer-cache-v1';
+const CACHE_NAME = 'sht-customer-cache-v2';
 const ASSETS_TO_CACHE = [
   '/',
-  '/icon-192.png',
+  '/sht-2.png',
   '/offline.html'
 ];
 
@@ -42,28 +42,36 @@ self.addEventListener('fetch', event => {
     return;
   }
 
+  const requestUrl = new URL(event.request.url);
+  const isNextAsset = requestUrl.pathname.startsWith('/_next/');
+  const isHtmlNavigation = event.request.mode === 'navigate' || event.request.destination === 'document';
+
+  if (isNextAsset) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
   event.respondWith(
-    caches.match(event.request).then(response => {
-      if (response) return response;
-      
-      return fetch(event.request).then(response => {
-        // Don't cache non-successful responses
-        if (!response || response.status !== 200) {
+    fetch(event.request)
+      .then(response => {
+        if (!response || response.status !== 200 || isHtmlNavigation) {
           return response;
         }
-        
-        // Cache successful responses
+
         const responseToCache = response.clone();
         caches.open(CACHE_NAME).then(cache => {
           cache.put(event.request, responseToCache);
         });
-        
+
         return response;
-      }).catch(() => {
-        // Return offline page or cached response
-        return caches.match('/') || new Response('Offline - please check connection');
-      });
-    })
+      })
+      .catch(async () => {
+        if (isHtmlNavigation) {
+          return (await caches.match('/offline.html')) || (await caches.match('/')) || new Response('Offline - please check connection');
+        }
+
+        return caches.match(event.request) || new Response('Offline - please check connection');
+      })
   );
 });
 
@@ -78,8 +86,8 @@ self.addEventListener('push', event => {
   event.waitUntil(
     self.registration.showNotification(data.title, {
       body: data.body,
-      icon: data.icon || '/icon-192.png',
-      badge: data.badge || '/icon-192.png',
+      icon: data.icon || '/sht-2.png',
+      badge: data.badge || '/sht-2.png',
       tag: data.tag || 'sht-notification',
       data: { url: data.url || '/' },
       requireInteraction: data.requireInteraction || false

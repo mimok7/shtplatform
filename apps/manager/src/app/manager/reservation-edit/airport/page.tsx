@@ -201,6 +201,7 @@ function AirportReservationEditContent() {
     });
     const [usdRateToKrw, setUsdRateToKrw] = useState<number>(1400);
     const [additionalFee, setAdditionalFee] = useState(0);
+    const [additionalFeeInput, setAdditionalFeeInput] = useState('');
     const [additionalFeeDetail, setAdditionalFeeDetail] = useState('');
     const [feeTemplates, setFeeTemplates] = useState<{ id: number; name: string; amount: number }[]>([]);
 
@@ -212,7 +213,12 @@ function AirportReservationEditContent() {
         ? fastTrackSummary.storedKrwTotal
         : Math.round(fastTrackUsdTotal * usdRateToKrw);
     const airportBaseTotal = (airportForms.pickup.total_price || 0) + (airportForms.sending.total_price || 0);
-    const airportFinalTotal = airportBaseTotal + additionalFee;
+    const airportFinalTotal = Math.max(0, airportBaseTotal + additionalFee);
+
+    const applyAdditionalFeeValue = (nextValue: number) => {
+        setAdditionalFee(nextValue);
+        setAdditionalFeeInput(nextValue === 0 ? '' : String(nextValue));
+    };
 
     const updateActiveForm = (updates: Partial<AirportWayFormData>) => {
         setAirportForms(prev => ({
@@ -521,7 +527,7 @@ function AirportReservationEditContent() {
                 sending: toWayFormData(rowMap.sending),
             });
             setAirportRowIds(rowIdMap);
-            setAdditionalFee(Number(resRow.manual_additional_fee || 0));
+            applyAdditionalFeeValue(Number(resRow.manual_additional_fee || 0));
             setAdditionalFeeDetail(String(resRow.manual_additional_fee_detail || ''));
 
             if (rowMap.sending && !rowMap.pickup) {
@@ -1142,7 +1148,7 @@ function AirportReservationEditContent() {
                                             value=""
                                             onChange={(e) => {
                                                 const tpl = feeTemplates.find(t => String(t.id) === e.target.value);
-                                                if (tpl) { setAdditionalFee(tpl.amount); setAdditionalFeeDetail(tpl.name); }
+                                                if (tpl) { applyAdditionalFeeValue(tpl.amount); setAdditionalFeeDetail(tpl.name); }
                                             }}
                                         >
                                             <option value="">-- 추가내역 선택 --</option>
@@ -1152,15 +1158,28 @@ function AirportReservationEditContent() {
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">추가요금 (VND)</label>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">직접입력 추가/차감 금액 (VND)</label>
                                         <input
                                             type="number"
-                                            min="0"
-                                            value={additionalFee}
-                                            onChange={(e) => setAdditionalFee(parseInt(e.target.value, 10) || 0)}
-                                            title="추가요금"
+                                            value={additionalFeeInput}
+                                            onChange={(e) => {
+                                                const nextValue = e.target.value;
+                                                setAdditionalFeeInput(nextValue);
+
+                                                if (nextValue === '' || nextValue === '-') {
+                                                    setAdditionalFee(0);
+                                                    return;
+                                                }
+
+                                                const parsedValue = Number(nextValue);
+                                                if (Number.isFinite(parsedValue)) {
+                                                    setAdditionalFee(parsedValue);
+                                                }
+                                            }}
+                                            title="직접입력 추가/차감 금액"
                                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                         />
+                                        <p className="text-xs text-gray-500 mt-1">할인은 음수(-)로 입력하면 추가내역 차감으로 저장됩니다.</p>
                                     </div>
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">추가요금 내역</label>
@@ -1173,7 +1192,7 @@ function AirportReservationEditContent() {
                                         />
                                     </div>
                                 </div>
-                                {(airportBaseTotal > 0 || additionalFee > 0) && (
+                                {(airportBaseTotal > 0 || additionalFee !== 0) && (
                                     <div className="pt-4 mt-4 border-t border-gray-100 space-y-2">
                                         <div className="flex justify-between text-sm text-gray-700">
                                             <span>기본 공항 금액</span>
@@ -1182,9 +1201,9 @@ function AirportReservationEditContent() {
                                         <div className="text-xs text-gray-500">
                                             {activeWay === 'pickup' ? '픽업' : '샌딩'} 현재 선택 금액 {formData.total_price.toLocaleString()}동 · 전체 합계 {airportBaseTotal.toLocaleString()}동
                                         </div>
-                                        <div className="flex justify-between text-sm text-orange-600">
-                                            <span>추가요금</span>
-                                            <span className="font-semibold">+{additionalFee.toLocaleString()}동</span>
+                                        <div className={`flex justify-between text-sm ${additionalFee >= 0 ? 'text-orange-600' : 'text-red-600'}`}>
+                                            <span>{additionalFee >= 0 ? '추가요금' : '차감금액'}</span>
+                                            <span className="font-semibold">{additionalFee > 0 ? '+' : ''}{additionalFee.toLocaleString()}동</span>
                                         </div>
                                         {additionalFeeDetail.trim() && (
                                             <div className="text-xs text-gray-500 whitespace-pre-wrap">{additionalFeeDetail}</div>

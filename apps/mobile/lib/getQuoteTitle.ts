@@ -29,7 +29,6 @@ export async function fetchQuoteTitle(opts: { quote_id?: string; id?: string }):
             return titleCache.get(cacheKey);
         }
 
-        console.log('🔍 견적 타이틀 조회 시작:', { quote_id, id });
 
         let query = supabase.from('quote').select('title, quote_id, id').limit(1);
         if (quote_id) {
@@ -41,11 +40,9 @@ export async function fetchQuoteTitle(opts: { quote_id?: string; id?: string }):
         const { data, error } = await query.single();
 
         if (error) {
-            console.warn('⚠️ 견적 타이틀 조회 실패:', error);
             return undefined;
         }
 
-        console.log('📝 조회된 견적 데이터:', data);
 
         const title = data?.title;
         const resultQuoteId = data?.quote_id;
@@ -56,11 +53,9 @@ export async function fetchQuoteTitle(opts: { quote_id?: string; id?: string }):
             const key = resultQuoteId || resultId;
             if (key) {
                 titleCache.set(key, title);
-                console.log('✅ 타이틀 캐시 저장:', { key, title });
             }
             return title;
         } else {
-            console.warn('⚠️ 견적에 타이틀이 비어있음:', { quote_id, id, title });
             return undefined;
         }
     } catch (err) {

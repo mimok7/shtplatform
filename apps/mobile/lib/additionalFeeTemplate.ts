@@ -1,6 +1,6 @@
 import supabase from '@/lib/supabase';
 
-type AdditionalFeeServiceType = 'cruise' | 'airport' | 'hotel' | 'rentcar' | 'tour' | 'sht' | 'vehicle';
+type AdditionalFeeServiceType = 'cruise' | 'airport' | 'hotel' | 'rentcar' | 'tour' | 'sht' | 'vehicle' | 'ticket';
 
 interface SaveAdditionalFeeTemplateParams {
     serviceType: AdditionalFeeServiceType;
@@ -30,7 +30,6 @@ export async function saveAdditionalFeeTemplateFromInput({
             .maybeSingle();
 
         if (existingError) {
-            console.warn('⚠️ 추가요금 템플릿 조회 실패:', existingError);
             return false;
         }
 
@@ -53,7 +52,6 @@ export async function saveAdditionalFeeTemplateFromInput({
                 .eq('id', existing.id);
 
             if (updateError) {
-                console.warn('⚠️ 추가요금 템플릿 업데이트 실패:', updateError);
                 return false;
             }
 
@@ -72,13 +70,11 @@ export async function saveAdditionalFeeTemplateFromInput({
             });
 
         if (insertError) {
-            console.warn('⚠️ 추가요금 템플릿 등록 실패:', insertError);
             return false;
         }
 
         return true;
     } catch (error) {
-        console.warn('⚠️ 추가요금 템플릿 자동 저장 예외:', error);
         return false;
     }
 }

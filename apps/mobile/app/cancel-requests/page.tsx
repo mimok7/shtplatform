@@ -491,7 +491,7 @@ export default function MobileCancelRequestsPage() {
                         metadata: { cancellationType: row.cancellation_type, reasonCategory: row.cancel_reason_category, executionSummary: summary },
                     }),
                 });
-            } catch (e) { console.warn('approve notify 실패', e); }
+            } catch (e) {}
             if (refreshAfter) await fetchRows();
             if (!silent) alert('승인 처리되었습니다.');
         } catch (err: any) {
@@ -638,7 +638,6 @@ export default function MobileCancelRequestsPage() {
                 .select('id')
                 .single();
             if (payErr) {
-                console.warn('[cancel-requests] refund 타입 INSERT 실패, final 음수 금액으로 재시도', payErr);
                 const { data: fallbackInserted, error: fallbackErr } = await supabase
                     .from('reservation_payments')
                     .insert({
@@ -680,7 +679,7 @@ export default function MobileCancelRequestsPage() {
                         metadata: { cancellationType: row.cancellation_type, refundAmount, paymentId: paymentInsertedId },
                     }),
                 });
-            } catch (e) { console.warn('refund notify 실패', e); }
+            } catch (e) {}
 
             await fetchRows();
             setRefundDraft((prev) => ({ ...prev, [row.id]: '' }));
@@ -717,7 +716,7 @@ export default function MobileCancelRequestsPage() {
                         metadata: { cancellationType: row.cancellation_type, reasonCategory: row.cancel_reason_category, managerNote: note },
                     }),
                 });
-            } catch (e) { console.warn('reject notify 실패', e); }
+            } catch (e) {}
             await fetchRows();
         } catch (err: any) {
             alert(err?.message || '반려 실패');

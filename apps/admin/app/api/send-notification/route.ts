@@ -7,6 +7,7 @@ const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || '';
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || '';
 const VAPID_EMAIL = process.env.VAPID_EMAIL || 'mailto:admin@stayhalong.com';
 const DEFAULT_NOTIFICATION_TYPE = 'manual_customer';
+const PERSONAL_NOTIFICATION_APPS = new Set(['customer', 'customer1']);
 
 type AppRouteConfig = {
   baseUrl: string;
@@ -238,19 +239,22 @@ export async function POST(req: NextRequest) {
       .select('id, endpoint, p256dh, auth, user_id, app_name, user_agent, last_used_at, created_at')
       .eq('is_active', true);
 
-    if (userId) {
-      query = query.eq('user_id', userId);
-    }
     if (allowedAppPolicy.appNames.length > 0) {
       query = query.in('app_name', allowedAppPolicy.appNames);
     }
 
-    const { data: subscriptions, error: fetchError } = await query;
+    const { data: rawSubscriptions, error: fetchError } = await query;
 
     if (fetchError) {
       console.error('[send-notification] 구독 조회 실패:', fetchError);
       return jsonResponse({ error: '구독 조회 실패' }, { status: 500 });
     }
+
+    const subscriptions = (rawSubscriptions || []).filter((sub) => {
+      if (!userId) return true;
+      if (!PERSONAL_NOTIFICATION_APPS.has(String(sub.app_name || ''))) return true;
+      return sub.user_id === userId;
+    });
 
     if (!subscriptions || subscriptions.length === 0) {
       return jsonResponse({

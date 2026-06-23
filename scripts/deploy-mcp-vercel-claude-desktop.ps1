@@ -46,7 +46,7 @@ Write-Host "[3/4] MCP 서버 추가..." -ForegroundColor Yellow
 
 # Add Google Sheets MCP
 $config.mcpServers["sht-googlesheets"] = @{
-    command = "npx"
+    command = "npx.cmd"
     args = @("-y", "smithery", "run", "googlesheets")
     disabled = $false
 }
@@ -54,7 +54,7 @@ Write-Host "Added: Google Sheets MCP" -ForegroundColor Green
 
 # Add Vercel MCP
 $config.mcpServers["vercel-mcp"] = @{
-    command = "npx"
+    command = "npx.cmd"
     args = @("-y", "smithery", "run", "vercel")
     disabled = $false
 }

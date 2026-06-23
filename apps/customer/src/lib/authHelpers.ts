@@ -1,4 +1,5 @@
 import supabase from './supabase';
+import { clearInvalidSession, isInvalidRefreshTokenError } from './authRecovery';
 
 function extractUserFromStoredValue(raw: string): any | null {
   try {
@@ -67,6 +68,11 @@ export async function getSessionUser(_timeoutMs?: number): Promise<{ user: any; 
       return { user: data.user, error: null };
     }
 
+    if (error && isInvalidRefreshTokenError(error)) {
+      await clearInvalidSession();
+      return { user: null, error };
+    }
+
     // 로컬 백업에서 복구 시도
     const fallbackUser = getStoredSessionUser();
     if (fallbackUser) {
@@ -75,6 +81,11 @@ export async function getSessionUser(_timeoutMs?: number): Promise<{ user: any; 
 
     return { user: null, error };
   } catch (err) {
+    if (isInvalidRefreshTokenError(err)) {
+      await clearInvalidSession();
+      return { user: null, error: err };
+    }
+
     const fallbackUser = getStoredSessionUser();
     if (fallbackUser) {
       return { user: fallbackUser, error: null };
@@ -93,10 +104,18 @@ export async function refreshAuthBeforeSubmit(_timeoutMs?: number): Promise<{ us
   try {
     const { data, error } = await supabase.auth.getUser();
     if (data?.user) return { user: data.user, error: null };
+    if (error && isInvalidRefreshTokenError(error)) {
+      await clearInvalidSession();
+      return { user: null, error };
+    }
     const fallbackUser = getStoredSessionUser();
     if (fallbackUser) return { user: fallbackUser, error: null };
     return { user: null, error: error || new Error('No active session') };
   } catch (err) {
+    if (isInvalidRefreshTokenError(err)) {
+      await clearInvalidSession();
+      return { user: null, error: err };
+    }
     const fallbackUser = getStoredSessionUser();
     if (fallbackUser) return { user: fallbackUser, error: null };
     return { user: null, error: err };

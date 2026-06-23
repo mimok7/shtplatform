@@ -7,6 +7,23 @@ import { getSessionUser, refreshAuthBeforeSubmit } from '@/lib/authHelpers';
 import { useLoadingTimeout } from '@/hooks/useLoadingTimeout';
 import PageWrapper from '@/components/PageWrapper';
 import SectionBox from '@/components/SectionBox';
+import { calculateReservationPricing } from '@sht/domain/pricing';
+
+type TicketPriceItem = 'adult' | 'child_under_1_2m' | 'shuttle';
+type PriceChannel = 'official' | 'card' | 'krw';
+
+interface TicketPriceOption {
+    ticket_price_code: string;
+    ticket_type: string;
+    ticket_name: string;
+    price_item: TicketPriceItem;
+    official_price_vnd: number;
+    stay_card_price_vnd: number;
+    stay_krw_price_krw: number;
+    valid_from: string;
+    valid_to: string | null;
+    sort_order: number;
+}
 
 function TicketBookingContent() {
     const router = useRouter();
@@ -41,6 +58,106 @@ function TicketBookingContent() {
         special_requests: ''       // 요청사항
     });
     const [locationInputError, setLocationInputError] = useState('');
+    const loadTicketPriceOptions = useCallback(async (): Promise<TicketPriceOption[]> => {
+        const res = await fetch('/api/ticket-price');
+        const json = await res.json();
+        if (!res.ok || json?.error) {
+            throw new Error(json?.error || '티켓 가격 정보를 불러오지 못했습니다.');
+        }
+        return Array.isArray(json?.data) ? json.data : [];
+    }, []);
+
+    const getUnitByChannel = (option: TicketPriceOption, channel: PriceChannel) => {
+        if (channel === 'official') return Number(option.official_price_vnd || 0);
+        if (channel === 'krw') return Number(option.stay_krw_price_krw || 0);
+        return Number(option.stay_card_price_vnd || 0);
+    };
+
+    const findTicketPriceOption = (
+        options: TicketPriceOption[],
+        ticketType: string,
+        priceItem: TicketPriceItem,
+        effectiveDate: string,
+    ) => {
+        return options
+            .filter((option) => {
+                if (option.ticket_type !== ticketType) return false;
+                if (option.price_item !== priceItem) return false;
+                if (option.valid_from > effectiveDate) return false;
+                if (option.valid_to && option.valid_to < effectiveDate) return false;
+                return true;
+            })
+            .sort((a, b) => {
+                if (a.valid_from === b.valid_from) {
+                    if (a.sort_order === b.sort_order) {
+                        return a.ticket_price_code.localeCompare(b.ticket_price_code);
+                    }
+                    return a.sort_order - b.sort_order;
+                }
+                return a.valid_from < b.valid_from ? 1 : -1;
+            })[0];
+    };
+
+    const buildTicketPricing = async () => {
+        const effectiveDate = formData.ticket_date;
+        const priceChannel: PriceChannel = 'card';
+        const ticketPriceOptions = await loadTicketPriceOptions();
+
+        const adultCount = Math.max(0, Number(formData.ticket_quantity || 0));
+        const childCount = 0;
+        const shuttleCount = ticketType === 'dragon' && formData.shuttle_required ? adultCount : 0;
+
+        const adultOption = findTicketPriceOption(ticketPriceOptions, ticketType, 'adult', effectiveDate);
+        const shuttleOption = findTicketPriceOption(ticketPriceOptions, ticketType, 'shuttle', effectiveDate);
+
+        const adultUnitPrice = adultOption ? getUnitByChannel(adultOption, priceChannel) : 0;
+        const shuttleUnitPrice = shuttleOption ? getUnitByChannel(shuttleOption, priceChannel) : 0;
+        const baseTotal = adultUnitPrice * adultCount + shuttleUnitPrice * shuttleCount;
+        const representativeCode = adultOption?.ticket_price_code || shuttleOption?.ticket_price_code || null;
+        const representativeName = formData.ticket_name || adultOption?.ticket_name || formData.program_selection || null;
+
+        const pricing = calculateReservationPricing({
+            serviceType: 'ticket',
+            baseTotal,
+            lineItems: [
+                {
+                    label: '티켓(성인)',
+                    code: adultOption?.ticket_price_code || 'adult',
+                    unit_price: adultUnitPrice,
+                    quantity: adultCount,
+                    total: adultUnitPrice * adultCount,
+                },
+                {
+                    label: '티켓(셔틀)',
+                    code: shuttleOption?.ticket_price_code || 'shuttle',
+                    unit_price: shuttleUnitPrice,
+                    quantity: shuttleCount,
+                    total: shuttleUnitPrice * shuttleCount,
+                },
+            ].filter((item) => Number(item.quantity || 0) > 0),
+            metadata: {
+                ticket_type: ticketType,
+                price_channel: priceChannel,
+                request_note: null,
+            },
+        });
+
+        return {
+            pricing,
+            ticketPayload: {
+                ticket_quantity: adultCount,
+                adult_count: adultCount,
+                child_count: childCount,
+                shuttle_count: shuttleCount,
+                price_channel: priceChannel,
+                ticket_price_item: 'adult' as TicketPriceItem,
+                ticket_price_code: representativeCode,
+                ticket_name: representativeName,
+                unit_price: adultUnitPrice,
+                total_price: pricing.base_total,
+            },
+        };
+    };
 
     const hasKorean = (text: string) => /[ㄱ-ㅎㅏ-ㅣ가-힣]/.test(text);
     const sanitizeEnglishOnly = (text: string) => text.replace(/[ㄱ-ㅎㅏ-ㅣ가-힣]/g, '');
@@ -98,11 +215,22 @@ function TicketBookingContent() {
             if (!reservation) return;
             setExistingReservationId(reservation.re_id);
 
-            const { data: tourRow } = await supabase
-                .from('reservation_tour')
+            const { data: ticketRow } = await supabase
+                .from('reservation_ticket')
                 .select('*')
                 .eq('reservation_id', reservation.re_id)
                 .maybeSingle();
+
+            let legacyTourRow: any = null;
+            if (!ticketRow) {
+                const { data } = await supabase
+                    .from('reservation_tour')
+                    .select('*')
+                    .eq('reservation_id', reservation.re_id)
+                    .maybeSingle();
+                legacyTourRow = data;
+            }
+            const tourRow = ticketRow || legacyTourRow;
             if (!tourRow) return;
 
             // request_note를 파싱하여 데이터 복원
@@ -232,20 +360,53 @@ function TicketBookingContent() {
 
             // 수정 모드
             if (isEditMode && existingReservationId) {
+                const { pricing, ticketPayload: calculatedFields } = await buildTicketPricing();
+                const ticketPayload = {
+                    reservation_id: existingReservationId,
+                    ticket_type: ticketType,
+                    ticket_name: ticketType === 'dragon' ? (calculatedFields.ticket_name || formData.ticket_name || null) : null,
+                    program_selection: ticketType === 'dragon' ? null : (formData.program_selection || null),
+                    ticket_quantity: calculatedFields.ticket_quantity,
+                    adult_count: calculatedFields.adult_count,
+                    child_count: calculatedFields.child_count,
+                    shuttle_count: calculatedFields.shuttle_count,
+                    pickup_location: ticketType === 'dragon' ? formData.pickup_location || null : null,
+                    dropoff_location: ticketType === 'dragon' ? formData.dropoff_location || null : null,
+                    usage_date: formData.ticket_date,
+                    shuttle_required: ticketType === 'dragon' ? !!formData.shuttle_required : false,
+                    ticket_details: ticketType === 'other' ? formData.ticket_details || null : null,
+                    special_requests: formData.special_requests || null,
+                    price_channel: calculatedFields.price_channel,
+                    ticket_price_item: calculatedFields.ticket_price_item,
+                    ticket_price_code: calculatedFields.ticket_price_code,
+                    unit_price: calculatedFields.unit_price,
+                    total_price: calculatedFields.total_price,
+                    request_note: requestNote || null,
+                    updated_at: new Date().toISOString(),
+                };
                 const { error } = await supabase
-                    .from('reservation_tour')
-                    .update({
-                        tour_price_code: null,
-                        tour_capacity: formData.ticket_quantity,
-                        pickup_location: ticketType === 'dragon' ? formData.pickup_location || null : null,
-                        dropoff_location: ticketType === 'dragon' ? formData.dropoff_location || null : null,
-                        usage_date: formData.ticket_date,
-                        unit_price: 0,
-                        total_price: 0,
-                        request_note: requestNote || null
-                    })
-                    .eq('reservation_id', existingReservationId);
+                    .from('reservation_ticket')
+                    .upsert(ticketPayload, { onConflict: 'reservation_id' });
                 if (error) throw error;
+                const { error: reservationError } = await supabase
+                    .from('reservation')
+                    .update({
+                        total_amount: pricing.total_amount,
+                        pax_count: calculatedFields.ticket_quantity,
+                        re_adult_count: calculatedFields.adult_count,
+                        re_child_count: calculatedFields.child_count,
+                        reservation_date: formData.ticket_date,
+                        price_breakdown: {
+                            ...pricing.price_breakdown,
+                            metadata: {
+                                ...(pricing.price_breakdown as any)?.metadata,
+                                request_note: requestNote || null,
+                            },
+                        },
+                        re_update_at: new Date().toISOString(),
+                    })
+                    .eq('re_id', existingReservationId);
+                if (reservationError) throw reservationError;
                 alert('티켓 예약이 수정되었습니다!');
                 router.push('/order/new?completed=ticket');
                 return;
@@ -268,22 +429,58 @@ function TicketBookingContent() {
                 return;
             }
 
+            const { pricing, ticketPayload: calculatedFields } = await buildTicketPricing();
             const { error: tourReservationError } = await supabase
-                .from('reservation_tour')
+                .from('reservation_ticket')
                 .insert({
                     reservation_id: reservationData.re_id,
-                    tour_price_code: null,
-                    tour_capacity: formData.ticket_quantity,
+                    ticket_type: ticketType,
+                    ticket_name: ticketType === 'dragon' ? (calculatedFields.ticket_name || formData.ticket_name || null) : null,
+                    program_selection: ticketType === 'dragon' ? null : (formData.program_selection || null),
+                    ticket_quantity: calculatedFields.ticket_quantity,
+                    adult_count: calculatedFields.adult_count,
+                    child_count: calculatedFields.child_count,
+                    shuttle_count: calculatedFields.shuttle_count,
                     pickup_location: ticketType === 'dragon' ? formData.pickup_location || null : null,
                     dropoff_location: ticketType === 'dragon' ? formData.dropoff_location || null : null,
                     usage_date: formData.ticket_date,
-                    unit_price: 0,
-                    total_price: 0,
+                    shuttle_required: ticketType === 'dragon' ? !!formData.shuttle_required : false,
+                    ticket_details: ticketType === 'other' ? formData.ticket_details || null : null,
+                    special_requests: formData.special_requests || null,
+                    price_channel: calculatedFields.price_channel,
+                    ticket_price_item: calculatedFields.ticket_price_item,
+                    ticket_price_code: calculatedFields.ticket_price_code,
+                    unit_price: calculatedFields.unit_price,
+                    total_price: calculatedFields.total_price,
                     request_note: requestNote
                 });
 
             if (tourReservationError) {
                 alert(`티켓 예약 생성 실패: ${tourReservationError.message}`);
+                return;
+            }
+
+            const { error: reservationUpdateError } = await supabase
+                .from('reservation')
+                .update({
+                    total_amount: pricing.total_amount,
+                    pax_count: calculatedFields.ticket_quantity,
+                    re_adult_count: calculatedFields.adult_count,
+                    re_child_count: calculatedFields.child_count,
+                    reservation_date: formData.ticket_date,
+                    price_breakdown: {
+                        ...pricing.price_breakdown,
+                        metadata: {
+                            ...(pricing.price_breakdown as any)?.metadata,
+                            request_note: requestNote || null,
+                        },
+                    },
+                    re_update_at: new Date().toISOString(),
+                })
+                .eq('re_id', reservationData.re_id);
+
+            if (reservationUpdateError) {
+                alert(`예약 금액 저장 실패: ${reservationUpdateError.message}`);
                 return;
             }
 

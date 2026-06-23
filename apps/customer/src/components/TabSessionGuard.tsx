@@ -6,6 +6,18 @@ import { usePathname } from 'next/navigation';
 const TAB_SESSION_KEY = 'sht:tab:id';
 const ACTIVE_TAB_KEY = 'sht:active:tab:customer';
 
+function isMobileOrStandalone() {
+  if (typeof window === 'undefined') return true;
+
+  const userAgent = window.navigator.userAgent || '';
+  const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+  const isStandalone =
+    window.matchMedia?.('(display-mode: standalone)').matches ||
+    (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
+
+  return isMobileDevice || isStandalone;
+}
+
 function getOrCreateTabId() {
   if (typeof window === 'undefined') return '';
   let tabId = sessionStorage.getItem(TAB_SESSION_KEY);
@@ -35,10 +47,12 @@ export default function TabSessionGuard({ loginPath }: { loginPath: string }) {
   const currentTabIdRef = useRef('');
   const blockedRef = useRef(false);
   const [blocked, setBlocked] = useState(false);
+  const avoidWindowClose = isMobileOrStandalone();
 
   useEffect(() => {
     // 로그인 페이지에서는 차단하지 않음 — 새 로그인이 우선되어야 함
     if (pathname.startsWith(loginPath)) return;
+    if (isMobileOrStandalone()) return;
 
     currentTabIdRef.current = getOrCreateTabId();
 
@@ -63,6 +77,11 @@ export default function TabSessionGuard({ loginPath }: { loginPath: string }) {
   }, [pathname, loginPath]);
 
   const handleClose = () => {
+    if (isMobileOrStandalone()) {
+      window.location.replace(loginPath);
+      return;
+    }
+
     try {
       window.open('', '_self');
       window.close();
@@ -88,7 +107,7 @@ export default function TabSessionGuard({ loginPath }: { loginPath: string }) {
             onClick={handleClose}
             className="mt-6 w-full px-4 py-2 bg-gray-800 text-white rounded-lg font-medium hover:bg-gray-900 transition"
           >
-            닫기
+            {avoidWindowClose ? '로그인 화면으로 이동' : '닫기'}
           </button>
         </div>
       </div>

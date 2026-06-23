@@ -7,10 +7,24 @@ interface PageWrapperProps {
   title?: string;
   description?: string;
   actions?: React.ReactNode;
+  disableHomeButton?: boolean;
+  rightIcon?: React.ReactNode;
+  rightLabel?: string;
+  onRightClick?: () => void;
 }
 
-export default function PageWrapper({ children, title, description, actions }: PageWrapperProps) {
+export default function PageWrapper({
+  children,
+  title,
+  description,
+  actions,
+  disableHomeButton = false,
+  rightIcon,
+  rightLabel = '홈',
+  onRightClick,
+}: PageWrapperProps) {
   const router = useRouter();
+  const handleRightClick = onRightClick || (() => router.push('/mypage'));
 
   return (
     <div className="max-w-7xl mx-auto">
@@ -21,18 +35,34 @@ export default function PageWrapper({ children, title, description, actions }: P
           <div className="flex items-center gap-2">
               <button
                 onClick={() => router.back()}
-                className="p-1.5 rounded-lg hover:bg-gray-100 transition flex-shrink-0"
+                disabled={disableHomeButton}
+                className={`p-1.5 rounded-lg transition flex-shrink-0 ${
+                  disableHomeButton
+                    ? 'cursor-not-allowed opacity-40'
+                    : 'hover:bg-gray-100 cursor-pointer'
+                }`}
                 aria-label="뒤로가기"
               >
-                <ArrowLeft className="w-5 h-5 text-gray-600" />
+                <ArrowLeft className={`w-5 h-5 ${
+                  disableHomeButton ? 'text-gray-400' : 'text-gray-600'
+                }`} />
               </button>
               <h1 className="text-base font-bold text-gray-800 flex-1 text-center">{title}</h1>
               <button
-                onClick={() => router.push('/mypage')}
-                className="p-1.5 rounded-lg hover:bg-gray-100 transition flex-shrink-0"
-                aria-label="홈"
+                onClick={handleRightClick}
+                disabled={disableHomeButton}
+                className={`p-1.5 rounded-lg transition flex-shrink-0 ${
+                  disableHomeButton
+                    ? 'cursor-not-allowed opacity-40'
+                    : 'hover:bg-gray-100 cursor-pointer'
+                }`}
+                aria-label={rightLabel}
               >
-                <Home className="w-5 h-5 text-gray-600" />
+                {rightIcon || (
+                  <Home className={`w-5 h-5 ${
+                    disableHomeButton ? 'text-gray-400' : 'text-gray-600'
+                  }`} />
+                )}
               </button>
             </div>
           </div>

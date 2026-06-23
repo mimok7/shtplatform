@@ -30,4 +30,17 @@ export async function clearInvalidSession(): Promise<void> {
     } catch {
         // no-op
     }
+
+    try {
+        for (const key of Object.keys(sessionStorage)) {
+            if (key.startsWith('sb-') && key.endsWith('-auth-token')) {
+                sessionStorage.removeItem(key);
+            }
+        }
+
+        sessionStorage.removeItem('app:auth:cache');
+        sessionStorage.removeItem('app:session:cache');
+    } catch {
+        // no-op
+    }
 }

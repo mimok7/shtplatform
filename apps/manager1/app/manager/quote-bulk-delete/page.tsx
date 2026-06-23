@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import supabase from '@/lib/supabase';
 import ManagerLayout from '@/components/ManagerLayout';
+import { safeWriteClipboard } from '@/lib/browserCompat';
 import { Search, Trash2, Copy, RefreshCw, FileText, AlertTriangle } from 'lucide-react';
 
 interface ServiceRow {
@@ -129,7 +130,7 @@ export default function QuoteBulkDeletePage() {
     const handleCopy = async (text: string | null) => {
         if (!text) return;
         try {
-            await navigator.clipboard.writeText(text);
+            await safeWriteClipboard(text);
         } catch { /* noop */ }
     };
 

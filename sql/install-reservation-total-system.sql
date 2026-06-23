@@ -82,6 +82,10 @@ BEGIN
                  ) 
                  FROM reservation_rentcar 
                  WHERE reservation_id = p_reservation_id), 0 )
+    -- 스하 차량 서비스: car_total_price 직접 사용
+    + COALESCE( (SELECT SUM(COALESCE(car_total_price, 0))
+                 FROM reservation_car_sht
+                 WHERE reservation_id = p_reservation_id), 0 )
   INTO v_total;
 
   -- reservation 테이블의 total_amount 업데이트

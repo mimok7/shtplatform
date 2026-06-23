@@ -67,6 +67,7 @@ function TourReservationEditContent() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [additionalFee, setAdditionalFee] = useState(0);
+    const [additionalFeeInput, setAdditionalFeeInput] = useState('');
     const [additionalFeeDetail, setAdditionalFeeDetail] = useState('');
     const [feeTemplates, setFeeTemplates] = useState<{ id: number; name: string; amount: number }[]>([]);
     const [formData, setFormData] = useState({
@@ -78,7 +79,12 @@ function TourReservationEditContent() {
         total_price: 0,
         request_note: ''
     });
-    const tourFinalTotal = (formData.total_price || 0) + additionalFee;
+
+    const applyAdditionalFeeValue = (nextValue: number) => {
+        setAdditionalFee(nextValue);
+        setAdditionalFeeInput(nextValue === 0 ? '' : String(nextValue));
+    };
+    const tourFinalTotal = Math.max(0, (formData.total_price || 0) + additionalFee);
 
     useEffect(() => {
         if (reservationId) {
@@ -100,7 +106,6 @@ function TourReservationEditContent() {
 
     const loadReservation = async () => {
         try {
-            console.log('🔄 투어 예약 데이터 로드 시작...', reservationId);
             setLoading(true);
 
             // 1) 예약 기본 정보 조회
@@ -134,7 +139,6 @@ function TourReservationEditContent() {
                 .maybeSingle();
 
             if (tourErr) {
-                console.warn('⚠️ 투어 예약 상세 조회 실패:', tourErr);
             }
 
             // 4) 견적 타이틀
@@ -213,7 +217,7 @@ function TourReservationEditContent() {
                 total_price: tourRow?.total_price || (tourRow?.tour_capacity * (tourRow?.unit_price || tourPriceInfo?.price_per_person || 0)) || 0,
                 request_note: tourRow?.request_note || ''
             });
-            setAdditionalFee(Number(resRow.manual_additional_fee || 0));
+            applyAdditionalFeeValue(Number(resRow.manual_additional_fee || 0));
             setAdditionalFeeDetail(String(resRow.manual_additional_fee_detail || ''));
 
         } catch (error) {
@@ -250,7 +254,6 @@ function TourReservationEditContent() {
 
         try {
             setSaving(true);
-            console.log('💾 투어 예약 수정 저장 시작...');
 
             const payload = {
                 usage_date: formData.tour_date || null,
@@ -341,12 +344,10 @@ function TourReservationEditContent() {
                     },
                 });
             } catch (trackErr) {
-                console.warn('⚠️ 변경 추적 기록 실패(저장은 계속):', trackErr);
             }
 
             // 2. Insert fallback
             if (!updatedData || updatedData.length === 0) {
-                console.log('⚠️ 기존 데이터 없음, 신규 삽입...');
                 const { error: insertError } = await supabase
                     .from('reservation_tour')
                     .insert({
@@ -356,7 +357,6 @@ function TourReservationEditContent() {
                 if (insertError) throw insertError;
             }
 
-            console.log('✅ 투어 예약 수정 완료');
             alert('투어 예약이 성공적으로 수정되었습니다.');
 
             // 데이터 다시 로드 + Next.js 라우터 캐시 무효화 (상세 모달 최신화)
@@ -591,7 +591,7 @@ function TourReservationEditContent() {
                                             value=""
                                             onChange={(e) => {
                                                 const tpl = feeTemplates.find(t => String(t.id) === e.target.value);
-                                                if (tpl) { setAdditionalFee(tpl.amount); setAdditionalFeeDetail(tpl.name); }
+                                                if (tpl) { applyAdditionalFeeValue(tpl.amount); setAdditionalFeeDetail(tpl.name); }
                                             }}
                                         >
                                             <option value="">-- 추가내역 선택 --</option>
@@ -601,15 +601,28 @@ function TourReservationEditContent() {
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">추가요금 (VND)</label>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">직접입력 추가/차감 금액 (VND)</label>
                                         <input
                                             type="number"
-                                            min="0"
-                                            value={additionalFee}
-                                            onChange={(e) => setAdditionalFee(parseInt(e.target.value, 10) || 0)}
-                                            title="추가요금"
+                                            value={additionalFeeInput}
+                                            onChange={(e) => {
+                                                const nextValue = e.target.value;
+                                                setAdditionalFeeInput(nextValue);
+
+                                                if (nextValue === '' || nextValue === '-') {
+                                                    setAdditionalFee(0);
+                                                    return;
+                                                }
+
+                                                const parsedValue = Number(nextValue);
+                                                if (Number.isFinite(parsedValue)) {
+                                                    setAdditionalFee(parsedValue);
+                                                }
+                                            }}
+                                            title="직접입력 추가/차감 금액"
                                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                         />
+                                        <p className="text-xs text-gray-500 mt-1">할인은 음수(-)로 입력하면 추가내역 차감으로 저장됩니다.</p>
                                     </div>
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">추가요금 내역</label>
@@ -622,7 +635,7 @@ function TourReservationEditContent() {
                                         />
                                     </div>
                                 </div>
-                                {(formData.total_price > 0 || additionalFee > 0) && (
+                                {(formData.total_price > 0 || additionalFee !== 0) && (
                                     <div className="pt-4 mt-4 border-t border-gray-100 space-y-2">
                                         <div className="flex justify-between text-sm text-gray-700">
                                             <span>기본 투어 금액</span>
@@ -631,9 +644,9 @@ function TourReservationEditContent() {
                                         <div className="text-xs text-gray-500">
                                             {formData.tour_capacity}명 × {formData.unit_price.toLocaleString()}동
                                         </div>
-                                        <div className="flex justify-between text-sm text-orange-600">
-                                            <span>추가요금</span>
-                                            <span className="font-semibold">+{additionalFee.toLocaleString()}동</span>
+                                        <div className={`flex justify-between text-sm ${additionalFee >= 0 ? 'text-orange-600' : 'text-red-600'}`}>
+                                            <span>{additionalFee >= 0 ? '추가요금' : '차감금액'}</span>
+                                            <span className="font-semibold">{additionalFee > 0 ? '+' : ''}{additionalFee.toLocaleString()}동</span>
                                         </div>
                                         {additionalFeeDetail.trim() && (
                                             <div className="text-xs text-gray-500 whitespace-pre-wrap">{additionalFeeDetail}</div>

@@ -106,10 +106,17 @@ interface AdditionalFeeItem {
 
 const BIRTHDAY_EVENT_FEE = 1000000;
 
+const normalizeAdditionalFeeTemplateId = (value: unknown): number | null => {
+    if (value === null || value === undefined || value === '') return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+};
+
 const isBirthdayEventAdditionalFeeItem = (item: AdditionalFeeItem) => {
     if (String(item.key || '').startsWith('birthday-event-')) return true;
+    const normalizedName = String(item.name || '').replace(/\s+/g, '');
     return item.template_id === null
-        && item.name === '생일이벤트 추가'
+        && (normalizedName === '생일이벤트추가' || normalizedName === '생일이벤트')
         && Number(item.amount) === BIRTHDAY_EVENT_FEE;
 };
 
@@ -961,14 +968,6 @@ function CruiseReservationEditContent() {
                 setCategoryOptions(uniqueCategories as string[]);
                 setScheduleOptions(uniqueSchedules as string[]);
 
-                console.log('✅ cruise_rate_card 옵션 로드 완료:', {
-                    총개수: allRoomPrices.length,
-                    매핑개수: mapped.length,
-                    크루즈: uniqueCruises.length,
-                    객실: uniqueRoomTypes.length,
-                    카테고리: uniqueCategories,
-                    일정: uniqueSchedules.length
-                });
             }
         } catch (error) {
             console.error('❌ cruise_rate_card 옵션 로드 오류:', error);
@@ -1016,7 +1015,6 @@ function CruiseReservationEditContent() {
 
     const loadTourOptions = async () => {
         try {
-            console.log('🔍 추가 옵션(cruise_tour_options) 로드 시작...');
             const { data: options, error } = await supabase
                 .from('cruise_tour_options')
                 .select('option_id, cruise_name, schedule_type, option_name, option_name_en, option_price, option_type, is_active')
@@ -1030,9 +1028,7 @@ function CruiseReservationEditContent() {
 
             setTourOptions(options || []);
             if (options && options.length > 0) {
-                console.log('✅ 추가 옵션 로드 완료:', options.length, '개');
             } else {
-                console.log('ℹ️ 추가 옵션 데이터 없음');
             }
         } catch (error) {
             console.error('❌ cruise_tour_options 로드 오류:', error);
@@ -1041,11 +1037,9 @@ function CruiseReservationEditContent() {
 
     const loadReservation = async () => {
         try {
-            console.log('🔄 크루즈 예약 데이터 로드 시작...', reservationId);
             setLoading(true);
 
             // 1) 서비스 상세 (다건)
-            console.log('🔍 크루즈 예약 조회 시작, ID:', reservationId);
             const { data: cruiseRows, error: cruiseErr } = await supabase
                 .from('reservation_cruise')
                 .select('*')
@@ -1071,15 +1065,8 @@ function CruiseReservationEditContent() {
 
             const primaryCruiseRow = cruiseRows[0];
 
-            console.log('✅ 크루즈 예약 조회 성공:', {
-                reservation_id: primaryCruiseRow.reservation_id,
-                room_count: cruiseRows.length,
-                room_price_codes: cruiseRows.map((row) => row.room_price_code),
-                전체데이터: cruiseRows
-            });
 
             // 2) 예약 기본 정보 + 고객 정보 조회
-            console.log('🔍 예약 기본 정보 조회 시작');
             const { data: resRow, error: resErr } = await supabase
                 .from('reservation')
                 .select('re_id, re_status, re_created_at, re_quote_id, re_user_id, total_amount, price_breakdown, manual_additional_fee, manual_additional_fee_detail')
@@ -1105,7 +1092,6 @@ function CruiseReservationEditContent() {
                 }
             }
 
-            console.log('✅ 예약 기본 정보 조회 성공:', resRow.re_id);
 
             // 3) 견적 타이틀
             let quoteInfo = null as { title: string } | null;
@@ -1122,11 +1108,9 @@ function CruiseReservationEditContent() {
             const roomPriceInfoList = await Promise.all(
                 cruiseRows.map(async (cruiseRow) => {
                     if (!cruiseRow.room_price_code) {
-                        console.warn('⚠️ room_price_code가 없습니다 - cruiseRow:', cruiseRow);
                         return null;
                     }
 
-                    console.log('🔍 cruise_rate_card 조회 시작, room_price_code:', cruiseRow.room_price_code);
 
                     const { data: rateCard, error: rpErr } = await supabase
                         .from('cruise_rate_card')
@@ -1146,7 +1130,6 @@ function CruiseReservationEditContent() {
                     }
 
                     if (!rateCard) {
-                        console.warn('⚠️ cruise_rate_card 데이터 없음 - id로 일치하는 데이터가 없습니다');
                         return null;
                     }
 
@@ -1166,7 +1149,6 @@ function CruiseReservationEditContent() {
                         price_single: rateCard.price_single || 0
                     };
 
-                    console.log('✅ cruise_rate_card 데이터 설정 완료:', roomPriceInfo);
                     return roomPriceInfo;
                 })
             );
@@ -1174,20 +1156,17 @@ function CruiseReservationEditContent() {
             setRoomPriceDetails(roomPriceInfoList);
 
             // 5) 차량 정보 조회
-            console.log('🔍 차량 정보 조회 시작');
             const { data: cruiseCars } = await supabase
                 .from('reservation_cruise_car')
                 .select('*')
                 .eq('reservation_id', reservationId);
 
             if (cruiseCars && cruiseCars.length > 0) {
-                console.log('✅ 차량 데이터 조회 완료:', cruiseCars.length, '대');
 
                 // 각 차량의 가격 정보 조회 (cruise, car_type, car_category, price 포함)
                 const carsWithPrice = await Promise.all(
                     cruiseCars.map(async (car) => {
                         if (car.car_price_code) {
-                            console.log('🔍 차량 가격 조회:', car.car_price_code);
 
                             const { data: carPriceLegacy } = await supabase
                                 .from('rentcar_price')
@@ -1216,14 +1195,6 @@ function CruiseReservationEditContent() {
                             }
 
                             if (carPrice) {
-                                console.log('✅ 차량 가격 정보:', {
-                                    car_code: carPrice.car_code,
-                                    cruise: carPrice.cruise,
-                                    car_type: carPrice.car_type,
-                                    price: carPrice.price,
-                                    car_count: car.car_count,
-                                    passenger_count: car.passenger_count
-                                });
 
                                 // 차량 가격 자동 계산
                                 const carCount = car.car_count || 0;
@@ -1234,13 +1205,6 @@ function CruiseReservationEditContent() {
                                     ? carCount * unitPrice
                                     : passengerCount * unitPrice;
 
-                                console.log('💰 차량 가격 계산:', {
-                                    차량수: carCount,
-                                    승객수: passengerCount,
-                                    단가: unitPrice,
-                                    계산된가격: calculatedPrice,
-                                    기존가격: car.car_total_price
-                                });
 
                                 return {
                                     ...car,
@@ -1248,7 +1212,6 @@ function CruiseReservationEditContent() {
                                     car_total_price: calculatedPrice // 계산된 가격으로 업데이트
                                 };
                             } else {
-                                console.warn('⚠️ 차량 가격 정보 없음:', car.car_price_code);
                             }
 
                             return { ...car, priceInfo: carPrice };
@@ -1257,9 +1220,7 @@ function CruiseReservationEditContent() {
                     })
                 );
                 setCarData(carsWithPrice);
-                console.log('✅ 차량 데이터 설정 완료:', carsWithPrice);
             } else {
-                console.log('ℹ️ 차량 정보 없음');
             }
 
             const fullReservation: CruiseReservation = {
@@ -1278,11 +1239,6 @@ function CruiseReservationEditContent() {
                 room_price: roomPriceInfoList[0] || null,
             };
 
-            console.log('📦 최종 예약 데이터:', {
-                fullReservation,
-                roomPriceInfoList,
-                cruiseRow_room_price_code: primaryCruiseRow.room_price_code
-            });
 
             setReservation(fullReservation);
             setStoredReservationTotal(Number(resRow.total_amount || 0));
@@ -1293,7 +1249,7 @@ function CruiseReservationEditContent() {
             const normalizedAdditionalFeeItems: AdditionalFeeItem[] = rawAdditionalFeeItems
                 .map((item: any, index: number) => ({
                     key: String(item?.key || `saved-${index + 1}`),
-                    template_id: Number.isFinite(Number(item?.template_id)) ? Number(item.template_id) : null,
+                    template_id: normalizeAdditionalFeeTemplateId(item?.template_id),
                     name: String(item?.name || '').trim(),
                     amount: Number(item?.amount) || 0,
                 }))
@@ -1519,11 +1475,6 @@ function CruiseReservationEditContent() {
 
         try {
             setSaving(true);
-            console.log('💾 크루즈 예약 수정 저장 시작...');
-            console.log('📝 저장할 데이터:', {
-                rooms: roomForms,
-                request_note: requestNote
-            });
 
             if (roomForms.length === 0) {
                 throw new Error('객실이 없습니다. 최소 1개의 객실이 필요합니다.');
@@ -1572,7 +1523,6 @@ function CruiseReservationEditContent() {
                 birthday_name: room.birthday_name || null,
             }));
 
-            console.log('📤 reservation_cruise 재저장 요청:', cruiseInsertData);
 
             const { error: deleteCruiseError } = await supabase
                 .from('reservation_cruise')
@@ -1600,15 +1550,12 @@ function CruiseReservationEditContent() {
                 throw cruiseError;
             }
 
-            console.log('✅ 객실 정보 저장 완료, 업데이트된 행:', cruiseResult?.length || 0, cruiseResult);
 
             if (!cruiseResult || cruiseResult.length !== roomForms.length) {
-                console.warn('⚠️ reservation_cruise 저장 결과가 예상과 다릅니다.');
                 throw new Error('객실 정보 저장 결과를 확인할 수 없습니다. 다시 시도해주세요.');
             }
 
             // 2. 차량 정보 저장 - 업데이트할 필드만 명시적으로 지정
-            console.log('🚗 차량 정보 저장 시작:', carData.length, '대');
             for (const car of carData) {
                 if (car.id) {
                     // 업데이트할 필드만 명시적으로 추출 (id, reservation_id, created_at 등은 제외)
@@ -1623,7 +1570,6 @@ function CruiseReservationEditContent() {
                         request_note: car.request_note || null,
                     };
 
-                    console.log('📤 차량 업데이트 (id:', car.id, '):', carUpdateFields);
 
                     const { data: carResult, error: carError } = await supabase
                         .from('reservation_cruise_car')
@@ -1636,13 +1582,10 @@ function CruiseReservationEditContent() {
                         throw carError;
                     }
 
-                    console.log('✅ 차량 업데이트 완료, 업데이트된 행:', carResult?.length || 0);
 
                     if (!carResult || carResult.length === 0) {
-                        console.warn(`⚠️ 차량 id=${car.id} 업데이트 대상을 찾을 수 없습니다.`);
                     }
                 } else {
-                    console.warn('⚠️ 차량 데이터에 id가 없습니다. 업데이트를 건너뜁니다:', car);
                 }
             }
 
@@ -1790,7 +1733,6 @@ function CruiseReservationEditContent() {
             if (masterError) {
                 console.error('⚠️ reservation 마스터 동기화 실패:', masterError);
             } else {
-                console.log('✅ 3. reservation 마스터 동기화 완료 (total_amount, 인원수, price_breakdown)');
             }
 
             await saveAdditionalFeeTemplateFromInput({
@@ -1847,10 +1789,8 @@ function CruiseReservationEditContent() {
                     },
                 });
             } catch (trackErr) {
-                console.warn('⚠️ 변경 추적 기록 실패(저장은 계속):', trackErr);
             }
 
-            console.log('✅ 크루즈 예약 수정 완료');
             alert('크루즈 예약이 성공적으로 수정되었습니다.');
 
             // 데이터 다시 로드 + Next.js 라우터 캐시 무효화 (상세 모달 최신화)
@@ -2429,14 +2369,6 @@ function CruiseReservationEditContent() {
                                                         const totalPrice = car.car_total_price || 0;
 
                                                         // 디버그 정보
-                                                        console.log('🔍 차량 가격 표시:', {
-                                                            idx,
-                                                            carCount,
-                                                            passengerCount,
-                                                            unitPrice,
-                                                            totalPrice,
-                                                            car
-                                                        });
 
                                                         return `${totalPrice.toLocaleString()}동`;
                                                     })()}

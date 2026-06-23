@@ -172,7 +172,6 @@ function ReservationEditContent() {
 
     const loadReservations = async (keywordRaw: string = searchTerm) => {
         try {
-            console.log('🔄 예약 데이터 로드 시작 (배이스 테이블 조회)...');
             setLoading(true);
 
             // URL 파라미터에서 필터 추출
@@ -263,6 +262,7 @@ function ReservationEditContent() {
                         hotel: ['hotel'],
                         rentcar: ['rentcar'],
                         tour: ['tour'],
+                        ticket: ['ticket'],
                         package: ['package'],
                     };
                     const dbTypeFilters = typeAliases[typeFilter] || [typeFilter];
@@ -296,13 +296,11 @@ function ReservationEditContent() {
 
             // 1.5) 사용자 정보 로드
             const userIds = Array.from(new Set(baseRows.map((r: any) => r.re_user_id).filter(Boolean)));
-            console.log('📌 추출된 사용자 IDs:', userIds);
 
             let userMap: Record<string, any> = {};
             if (userIds.length > 0) {
                 // phone 컬럼이 없어서 오류 발생함. id, name, email, phone_number 조회
                 const usersData = await fetchTableInBatches('users', 'id', userIds as string[], 'id, name, email, phone_number');
-                console.log('📌 조회된 사용자 데이터:', usersData);
 
                 if (usersData) {
                     usersData.forEach((u: any) => {
@@ -401,7 +399,6 @@ function ReservationEditContent() {
                     });
                 }
 
-                console.log('✅ 차량 데이터 로드 완료:', Object.keys(vehicleDataMap).length, '개 예약에 차량 데이터 있음');
             }
 
             // 2-b) 각 서비스별 전체 상세 데이터 배치 조회 (카드 통일 표시용)
@@ -413,22 +410,24 @@ function ReservationEditContent() {
                 const hotelIds = baseRows.filter((r: any) => r.re_type === 'hotel').map((r: any) => r.re_id);
                 const rentcarIds = baseRows.filter((r: any) => r.re_type === 'rentcar').map((r: any) => r.re_id);
                 const tourIds = baseRows.filter((r: any) => r.re_type === 'tour').map((r: any) => r.re_id);
+                const ticketIds = baseRows.filter((r: any) => r.re_type === 'ticket').map((r: any) => r.re_id);
                 const cruiseCarIds = baseRows.filter((r: any) => r.re_type === 'cruise_car' || r.re_type === 'vehicle').map((r: any) => r.re_id);
                 const carShtIds = baseRows.filter((r: any) => r.re_type === 'car_sht' || r.re_type === 'sht').map((r: any) => r.re_id);
                 const packageIds = baseRows.filter((r: any) => r.re_type === 'package').map((r: any) => r.re_id);
 
-                const [cruiseRes, airportRes, hotelRes, rentcarRes, tourRes, cruiseCarRes, carShtRes, airportFastTrackRes] = await Promise.all([
+                const [cruiseRes, airportRes, hotelRes, rentcarRes, tourRes, ticketRes, cruiseCarRes, carShtRes, airportFastTrackRes] = await Promise.all([
                     cruiseIds.length ? supabase.from('reservation_cruise').select('*').in('reservation_id', cruiseIds) : { data: [], error: null },
                     airportIds.length ? supabase.from('reservation_airport').select('*').in('reservation_id', airportIds) : { data: [], error: null },
                     hotelIds.length ? supabase.from('reservation_hotel').select('*').in('reservation_id', hotelIds) : { data: [], error: null },
                     rentcarIds.length ? supabase.from('reservation_rentcar').select('*').in('reservation_id', rentcarIds) : { data: [], error: null },
                     tourIds.length ? supabase.from('reservation_tour').select('*').in('reservation_id', tourIds) : { data: [], error: null },
+                    ticketIds.length ? supabase.from('reservation_ticket').select('*').in('reservation_id', ticketIds) : { data: [], error: null },
                     cruiseCarIds.length ? supabase.from('reservation_cruise_car').select('*').in('reservation_id', cruiseCarIds) : { data: [], error: null },
                     carShtIds.length ? supabase.from('reservation_car_sht').select('*').in('reservation_id', carShtIds) : { data: [], error: null },
                     airportIds.length ? supabase.from('reservation_airport_fasttrack').select('reservation_id, way_type').in('reservation_id', airportIds) : { data: [], error: null },
                 ]);
 
-                [cruiseRes, airportRes, hotelRes, rentcarRes, tourRes, cruiseCarRes, carShtRes].forEach((res: any) => {
+                [cruiseRes, airportRes, hotelRes, rentcarRes, tourRes, ticketRes, cruiseCarRes, carShtRes].forEach((res: any) => {
                     if (res?.data) {
                         res.data.forEach((row: any) => {
                             serviceDetailsMap[row.reservation_id] = row;
@@ -460,7 +459,6 @@ function ReservationEditContent() {
                     }
                 });
 
-                console.log('✅ 서비스 상세 데이터 로드 완료:', Object.keys(serviceDetailsMap).length, '개');
             }
 
             // 3) quote를 배치로 조회하여 맵 구성
@@ -476,8 +474,6 @@ function ReservationEditContent() {
                         acc[q.id] = { title: q.title, status: q.status };
                         return acc;
                     }, {});
-                } else if (quoteErr) {
-                    console.warn('⚠️ 견적 배치 조회 오류:', quoteErr);
                 }
             }
 
@@ -527,7 +523,6 @@ function ReservationEditContent() {
 
             const merged: ReservationSummary[] = Object.values(groupedByUser);
 
-            console.log('✅ 예약 데이터 로드/머지 완료:', merged.length, '개 그룹 (총', baseRows.length, '개 서비스)');
             setReservations(merged);
         } catch (error) {
             console.error('❌ 예약 목록 로드 실패:', error);
@@ -578,13 +573,13 @@ function ReservationEditContent() {
                 car: 'reservation_cruise_car',
                 car_sht: 'reservation_car_sht',
                 sht: 'reservation_car_sht',
+                ticket: 'reservation_ticket',
                 package: 'reservation_package',
             };
 
             const serviceTable = serviceTableMap[reType];
             if (serviceTable) {
-                const { error: childErr } = await supabase.from(serviceTable).delete().eq('reservation_id', reId);
-                if (childErr) console.warn(`자식 테이블 ${serviceTable} 삭제 경고:`, childErr.message);
+                await supabase.from(serviceTable).delete().eq('reservation_id', reId);
             }
 
             const { error } = await supabase.from('reservation').delete().eq('re_id', reId);
@@ -614,6 +609,13 @@ function ReservationEditContent() {
             return;
         }
         router.push('/reservation-edit/new');
+    };
+
+    const handleResetSearch = () => {
+        setSearchTerm('');
+        setSearchInput('');
+        setHasSearched(false);
+        clearSearchCache();
     };
 
     const handleCopyQuoteId = async (quoteId: string | null) => {
@@ -651,6 +653,7 @@ function ReservationEditContent() {
             'airport': '✈️ 공항',
             'rentcar': '🚗 렌터카',
             'tour': '🚩 투어',
+            'ticket': '🎫 티켓',
             'car': '🚗 크차',
             'vehicle': '🚗 크루즈 차량',
             'sht': '🚌 스하차량',
@@ -691,6 +694,7 @@ function ReservationEditContent() {
             case 'hotel': return <span className="flex items-center gap-1"><Building className="w-5 h-5 text-purple-600" /> 호텔</span>;
             case 'tour': return <span className="flex items-center gap-1"><MapPin className="w-5 h-5 text-orange-600" /> 투어</span>;
             case 'rentcar': return <span className="flex items-center gap-1"><Car className="w-5 h-5 text-red-600" /> 렌터카</span>;
+            case 'ticket': return <span className="flex items-center gap-1"><FileText className="w-5 h-5 text-teal-600" /> 티켓</span>;
             case 'car': return <span className="flex items-center gap-1"><Car className="w-5 h-5 text-blue-600" /> 크차</span>;
             case 'vehicle': return <span className="flex items-center gap-1"><Car className="w-5 h-5 text-blue-600" /> 크루즈 차량</span>;
             case 'sht': return <span className="flex items-center gap-1"><Bus className="w-5 h-5 text-indigo-600" /> 스하차량</span>;
@@ -710,6 +714,7 @@ function ReservationEditContent() {
             'vehicle': 2, // sht와 동일한 순서
             'airport': 3,
             'tour': 4,
+            'ticket': 5,
             'rentcar': 5,
             'hotel': 6
         };
@@ -760,6 +765,25 @@ function ReservationEditContent() {
             {/* 본문 */}
             <div className="px-2 py-4">
             <div className="space-y-6">
+                <div className="bg-white rounded-lg shadow-md p-2">
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={() => router.push('/reservation-edit')}
+                            className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium"
+                        >
+                            NEW 수정
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => router.push('/reservation-edit/old')}
+                            className="px-4 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 text-sm font-medium transition-colors"
+                        >
+                            OLD 수정
+                        </button>
+                    </div>
+                </div>
+
                 {/* 검색 및 액션 */}
                 <div className="bg-white rounded-lg shadow-md p-3">
                     <div className="flex flex-wrap gap-4 items-center mb-4">
@@ -817,12 +841,7 @@ function ReservationEditContent() {
                                     </button>
                                 </span>
                                 <button
-                                    onClick={() => {
-                                        setSearchTerm('');
-                                        setSearchInput('');
-                                        setHasSearched(false);
-                                        clearSearchCache();
-                                    }}
+                                    onClick={handleResetSearch}
                                     className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1 hover:bg-gray-100 rounded"
                                 >
                                     검색 초기화
@@ -849,12 +868,7 @@ function ReservationEditContent() {
                                 </p>
                                 <div className="mt-4">
                                     <button
-                                        onClick={() => {
-                                            setSearchTerm('');
-                                            setSearchInput('');
-                                            setHasSearched(false);
-                                            clearSearchCache();
-                                        }}
+                                        onClick={handleResetSearch}
                                         className="text-blue-600 hover:text-blue-800 text-sm"
                                     >
                                         검색 초기화
@@ -892,6 +906,31 @@ function ReservationEditContent() {
                                         {/* 카드 본문 */}
                                         <div className="p-4 space-y-3">
                                             <div>
+                                                <div className="space-y-1">
+                                                    <div className="text-sm font-semibold text-gray-900">
+                                                        {reservation.users?.name || '정보 없음'}
+                                                    </div>
+                                                    <div className="text-xs text-gray-500 break-all">
+                                                        {reservation.users?.email || '이메일 없음'}
+                                                    </div>
+                                                </div>
+                                                {searchTerm && (
+                                                    <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2">
+                                                        <div className="text-[11px] font-medium text-blue-700">현재 검색</div>
+                                                        <div className="mt-1 flex items-center justify-between gap-2">
+                                                            <div className="text-xs text-blue-900 break-all">
+                                                                검색: "{searchTerm}"
+                                                            </div>
+                                                            <button
+                                                                type="button"
+                                                                onClick={handleResetSearch}
+                                                                className="shrink-0 rounded-md border border-blue-200 bg-white px-2 py-1 text-[11px] text-blue-700 hover:bg-blue-100"
+                                                            >
+                                                                검색 초기화
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                )}
                                                 <div className="text-xs text-gray-500 mt-1 break-all flex items-center gap-2">
                                                     <span>견적 ID: {reservation.re_quote_id || '-'}</span>
                                                     {reservation.re_quote_id && (

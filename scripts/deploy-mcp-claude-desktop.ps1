@@ -44,7 +44,7 @@ if (-not $config.mcpServers) {
 
 # Google Sheets MCP 추가
 $config.mcpServers["sht-googlesheets"] = @{
-    command = "npx"
+    command = "npx.cmd"
     args = @("-y", "smithery", "run", "googlesheets")
     disabled = $false
 }

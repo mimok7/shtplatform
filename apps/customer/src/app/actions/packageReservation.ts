@@ -2,6 +2,7 @@
 
 import supabase from '@/lib/supabase';
 import { PackageWithItems } from '@/lib/types';
+import { calculateShtSeatPrice } from '@sht/domain/pricing';
 
 interface PackageReservationParams {
     packageId: string;
@@ -26,6 +27,30 @@ interface PackageReservationParams {
     itemDetails?: Record<string, any>;
     additionalRequests?: string;
     totalPrice?: number;
+}
+
+function getShtPricingFromSeatNumber(seatNumber: string | null | undefined) {
+    const normalizedSeatNumber = (seatNumber || '').trim();
+    if (!normalizedSeatNumber) {
+        return {
+            passengerCount: 0,
+            unitPrice: 0,
+            totalPrice: 0
+        };
+    }
+
+    const seatPrice = calculateShtSeatPrice(normalizedSeatNumber);
+    const seats = normalizedSeatNumber
+        .split(/[,;\s]+/)
+        .map((seat) => seat.trim())
+        .filter(Boolean);
+    const passengerCount = seats.length;
+
+    return {
+        passengerCount,
+        unitPrice: passengerCount > 0 ? Math.round(seatPrice.total / passengerCount) : 0,
+        totalPrice: seatPrice.total
+    };
 }
 
 export async function createPackageReservation({
@@ -403,6 +428,7 @@ export async function createPackageReservation({
 
                     // 스하 셔틀 차량 저장 (픽업: 숙소→선착장) - reservation_car_sht
                     if (details.shtPickupSeat) {
+                        const pickupShtPricing = getShtPricingFromSeatNumber(details.shtPickupSeat);
                         await supabase.from('reservation_car_sht').insert({
                             reservation_id: reservationId,
                             vehicle_number: details.shtPickupVehicle || '',
@@ -411,8 +437,10 @@ export async function createPackageReservation({
                             usage_date: usageDate,
                             pickup_location: details.accommodation || '',
                             dropoff_location: pierLocation,
-                            passenger_count: totalGuests,
+                            passenger_count: pickupShtPricing.passengerCount || totalGuests,
                             car_count: 1,
+                            unit_price: pickupShtPricing.unitPrice || null,
+                            car_total_price: pickupShtPricing.totalPrice || 0,
                             request_note: `[스하 셔틀 픽업] 차량: ${details.shtPickupVehicle || ''}, 좌석: ${details.shtPickupSeat}\n${additionalRequests || ''}`,
                             created_at: new Date().toISOString()
                         });
@@ -421,6 +449,7 @@ export async function createPackageReservation({
                     // 스하 셔틀 차량 저장 (드랍: 선착장→숙소) - reservation_car_sht
                     if (details.shtDropoffSeat) {
                         const dropoffDate = getOffsetDate(usageDate, 1); // 크루즈 다음날
+                        const dropoffShtPricing = getShtPricingFromSeatNumber(details.shtDropoffSeat);
                         await supabase.from('reservation_car_sht').insert({
                             reservation_id: reservationId,
                             vehicle_number: details.shtDropoffVehicle || '',
@@ -429,8 +458,10 @@ export async function createPackageReservation({
                             usage_date: dropoffDate,
                             pickup_location: pierLocation,
                             dropoff_location: details.roomType || details.accommodation || '',
-                            passenger_count: totalGuests,
+                            passenger_count: dropoffShtPricing.passengerCount || totalGuests,
                             car_count: 1,
+                            unit_price: dropoffShtPricing.unitPrice || null,
+                            car_total_price: dropoffShtPricing.totalPrice || 0,
                             request_note: `[스하 셔틀 드랍] 차량: ${details.shtDropoffVehicle || ''}, 좌석: ${details.shtDropoffSeat}\n${additionalRequests || ''}`,
                             created_at: new Date().toISOString()
                         });

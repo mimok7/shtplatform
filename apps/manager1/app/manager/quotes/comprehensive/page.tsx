@@ -2,6 +2,7 @@
 import { useEffect, useState, Suspense, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import ManagerLayout from '@/components/ManagerLayout';
+import { safeWriteClipboard } from '@/lib/browserCompat';
 import supabase from '@/lib/supabase';
 import { getExchangeRate, vndToKrw, roundKrwToHundred, formatExchangeRate } from '../../../../lib/exchangeRate';
 // 공용 탭 (quoteId 유지) + 오늘 타이틀 선택/작
@@ -214,7 +215,8 @@ function ManagerComprehensiveQuoteForm() {
                 alert('복사할 자연어 요약이 없습니다.');
                 return;
             }
-            await navigator.clipboard.writeText(naturalText);
+            const copied = await safeWriteClipboard(naturalText);
+            if (!copied) throw new Error('clipboard_unavailable');
             alert('자연어 요약을 클립보드에 복사했습니다.');
         } catch (e) {
             console.error('복사 실패:', e);

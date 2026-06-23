@@ -56,6 +56,14 @@ interface HotelReservation {
     } | null;
 }
 
+interface HotelPriceOption {
+    hotel_price_code: string;
+    hotel_name: string | null;
+    room_name: string | null;
+    room_type: string | null;
+    base_price: number | null;
+}
+
 function HotelReservationEditContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -65,9 +73,12 @@ function HotelReservationEditContent() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [additionalFee, setAdditionalFee] = useState(0);
+    const [additionalFeeInput, setAdditionalFeeInput] = useState('');
     const [additionalFeeDetail, setAdditionalFeeDetail] = useState('');
     const [feeTemplates, setFeeTemplates] = useState<{ id: number; name: string; amount: number }[]>([]);
+    const [hotelOptions, setHotelOptions] = useState<HotelPriceOption[]>([]);
     const [formData, setFormData] = useState({
+        hotel_price_code: '',
         checkin_date: '',
         schedule: '',
         room_count: 1,
@@ -76,6 +87,11 @@ function HotelReservationEditContent() {
         request_note: ''
     });
 
+    const applyAdditionalFeeValue = (nextValue: number) => {
+        setAdditionalFee(nextValue);
+        setAdditionalFeeInput(nextValue === 0 ? '' : String(nextValue));
+    };
+
     const getNightsFromSchedule = (schedule: string) => {
         const matched = String(schedule || '').match(/(\d+)/);
         const nights = matched ? parseInt(matched[1], 10) : 1;
@@ -83,7 +99,8 @@ function HotelReservationEditContent() {
     };
 
     const hotelBaseTotal = getNightsFromSchedule(formData.schedule) * (formData.room_count || 1) * formData.unit_price;
-    const hotelFinalTotal = hotelBaseTotal + additionalFee;
+    const hotelFinalTotal = Math.max(0, hotelBaseTotal + additionalFee);
+    const selectedHotelOption = hotelOptions.find((option) => option.hotel_price_code === formData.hotel_price_code);
 
     useEffect(() => {
         if (reservationId) {
@@ -101,11 +118,19 @@ function HotelReservationEditContent() {
             .eq('is_active', true)
             .order('sort_order')
             .then(({ data }) => { if (data) setFeeTemplates(data); });
+
+        supabase
+            .from('hotel_price')
+            .select('hotel_price_code, hotel_name, room_name, room_type, base_price')
+            .order('hotel_name', { ascending: true })
+            .order('room_name', { ascending: true })
+            .then(({ data }) => {
+                if (data) setHotelOptions(data as HotelPriceOption[]);
+            });
     }, []);
 
     const loadReservation = async () => {
         try {
-            console.log('🔄 호텔 예약 데이터 로드 시작...', reservationId);
             setLoading(true);
 
             // 1) 서비스 상세
@@ -160,14 +185,8 @@ function HotelReservationEditContent() {
                     .eq('hotel_price_code', hotelRow.hotel_price_code)
                     .single();
 
-                console.log('🏨 호텔 가격 정보 조회 (전체):', {
-                    hotel_price_code: hotelRow.hotel_price_code,
-                    result: hp,
-                    error: hpErr
-                });
 
                 if (hpErr) {
-                    console.warn('⚠️ 호텔 가격 정보 조회 실패:', hpErr);
 
                     // hotel_price_code로 검색해도 없으면 전체 테이블에서 비슷한 코드 찾기
                     const { data: allHotels, error: allErr } = await supabase
@@ -176,11 +195,9 @@ function HotelReservationEditContent() {
                         .ilike('hotel_price_code', `%${hotelRow.hotel_price_code}%`)
                         .limit(5);
 
-                    console.log('🔍 비슷한 호텔 코드 검색:', allHotels);
                 } else if (hp) {
                     hotelPriceInfo = hp;
                 } else {
-                    console.warn('⚠️ 호텔 가격 정보를 찾을 수 없습니다:', hotelRow.hotel_price_code);
                 }
             } const fullReservation: HotelReservation = {
                 ...hotelRow,
@@ -200,6 +217,7 @@ function HotelReservationEditContent() {
 
             setReservation(fullReservation);
             setFormData({
+                hotel_price_code: hotelRow.hotel_price_code || '',
                 checkin_date: hotelRow.checkin_date || '',
                 schedule: hotelRow.schedule || '1박',
                 room_count: hotelRow.room_count || 1,
@@ -207,7 +225,7 @@ function HotelReservationEditContent() {
                 unit_price: hotelRow.unit_price || hotelPriceInfo?.base_price || 0,
                 request_note: hotelRow.request_note || ''
             });
-            setAdditionalFee(Number(resRow.manual_additional_fee || 0));
+            applyAdditionalFeeValue(Number(resRow.manual_additional_fee || 0));
             setAdditionalFeeDetail(String(resRow.manual_additional_fee_detail || ''));
 
         } catch (error) {
@@ -231,6 +249,7 @@ function HotelReservationEditContent() {
             if (error) throw error;
             alert('호텔 서비스가 삭제되었습니다.');
             setFormData({
+                hotel_price_code: '',
                 checkin_date: '',
                 schedule: '',
                 room_count: 1,
@@ -251,7 +270,6 @@ function HotelReservationEditContent() {
 
         try {
             setSaving(true);
-            console.log('💾 호텔 예약 수정 저장 시작...');
 
             // schedule에서 숫자 추출 (예: "3박" -> 3)
             const nightsNum = getNightsFromSchedule(formData.schedule);
@@ -264,7 +282,7 @@ function HotelReservationEditContent() {
                 additionalFeeDetail,
                 lineItems: [{
                     label: '호텔 객실',
-                    code: formData.checkin_date || reservation.hotel_price_code,
+                    code: formData.hotel_price_code || reservation.hotel_price_code,
                     unit_price: formData.unit_price,
                     quantity: nightsNum * roomCount,
                     total: totalPrice,
@@ -275,7 +293,7 @@ function HotelReservationEditContent() {
                     },
                 }],
                 metadata: {
-                    hotel_price_code: reservation.hotel_price_code,
+                    hotel_price_code: formData.hotel_price_code || reservation.hotel_price_code,
                     checkin_date: formData.checkin_date || null,
                     schedule: formData.schedule || null,
                     request_note: formData.request_note || null,
@@ -286,6 +304,7 @@ function HotelReservationEditContent() {
             const { error: hotelError } = await supabase
                 .from('reservation_hotel')
                 .update({
+                    hotel_price_code: formData.hotel_price_code || null,
                     checkin_date: formData.checkin_date,
                     schedule: formData.schedule,
                     room_count: roomCount,
@@ -301,7 +320,6 @@ function HotelReservationEditContent() {
                 throw hotelError;
             }
 
-            console.log('✅ 1. 예약 호텔 테이블 저장 완료');
 
             // 2. 메인 예약 테이블 동기화 (총 금액 + 인원수 + 예약일 + 타임스탬프)
             const { error: reservationError } = await supabase
@@ -322,7 +340,6 @@ function HotelReservationEditContent() {
                 throw reservationError;
             }
 
-            console.log('✅ 2. 예약 테이블 동기화 완료 (총 금액, 인원수, 예약일)');
 
             await saveAdditionalFeeTemplateFromInput({
                 serviceType: 'hotel',
@@ -337,7 +354,7 @@ function HotelReservationEditContent() {
                     reType: 'hotel',
                     rows: {
                         hotel: [{
-                            hotel_price_code: reservation.hotel_price_code,
+                            hotel_price_code: formData.hotel_price_code || reservation.hotel_price_code,
                             checkin_date: formData.checkin_date,
                             schedule: formData.schedule,
                             room_count: roomCount,
@@ -355,10 +372,8 @@ function HotelReservationEditContent() {
                     },
                 });
             } catch (trackErr) {
-                console.warn('⚠️ 변경 추적 기록 실패(저장은 계속):', trackErr);
             }
 
-            console.log('✅ 모든 테이블 저장 완료');
             alert('호텔 예약이 성공적으로 수정되었습니다.');
 
             // 데이터 다시 로드 + Next.js 라우터 캐시 무효화 (상세 모달 최신화)
@@ -428,21 +443,41 @@ function HotelReservationEditContent() {
                                 <Hotel className="w-5 h-5" />
                                 호텔 정보
                             </h3>
-                            <div className="rounded-lg bg-white px-3 py-2 space-y-1 text-sm text-gray-700 border border-gray-100 shadow-sm">
+                            <div className="rounded-lg bg-white px-3 py-2 space-y-2 text-sm text-gray-700 border border-gray-100 shadow-sm">
+                                <div>
+                                    <label className="block text-xs font-semibold text-blue-600 mb-1">호텔 객실 선택 (수정 가능)</label>
+                                    <select
+                                        value={formData.hotel_price_code}
+                                        onChange={(e) => {
+                                            const nextCode = e.target.value;
+                                            const nextOption = hotelOptions.find((option) => option.hotel_price_code === nextCode);
+                                            setFormData((prev) => ({
+                                                ...prev,
+                                                hotel_price_code: nextCode,
+                                                unit_price: nextOption?.base_price ?? prev.unit_price,
+                                            }));
+                                        }}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                                    >
+                                        <option value="">선택 안 함</option>
+                                        {hotelOptions.map((option) => (
+                                            <option key={option.hotel_price_code} value={option.hotel_price_code}>
+                                                [{option.hotel_price_code}] {option.hotel_name || '-'} / {option.room_name || option.room_type || '-'}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
                                 <p>
-                                    <span className="font-semibold text-blue-600">호텔코드:</span> {reservation.hotel_price_code}
+                                    <span className="font-semibold text-blue-600">호텔명:</span> {selectedHotelOption?.hotel_name || reservation.hotel_price?.hotel_name || '호텔명 정보 없음'}
                                 </p>
                                 <p>
-                                    <span className="font-semibold text-blue-600">호텔명:</span> {reservation.hotel_price?.hotel_name || '호텔명 정보 없음'}
+                                    <span className="font-semibold text-blue-600">객실명:</span> {selectedHotelOption?.room_name || reservation.hotel_price?.room_name || '객실명 정보 없음'}
                                 </p>
                                 <p>
-                                    <span className="font-semibold text-blue-600">객실명:</span> {reservation.hotel_price?.room_name || '객실명 정보 없음'}
+                                    <span className="font-semibold text-blue-600">객실타입:</span> {selectedHotelOption?.room_type || reservation.hotel_price?.room_type || reservation.hotel_price?.room_category || '객실타입 정보 없음'}
                                 </p>
                                 <p>
-                                    <span className="font-semibold text-blue-600">객실타입:</span> {reservation.hotel_price?.room_type || reservation.hotel_price?.room_category || '객실타입 정보 없음'}
-                                </p>
-                                <p>
-                                    <span className="font-semibold text-blue-600">기본 1박 가격:</span> {reservation.hotel_price?.base_price ? `${reservation.hotel_price.base_price.toLocaleString()}동` : '가격 정보 없음'}
+                                    <span className="font-semibold text-blue-600">기본 1박 가격:</span> {(selectedHotelOption?.base_price ?? reservation.hotel_price?.base_price) ? `${Number(selectedHotelOption?.base_price ?? reservation.hotel_price?.base_price).toLocaleString()}동` : '가격 정보 없음'}
                                 </p>
                                 {(reservation.hotel_price?.conditions || reservation.hotel_price?.notes) && (
                                     <p>
@@ -600,7 +635,7 @@ function HotelReservationEditContent() {
                                             value=""
                                             onChange={(e) => {
                                                 const tpl = feeTemplates.find(t => String(t.id) === e.target.value);
-                                                if (tpl) { setAdditionalFee(tpl.amount); setAdditionalFeeDetail(tpl.name); }
+                                                if (tpl) { applyAdditionalFeeValue(tpl.amount); setAdditionalFeeDetail(tpl.name); }
                                             }}
                                         >
                                             <option value="">-- 추가내역 선택 --</option>
@@ -610,15 +645,28 @@ function HotelReservationEditContent() {
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">추가요금 (VND)</label>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">직접입력 추가/차감 금액 (VND)</label>
                                         <input
                                             type="number"
-                                            min="0"
-                                            value={additionalFee}
-                                            onChange={(e) => setAdditionalFee(parseInt(e.target.value, 10) || 0)}
-                                            title="추가요금"
+                                            value={additionalFeeInput}
+                                            onChange={(e) => {
+                                                const nextValue = e.target.value;
+                                                setAdditionalFeeInput(nextValue);
+
+                                                if (nextValue === '' || nextValue === '-') {
+                                                    setAdditionalFee(0);
+                                                    return;
+                                                }
+
+                                                const parsedValue = Number(nextValue);
+                                                if (Number.isFinite(parsedValue)) {
+                                                    setAdditionalFee(parsedValue);
+                                                }
+                                            }}
+                                            title="직접입력 추가/차감 금액"
                                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                         />
+                                        <p className="text-xs text-gray-500 mt-1">할인은 음수(-)로 입력하면 추가내역 차감으로 저장됩니다.</p>
                                     </div>
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">추가요금 내역</label>
@@ -631,7 +679,7 @@ function HotelReservationEditContent() {
                                         />
                                     </div>
                                 </div>
-                                {(hotelBaseTotal > 0 || additionalFee > 0) && (
+                                {(hotelBaseTotal > 0 || additionalFee !== 0) && (
                                     <div className="pt-4 mt-4 border-t border-gray-100 space-y-2">
                                         <div className="flex justify-between text-sm text-gray-700">
                                             <span>기본 호텔 금액</span>
@@ -640,9 +688,9 @@ function HotelReservationEditContent() {
                                         <div className="text-xs text-gray-500">
                                             {formData.room_count}실 × {formData.schedule || '-'} × {formData.unit_price.toLocaleString()}동/박
                                         </div>
-                                        <div className="flex justify-between text-sm text-orange-600">
-                                            <span>추가요금</span>
-                                            <span className="font-semibold">+{additionalFee.toLocaleString()}동</span>
+                                        <div className={`flex justify-between text-sm ${additionalFee >= 0 ? 'text-orange-600' : 'text-red-600'}`}>
+                                            <span>{additionalFee >= 0 ? '추가요금' : '차감금액'}</span>
+                                            <span className="font-semibold">{additionalFee > 0 ? '+' : ''}{additionalFee.toLocaleString()}동</span>
                                         </div>
                                         {additionalFeeDetail.trim() && (
                                             <div className="text-xs text-gray-500 whitespace-pre-wrap">{additionalFeeDetail}</div>

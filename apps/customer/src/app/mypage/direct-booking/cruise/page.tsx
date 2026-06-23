@@ -64,6 +64,14 @@ type MultiRoomPriceResult = {
     primary_rate_card: CruiseRateCard;
 };
 
+const normalizeScheduleLabel = (scheduleType?: string | null) => {
+    if (!scheduleType) return '';
+    if (scheduleType === '1N2D') return '1박2일';
+    if (scheduleType === '2N3D') return '2박3일';
+    if (scheduleType === 'DAY') return '당일';
+    return scheduleType;
+};
+
 const createRoomSelection = (idSeed?: string): RoomSelection => ({
     local_id: idSeed || `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     rate_card_id: '',
@@ -302,13 +310,23 @@ function DirectBookingCruiseContent() {
                 if (rateCard) {
                     cruiseName = rateCard.cruise_name || '';
                     roomType = rateCard.room_type || '';
-                    schedule = rateCard.schedule_type || '';
+                    schedule = normalizeScheduleLabel(rateCard.schedule_type);
                 }
             }
 
             const restoredSelections = Array.isArray((reservation as any)?.price_breakdown?.room_selections)
                 ? (reservation as any).price_breakdown.room_selections as any[]
                 : [];
+
+            if (!cruiseName && restoredSelections.length > 0) {
+                cruiseName = String((reservation as any)?.price_breakdown?.cruise_name || '');
+            }
+            if (!schedule && restoredSelections.length > 0) {
+                schedule = normalizeScheduleLabel((reservation as any)?.price_breakdown?.schedule);
+            }
+            if (!roomType && restoredSelections.length > 0) {
+                roomType = String(restoredSelections[0]?.room_type || '');
+            }
 
             const normalizedSelections: RoomSelection[] = restoredSelections
                 .map((s: any, idx: number) => ({
@@ -449,6 +467,25 @@ function DirectBookingCruiseContent() {
         // 가격이 낮은 순으로 정렬
         const sortedCards = [...cards].sort((a, b) => (a.price_adult || 0) - (b.price_adult || 0));
         setRoomTypeCards(sortedCards);
+
+        if (sortedCards.length > 0) {
+            setRoomSelections((prev) => prev.map((selection) => {
+                const currentCard = sortedCards.find((card) => card.id === selection.rate_card_id);
+                if (currentCard) {
+                    if (selection.room_type === currentCard.room_type) return selection;
+                    return { ...selection, room_type: currentCard.room_type };
+                }
+
+                const fallbackCard = sortedCards.find((card) => card.room_type === selection.room_type);
+                if (!fallbackCard) return selection;
+
+                return {
+                    ...selection,
+                    rate_card_id: fallbackCard.id,
+                    room_type: fallbackCard.room_type,
+                };
+            }));
+        }
 
         // 포함사항 로드
         if (sortedCards.length > 0) {

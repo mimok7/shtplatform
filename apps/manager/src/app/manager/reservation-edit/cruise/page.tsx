@@ -100,6 +100,12 @@ interface AdditionalFeeItem {
     amount: number;
 }
 
+const normalizeAdditionalFeeTemplateId = (value: unknown): number | null => {
+    if (value === null || value === undefined || value === '') return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+};
+
 const createEmptyRoomForm = (overrides: Partial<CruiseRoomForm> = {}): CruiseRoomForm => ({
     room_count: 1,
     guest_count: 0,
@@ -1229,7 +1235,7 @@ function CruiseReservationEditContent() {
             const savedAdditionalFeeItems: AdditionalFeeItem[] = rawAdditionalFeeItems
                 .map((item: any, index: number) => ({
                     key: String(item?.key || `saved-${index + 1}`),
-                    template_id: Number.isFinite(Number(item?.template_id)) ? Number(item.template_id) : null,
+                    template_id: normalizeAdditionalFeeTemplateId(item?.template_id),
                     name: String(item?.name || '').trim(),
                     amount: Number(item?.amount) || 0,
                 }))

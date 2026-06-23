@@ -32,6 +32,7 @@ interface CruiseCarReservation {
     car_price_code: string;
     rentcar_price_code?: string;
     way_type?: string;
+    one_way_direction?: string;
     route?: string;
     vehicle_type?: string;
     car_count: number;
@@ -64,6 +65,7 @@ interface CruiseCarReservation {
 interface VehicleFormData {
     rentcar_price_code: string;
     way_type: string;
+    one_way_direction: string;
     route: string;
     vehicle_type: string;
     car_count: number;
@@ -80,9 +82,36 @@ interface VehicleFormData {
     dispatch_memo: string;
 }
 
+const isOneWayPickup = (item: Pick<VehicleFormData, 'way_type' | 'one_way_direction'>) =>
+    item.way_type === '편도' && item.one_way_direction === 'pickup';
+
+const isOneWayDropoff = (item: Pick<VehicleFormData, 'way_type' | 'one_way_direction'>) =>
+    item.way_type === '편도' && item.one_way_direction === 'dropoff';
+
+const normalizeVehicleFormForSave = (item: VehicleFormData): VehicleFormData => {
+    if (isOneWayDropoff(item)) {
+        return {
+            ...item,
+            pickup_datetime: '',
+            return_datetime: item.return_datetime || item.pickup_datetime || '',
+        };
+    }
+
+    if (isOneWayPickup(item)) {
+        return {
+            ...item,
+            pickup_datetime: item.pickup_datetime || item.return_datetime || '',
+            return_datetime: '',
+        };
+    }
+
+    return item;
+};
+
 const createEmptyVehicleForm = (): VehicleFormData => ({
     rentcar_price_code: '',
     way_type: '',
+    one_way_direction: '',
     route: '',
     vehicle_type: '',
     car_count: 0,
@@ -113,6 +142,7 @@ function CruiseCarReservationEditContent() {
     const [vehicleForms, setVehicleForms] = useState<VehicleFormData[]>([createEmptyVehicleForm()]);
     const [cruiseCheckin, setCruiseCheckin] = useState('');
     const [additionalFee, setAdditionalFee] = useState(0);
+    const [additionalFeeInput, setAdditionalFeeInput] = useState('');
     const [additionalFeeDetail, setAdditionalFeeDetail] = useState('');
     const [feeTemplates, setFeeTemplates] = useState<{ id: number; name: string; amount: number }[]>([]);
     const [authChecked, setAuthChecked] = useState(false);
@@ -127,7 +157,12 @@ function CruiseCarReservationEditContent() {
         [vehicleForms]
     );
 
-    const finalTotalPrice = baseTotalPrice + additionalFee;
+    const finalTotalPrice = Math.max(0, baseTotalPrice + additionalFee);
+
+    const applyAdditionalFeeValue = (nextValue: number) => {
+        setAdditionalFee(nextValue);
+        setAdditionalFeeInput(nextValue === 0 ? '' : String(nextValue));
+    };
 
     // ✅ 인증 상태 확인 (403 에러 사전 방지)
     useEffect(() => {
@@ -208,9 +243,12 @@ function CruiseCarReservationEditContent() {
             ...prev,
             {
                 ...createEmptyVehicleForm(),
-                pickup_datetime: prev[0]?.pickup_datetime || cruiseCheckin || '',
+                pickup_datetime: isOneWayDropoff(prev[0] || createEmptyVehicleForm())
+                    ? ''
+                    : (prev[0]?.pickup_datetime || cruiseCheckin || ''),
                 pickup_location: prev[0]?.pickup_location || '',
-                dropoff_location: prev[0]?.dropoff_location || ''
+                dropoff_location: prev[0]?.dropoff_location || '',
+                return_datetime: prev[0]?.return_datetime || ''
             }
         ]);
     };
@@ -501,6 +539,7 @@ function CruiseCarReservationEditContent() {
                 const form: VehicleFormData = {
                     rentcar_price_code: existingCode,
                     way_type: wayType,
+                    one_way_direction: row.one_way_direction || '',
                     route,
                     vehicle_type: row.vehicle_type || rentcarPriceInfo?.vehicle_type || '',
                     car_count: row.car_count || 0,
@@ -529,8 +568,8 @@ function CruiseCarReservationEditContent() {
             const savedAdditionalFee = Number(resRow.price_breakdown?.additional_fee);
             const derivedAdditionalFee = Number.isFinite(savedAdditionalFee)
                 ? savedAdditionalFee
-                : Math.max(0, Number(resRow.total_amount || 0) - baseTotal);
-            setAdditionalFee(derivedAdditionalFee);
+                : Number(resRow.total_amount || 0) - baseTotal;
+            applyAdditionalFeeValue(derivedAdditionalFee);
             setAdditionalFeeDetail(
                 String(
                     resRow.manual_additional_fee_detail
@@ -555,10 +594,11 @@ function CruiseCarReservationEditContent() {
             setSaving(true);
 
             const normalizedForms = vehicleForms
-                .map(item => ({ ...item }))
+                .map(item => normalizeVehicleFormForSave({ ...item }))
                 .filter(item =>
                     item.rentcar_price_code
                     || item.way_type
+                    || item.one_way_direction
                     || item.route
                     || item.vehicle_type
                     || item.car_count > 0
@@ -581,7 +621,7 @@ function CruiseCarReservationEditContent() {
                 car_price_code: item.rentcar_price_code,
                 car_count: item.car_count,
                 passenger_count: item.passenger_count,
-                pickup_datetime: item.pickup_datetime,
+                pickup_datetime: item.pickup_datetime || null,
                 pickup_location: item.pickup_location,
                 dropoff_location: item.dropoff_location,
                 car_total_price: item.car_total_price,
@@ -596,6 +636,7 @@ function CruiseCarReservationEditContent() {
                 ...row,
                 rentcar_price_code: normalizedForms[index].rentcar_price_code,
                 way_type: normalizedForms[index].way_type || null,
+                one_way_direction: normalizedForms[index].one_way_direction || null,
                 route: normalizedForms[index].route || null,
                 vehicle_type: normalizedForms[index].vehicle_type || null,
                 return_datetime: normalizedForms[index].return_datetime || null
@@ -633,6 +674,7 @@ function CruiseCarReservationEditContent() {
                     total: item.car_total_price || 0,
                     metadata: {
                         way_type: item.way_type || null,
+                        one_way_direction: item.one_way_direction || null,
                         route: item.route || null,
                         vehicle_type: item.vehicle_type || null,
                         passenger_count: item.passenger_count || 0,
@@ -837,6 +879,7 @@ function CruiseCarReservationEditContent() {
                                                             const nextWayType = e.target.value;
                                                             updateVehicleFormWithAutoTotal(index, {
                                                                 way_type: nextWayType,
+                                                                one_way_direction: nextWayType === '편도' ? item.one_way_direction : '',
                                                                 route: '',
                                                                 vehicle_type: '',
                                                                 rentcar_price_code: '',
@@ -856,6 +899,41 @@ function CruiseCarReservationEditContent() {
                                                     </select>
                                                 </div>
 
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-1">편도 방향</label>
+                                                    <select
+                                                        value={item.one_way_direction}
+                                                        onChange={(e) => {
+                                                            const nextDirection = e.target.value;
+                                                            if (nextDirection === 'dropoff') {
+                                                                updateVehicleForm(index, {
+                                                                    one_way_direction: nextDirection,
+                                                                    return_datetime: item.return_datetime || item.pickup_datetime || '',
+                                                                    pickup_datetime: ''
+                                                                });
+                                                                return;
+                                                            }
+                                                            if (nextDirection === 'pickup') {
+                                                                updateVehicleForm(index, {
+                                                                    one_way_direction: nextDirection,
+                                                                    pickup_datetime: item.pickup_datetime || item.return_datetime || '',
+                                                                    return_datetime: ''
+                                                                });
+                                                                return;
+                                                            }
+                                                            updateVehicleForm(index, { one_way_direction: nextDirection });
+                                                        }}
+                                                        disabled={item.way_type !== '편도'}
+                                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-400"
+                                                    >
+                                                        <option value="">방향 선택</option>
+                                                        <option value="pickup">픽업</option>
+                                                        <option value="dropoff">드롭오프</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 mb-1">경로</label>
                                                     <select
@@ -882,9 +960,7 @@ function CruiseCarReservationEditContent() {
                                                         ))}
                                                     </select>
                                                 </div>
-                                            </div>
 
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 mb-1">차량타입</label>
                                                     <select
@@ -970,62 +1046,74 @@ function CruiseCarReservationEditContent() {
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 mb-1">
                                                         <Calendar className="inline w-4 h-4 mr-1" />
-                                                        픽업 일시 (가는 편)
+                                                        {isOneWayDropoff(item) ? '드롭오프 일시' : '픽업 일시'}
+                                                        <span className={`ml-1 text-xs ${isOneWayDropoff(item) ? 'text-orange-500' : 'text-blue-500'}`}>
+                                                            {isOneWayDropoff(item) ? '(편도 드롭)' : '(가는 편)'}
+                                                        </span>
                                                     </label>
                                                     <input
                                                         type="date"
-                                                        value={item.pickup_datetime}
-                                                        onChange={(e) => updateVehicleForm(index, { pickup_datetime: e.target.value })}
+                                                        value={isOneWayDropoff(item) ? item.return_datetime : item.pickup_datetime}
+                                                        onChange={(e) => updateVehicleForm(index, isOneWayDropoff(item)
+                                                            ? { return_datetime: e.target.value, pickup_datetime: '' }
+                                                            : { pickup_datetime: e.target.value })}
                                                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                                     />
                                                     <div className="mt-2 flex items-center justify-between gap-2 text-sm">
                                                         <span className="text-gray-600">
-                                                            체크인 일자: <span className="font-medium text-gray-900">{cruiseCheckin || '-'}</span>
+                                                            {isOneWayDropoff(item)
+                                                                ? '드롭오프는 픽업일시를 비워 두고 리턴일시에만 저장됩니다.'
+                                                                : <>체크인 일자: <span className="font-medium text-gray-900">{cruiseCheckin || '-'}</span></>}
                                                         </span>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => updateVehicleForm(index, { pickup_datetime: cruiseCheckin })}
-                                                            disabled={!cruiseCheckin}
-                                                            className="px-2 py-1 text-xs rounded border border-blue-200 text-blue-600 hover:bg-blue-50 disabled:text-gray-400 disabled:border-gray-200 disabled:cursor-not-allowed"
-                                                        >
-                                                            체크인 일자 복사
-                                                        </button>
+                                                        {!isOneWayDropoff(item) && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => updateVehicleForm(index, { pickup_datetime: cruiseCheckin })}
+                                                                disabled={!cruiseCheckin}
+                                                                className="px-2 py-1 text-xs rounded border border-blue-200 text-blue-600 hover:bg-blue-50 disabled:text-gray-400 disabled:border-gray-200 disabled:cursor-not-allowed"
+                                                            >
+                                                                체크인 일자 복사
+                                                            </button>
+                                                        )}
                                                     </div>
                                                 </div>
 
-                                                {(item.way_type === '당일왕복' || item.way_type === '다른날왕복') && (
-                                                    <div>
-                                                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                                                            <Calendar className="inline w-4 h-4 mr-1" />
-                                                            오는 편 날짜
-                                                            <span className="ml-1 text-xs text-orange-500">(pier → 숙소)</span>
-                                                        </label>
-                                                        <input
-                                                            type="date"
-                                                            value={item.return_datetime}
-                                                            onChange={(e) => updateVehicleForm(index, { return_datetime: e.target.value })}
-                                                            className="w-full px-3 py-2 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 bg-orange-50"
-                                                        />
-                                                        <div className="mt-2 flex items-center gap-2">
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => copyPickupDateToReturnDate(index, 'next-day')}
-                                                                disabled={!item.pickup_datetime}
-                                                                className="px-2 py-1 text-xs rounded border border-orange-200 text-orange-600 hover:bg-orange-50 disabled:text-gray-400 disabled:border-gray-200 disabled:cursor-not-allowed"
-                                                            >
-                                                                픽업 다음일 복사
-                                                            </button>
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => copyPickupDateToReturnDate(index, 'same-day')}
-                                                                disabled={!item.pickup_datetime}
-                                                                className="px-2 py-1 text-xs rounded border border-blue-200 text-blue-600 hover:bg-blue-50 disabled:text-gray-400 disabled:border-gray-200 disabled:cursor-not-allowed"
-                                                            >
-                                                                당일 복사
-                                                            </button>
-                                                        </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                        <Calendar className="inline w-4 h-4 mr-1" />
+                                                        리턴 일시
+                                                        <span className="ml-1 text-xs text-orange-500">
+                                                            {isOneWayPickup(item) ? '(자동 공란 저장)' : '(오는 편)'}
+                                                        </span>
+                                                    </label>
+                                                    <input
+                                                        type="date"
+                                                        value={item.return_datetime}
+                                                        onChange={(e) => updateVehicleForm(index, { return_datetime: e.target.value })}
+                                                        disabled={isOneWayPickup(item)}
+                                                        className={`w-full px-3 py-2 border rounded-lg ${isOneWayPickup(item)
+                                                            ? 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed'
+                                                            : 'border-orange-300 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 bg-orange-50'}`}
+                                                    />
+                                                    <div className="mt-2 flex items-center gap-2">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => copyPickupDateToReturnDate(index, 'next-day')}
+                                                            disabled={!item.pickup_datetime || isOneWayPickup(item)}
+                                                            className="px-2 py-1 text-xs rounded border border-orange-200 text-orange-600 hover:bg-orange-50 disabled:text-gray-400 disabled:border-gray-200 disabled:cursor-not-allowed"
+                                                        >
+                                                            픽업 다음일 복사
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => copyPickupDateToReturnDate(index, 'same-day')}
+                                                            disabled={!item.pickup_datetime || isOneWayPickup(item)}
+                                                            className="px-2 py-1 text-xs rounded border border-blue-200 text-blue-600 hover:bg-blue-50 disabled:text-gray-400 disabled:border-gray-200 disabled:cursor-not-allowed"
+                                                        >
+                                                            당일 복사
+                                                        </button>
                                                     </div>
-                                                )}
+                                                </div>
                                             </div>
 
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1183,7 +1271,7 @@ function CruiseCarReservationEditContent() {
                                             onChange={(e) => {
                                                 const tpl = feeTemplates.find(t => String(t.id) === e.target.value);
                                                 if (tpl) {
-                                                    setAdditionalFee(tpl.amount);
+                                                    applyAdditionalFeeValue(tpl.amount);
                                                     setAdditionalFeeDetail(tpl.name);
                                                 }
                                             }}
@@ -1195,15 +1283,28 @@ function CruiseCarReservationEditContent() {
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">추가요금 (VND)</label>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">직접입력 추가/차감 금액 (VND)</label>
                                         <input
                                             type="number"
-                                            value={additionalFee}
-                                            onChange={(e) => setAdditionalFee(parseInt(e.target.value, 10) || 0)}
-                                            title="추가요금"
+                                            value={additionalFeeInput}
+                                            onChange={(e) => {
+                                                const nextValue = e.target.value;
+                                                setAdditionalFeeInput(nextValue);
+
+                                                if (nextValue === '' || nextValue === '-') {
+                                                    setAdditionalFee(0);
+                                                    return;
+                                                }
+
+                                                const parsedValue = Number(nextValue);
+                                                if (Number.isFinite(parsedValue)) {
+                                                    setAdditionalFee(parsedValue);
+                                                }
+                                            }}
+                                            title="직접입력 추가/차감 금액"
                                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                            min="0"
                                         />
+                                        <p className="text-xs text-gray-500 mt-1">할인은 음수(-)로 입력하면 추가내역 차감으로 저장됩니다.</p>
                                     </div>
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">추가요금 내역</label>
@@ -1217,7 +1318,7 @@ function CruiseCarReservationEditContent() {
                                     </div>
                                 </div>
 
-                                {(baseTotalPrice > 0 || additionalFee > 0) && (
+                                {(baseTotalPrice > 0 || additionalFee !== 0) && (
                                     <div className="mt-4 pt-4 border-t border-gray-100 space-y-2">
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700 mb-1">기본 차량 금액</label>
@@ -1226,9 +1327,9 @@ function CruiseCarReservationEditContent() {
                                             </div>
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">추가요금</label>
-                                            <div className="text-lg font-semibold text-gray-900">
-                                                {additionalFee.toLocaleString()}동
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">{additionalFee >= 0 ? '추가요금' : '차감금액'}</label>
+                                            <div className={`text-lg font-semibold ${additionalFee >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
+                                                {additionalFee > 0 ? '+' : ''}{additionalFee.toLocaleString()}동
                                             </div>
                                         </div>
                                         {additionalFeeDetail.trim() && (

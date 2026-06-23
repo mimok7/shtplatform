@@ -10,6 +10,55 @@ import { clearAuthCache } from '@/hooks/useAuth';
 import { clearInvalidSession, isInvalidRefreshTokenError } from '@/lib/authRecovery';
 import { useLoadingTimeout } from '@/hooks/useLoadingTimeout';
 import { getSessionUser } from '@/lib/authHelpers';
+import { buildProfileCompletionPath, hasRequiredProfileFields } from '@/lib/profileRequirements';
+import { BadgeCheck, Briefcase, CircleDollarSign, FileText, LogOut, Mail, Phone, User } from 'lucide-react';
+
+function stripPaymentMethodLines(value: string | null | undefined): string {
+  if (!value) return '';
+
+  return String(value)
+    .split(/\r?\n/)
+    .filter((line) => {
+      const normalized = line.replace(/\s+/g, '').toLowerCase();
+      return !normalized.startsWith('결제방법:') && !normalized.startsWith('결제방식:');
+    })
+    .join('\n')
+    .trim();
+}
+
+function getNotificationLineIcon(line: string) {
+  const label = line.split(':')[0]?.trim();
+
+  if (label.includes('고객명')) return User;
+  if (label.includes('이메일')) return Mail;
+  if (label.includes('연락처')) return Phone;
+  if (label.includes('서비스')) return Briefcase;
+  if (label.includes('견적명')) return FileText;
+  if (label.includes('예약 금액')) return CircleDollarSign;
+  if (label.includes('예약 상태')) return BadgeCheck;
+  return null;
+}
+
+function renderNotificationDescription(description: string, className: string) {
+  const lines = description
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  return (
+    <div className={className}>
+      {lines.map((line, index) => {
+        const Icon = getNotificationLineIcon(line);
+        return (
+          <div key={`${line}-${index}`} className="flex items-start gap-1.5">
+            {Icon ? <Icon className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-slate-400" /> : null}
+            <span className="break-words">{line}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 export default function MyPage() {
   const router = useRouter();
@@ -30,7 +79,7 @@ export default function MyPage() {
       return {
         ...row,
         is_read: isRead,
-        description: row?.description ?? row?.message ?? '',
+        description: stripPaymentMethodLines(row?.description ?? row?.message ?? ''),
       };
     })
   ), []);
@@ -62,7 +111,7 @@ export default function MyPage() {
         // 사용자 프로필 정보 조회 (최소 필드만)
         const { data: profile } = await supabase
           .from('users')
-          .select('name')
+          .select('email, name, english_name, phone_number')
           .eq('id', user.id)
           .maybeSingle();
 
@@ -152,6 +201,23 @@ export default function MyPage() {
     }
   }, [router]);
 
+  const handleProtectedNavigation = useCallback((targetHref: string) => {
+    const profileToValidate = {
+      email: userProfile?.email || user?.email || '',
+      name: userProfile?.name || '',
+      english_name: userProfile?.english_name || '',
+      phone_number: userProfile?.phone_number || '',
+    };
+
+    if (!hasRequiredProfileFields(profileToValidate)) {
+      alert('예약 진행 전 내 정보의 필수 항목을 먼저 입력해주세요.');
+      router.push(buildProfileCompletionPath(targetHref));
+      return;
+    }
+
+    router.push(targetHref);
+  }, [router, userProfile, user]);
+
   const quickActions = useMemo(() => [
     { icon: '🎯', label: '예약 하기', desc: '새로운 예약 신청', href: '/mypage/direct-booking', bg: 'bg-blue-100', color: 'text-blue-600' },
     { icon: '📋', label: '예약 내역', desc: '예약 조회 및 관리', href: '/mypage/reservations/list', bg: 'bg-green-100', color: 'text-green-600' },
@@ -191,22 +257,17 @@ export default function MyPage() {
   }
 
   return (
-    <PageWrapper title={`${getUserDisplayName()}님 환영합니다`}>
+    <PageWrapper
+      title={`${getUserDisplayName()}님 환영합니다`}
+      rightIcon={<LogOut className="w-5 h-5 text-gray-600" />}
+      rightLabel="로그아웃"
+      onRightClick={handleLogout}
+    >
       <div className="space-y-4">
         {/* 인사말 */}
         <div className="text-sm text-slate-600 flex items-center gap-2">
           <span>오늘도 행복한 하루 보내세요</span>
           <span>😊</span>
-        </div>
-
-        {/* 로그아웃 버튼 */}
-        <div className="flex justify-end">
-          <button
-            onClick={handleLogout}
-            className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-800 transition"
-          >
-            로그아웃
-          </button>
         </div>
 
         {/* 서비스 메뉴 - 2열 격자 */}
@@ -219,6 +280,27 @@ export default function MyPage() {
                   type="button"
                   onClick={handleGoPartner}
                   className="w-full text-left p-0 border-0 bg-transparent cursor-pointer"
+                >
+                  <div className="bg-white border border-slate-300 rounded-lg p-2 hover:shadow-md transition shadow-sm flex flex-col gap-1">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-8 h-8 flex items-center justify-center rounded-lg ${action.bg} flex-shrink-0`}>
+                        <span className="text-base">{action.icon}</span>
+                      </div>
+                      <h3 className="text-sm font-semibold text-slate-900">{action.label}</h3>
+                    </div>
+                    <p className="text-xs text-slate-500 ml-10">{action.desc}</p>
+                  </div>
+                </button>
+              );
+            }
+
+            if (action.href === '/mypage/direct-booking') {
+              return (
+                <button
+                  key={index}
+                  type="button"
+                  onClick={() => handleProtectedNavigation(action.href)}
+                  className="text-left block w-full"
                 >
                   <div className="bg-white border border-slate-300 rounded-lg p-2 hover:shadow-md transition shadow-sm flex flex-col gap-1">
                     <div className="flex items-center gap-2">
@@ -259,9 +341,9 @@ export default function MyPage() {
         {/* 알림 섹션 */}
         {notifications.length > 0 && (
           <div id="notifications-section" className="mt-6">
-            <h2 className="text-sm font-semibold text-slate-900 mb-2.5">나에게 온 알림 (최근 5개)</h2>
+            <h2 className="text-sm font-semibold text-slate-900 mb-2.5">나에게 온 알림 (최근 1개)</h2>
             <div className="space-y-2">
-              {notifications.slice(0, 5).map((notification: any) => (
+              {notifications.slice(0, 1).map((notification: any) => (
                 <div
                   key={notification.id}
                   className={`border rounded-lg p-3 text-sm ${
@@ -279,7 +361,7 @@ export default function MyPage() {
                         {notification.title}
                       </p>
                       {notification.description && (
-                        <p className="text-xs text-slate-500 mt-1">{notification.description}</p>
+                        renderNotificationDescription(notification.description, 'mt-1 space-y-1 text-xs text-slate-500')
                       )}
                       <p className="text-xs text-slate-400 mt-1">
                         {new Date(notification.created_at).toLocaleDateString('ko-KR', {

@@ -2,7 +2,8 @@
 const CACHE_NAME = 'sht-admin-cache-v1';
 const ASSETS_TO_CACHE = [
   '/',
-  '/logo-160.png'
+  '/icon-192.png',
+  '/manifest.json'
 ];
 
 self.addEventListener('install', event => {
@@ -62,8 +63,8 @@ self.addEventListener('push', event => {
   event.waitUntil(
     self.registration.showNotification(data.title, {
       body: data.body,
-      icon: data.icon || '/logo-160.png',
-      badge: data.badge || '/logo-160.png',
+      icon: data.icon || '/icon-192.png',
+      badge: data.badge || '/icon-192.png',
       tag: data.tag || 'sht-admin-notification',
       data: { url: data.url || '/admin' },
       requireInteraction: data.requireInteraction || false

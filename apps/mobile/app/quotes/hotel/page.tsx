@@ -207,7 +207,7 @@ function RightDetailsCard() {
                                 detailed.tours.push({ item, tourInfo, priceInfo: priceInfo || [] });
                             }
                         }
-                    } catch (ie) { console.warn('상세 로드 실패:', ie); }
+                    } catch (ie) {}
                 }
                 setDetailedServices(detailed);
             } finally { setLoading(false); }

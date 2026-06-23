@@ -36,6 +36,10 @@ interface UnifiedConfirmationProps {
 // 예약자 확인서 양식(고객 화면 기준) - 공용 렌더러
 export default function UnifiedConfirmation({ data, isPackage }: UnifiedConfirmationProps) {
     const isPackageMode = isPackage || data.hide_details || false;
+    const visibleReservations = (data.reservations || []).filter((reservation) => {
+        const status = String(reservation.status || '').trim().toLowerCase();
+        return status === 'approved' || status === 'confirmed';
+    });
 
     const formatDateTime = (dateString?: string) => {
         if (!dateString) return '';
@@ -55,6 +59,7 @@ export default function UnifiedConfirmation({ data, isPackage }: UnifiedConfirma
         hotel: '호텔',
         rentcar: '렌터카',
         tour: '투어',
+        ticket: '티켓',
         car: '차량(SHT)',
         sht: '차량(SHT)',
         vehicle: '차량 서비스'
@@ -112,10 +117,76 @@ export default function UnifiedConfirmation({ data, isPackage }: UnifiedConfirma
         ).trim();
     };
 
-    const displayedTotal = data.reservations?.length
-        ? data.reservations.reduce((sum, reservation) => sum + getReservationAmount(reservation), 0)
+    const formatDong = (value: any): string => `${Number(value || 0).toLocaleString()}동`;
+
+    const formatTicketLabel = (label: string): string => {
+        if (label.includes('성인')) return '성인요금';
+        if (label.includes('아동')) return '아동요금';
+        if (label.includes('셔틀')) return '셔틀요금';
+        return '티켓요금';
+    };
+
+    const getTicketInfo = (reservation: UnifiedReservationDetail) => {
+        const details = reservation.service_details || {};
+        const priceBreakdown = reservation.price_breakdown || details.price_breakdown || {};
+        const lineItems = Array.isArray(priceBreakdown?.line_items) ? priceBreakdown.line_items : [];
+        const ticketName = String(details.ticket_name || '').trim();
+        const programSelection = String(details.program_selection || '').trim();
+
+        const infoLines = [
+            `티켓명: ${ticketName || '-'}`,
+            `프로그램선택: ${programSelection || '-'}`,
+            `인원수: ${Number(details.adult_count || 0) + Number(details.child_count || 0) || Number(details.ticket_quantity || 0) || '-'}`,
+            `사용일자: ${details.usage_date || '-'}`,
+            `셔틀신청: ${details.shuttle_required === true ? '신청' : '미신청'}`,
+            `픽업장소: ${details.pickup_location || '-'}`,
+            `드롭장소: ${details.dropoff_location || '-'}`,
+        ];
+
+        const priceLines = lineItems.map((item: any) => {
+            const quantity = Number(item.quantity || 0);
+            const unitPrice = Number(item.unit_price || 0);
+            const total = Number(item.total || 0);
+            return `${formatTicketLabel(String(item.label || ''))}: ${formatDong(unitPrice)} × ${quantity}명 = ${formatDong(total)}`;
+        });
+
+        if (Number(priceBreakdown?.additional_fee || 0) !== 0) {
+            priceLines.push(`추가/차감: ${formatDong(priceBreakdown.additional_fee)}`);
+        }
+
+        if (priceLines.length === 0) {
+            const adultCount = Math.max(0, Number(details.adult_count || 0));
+            const childCount = Math.max(0, Number(details.child_count || 0));
+            const shuttleCount = details.shuttle_required ? Math.max(0, Number(details.shuttle_count || 0)) : 0;
+            const quantity = adultCount + childCount || Number(details.ticket_quantity || 0);
+            const total = Number(details.total_price || 0) || getReservationAmount(reservation);
+            const buckets = [
+                adultCount > 0 ? { label: '성인요금', quantity: adultCount } : null,
+                childCount > 0 ? { label: '아동요금', quantity: childCount } : null,
+                shuttleCount > 0 ? { label: '셔틀요금', quantity: shuttleCount } : null,
+            ].filter(Boolean) as Array<{ label: string; quantity: number }>;
+            priceLines.push(`티켓명: ${ticketName || programSelection || '-'}`);
+            if (buckets.length === 1 && total > 0) {
+                const bucket = buckets[0];
+                const unitPrice = bucket.quantity > 0 ? Math.round(total / bucket.quantity) : 0;
+                priceLines.push(`${bucket.label}: ${formatDong(unitPrice)} × ${bucket.quantity}명 = ${formatDong(total)}`);
+            } else if (quantity > 0 && total > 0) {
+                priceLines.push(`티켓 합계: ${formatDong(total)}`);
+            }
+        } else {
+            priceLines.unshift(`티켓명: ${ticketName || programSelection || '-'}`);
+        }
+
+        return {
+            info: infoLines.join('\n'),
+            details: priceLines.join('\n'),
+        };
+    };
+
+    const displayedTotal = visibleReservations.length
+        ? visibleReservations.reduce((sum, reservation) => sum + getReservationAmount(reservation), 0)
         : 0;
-    const confirmationTotal = displayedTotal > 0 ? displayedTotal : (data.total_price || 0);
+    const confirmationTotal = displayedTotal > 0 ? displayedTotal : 0;
 
     return (
         <div id="confirmation-letter" className="bg-white">
@@ -169,7 +240,7 @@ export default function UnifiedConfirmation({ data, isPackage }: UnifiedConfirma
                     <span className="w-1 h-6 bg-green-500 mr-3"></span>
                     예약 서비스 내역
                 </h3>
-                {data.reservations?.length ? (
+                {visibleReservations.length ? (
                     <div className="overflow-x-auto">
                         <table className="w-full border-collapse border border-gray-300">
                             <thead>
@@ -187,7 +258,7 @@ export default function UnifiedConfirmation({ data, isPackage }: UnifiedConfirma
                                 </tr>
                             </thead>
                             <tbody>
-                                {data.reservations.map((r, idx) => {
+                                {visibleReservations.map((r, idx) => {
                                     const d: any = r.service_details || {};
                                     const priceInfo = d?.price_info || {};
                                     const displayAmount = getReservationAmount(r);
@@ -259,6 +330,10 @@ export default function UnifiedConfirmation({ data, isPackage }: UnifiedConfirma
                                         const rental = d.rental_type || priceInfo?.rental_type || '-';
                                         customInfo = `경로: ${route} • 차종: ${carType} • 차량수: ${d.car_count || '-'}대 • 렌탈: ${rental}`;
                                         customDetails = `픽업: ${d.pickup_datetime || '-'} • 장소: ${d.pickup_location || '-'} → ${d.dropoff_location || '-'} • 승객: ${d.passenger_count || '-'}명 • 반납: ${d.return_datetime || '-'} • 배정: ${d.dispatch_code || '-'} • 배정내용: ${d.dispatch_memo || '-'}`;
+                                    } else if (r.service_type === 'ticket') {
+                                        const ticketInfo = getTicketInfo(r);
+                                        customInfo = ticketInfo.info;
+                                        customDetails = ticketInfo.details;
                                     } else {
                                         // 기타: 기본 요약
                                         customInfo = summarize(d, { exclude: ['price_info'] });
@@ -285,7 +360,7 @@ export default function UnifiedConfirmation({ data, isPackage }: UnifiedConfirma
                                             {!isPackageMode && (
                                                 <>
                                                     <td className="border border-gray-300 px-3 py-3 text-sm text-gray-700">
-                                                        <div className="truncate" title={`\uc608\uc57d ID: ${String(r.reservation_id).slice(-8)}`}>{customInfo || '-'}</div>
+                                                        <div className="whitespace-pre-wrap break-words">{customInfo || '-'}</div>
                                                         <div className="text-xs text-gray-400 mt-1">\uc608\uc57d ID: {String(r.reservation_id).slice(-8)}</div>
                                                     </td>
                                                     <td className="border border-gray-300 px-3 py-3 text-sm text-gray-700">

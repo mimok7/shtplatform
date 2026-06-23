@@ -188,6 +188,12 @@ interface SHRCReservation {
 
 const SCHEDULE_VISIBLE_STATUSES = ['approved', 'confirmed', 'completed'] as const;
 
+const inferCruiseCarSegmentType = (row: any): 'pickup' | 'return' => {
+  const direction = String(row?.one_way_direction || '').trim().toLowerCase();
+  if (direction === 'dropoff') return 'return';
+  return 'pickup';
+};
+
 export default function ManagerSchedulePage() {
   const [schedules, setSchedules] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -908,16 +914,18 @@ export default function ManagerSchedulePage() {
           };
 
           const rows: any[] = [];
+          const initialSegmentType = inferCruiseCarSegmentType(r);
+          const initialSegmentRibbon = initialSegmentType === 'return' ? '드롭' : '픽업';
 
           // 픽업 카드: 픽업일자 + 승차 위치만 표시
           if (r.pickup_datetime) {
             rows.push({
               ...base,
-              segmentType: 'pickup',
-              segmentRibbon: '픽업',
+              segmentType: initialSegmentType,
+              segmentRibbon: initialSegmentRibbon,
               pickupDatetime: r.pickup_datetime,
-              pickupLocation: r.pickup_location,
-              dropoffLocation: null,
+              pickupLocation: initialSegmentType === 'return' ? null : r.pickup_location,
+              dropoffLocation: initialSegmentType === 'return' ? r.dropoff_location : null,
             });
           }
 
@@ -937,11 +945,11 @@ export default function ManagerSchedulePage() {
           if (rows.length === 0) {
             rows.push({
               ...base,
-              segmentType: 'pickup',
-              segmentRibbon: '픽업',
+              segmentType: initialSegmentType,
+              segmentRibbon: initialSegmentRibbon,
               pickupDatetime: r.pickup_datetime,
-              pickupLocation: r.pickup_location,
-              dropoffLocation: null,
+              pickupLocation: initialSegmentType === 'return' ? null : r.pickup_location,
+              dropoffLocation: initialSegmentType === 'return' ? r.dropoff_location : null,
             });
           }
 
@@ -2458,7 +2466,10 @@ export default function ManagerSchedulePage() {
               }
             }
 
-            // 픽업 카드 생성
+            const initialSegmentType = inferCruiseCarSegmentType(row);
+            const initialSegmentRibbon = initialSegmentType === 'return' ? '드롭' : '픽업';
+
+            // 기본 카드 생성
             if (row.pickup_datetime) {
               const pickupDate = new Date(row.pickup_datetime + 'T09:00:00');
               result.push({
@@ -2471,8 +2482,8 @@ export default function ManagerSchedulePage() {
                 schedule_time: '09:00',
                 location: row.pickup_location || null,
                 duration,
-                segment_type: 'pickup',
-                segment_ribbon: '픽업',
+                segment_type: initialSegmentType,
+                segment_ribbon: initialSegmentRibbon,
                 service_table: table,
                 service_row: row,
                 cruise_info: (row as any)._cruise_info || null

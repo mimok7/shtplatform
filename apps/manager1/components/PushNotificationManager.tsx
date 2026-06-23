@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import supabase from '@/lib/supabase';
+import { isIosWebKit, isStandaloneDisplayMode } from '@/lib/browserCompat';
 
 const APP_NAME = 'manager1';
 const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || '';
@@ -23,10 +24,13 @@ function toApplicationServerKey(base64String: string): ArrayBuffer {
 export default function PushNotificationManager() {
   useEffect(() => {
     if (!VAPID_PUBLIC_KEY || typeof window === 'undefined') return;
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    if (!window.isSecureContext) return;
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return;
+    if (isIosWebKit() && !isStandaloneDisplayMode()) return;
 
     const registerPush = async () => {
       try {
+        if (typeof Notification === 'undefined') return;
         if (Notification.permission === 'denied') return;
 
         const registration = await navigator.serviceWorker.ready;

@@ -627,8 +627,11 @@ reservation_change_cruise_car,route,text,NULL 가능,null,18
 reservation_change_cruise_car,vehicle_type,text,NULL 가능,null,19
 reservation_change_cruise_car,rental_type,text,NULL 가능,null,20
 reservation_change_cruise_car,return_datetime,date,NULL 가능,null,21
-reservation_change_cruise_car,created_at,timestamp with time zone,NOT NULL,now(),22
-reservation_change_cruise_car,updated_at,timestamp with time zone,NOT NULL,now(),23
+reservation_change_cruise_car,pickup_time,time,NULL 가능,null,22
+reservation_change_cruise_car,return_time,time,NULL 가능,null,23
+reservation_change_cruise_car,one_way_direction,text,NULL 가능,null,24
+reservation_change_cruise_car,created_at,timestamp with time zone,NOT NULL,now(),25
+reservation_change_cruise_car,updated_at,timestamp with time zone,NOT NULL,now(),26
 reservation_change_hotel,id,uuid,NOT NULL,gen_random_uuid(),1
 reservation_change_hotel,request_id,uuid,NOT NULL,null,2
 reservation_change_hotel,reservation_id,uuid,NOT NULL,null,3

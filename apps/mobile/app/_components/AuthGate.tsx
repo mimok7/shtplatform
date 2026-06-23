@@ -5,47 +5,6 @@ import { usePathname, useRouter } from 'next/navigation';
 import supabase, { hasSupabaseEnv } from '@/lib/supabase';
 import { canAccessManagerApp, clearManagerAccessCache, isPublicPath } from '@/lib/auth';
 
-const TAB_SESSION_KEY = 'sht:tab:id';
-const ACTIVE_TAB_PREFIX = 'sht:active:tab:user:mobile:';
-
-function getOrCreateTabId(): string {
-  if (typeof window === 'undefined') return '';
-  let tabId = sessionStorage.getItem(TAB_SESSION_KEY);
-  if (!tabId) {
-    tabId = `tab_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
-    sessionStorage.setItem(TAB_SESSION_KEY, tabId);
-  }
-  return tabId;
-}
-
-function parseActiveTabValue(raw: string | null): string | null {
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw);
-    return typeof parsed?.tabId === 'string' ? parsed.tabId : null;
-  } catch (e) {
-    return null;
-  }
-}
-
-function isActiveTabOwner(userId: string): boolean {
-  if (typeof window === 'undefined') return true;
-  const activeRaw = localStorage.getItem(`${ACTIVE_TAB_PREFIX}${userId}`);
-  const activeTabId = parseActiveTabValue(activeRaw);
-  if (!activeTabId) return true;
-  return activeTabId === getOrCreateTabId();
-}
-
-function adoptCurrentTab(userId: string): void {
-  if (typeof window === 'undefined') return;
-  const tabId = getOrCreateTabId();
-  try {
-    localStorage.setItem(`${ACTIVE_TAB_PREFIX}${userId}`, JSON.stringify({ tabId, ts: Date.now() }));
-  } catch {
-    // noop
-  }
-}
-
 type AuthGateProps = {
   children: React.ReactNode;
 };
@@ -85,10 +44,6 @@ export default function AuthGate({ children }: AuthGateProps) {
           return;
         }
 
-        if (!isActiveTabOwner(session.user.id)) {
-          adoptCurrentTab(session.user.id);
-        }
-
         const canAccess = await canAccessManagerApp(session.user);
 
         if (!canAccess) {
@@ -101,7 +56,6 @@ export default function AuthGate({ children }: AuthGateProps) {
 
         if (!cancelled) setChecking(false);
       } catch (err) {
-        console.warn('Session validation error (non-blocking):', err);
         if (!cancelled) {
           setChecking(false);
         }
@@ -118,10 +72,6 @@ export default function AuthGate({ children }: AuthGateProps) {
         return;
       }
 
-      if (!isActiveTabOwner(session.user.id)) {
-        adoptCurrentTab(session.user.id);
-      }
-
       void (async () => {
         if (cancelled) return;
         const canAccess = await canAccessManagerApp(session.user);
@@ -133,24 +83,8 @@ export default function AuthGate({ children }: AuthGateProps) {
       })();
     });
 
-    const handleStorage = (e: StorageEvent) => {
-      if (cancelled || !e.key || !e.key.startsWith(ACTIVE_TAB_PREFIX)) return;
-      const incomingTabId = parseActiveTabValue(e.newValue);
-      if (!incomingTabId || incomingTabId === getOrCreateTabId()) return;
-
-      void (async () => {
-        const { data } = await supabase.auth.getUser();
-        const currentUser = data?.user;
-        if (!currentUser) return;
-        if (e.key !== `${ACTIVE_TAB_PREFIX}${currentUser.id}`) return;
-        adoptCurrentTab(currentUser.id);
-      })();
-    };
-    window.addEventListener('storage', handleStorage);
-
     return () => {
       cancelled = true;
-      window.removeEventListener('storage', handleStorage);
       try {
         subscription?.unsubscribe?.();
       } catch (e) {

@@ -388,6 +388,7 @@ function DetailModal({
 
 // ─── 메인 페이지 ───
 export default function SheetEditPage() {
+    const router = useRouter();
     const [items, setItems] = useState<CardItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -592,6 +593,25 @@ export default function SheetEditPage() {
     return (
         <ManagerLayout title="시트 수정" activeTab="schedule-sheet-edit">
             <div className="w-full">
+                <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-2 mb-3">
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={() => router.push('/manager/reservation-edit')}
+                            className="px-4 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 text-sm font-medium transition-colors"
+                        >
+                            NEW 수정
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => router.push('/manager/schedule/sheet-edit')}
+                            className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium"
+                        >
+                            OLD 수정
+                        </button>
+                    </div>
+                </div>
+
                 {/* ── 툴바 ── */}
                 <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-3 mb-3 flex flex-wrap gap-2 items-center">
                     {/* 서비스 타입 필터 */}

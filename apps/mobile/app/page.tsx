@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -17,10 +18,11 @@ import {
   LogOut,
   Home,
   Bell,
+  ShieldAlert,
   type LucideIcon,
 } from 'lucide-react';
-import supabase from '@/lib/supabase';
-import { clearManagerAccessCache } from '@/lib/auth';
+import supabase, { hasSupabaseEnv } from '@/lib/supabase';
+import { canAccessManagerApp, clearManagerAccessCache } from '@/lib/auth';
 
 type MenuItem = {
   href: string;
@@ -48,10 +50,61 @@ const FAVORITES: MenuItem[] = [
   { href: '/quotes/cruise',         label: '견적 입력',  desc: '크루즈 견적 신규 입력',         icon: FilePenLine,   iconColor: 'text-purple-600', bg: 'bg-purple-100' },
   { href: '/cancel-requests',       label: '취소요청',  desc: '취소 신청 승인/반려 처리',      icon: Home,          iconColor: 'text-red-600',    bg: 'bg-red-100' },
   { href: '/notifications',         label: '알림 관리',  desc: '읽지 않은 알림 확인',           icon: Bell,          iconColor: 'text-rose-600',   bg: 'bg-rose-100' },
+  { href: '/program-updates',       label: '프로그램 수정', desc: '앱 수정 요청 접수 / 완료 기록', icon: FilePenLine, iconColor: 'text-fuchsia-600', bg: 'bg-fuchsia-100' },
 ];
 
 export default function HomePage() {
   const router = useRouter();
+  const [sessionState, setSessionState] = useState<'loading' | 'authorized' | 'unauthorized'>('loading');
+  const [sessionMessage, setSessionMessage] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const checkAccess = async () => {
+      if (!hasSupabaseEnv) {
+        if (!cancelled) {
+          setSessionState('unauthorized');
+          setSessionMessage('환경변수가 설정되지 않아 로그인 페이지로 이동할 수 없습니다.');
+        }
+        return;
+      }
+
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (cancelled) return;
+
+        if (!session?.user) {
+          setSessionState('unauthorized');
+          setSessionMessage('로그인이 필요합니다.');
+          return;
+        }
+
+        const canAccess = await canAccessManagerApp(session.user);
+        if (cancelled) return;
+
+        if (!canAccess) {
+          await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined);
+          clearManagerAccessCache(session.user.id);
+          setSessionState('unauthorized');
+          setSessionMessage('매니저 권한이 있는 계정으로 다시 로그인해 주세요.');
+          return;
+        }
+
+        setSessionState('authorized');
+      } catch {
+        if (!cancelled) {
+          setSessionState('unauthorized');
+          setSessionMessage('세션 확인 중 문제가 생겼습니다. 로그인 후 다시 시도해 주세요.');
+        }
+      }
+    };
+
+    void checkAccess();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const getPartnerBaseUrl = () => {
     if (typeof window === 'undefined') return 'https://partner.stayhalong.com';
@@ -95,6 +148,42 @@ export default function HomePage() {
     await supabase.auth.signOut();
     router.replace('/login');
   };
+
+  if (sessionState === 'loading') {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500" />
+          <p className="mt-4 text-sm text-slate-600">모바일 앱을 준비하는 중입니다...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (sessionState === 'unauthorized') {
+    return (
+      <div className="min-h-screen bg-slate-50 px-4 py-8">
+        <div className="mx-auto max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-100">
+              <ShieldAlert className="h-6 w-6 text-amber-600" />
+            </div>
+            <div>
+              <h1 className="text-lg font-semibold text-slate-900">모바일앱 로그인 필요</h1>
+              <p className="mt-1 text-sm text-slate-600">{sessionMessage || '로그인 후 이용해 주세요.'}</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => router.push('/login')}
+            className="mt-6 w-full rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-700"
+          >
+            로그인 페이지로 이동
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 pb-10">
