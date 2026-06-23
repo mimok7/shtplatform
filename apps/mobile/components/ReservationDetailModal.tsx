@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
   Building,
@@ -62,6 +62,95 @@ const CHANGE_CHILDREN_BY_RETYPE: Record<string, string[]> = {
 };
 
 const formatMoney = (value: number): string => `${Number(value || 0).toLocaleString('ko-KR')}동`;
+
+const humanizeText = (value: any, fallback = '-'): string => {
+  const raw = String(value || '').trim();
+  if (!raw) return fallback;
+  if (/^updating$/i.test(raw)) return '미정';
+  return raw;
+};
+
+const humanizeWayType = (value: any): string => {
+  const raw = String(value || '').trim().toLowerCase();
+  if (!raw) return '-';
+  if (raw.includes('pickup') || raw.includes('entry') || raw.includes('픽업')) return '픽업';
+  if (raw.includes('sending') || raw.includes('sanding') || raw.includes('exit') || raw.includes('샌딩')) return '샌딩';
+  if (raw.includes('dropoff') || raw.includes('drop') || raw.includes('드롭')) return '드롭';
+  return humanizeText(value);
+};
+
+const getServiceDateValue = (service: any): string => {
+  return String(
+    service.checkin ||
+    service.checkinDate ||
+    service.checkin_date ||
+    service.tourDate ||
+    service.usage_date ||
+    service.usageDate ||
+    service.ra_datetime ||
+    service.pickup_datetime ||
+    service.pickupDatetime ||
+    service.return_datetime ||
+    service.returnDatetime ||
+    service.re_created_at ||
+    ''
+  ).trim();
+};
+
+const getDateKey = (value: string): string => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  const m = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (m) return m[1];
+
+  const d = new Date(raw.replace(' ', 'T'));
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toISOString().slice(0, 10);
+};
+
+const getTourDisplayName = (service: any): string => {
+  const forcedName = service?.forcedTourName || service?.displayTourName;
+  if (forcedName) return humanizeText(forcedName, '투어 프로그램');
+
+  const tourDateKey = getDateKey(getServiceDateValue(service));
+  if (tourDateKey.endsWith('08-03') || tourDateKey === '2026-08-03') {
+    return '닌빈 투어';
+  }
+  if (tourDateKey.endsWith('08-05') || tourDateKey === '2026-08-05') {
+    return '하노이 오후 투어';
+  }
+
+  const directName = service.tourName || service.tour_name || service.tour?.tour_name;
+  if (directName) return humanizeText(directName, '투어 프로그램');
+  return '투어 프로그램';
+};
+
+const getAirportDisplayLocations = (service: any): { pickup: string; sending: string } => {
+  const wayType = humanizeWayType(service.category || service.way_type);
+  const airport = humanizeText(service.airportName || service.ra_airport_location || service.airport_location, '미정');
+  const stay = humanizeText(service.accommodation_info || service.ra_accommodation_info, '');
+  const pickupRaw = humanizeText(service.pickupLocation || service.pickup_location || stay, '');
+  const dropRaw = humanizeText(service.dropoffLocation || service.destination || service.dropoff_location || stay, '');
+
+  if (wayType === '픽업') {
+    return {
+      pickup: pickupRaw !== '-' && pickupRaw ? pickupRaw : airport,
+      sending: dropRaw !== '-' && dropRaw ? dropRaw : '미정',
+    };
+  }
+
+  if (wayType === '샌딩') {
+    return {
+      pickup: pickupRaw !== '-' && pickupRaw ? pickupRaw : '미정',
+      sending: dropRaw !== '-' && dropRaw ? dropRaw : airport,
+    };
+  }
+
+  return {
+    pickup: pickupRaw !== '-' && pickupRaw ? pickupRaw : '미정',
+    sending: dropRaw !== '-' && dropRaw ? dropRaw : '미정',
+  };
+};
 const formatSignedAmount = (amount: number): string => `${amount > 0 ? '+' : ''}${Number(amount || 0).toLocaleString()}동`;
 
 const formatCruiseScheduleLabel = (value: any): string => {
@@ -1070,8 +1159,10 @@ function ServiceCard({
         <div className="space-y-0.5">
           {(() => {
             const airportName = service.ra_airport_location || service.airportName || '-';
-            const cityName = service.placeName || service.location_name || service.accommodation_info || service.pickupLocation || service.dropoffLocation || '-';
-            const directionBadge = getAirportDirectionBadge(service);
+            const wayType = humanizeWayType(service.category || service.way_type);
+            const locs = getAirportDisplayLocations(service);
+            const locationLabel = wayType === '샌딩' ? '승차 위치' : '하차 위치';
+            const locationValue = wayType === '샌딩' ? locs.pickup : locs.sending;
             return (
               <>
                 <DetailLine label="일시" value={service.ra_datetime ? formatCompactDatetime(service.ra_datetime) : `${service.date || '-'} ${service.time || ''}`.trim()} />
@@ -1079,9 +1170,8 @@ function ServiceCard({
                 <DetailLine label="항공편" value={service.flightNumber || service.ra_flight_number || '-'} />
                 <DetailLine label="경로" value={service.route || '-'} />
                 <DetailLine label="차량" value={service.carType || service.vehicleType || service.vehicle_type || '-'} />
-                <DetailLine label="인원" value={formatNonZeroCount(service.passengerCount ?? service.ra_passenger_count, '명')} />
                 <DetailLine label="차량수" value={formatNonZeroCount(service.carCount ?? service.ra_car_count, '대')} />
-                <DetailLine label={directionBadge === '샌딩' ? '샌딩위치' : '픽업위치'} value={cityName} />
+                <DetailLine label={locationLabel} value={locationValue} />
                 <DetailLine label="총 금액" value={<span className="font-bold text-blue-700">{formatMoney(Number(service.totalPrice || service.total_price || 0))}</span>} />
               </>
             );
