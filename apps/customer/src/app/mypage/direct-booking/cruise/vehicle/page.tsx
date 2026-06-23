@@ -136,30 +136,46 @@ const buildShtReservationRows = async (params: {
         priceMap.set(rentCode, Number(row?.price || 0));
     });
 
-    return seatGroups.map((group) => {
+    const breakdown = seatGroups.map((group) => {
         const carPriceCode = getShtPriceCodeForBucket(params.baseCode, group.bucket);
         const storedUnitPrice = priceMap.get(carPriceCode) || params.fallbackUnitPrice;
         const passengerCount = group.bucket === 'ALL' ? 10 : group.seats.length;
         const computedTotalPrice = group.bucket === 'ALL'
             ? storedUnitPrice
             : storedUnitPrice * group.seats.length;
-        const carTotalPrice = params.totalPriceOverride ?? computedTotalPrice;
 
         return {
-            reservation_id: params.reservationId,
-            vehicle_number: params.vehicleNumber || null,
-            seat_number: group.seats.join(','),
-            car_price_code: carPriceCode,
-            passenger_count: passengerCount,
+            bucket: group.bucket,
+            seats: group.seats,
+            price_code: carPriceCode,
             unit_price: storedUnitPrice,
-            request_note: params.requestNote || null,
-            usage_date: params.usageDate,
-            sht_category: params.shtCategory,
-            pickup_location: params.pickupLocation,
-            dropoff_location: params.dropoffLocation,
-            car_total_price: carTotalPrice
+            quantity: passengerCount,
+            total_price: computedTotalPrice
         };
     });
+
+    const allSeats = seatGroups.flatMap((group) => group.seats);
+    const totalPassengerCount = breakdown.reduce((sum, item) => sum + item.quantity, 0);
+    const totalComputedPrice = breakdown.reduce((sum, item) => sum + item.total_price, 0);
+    const carTotalPrice = params.totalPriceOverride ?? totalComputedPrice;
+
+    const firstItem = breakdown[0];
+
+    return [{
+        reservation_id: params.reservationId,
+        vehicle_number: params.vehicleNumber || null,
+        seat_number: allSeats.join(','),
+        car_price_code: firstItem.price_code,
+        passenger_count: totalPassengerCount,
+        unit_price: firstItem.unit_price,
+        request_note: params.requestNote || null,
+        usage_date: params.usageDate,
+        sht_category: params.shtCategory,
+        pickup_location: params.pickupLocation,
+        dropoff_location: params.dropoffLocation,
+        car_total_price: carTotalPrice,
+        seat_pricing_breakdown: breakdown
+    }];
 };
 
 const LYRA_GRANZER_VEHICLE_DISCOUNT_CODE = 'LYRA-GRANZER-1N2D-VOUCHER-2026-30';

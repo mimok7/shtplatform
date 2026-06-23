@@ -119,7 +119,7 @@ async function buildPackageShtInsertRows(params: {
         priceMap.set(code, Number(row?.price || 0));
     });
 
-    return seatGroups.map((group) => {
+    const breakdown = seatGroups.map((group) => {
         const carPriceCode = getPackageShtPriceCode(group.bucket);
         const unitPrice = priceMap.get(carPriceCode) || 0;
         const seatCount = group.bucket === 'ALL' ? 1 : group.seats.length;
@@ -127,22 +127,38 @@ async function buildPackageShtInsertRows(params: {
         const totalPrice = group.bucket === 'ALL' ? unitPrice : unitPrice * seatCount;
 
         return {
-            reservation_id: params.reservationId,
-            vehicle_number: params.vehicleNumber || '',
-            seat_number: group.seats.join(','),
-            sht_category: params.shtCategory,
-            usage_date: params.usageDate,
-            pickup_location: params.pickupLocation,
-            dropoff_location: params.dropoffLocation,
-            passenger_count: passengerCount,
-            car_count: 1,
-            car_price_code: carPriceCode,
-            unit_price: unitPrice || null,
-            car_total_price: totalPrice || 0,
-            request_note: `[${params.noteLabel}] 차량: ${params.vehicleNumber || ''}, 좌석: ${group.seats.join(',')}\n${params.additionalRequests || ''}`,
-            created_at: new Date().toISOString()
+            bucket: group.bucket,
+            seats: group.seats,
+            price_code: carPriceCode,
+            unit_price: unitPrice,
+            quantity: passengerCount,
+            total_price: totalPrice
         };
     });
+
+    const allSeats = seatGroups.flatMap((group) => group.seats);
+    const totalPassengerCount = breakdown.reduce((sum, item) => sum + item.quantity, 0);
+    const totalComputedPrice = breakdown.reduce((sum, item) => sum + item.total_price, 0);
+
+    const firstItem = breakdown[0];
+
+    return [{
+        reservation_id: params.reservationId,
+        vehicle_number: params.vehicleNumber || '',
+        seat_number: allSeats.join(','),
+        sht_category: params.shtCategory,
+        usage_date: params.usageDate,
+        pickup_location: params.pickupLocation,
+        dropoff_location: params.dropoffLocation,
+        passenger_count: totalPassengerCount,
+        car_count: 1,
+        car_price_code: firstItem.price_code,
+        unit_price: firstItem.unit_price || null,
+        car_total_price: totalComputedPrice || 0,
+        request_note: `[${params.noteLabel}] 차량: ${params.vehicleNumber || ''}, 좌석: ${allSeats.join(',')}\n${params.additionalRequests || ''}`,
+        created_at: new Date().toISOString(),
+        seat_pricing_breakdown: breakdown
+    }];
 }
 
 export async function createPackageReservation({
