@@ -5,6 +5,7 @@ import { X, Ship, Plane, Building, MapPin, Car, Users, Wallet, Calendar, Clock, 
 import supabase from '@/lib/supabase';
 import ShtCarSeatMap from '@/components/ShtCarSeatMap';
 import { getReservationStoredAmount } from '@sht/domain/reservation';
+import { parseSeatPricingBreakdown } from '@sht/domain/sht';
 import { fetchPromotionSequenceMap } from '@/lib/promotionSequence';
 
 interface UserReservationDetailModalProps {
@@ -1668,12 +1669,23 @@ export default function UserReservationDetailModal({
                         {service.unitPrice && <div>단가: {Number(service.unitPrice || 0).toLocaleString()}동</div>}
                         {(() => {
                             const isShtDropoff = String(service.category || '').toLowerCase().includes('drop');
-                            const priceLines = Array.isArray(service.shtPriceLines) && service.shtPriceLines.length > 0
-                                ? service.shtPriceLines
-                                : buildShtPriceLines([service]);
+                            const breakdown = parseSeatPricingBreakdown(service.seat_pricing_breakdown || service.seatPricingBreakdown);
+                            let priceLines: any[] = [];
+                            if (breakdown && breakdown.length > 0) {
+                                priceLines = breakdown.map((b: any) => ({
+                                    label: b.bucket === 'ALL' ? '단독(ALL)' : `${b.bucket} 좌석`,
+                                    quantity: b.quantity,
+                                    unitPrice: b.unit_price,
+                                    total: b.total_price,
+                                }));
+                            } else {
+                                priceLines = Array.isArray(service.shtPriceLines) && service.shtPriceLines.length > 0
+                                    ? service.shtPriceLines
+                                    : buildShtPriceLines([service]);
+                            }
                             const displayAmt = isShtDropoff ? 0 : Number(service.totalPrice || 0);
                             return (
-                                <div className={Array.isArray(service.shtPriceLines) && service.shtPriceLines.length > 0 ? 'hidden' : 'border-t border-gray-100 pt-2 mt-1 space-y-1'}>
+                                <div className={priceLines.length > 0 ? 'hidden' : 'border-t border-gray-100 pt-2 mt-1 space-y-1'}>
                                     <span className="text-gray-500">총 금액</span>
                                     <span className="font-bold text-blue-600">
                                         {displayAmt.toLocaleString()}동
@@ -1682,28 +1694,47 @@ export default function UserReservationDetailModal({
                                 </div>
                             );
                         })()}
-                        {Array.isArray(service.shtPriceLines) && service.shtPriceLines.length > 0 && (
-                            <div className="border-t border-gray-100 pt-2 mt-1 space-y-1">
-                                <div className="text-xs font-semibold text-green-800 mb-1">요금 내역</div>
-                                {service.shtPriceLines.map((line: any, idx: number) => (
-                                    <div key={`${line.label}-${idx}`} className="flex justify-between text-sm">
-                                        <span className="text-gray-600">{line.label} {Number(line.unitPrice || 0).toLocaleString()}동 × {line.quantity}석</span>
-                                        <span className="font-medium">{Number(line.total || 0).toLocaleString()}동</span>
+                        {(() => {
+                            const breakdown = parseSeatPricingBreakdown(service.seat_pricing_breakdown || service.seatPricingBreakdown);
+                            let priceLines: any[] = [];
+                            if (breakdown && breakdown.length > 0) {
+                                priceLines = breakdown.map((b: any) => ({
+                                    label: b.bucket === 'ALL' ? '단독(ALL)' : `${b.bucket} 좌석`,
+                                    quantity: b.quantity,
+                                    unitPrice: b.unit_price,
+                                    total: b.total_price,
+                                }));
+                            } else {
+                                priceLines = Array.isArray(service.shtPriceLines) && service.shtPriceLines.length > 0
+                                    ? service.shtPriceLines
+                                    : buildShtPriceLines([service]);
+                            }
+
+                            if (priceLines.length === 0) return null;
+
+                            return (
+                                <div className="border-t border-gray-100 pt-2 mt-1 space-y-1">
+                                    <div className="text-xs font-semibold text-green-800 mb-1">요금 내역</div>
+                                    {priceLines.map((line: any, idx: number) => (
+                                        <div key={`${line.label}-${idx}`} className="flex justify-between text-sm">
+                                            <span className="text-gray-600">{line.label} {Number(line.unitPrice || 0).toLocaleString()}동 × {line.quantity}석</span>
+                                            <span className="font-medium">{Number(line.total || 0).toLocaleString()}동</span>
+                                        </div>
+                                    ))}
+                                    <div className="flex justify-between items-center border-t border-gray-200 pt-1">
+                                        <span className="text-gray-500 font-medium">총 합계</span>
+                                        <span className="font-bold text-blue-600">
+                                            {String(service.category || '').toLowerCase().includes('drop')
+                                                ? '0동'
+                                                : `${Number(service.totalPrice || 0).toLocaleString()}동`}
+                                            {String(service.category || '').toLowerCase().includes('drop') && (
+                                                <span className="text-xs text-gray-400 ml-1">(왕복요금은 픽업에 포함)</span>
+                                            )}
+                                        </span>
                                     </div>
-                                ))}
-                                <div className="flex justify-between items-center border-t border-gray-200 pt-1">
-                                    <span className="text-gray-500 font-medium">총 합계</span>
-                                    <span className="font-bold text-blue-600">
-                                        {String(service.category || '').toLowerCase().includes('drop')
-                                            ? '0동'
-                                            : `${Number(service.totalPrice || 0).toLocaleString()}동`}
-                                        {String(service.category || '').toLowerCase().includes('drop') && (
-                                            <span className="text-xs text-gray-400 ml-1">(왕복요금은 픽업에 포함)</span>
-                                        )}
-                                    </span>
                                 </div>
-                            </div>
-                        )}
+                            );
+                        })()}
                         {renderServiceNote(service.note)}
                     </>
                 )}
