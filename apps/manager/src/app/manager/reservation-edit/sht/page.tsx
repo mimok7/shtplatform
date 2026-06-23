@@ -70,6 +70,18 @@ function calcSeatTotalPrice(seatStr: string): number {
     return calcSeatPriceBreakdown(seatStr).reduce((sum, g) => sum + g.subtotal, 0);
 }
 
+function getShtUnitPriceForGroup(
+    seatType: string,
+    carPriceCode: string,
+    priceMap: Record<string, number>,
+    priceByCode: Record<string, number>,
+): number {
+    const normalizedCode = String(carPriceCode || '').trim().toUpperCase();
+    const priceFromCode = normalizedCode ? Number(priceByCode[normalizedCode] || 0) : 0;
+    if (priceFromCode > 0) return priceFromCode;
+    return Number(priceMap[seatType] || 0);
+}
+
 function getShtCalculatedPrice(
     seatStr: string,
     priceMap: Record<string, number>,
@@ -77,12 +89,7 @@ function getShtCalculatedPrice(
     priceByCode: Record<string, number>,
 ): { totalPrice: number; unitPrice: number; passengerCount: number } {
     const breakdown = calcSeatPriceBreakdown(seatStr);
-    const normalizedCode = String(carPriceCode || '').trim().toUpperCase();
-    const allPriceFromCode = normalizedCode ? Number(priceByCode[normalizedCode] || 0) : 0;
-    const getUnitPrice = (seatType: string) => {
-        if (seatType === 'ALL') return allPriceFromCode > 0 ? allPriceFromCode : Number(priceMap.ALL || 0);
-        return Number(priceMap[seatType] || 0);
-    };
+    const getUnitPrice = (seatType: string) => getShtUnitPriceForGroup(seatType, carPriceCode, priceMap, priceByCode);
 
     const totalPrice = breakdown.reduce((sum, g) => sum + getUnitPrice(g.type) * g.seats.length, 0);
     const hasAll = breakdown.some((g) => g.type === 'ALL');
@@ -304,6 +311,11 @@ function SHTReservationEditContent() {
 
     const formData = shtForms[activeCategory];
     const isDropoffRoundTrip = activeCategory === 'Drop-off' && (isRoundTripPriceCode(formData.car_price_code) || isRoundTripPriceCode(shtForms.Pickup.car_price_code));
+    const displayedSeatBreakdown = calcSeatPriceBreakdown(formData.seat_number);
+    const displayedSeatTotal = displayedSeatBreakdown.reduce((sum, group) => {
+        const unitPrice = getShtUnitPriceForGroup(group.type, formData.car_price_code, seatPriceMap, seatPriceByCode);
+        return sum + unitPrice * group.seats.length;
+    }, 0);
     // 차량가격은 왕복요금이므로 픽업에만 총액 반영, 드롭은 0원 처리
     const pickupBaseTotal = Number(shtForms['Pickup'].car_total_price || 0);
     const pickupAdditionalFee = additionalFees['Pickup'].fee;
@@ -312,15 +324,26 @@ function SHTReservationEditContent() {
     const finalReservationTotal = Math.max(0, pickupBaseTotal + pickupAdditionalFee + dropoffAdditionalFee);
     const updateActiveForm = (updates: Partial<typeof formData>) => {
         setShtForms(prev => {
-            const nextForms = { ...prev, [activeCategory]: { ...prev[activeCategory], ...updates } };
+            const currentForm = prev[activeCategory];
+            const nextForm = { ...currentForm, ...updates };
+
+            const isRoundTrip = isRoundTripPriceCode(nextForm.car_price_code) || isRoundTripPriceCode(prev.Pickup.car_price_code);
+
+            if (updates.car_total_price !== undefined) {
+                nextForm.car_total_price = updates.car_total_price;
+            } else if (activeCategory === 'Drop-off' && isRoundTrip) {
+                nextForm.unit_price = 0;
+                nextForm.car_total_price = 0;
+            } else {
+                nextForm.car_total_price = (nextForm.unit_price || 0) * (nextForm.passenger_count || 0);
+            }
+
+            const nextForms = { ...prev, [activeCategory]: nextForm };
             const isPickupRoundTrip = isRoundTripPriceCode(nextForms.Pickup.car_price_code);
-            const isDropoffRoundTrip = isRoundTripPriceCode(nextForms['Drop-off'].car_price_code);
-            if (isPickupRoundTrip || isDropoffRoundTrip) {
+            if (isPickupRoundTrip) {
                 nextForms['Drop-off'].unit_price = 0;
                 nextForms['Drop-off'].car_total_price = 0;
-                if (isPickupRoundTrip) {
-                    nextForms['Drop-off'].car_price_code = nextForms.Pickup.car_price_code;
-                }
+                nextForms['Drop-off'].car_price_code = nextForms.Pickup.car_price_code;
             }
             return nextForms;
         });
@@ -1088,7 +1111,7 @@ function SHTReservationEditContent() {
                                             좌석별 단가 내역
                                         </h4>
                                         <div className="space-y-2">
-                                            {calcSeatPriceBreakdown(formData.seat_number).map((group) => (
+                                            {displayedSeatBreakdown.map((group) => (
                                                 <div key={group.type} className="flex items-center justify-between bg-white rounded px-3 py-2 text-sm">
                                                     <div className="flex items-center gap-2">
                                                         <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold text-white ${group.type === 'A' ? 'bg-blue-500' :
@@ -1107,10 +1130,10 @@ function SHTReservationEditContent() {
                                                     </div>
                                                     <div className="text-right">
                                                         <span className="text-gray-500 text-xs mr-2">
-                                                            @{(seatPriceMap[group.type] || 0).toLocaleString()}동
+                                                            @{getShtUnitPriceForGroup(group.type, formData.car_price_code, seatPriceMap, seatPriceByCode).toLocaleString()}동
                                                         </span>
                                                         <span className="font-semibold text-blue-700">
-                                                            {((seatPriceMap[group.type] || 0) * group.seats.length).toLocaleString()}동
+                                                            {(getShtUnitPriceForGroup(group.type, formData.car_price_code, seatPriceMap, seatPriceByCode) * group.seats.length).toLocaleString()}동
                                                         </span>
                                                     </div>
                                                 </div>
@@ -1119,16 +1142,10 @@ function SHTReservationEditContent() {
                                         <div className="mt-3 pt-3 border-t border-blue-200 flex justify-between items-center">
                                             <span className="text-sm font-medium text-blue-800">계산된 총 가격</span>
                                             <span className="text-lg font-bold text-red-600">
-                                                {calcSeatPriceBreakdown(formData.seat_number).reduce((sum, g) => {
-                                                    const unitPrice = seatPriceMap[g.type] || 0;
-                                                    return sum + unitPrice * g.seats.length;
-                                                }, 0).toLocaleString()}동
+                                                {displayedSeatTotal.toLocaleString()}동
                                             </span>
                                         </div>
-                                        {!isDropoffRoundTrip && formData.car_total_price !== calcSeatPriceBreakdown(formData.seat_number).reduce((sum, g) => {
-                                            const unitPrice = seatPriceMap[g.type] || 0;
-                                            return sum + unitPrice * g.seats.length;
-                                        }, 0) && (
+                                        {!isDropoffRoundTrip && formData.car_total_price !== displayedSeatTotal && (
                                                 <button
                                                     type="button"
                                                     onClick={() => {

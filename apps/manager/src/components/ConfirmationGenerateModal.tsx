@@ -83,6 +83,22 @@ const normalizeShtSeatType = (value: string) => {
     return raw;
 };
 
+const extractShtSeatTypes = (value: string): string[] => {
+    const raw = String(value || '').trim().toUpperCase();
+    if (!raw) return [];
+    if (raw.includes('ALL') || raw.includes('단독')) return ['ALL'];
+
+    const seatTypes: string[] = [];
+    if (raw.includes('A')) seatTypes.push('A');
+    if (raw.includes('B')) seatTypes.push('B');
+    if (raw.includes('C')) seatTypes.push('C');
+
+    if (seatTypes.length > 0) return seatTypes;
+
+    const normalized = normalizeShtSeatType(raw);
+    return normalized ? [normalized] : [];
+};
+
 const getShtSeatList = (seatNumber: string) => String(seatNumber || '')
     .split(/[\s,\/]+/)
     .map((s) => s.trim().toUpperCase())
@@ -449,14 +465,16 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
             (shtPriceRows || []).forEach((row: any) => {
                 const code = String(row.rent_code || '').trim();
                 if (!code) return;
-                const seatType = normalizeShtSeatType(row.category || row.vehicle_type || '');
-                if (!seatType) return;
+                const seatTypes = extractShtSeatTypes([row.category, row.vehicle_type].filter(Boolean).join(' '));
+                if (seatTypes.length === 0) return;
                 const unitPrice = Number(row.price || 0);
                 if (!unitPrice) return;
 
                 const existing = seatPriceMapByCode.get(code) || {};
                 // 같은 타입이 여러 행이면 더 큰 값을 사용 (데이터 중복/조건행 대비)
-                existing[seatType] = Math.max(existing[seatType] || 0, unitPrice);
+                seatTypes.forEach((seatType) => {
+                    existing[seatType] = Math.max(existing[seatType] || 0, unitPrice);
+                });
                 seatPriceMapByCode.set(code, existing);
             });
 

@@ -483,7 +483,7 @@ export default function UserReservationDetailModal({
                 const rentCodes = allUserServices
                     .filter(
                         s => (s.serviceType === 'rentcar' && s.rentcar_price_code)
-                            || ((s.serviceType === 'vehicle' || s.serviceType === 'car') && (s.rentcar_price_code || s.car_price_code)),
+                            || ((s.serviceType === 'vehicle' || s.serviceType === 'car' || s.serviceType === 'sht') && (s.rentcar_price_code || s.car_price_code)),
                     )
                     .map(s => String(s.rentcar_price_code || s.car_price_code || '').trim())
                     .filter(Boolean);
@@ -857,6 +857,10 @@ export default function UserReservationDetailModal({
                         };
                     }
                     if (normalizedService.serviceType === 'sht') {
+                        const shtPriceCode = String(normalizedService.car_price_code || normalizedService.rentcar_price_code || '').trim();
+                        const priceInfo: any = shtPriceCode
+                            ? (rentPriceMap.get(shtPriceCode) || rentPriceMap.get(shtPriceCode.toUpperCase()))
+                            : null;
                         return {
                             ...normalizedService,
                             usageDate: normalizedService.usageDate || normalizedService.usage_date || normalizedService.pickupDatetime || normalizedService.pickup_datetime || null,
@@ -867,7 +871,7 @@ export default function UserReservationDetailModal({
                             pickupLocation: normalizedService.pickupLocation || normalizedService.pickup_location || '-',
                             dropoffLocation: normalizedService.dropoffLocation || normalizedService.dropoff_location || '-',
                             totalPrice: Number(normalizedService.totalPrice ?? normalizedService.car_total_price ?? 0),
-                            unitPrice: Number(normalizedService.unitPrice ?? normalizedService.unit_price ?? 0),
+                            unitPrice: Number(normalizedService.unitPrice ?? normalizedService.unit_price ?? priceInfo?.price ?? 0),
                         };
                     }
                     return normalizedService;

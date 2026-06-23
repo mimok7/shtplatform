@@ -993,7 +993,7 @@ function CruiseForm({ userId, quoteId, onComplete }: { userId: string; quoteId?:
             setCarTypeOptions([]);
         }
     }, [vehicleForm.car_category, vehicleForm.route, form.cruise_name]);
-    useEffect(() => { if (vehicleForm.car_category && vehicleForm.route && vehicleForm.car_type) getCarCode(); }, [vehicleForm.car_category, vehicleForm.route, vehicleForm.car_type]);
+    useEffect(() => { if (vehicleForm.car_category && vehicleForm.route && vehicleForm.car_type) getCarCode(); }, [vehicleForm.car_category, vehicleForm.route, vehicleForm.car_type, selectedShtSeat]);
     useEffect(() => {
         setVehicleForm({ car_category: '', route: '', car_type: '', car_code: '', count: 1 });
         setCarRouteOptions([]);
@@ -1083,10 +1083,20 @@ function CruiseForm({ userId, quoteId, onComplete }: { userId: string; quoteId?:
     };
 
     const getCarCode = async () => {
+        let vehicleTypeQuery = vehicleForm.car_type;
+        const isSht = (vehicleForm.car_type || '').includes('스테이하롱 셔틀 리무진');
+        if (isSht) {
+            if (vehicleForm.car_type.includes('단독')) {
+                vehicleTypeQuery = '스테이하롱 셔틀 리무진 단독';
+            } else if (selectedShtSeat?.category) {
+                vehicleTypeQuery = `스테이하롱 셔틀 리무진 ${selectedShtSeat.category.toUpperCase()}`;
+            }
+        }
+
         const { data } = await supabase.from('rentcar_price').select('rent_code, price, cruise')
             .eq('way_type', vehicleForm.car_category)
             .eq('route', vehicleForm.route)
-            .eq('vehicle_type', vehicleForm.car_type)
+            .eq('vehicle_type', vehicleTypeQuery)
             .order('created_at', { ascending: false });
 
         const rows = (data || []) as any[];
@@ -1165,8 +1175,11 @@ function CruiseForm({ userId, quoteId, onComplete }: { userId: string; quoteId?:
 
         setLoading(true);
         try {
-            const carTotal = (carPrice || 0) * vehicleForm.count;
             const isSht = (vehicleForm.car_type || '').includes('스테이하롱 셔틀 리무진');
+            const seatCount = selectedShtSeat?.seat ? selectedShtSeat.seat.split(',').filter(Boolean).length : 0;
+            const carTotal = isSht 
+                ? (carPrice || 0) * seatCount 
+                : (carPrice || 0) * vehicleForm.count;
 
             if (isSht && !selectedShtSeat?.seat) {
                 alert('스하차량 좌석을 먼저 선택해주세요.');
@@ -1215,8 +1228,8 @@ function CruiseForm({ userId, quoteId, onComplete }: { userId: string; quoteId?:
                     vehicle_number: selectedShtSeat?.vehicle || null,
                     seat_number: selectedShtSeat?.seat || null,
                     car_price_code: vehicleForm.car_code,
-                    car_count: vehicleForm.count,
-                    passenger_count: vehicleForm.count,
+                    car_count: 1, // SHT는 1로 고정
+                    passenger_count: seatCount || 1, // 좌석 수로 매핑
                     unit_price: carPrice || 0,
                     request_note: form.request_note || null,
                 };
