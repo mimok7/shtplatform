@@ -1,10 +1,12 @@
 'use client';
+// 스하차량 예약 수정 페이지 - Pickup/Drop-off 탭 분리 저장 + JSONB 요금 내역
 
 import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import supabase from '@/lib/supabase';
 import { saveAdditionalFeeTemplateFromInput } from '@/lib/additionalFeeTemplate';
 import { recordReservationChange } from '@/lib/reservationChangeTracker';
+import { calcSeatPricingBreakdown } from '@sht/domain/sht';
 import ManagerLayout from '../_components/MobileReservationLayout';
 import ShtCarSeatMap from '@/components/ShtCarSeatMap';
 import {
@@ -677,6 +679,15 @@ function SHTReservationEditContent() {
             const finalUnitPrice = (normalizedCategory === 'Drop-off' && isRoundTrip) ? 0 : (formData.unit_price || 0);
             const finalTotalPrice = (normalizedCategory === 'Drop-off' && isRoundTrip) ? 0 : (formData.car_total_price || 0);
 
+            // 좌석군별 요금 내역 JSONB 계산 (드롭오프 왕복은 빈 배열)
+            const seatBreakdown = (normalizedCategory === 'Drop-off' && isRoundTrip)
+                ? []
+                : calcSeatPricingBreakdown(
+                    formData.seat_number || '',
+                    seatPriceMap,
+                    seatCodeByType,
+                  );
+
             const payload: Record<string, any> = {
                 reservation_id: reservationId,
                 vehicle_number: formData.vehicle_number || null,
@@ -694,6 +705,7 @@ function SHTReservationEditContent() {
                 dispatch_code: formData.dispatch_code || null,
                 dispatch_memo: formData.dispatch_memo || null,
                 pickup_confirmed_at: formData.pickup_confirmed_at || null,
+                seat_pricing_breakdown: seatBreakdown,
             };
 
 

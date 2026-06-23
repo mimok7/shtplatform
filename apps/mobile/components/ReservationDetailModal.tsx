@@ -179,6 +179,17 @@ const getCruiseDisplayTotal = (service: any): number => {
 };
 
 const getAmountSummaryLines = (service: any, type: string): string[] => {
+  if (type === 'sht') {
+    const lines = (Array.isArray(service?.shtPriceLines) && service.shtPriceLines.length > 0
+      ? service.shtPriceLines
+      : buildShtPriceLines([service]))
+      .map((line: any) => `${line.label} ${formatMoney(Number(line.unitPrice || 0))} × ${Number(line.quantity || 0)}석 = ${formatMoney(Number(line.total || 0))}`);
+
+    const total = Number(service?.shtDisplayTotal ?? service?.totalPrice ?? service?.car_total_price ?? 0);
+    lines.push(`총 합계 ${formatMoney(total)}`);
+    return lines;
+  }
+
   if (type === 'cruise') {
     const roomPb = getCruiseRoomPriceBreakdown(service);
     const unitFromPb = (key: string) => pickNumber(
@@ -563,6 +574,115 @@ const getTicketDisplayTotal = (service: any): number => {
   if (quantity > 0 && unitPrice > 0) return quantity * unitPrice;
 
   return 0;
+};
+
+const getShtPriceLineLabel = (service: any): string => {
+  const priceCode = String(service?.car_price_code || service?.rentcar_price_code || '').trim().toUpperCase();
+  if (priceCode.includes('_SOLO_')) return '단독';
+  if (priceCode.includes('_A_')) return 'A 좌석';
+  if (priceCode.includes('_B_')) return 'BC 좌석';
+
+  const seats = String(service?.seatNumber || service?.seat_number || '')
+    .split(/[,;\s]+/)
+    .map((seat) => seat.trim().toUpperCase())
+    .filter(Boolean);
+
+  if (seats.length > 0 && seats.every((seat) => seat.startsWith('A'))) return 'A 좌석';
+  if (seats.length > 0 && seats.every((seat) => seat.startsWith('B') || seat.startsWith('C'))) return 'BC 좌석';
+  return '좌석';
+};
+
+const buildShtPriceLines = (services: any[]) => {
+  return services
+    .map((service) => {
+      const unitPrice = Number(service?.unitPrice ?? service?.unit_price ?? 0);
+      const total = Number(service?.totalPrice ?? service?.car_total_price ?? 0);
+      const seats = String(service?.seatNumber || service?.seat_number || '')
+        .split(/[,;\s]+/)
+        .map((seat) => seat.trim())
+        .filter(Boolean);
+      const quantity = seats.includes('ALL')
+        ? 1
+        : Math.max(seats.length, Number(service?.passenger_count || 0), total > 0 && unitPrice > 0 ? Math.round(total / unitPrice) : 0);
+
+      return {
+        label: getShtPriceLineLabel(service),
+        quantity,
+        unitPrice,
+        total,
+      };
+    })
+    .filter((line) => line.quantity > 0 || line.total >= 0);
+};
+
+const aggregateDisplayServices = (services: any[]) => {
+  const aggregated: any[] = [];
+  const shtGroupMap = new Map<string, any>();
+
+  services.forEach((service) => {
+    if (String(service?.serviceType || '').toLowerCase() !== 'sht') {
+      aggregated.push(service);
+      return;
+    }
+
+    const category = String(service?.category || service?.sht_category || '').trim().toLowerCase();
+    const usageDate = String(service?.usageDate || service?.usage_date || '').trim();
+    const vehicleNumber = String(service?.vehicleNumber || service?.vehicle_number || '').trim();
+    const pickupLocation = String(service?.pickupLocation || service?.pickup_location || '').trim();
+    const dropoffLocation = String(service?.dropoffLocation || service?.dropoff_location || '').trim();
+    const reservationId = String(service?.reservation_id || service?.reservationId || '').trim();
+    const status = String(service?.status || service?.re_status || service?.reservation_status || '').trim().toLowerCase();
+    const pricingSource = getServicePricingSource(service);
+    const groupingKey = [
+      reservationId,
+      usageDate,
+      category,
+      vehicleNumber,
+      pickupLocation,
+      dropoffLocation,
+      status,
+      pricingSource,
+    ].join('::');
+
+    const existing = shtGroupMap.get(groupingKey);
+    if (!existing) {
+      const sourceRows = [service];
+      const seatNumbers = String(service?.seatNumber || service?.seat_number || '')
+        .split(/[,;\s]+/)
+        .map((seat) => seat.trim())
+        .filter(Boolean);
+
+      const aggregatedService = {
+        ...service,
+        seatNumber: seatNumbers.join(','),
+        totalPrice: undefined,
+        car_total_price: undefined,
+        unitPrice: undefined,
+        unit_price: undefined,
+        shtDisplayTotal: Number(service?.totalPrice ?? service?.car_total_price ?? 0),
+        shtPriceLines: buildShtPriceLines(sourceRows),
+        _sourceRows: sourceRows,
+      };
+      shtGroupMap.set(groupingKey, aggregatedService);
+      aggregated.push(aggregatedService);
+      return;
+    }
+
+    existing._sourceRows.push(service);
+    const mergedSeats = [
+      ...String(existing.seatNumber || '').split(/[,;\s]+/).map((seat) => seat.trim()).filter(Boolean),
+      ...String(service?.seatNumber || service?.seat_number || '').split(/[,;\s]+/).map((seat) => seat.trim()).filter(Boolean),
+    ];
+    existing.seatNumber = Array.from(new Set(mergedSeats)).join(',');
+    existing.totalPrice = undefined;
+    existing.car_total_price = undefined;
+    existing.unitPrice = undefined;
+    existing.unit_price = undefined;
+    existing.shtDisplayTotal = existing._sourceRows.reduce((sum: number, row: any) => sum + Number(row?.totalPrice ?? row?.car_total_price ?? 0), 0);
+    existing.shtPriceLines = buildShtPriceLines(existing._sourceRows);
+  });
+
+  return aggregated;
 };
 
 const getTicketDisplayLines = (service: any): Array<{ label: string; quantity: number; unitPrice: number; total: number; quantityUnit: string }> => {
@@ -1591,7 +1711,7 @@ export default function ReservationDetailModal({
     : `견적ID ${item?.quoteId || item?.re_quote_id || item?.quote_id || '-'}`;
 
   const sortedGroups = (() => {
-    const list = visibleServices;
+    const list = aggregateDisplayServices(visibleServices);
     if (sortMode === 'date') {
       const groups: Record<string, any[]> = {};
       list.forEach((service) => {

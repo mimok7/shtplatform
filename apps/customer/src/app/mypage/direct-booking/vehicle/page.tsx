@@ -1,4 +1,5 @@
 'use client';
+// 직접예약 차량 서비스 페이지
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -8,6 +9,7 @@ import { useLoadingTimeout } from '../../../../hooks/useLoadingTimeout';
 import { createQuote } from '../../../../lib/quoteUtils';
 import { hasInvalidLocationChars, normalizeLocationEnglishUpper } from '../../../../lib/locationInput';
 import StepperNumberInput from '../../../../components/StepperNumberInput';
+import { calcSeatPricingBreakdown } from '@sht/domain/sht';
 
 function DirectBookingVehicleContent() {
     const router = useRouter();
@@ -278,7 +280,11 @@ function DirectBookingVehicleContent() {
                 usage_date: quoteForm.service_date || null,
                 pickup_location: quoteForm.pickup_location || null,
                 dropoff_location: quoteForm.destination || null,
-                request_note: fullRequestNote || null
+                request_note: fullRequestNote || null,
+                seat_pricing_breakdown: calcSeatPricingBreakdown(
+                    String(passengerCount),
+                    {}, // 단가 정보 없음 - 빈 배열로 저장
+                ),
             };
 
             const { error: vehicleError } = await supabase

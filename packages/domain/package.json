@@ -10,7 +10,8 @@
     "./datetime": "./src/datetime/kst.ts",
     "./pricing": "./src/pricing/index.ts",
     "./quote": "./src/quote/index.ts",
-    "./reservation": "./src/reservation/index.ts"
+    "./reservation": "./src/reservation/index.ts",
+    "./sht": "./src/sht/seatPricingBreakdown.ts"
   },
   "scripts": {
     "lint": "eslint src",

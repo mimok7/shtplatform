@@ -315,6 +315,109 @@ const getTicketDisplayTotal = (service: any): number => {
     return 0;
 };
 
+const getShtPriceLineLabel = (service: any): string => {
+    const priceCode = String(service?.car_price_code || service?.rentcar_price_code || '').trim().toUpperCase();
+    if (priceCode.includes('_SOLO_')) return '단독';
+    if (priceCode.includes('_A_')) return 'A 좌석';
+    if (priceCode.includes('_B_')) return 'BC 좌석';
+
+    const seats = String(service?.seatNumber || service?.seat_number || '')
+        .split(/[,;\s]+/)
+        .map((seat) => seat.trim().toUpperCase())
+        .filter(Boolean);
+
+    if (seats.length > 0 && seats.every((seat) => seat.startsWith('A'))) return 'A 좌석';
+    if (seats.length > 0 && seats.every((seat) => seat.startsWith('B') || seat.startsWith('C'))) return 'BC 좌석';
+    return '좌석';
+};
+
+const buildShtPriceLines = (services: any[]) => {
+    return services
+        .map((service) => {
+            const unitPrice = Number(service?.unitPrice ?? service?.unit_price ?? 0);
+            const total = Number(service?.totalPrice ?? service?.car_total_price ?? 0);
+            const seats = String(service?.seatNumber || service?.seat_number || '')
+                .split(/[,;\s]+/)
+                .map((seat) => seat.trim())
+                .filter(Boolean);
+            const quantity = seats.includes('ALL')
+                ? 1
+                : Math.max(seats.length, Number(service?.passenger_count || 0), total > 0 && unitPrice > 0 ? Math.round(total / unitPrice) : 0);
+
+            return {
+                label: getShtPriceLineLabel(service),
+                quantity,
+                unitPrice,
+                total,
+            };
+        })
+        .filter((line) => line.quantity > 0 || line.total >= 0);
+};
+
+const aggregateDisplayServices = (services: any[]) => {
+    const aggregated: any[] = [];
+    const shtGroupMap = new Map<string, any>();
+
+    services.forEach((service) => {
+        if (service?.serviceType !== 'sht') {
+            aggregated.push(service);
+            return;
+        }
+
+        const category = String(service?.category || service?.sht_category || '').trim().toLowerCase();
+        const usageDate = String(service?.usageDate || service?.usage_date || '').trim();
+        const vehicleNumber = String(service?.vehicleNumber || service?.vehicle_number || '').trim();
+        const pickupLocation = String(service?.pickupLocation || service?.pickup_location || '').trim();
+        const dropoffLocation = String(service?.dropoffLocation || service?.dropoff_location || '').trim();
+        const reservationId = String(service?.reservation_id || service?.reservationId || '').trim();
+        const status = String(service?.status || service?.re_status || service?.reservation_status || '').trim().toLowerCase();
+        const pricingSource = getServicePricingSource(service);
+        const groupingKey = [
+            reservationId,
+            usageDate,
+            category,
+            vehicleNumber,
+            pickupLocation,
+            dropoffLocation,
+            status,
+            pricingSource,
+        ].join('::');
+
+        const existing = shtGroupMap.get(groupingKey);
+        if (!existing) {
+            const sourceRows = [service];
+            const seatNumbers = String(service?.seatNumber || service?.seat_number || '')
+                .split(/[,;\s]+/)
+                .map((seat) => seat.trim())
+                .filter(Boolean);
+
+            const aggregatedService = {
+                ...service,
+                seatNumber: seatNumbers.join(','),
+                totalPrice: Number(service?.totalPrice ?? service?.car_total_price ?? 0),
+                unitPrice: 0,
+                shtPriceLines: buildShtPriceLines(sourceRows),
+                _sourceRows: sourceRows,
+            };
+            shtGroupMap.set(groupingKey, aggregatedService);
+            aggregated.push(aggregatedService);
+            return;
+        }
+
+        existing._sourceRows.push(service);
+        const mergedSeats = [
+            ...String(existing.seatNumber || '').split(/[,;\s]+/).map((seat) => seat.trim()).filter(Boolean),
+            ...String(service?.seatNumber || service?.seat_number || '').split(/[,;\s]+/).map((seat) => seat.trim()).filter(Boolean),
+        ];
+        existing.seatNumber = Array.from(new Set(mergedSeats)).join(',');
+        existing.totalPrice = existing._sourceRows.reduce((sum: number, row: any) => sum + Number(row?.totalPrice ?? row?.car_total_price ?? 0), 0);
+        existing.unitPrice = 0;
+        existing.shtPriceLines = buildShtPriceLines(existing._sourceRows);
+    });
+
+    return aggregated;
+};
+
 const getTicketDisplayLines = (service: any): Array<{ label: string; quantity: number; unitPrice: number; total: number; quantityUnit: string }> => {
     const pb = getServicePriceBreakdown(service);
     const lineItems = Array.isArray(pb?.line_items) ? pb.line_items : [];
@@ -1016,7 +1119,7 @@ export default function UserReservationDetailModal({
 
     const getSortedGroups = () => {
         // 중복 제거 제거: 모든 서비스를 표시 (공항 픽업/샌딩, 렌터카 픽업/드롭 등)
-        const allServices = enrichedServices || [];
+        const allServices = aggregateDisplayServices(enrichedServices || []);
 
         if (sortMode === 'date') {
             const groups: Record<string, any[]> = {};
@@ -1589,12 +1692,14 @@ export default function UserReservationDetailModal({
                                 <div><strong>드롭장소:</strong> {service.dropoffLocation || '-'}</div>
                             </div>
                         </div>
-                        {service.unitPrice && <div>단가: {Number(service.unitPrice || 0).toLocaleString()}동</div>}
                         {(() => {
                             const isShtDropoff = isShtDropoffCategory(service.category || service.sht_category);
+                            const priceLines = Array.isArray(service.shtPriceLines) && service.shtPriceLines.length > 0
+                                ? service.shtPriceLines
+                                : buildShtPriceLines([service]);
                             const displayAmt = isShtDropoff ? 0 : Number(service.totalPrice || 0);
                             return (
-                                <div className="border-t border-gray-100 pt-1 mt-1 flex justify-between items-center">
+                                <div className={Array.isArray(service.shtPriceLines) && service.shtPriceLines.length > 0 ? 'hidden' : 'border-t border-gray-100 pt-1 mt-1 flex justify-between items-center'}>
                                     <span className="text-gray-500">총 금액</span>
                                     <span className="font-bold text-blue-600">
                                         {displayAmt.toLocaleString()}동
@@ -1603,6 +1708,24 @@ export default function UserReservationDetailModal({
                                 </div>
                             );
                         })()}
+                        {Array.isArray(service.shtPriceLines) && service.shtPriceLines.length > 0 && (
+                            <div className="border-t border-gray-100 pt-2 mt-1 space-y-1">
+                                <div className="text-xs font-semibold text-green-800 mb-1">요금 내역</div>
+                                {service.shtPriceLines.map((line: any, idx: number) => (
+                                    <div key={`${line.label}-${idx}`} className="flex justify-between text-sm">
+                                        <span className="text-gray-600">{line.label} {Number(line.unitPrice || 0).toLocaleString()}동 × {line.quantity}석</span>
+                                        <span className="font-medium">{Number(line.total || 0).toLocaleString()}동</span>
+                                    </div>
+                                ))}
+                                <div className="flex justify-between items-center border-t border-gray-200 pt-1">
+                                    <span className="text-gray-500 font-medium">총 합계</span>
+                                    <span className="font-bold text-blue-600">
+                                        {isShtDropoffCategory(service.category || service.sht_category) ? '0동' : `${Number(service.totalPrice || 0).toLocaleString()}동`}
+                                        {isShtDropoffCategory(service.category || service.sht_category) && <span className="text-xs text-gray-400 ml-1">(왕복요금은 픽업에 포함)</span>}
+                                    </span>
+                                </div>
+                            </div>
+                        )}
                         {renderServiceNote(service.note)}
                     </>
                 )}
