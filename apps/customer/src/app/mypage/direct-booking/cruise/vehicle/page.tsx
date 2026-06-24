@@ -103,6 +103,11 @@ const isMultiDayCruiseSchedule = (value?: string) => {
     return raw === '1박2일'.toUpperCase() || raw === '2박3일'.toUpperCase() || raw === '1N2D' || raw === '2N3D';
 };
 
+const isDayTripCruiseSchedule = (value?: string) => {
+    const raw = String(value || '').trim().toUpperCase();
+    return raw === '당일' || raw === 'DAY';
+};
+
 const getScheduleReturnOffsetDays = (value?: string) => {
     const raw = String(value || '').trim().toUpperCase();
     if (raw === '2박3일'.toUpperCase() || raw === '2N3D') return 2;
@@ -513,9 +518,10 @@ function CruiseVehicleContent() {
             if (error) throw error;
             const rawTypes = [...new Set((data || []).map((d: any) => d.vehicle_type).filter(Boolean))] as string[];
             // SHT 변형(A/B/C/단독)은 표시 옵션에서 제외하고, 한 종류 이상 있으면 일반 '스테이하롱 셔틀 리무진' 1개로 통합 표시
+            // 단, 당일 크루즈는 스테이하롱 셔틀 리무진 운영 안 함 → 제외
             const hasSht = rawTypes.some(t => isShtVehicleType(t));
             let uniqueCarTypes = rawTypes.filter(t => !isShtVehicleType(t));
-            if (hasSht) uniqueCarTypes.push('스테이하롱 셔틀 리무진');
+            if (hasSht && !isDayTripCruiseSchedule(schedule)) uniqueCarTypes.push('스테이하롱 셔틀 리무진');
             // 패키지 셔틀 리무진은 패키지 가능한 객실(FULL 프로모션 / 파라다이스 레거시 B,C)에서만 노출
             const packageEligible = isFullPromoOrLegacyC || isParadiseLegacyB;
             if (!packageEligible) {
@@ -527,7 +533,7 @@ function CruiseVehicleContent() {
         } catch (error) {
             console.error('차량타입 옵션 조회 실패:', error);
         }
-    }, [selectedCarCategory, selectedRoute, applyCruiseFilterToRentcarQuery, cruiseName, isFullPromoOrLegacyC, isParadiseLegacyB]);
+    }, [selectedCarCategory, selectedRoute, applyCruiseFilterToRentcarQuery, cruiseName, isFullPromoOrLegacyC, isParadiseLegacyB, schedule]);
 
     const getCarCode = useCallback(async (carType: string, carCategory: string, route?: string): Promise<string> => {
         try {
