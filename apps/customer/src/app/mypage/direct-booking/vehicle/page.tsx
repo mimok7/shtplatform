@@ -1,4 +1,5 @@
 'use client';
+// 직접예약 차량 서비스 페이지
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -8,6 +9,7 @@ import { useLoadingTimeout } from '../../../../hooks/useLoadingTimeout';
 import { createQuote } from '../../../../lib/quoteUtils';
 import { hasInvalidLocationChars, normalizeLocationEnglishUpper } from '../../../../lib/locationInput';
 import StepperNumberInput from '../../../../components/StepperNumberInput';
+import { calcSeatPricingBreakdown } from '@sht/domain/sht';
 
 function DirectBookingVehicleContent() {
     const router = useRouter();
@@ -278,7 +280,11 @@ function DirectBookingVehicleContent() {
                 usage_date: quoteForm.service_date || null,
                 pickup_location: quoteForm.pickup_location || null,
                 dropoff_location: quoteForm.destination || null,
-                request_note: fullRequestNote || null
+                request_note: fullRequestNote || null,
+                seat_pricing_breakdown: calcSeatPricingBreakdown(
+                    String(passengerCount),
+                    {}, // 단가 정보 없음 - 빈 배열로 저장
+                ),
             };
 
             const { error: vehicleError } = await supabase
@@ -287,7 +293,7 @@ function DirectBookingVehicleContent() {
 
             if (vehicleError) throw vehicleError;
 
-            alert('예약 신청이 완료되었습니다.\n카카오 채널로 연락주세요.\n담당자의 안내에 따라 결제를 진행하셔야 예약이 완료됩니다.');
+            alert('예약 신청이 완료되었습니다.\n카카오 채널로 연락주세요.\n담당자의 안내에 따라 결제를 진행하셔야 예약이 완료됩니다.\n\n※ 신청서 제출 후 24시간 이내에 카카오톡 채널로 연락주지 않으시면, 신청서는 삭제됩니다.\n\n카카오채널 - http://pf.kakao.com/_zvsxaG/chat');
             router.push('/mypage/direct-booking?completed=vehicle');
 
         } catch (error) {

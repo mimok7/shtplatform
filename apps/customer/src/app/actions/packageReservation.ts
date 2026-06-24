@@ -53,6 +53,114 @@ function getShtPricingFromSeatNumber(seatNumber: string | null | undefined) {
     };
 }
 
+type ShtSeatBucket = 'A' | 'B' | 'ALL';
+
+function getShtSeatBucket(seat: string): ShtSeatBucket | null {
+    const normalizedSeat = String(seat || '').trim().toUpperCase();
+    if (!normalizedSeat) return null;
+    if (normalizedSeat === 'ALL') return 'ALL';
+    if (normalizedSeat.startsWith('A')) return 'A';
+    if (normalizedSeat.startsWith('B') || normalizedSeat.startsWith('C')) return 'B';
+    return null;
+}
+
+function splitShtSeatsByBucket(seatNumber: string | null | undefined): Array<{ bucket: ShtSeatBucket; seats: string[] }> {
+    const seats = String(seatNumber || '')
+        .split(/[,;\s]+/)
+        .map((seat) => seat.trim().toUpperCase())
+        .filter(Boolean);
+
+    if (seats.includes('ALL')) {
+        return [{ bucket: 'ALL', seats: ['ALL'] }];
+    }
+
+    const grouped = new Map<ShtSeatBucket, string[]>();
+    seats.forEach((seat) => {
+        const bucket = getShtSeatBucket(seat);
+        if (!bucket) return;
+        const current = grouped.get(bucket) || [];
+        current.push(seat);
+        grouped.set(bucket, current);
+    });
+
+    return Array.from(grouped.entries()).map(([bucket, groupedSeats]) => ({ bucket, seats: groupedSeats }));
+}
+
+function getPackageShtPriceCode(bucket: ShtSeatBucket): string {
+    if (bucket === 'ALL') return 'SHT_LIMO_SOLO_HN_HL_2WAY_DIFF';
+    if (bucket === 'A') return 'SHT_LIMO_A_HN_HL_2WAY_DIFF';
+    return 'SHT_LIMO_B_HN_HL_2WAY_DIFF';
+}
+
+async function buildPackageShtInsertRows(params: {
+    reservationId: string;
+    vehicleNumber: string;
+    seatNumber: string;
+    shtCategory: 'pickup' | 'dropoff';
+    usageDate: string;
+    pickupLocation: string;
+    dropoffLocation: string;
+    additionalRequests?: string;
+    noteLabel: string;
+}) {
+    const seatGroups = splitShtSeatsByBucket(params.seatNumber);
+    if (seatGroups.length === 0) return [];
+
+    const candidateCodes = seatGroups.map((group) => getPackageShtPriceCode(group.bucket));
+    const { data: priceRows } = await supabase
+        .from('rentcar_price')
+        .select('rent_code, price')
+        .in('rent_code', candidateCodes);
+
+    const priceMap = new Map<string, number>();
+    (priceRows || []).forEach((row: any) => {
+        const code = String(row?.rent_code || '').trim();
+        if (!code) return;
+        priceMap.set(code, Number(row?.price || 0));
+    });
+
+    const breakdown = seatGroups.map((group) => {
+        const carPriceCode = getPackageShtPriceCode(group.bucket);
+        const unitPrice = priceMap.get(carPriceCode) || 0;
+        const seatCount = group.bucket === 'ALL' ? 1 : group.seats.length;
+        const passengerCount = group.bucket === 'ALL' ? 10 : group.seats.length;
+        const totalPrice = group.bucket === 'ALL' ? unitPrice : unitPrice * seatCount;
+
+        return {
+            bucket: group.bucket,
+            seats: group.seats,
+            price_code: carPriceCode,
+            unit_price: unitPrice,
+            quantity: passengerCount,
+            total_price: totalPrice
+        };
+    });
+
+    const allSeats = seatGroups.flatMap((group) => group.seats);
+    const totalPassengerCount = breakdown.reduce((sum, item) => sum + item.quantity, 0);
+    const totalComputedPrice = breakdown.reduce((sum, item) => sum + item.total_price, 0);
+
+    const firstItem = breakdown[0];
+
+    return [{
+        reservation_id: params.reservationId,
+        vehicle_number: params.vehicleNumber || '',
+        seat_number: allSeats.join(','),
+        sht_category: params.shtCategory,
+        usage_date: params.usageDate,
+        pickup_location: params.pickupLocation,
+        dropoff_location: params.dropoffLocation,
+        passenger_count: totalPassengerCount,
+        car_count: 1,
+        car_price_code: firstItem.price_code,
+        unit_price: (totalComputedPrice > 0 && totalPassengerCount > 0) ? Math.round(totalComputedPrice / totalPassengerCount) : (firstItem.unit_price || null),
+        car_total_price: totalComputedPrice || 0,
+        request_note: `[${params.noteLabel}] 차량: ${params.vehicleNumber || ''}, 좌석: ${allSeats.join(',')}\n${params.additionalRequests || ''}`,
+        created_at: new Date().toISOString(),
+        seat_pricing_breakdown: breakdown
+    }];
+}
+
 export async function createPackageReservation({
     packageId,
     userId,
@@ -428,43 +536,39 @@ export async function createPackageReservation({
 
                     // 스하 셔틀 차량 저장 (픽업: 숙소→선착장) - reservation_car_sht
                     if (details.shtPickupSeat) {
-                        const pickupShtPricing = getShtPricingFromSeatNumber(details.shtPickupSeat);
-                        await supabase.from('reservation_car_sht').insert({
-                            reservation_id: reservationId,
-                            vehicle_number: details.shtPickupVehicle || '',
-                            seat_number: details.shtPickupSeat,
-                            sht_category: 'pickup',
-                            usage_date: usageDate,
-                            pickup_location: details.accommodation || '',
-                            dropoff_location: pierLocation,
-                            passenger_count: pickupShtPricing.passengerCount || totalGuests,
-                            car_count: 1,
-                            unit_price: pickupShtPricing.unitPrice || null,
-                            car_total_price: pickupShtPricing.totalPrice || 0,
-                            request_note: `[스하 셔틀 픽업] 차량: ${details.shtPickupVehicle || ''}, 좌석: ${details.shtPickupSeat}\n${additionalRequests || ''}`,
-                            created_at: new Date().toISOString()
+                        const pickupRows = await buildPackageShtInsertRows({
+                            reservationId,
+                            vehicleNumber: details.shtPickupVehicle || '',
+                            seatNumber: details.shtPickupSeat,
+                            shtCategory: 'pickup',
+                            usageDate,
+                            pickupLocation: details.accommodation || '',
+                            dropoffLocation: pierLocation,
+                            additionalRequests,
+                            noteLabel: '스하 셔틀 픽업'
                         });
+                        if (pickupRows.length > 0) {
+                            await supabase.from('reservation_car_sht').insert(pickupRows);
+                        }
                     }
 
                     // 스하 셔틀 차량 저장 (드랍: 선착장→숙소) - reservation_car_sht
                     if (details.shtDropoffSeat) {
                         const dropoffDate = getOffsetDate(usageDate, 1); // 크루즈 다음날
-                        const dropoffShtPricing = getShtPricingFromSeatNumber(details.shtDropoffSeat);
-                        await supabase.from('reservation_car_sht').insert({
-                            reservation_id: reservationId,
-                            vehicle_number: details.shtDropoffVehicle || '',
-                            seat_number: details.shtDropoffSeat,
-                            sht_category: 'dropoff',
-                            usage_date: dropoffDate,
-                            pickup_location: pierLocation,
-                            dropoff_location: details.roomType || details.accommodation || '',
-                            passenger_count: dropoffShtPricing.passengerCount || totalGuests,
-                            car_count: 1,
-                            unit_price: dropoffShtPricing.unitPrice || null,
-                            car_total_price: dropoffShtPricing.totalPrice || 0,
-                            request_note: `[스하 셔틀 드랍] 차량: ${details.shtDropoffVehicle || ''}, 좌석: ${details.shtDropoffSeat}\n${additionalRequests || ''}`,
-                            created_at: new Date().toISOString()
+                        const dropoffRows = await buildPackageShtInsertRows({
+                            reservationId,
+                            vehicleNumber: details.shtDropoffVehicle || '',
+                            seatNumber: details.shtDropoffSeat,
+                            shtCategory: 'dropoff',
+                            usageDate: dropoffDate,
+                            pickupLocation: pierLocation,
+                            dropoffLocation: details.roomType || details.accommodation || '',
+                            additionalRequests,
+                            noteLabel: '스하 셔틀 드랍'
                         });
+                        if (dropoffRows.length > 0) {
+                            await supabase.from('reservation_car_sht').insert(dropoffRows);
+                        }
                     }
                     break;
                 case 'airport':
@@ -561,6 +665,8 @@ export async function createPackageReservation({
 
                     console.log(`Tour: ${tourName}, Guests: ${totalGuests}, Code: ${tourPriceCode}, Vehicle: ${tourVehicle}`);
 
+                    const isHanoi = desc.includes('하노이') || desc.includes('hanoi');
+
                     const { error: tourError } = await supabase.from('reservation_tour').insert({
                         reservation_id: reservationId,
                         tour_price_code: tourPriceCode,
@@ -571,7 +677,7 @@ export async function createPackageReservation({
                         infant_count: totalInfants,
                         usage_date: usageDate,
                         tour_capacity: totalGuests || 1,
-                        pickup_location: details.accommodation || '',
+                        pickup_location: isHanoi ? '' : (details.accommodation || ''),
                         dropoff_location: details.roomType || details.accommodation || ''
                     });
                     if (tourError) {

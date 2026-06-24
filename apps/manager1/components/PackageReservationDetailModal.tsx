@@ -108,6 +108,14 @@ function getTourDisplayName(service: any): string {
     const forcedName = service?.forcedTourName || service?.displayTourName;
     if (forcedName) return humanizeText(forcedName, '투어 프로그램');
 
+    const tourDateKey = getDateKey(getServiceDateValue(service));
+    if (tourDateKey.endsWith('08-03') || tourDateKey === '2026-08-03') {
+        return '닌빈 투어';
+    }
+    if (tourDateKey.endsWith('08-05') || tourDateKey === '2026-08-05') {
+        return '하노이 오후 투어';
+    }
+
     const directName = service.tourName || service.tour_name || service.tour?.tour_name;
     if (directName && !isCodeLike(directName)) return humanizeText(directName, '투어 프로그램');
 
@@ -365,7 +373,7 @@ function normalizePackageRoot(pkg: any): any {
     const infantTourPrice = toAmount(pkg?.infant_tour_price, packageMaster?.price_infant_tour);
     const infantExtraBedPrice = toAmount(pkg?.infant_extra_bed_price, packageMaster?.price_infant_extra_bed);
     const infantSeatPrice = toAmount(pkg?.infant_seat_price, packageMaster?.price_infant_seat);
-    const explicitTotalPrice = toAmount(pkg?.total_price, pkg?.total_amount, pkg?.totalPrice, service?.total_amount, service?.totalPrice);
+    const explicitTotalPrice = toAmount(pkg?.total_amount, pkg?.total_price, pkg?.totalPrice, service?.total_amount, service?.totalPrice);
     const calculatedPackagePrice =
         (adultCount * adultPrice) +
         (childExtraBed * childExtraBedPrice) +
@@ -754,12 +762,31 @@ export default function PackageReservationDetailModal({
                                 <div className="space-y-3">
                                     <h3 className="text-sm font-semibold text-gray-800">패키지 예약 목록</h3>
                                     {packageRootRows.map((pkg, idx) => {
+                                        // 수동 추가요금 항목 (price_breakdown.additional_fee_items)
+                                        const additionalItems: Array<{key?: string; name: string; amount: number}> =
+                                            Array.isArray(pkg.price_breakdown_additional_items)
+                                            ? pkg.price_breakdown_additional_items
+                                            : [];
+                                        const manualAdditionalFee = Number(pkg.manual_additional_fee || 0);
+
+                                        // 생일이벤트 여부: price_breakdown_additional_items에 생일이벤트 항목이 있거나
+                                        // cruise 서비스의 birthday_event === true인 경우
+                                        const hasBirthdayEvent =
+                                            additionalItems.some((item) => /생일/i.test(item.name || '')) ||
+                                            filteredServices.some(
+                                                (s) =>
+                                                    String(s.reservation_id || s.re_id || '').trim() === String(pkg.re_id || pkg.reservation_id || '').trim() &&
+                                                    s.serviceType === 'cruise' &&
+                                                    s.birthday_event === true
+                                            );
+
                                         const knownSubtotal =
                                             (Number(pkg.childExtraBed || 0) * Number(pkg.childExtraBedPrice || 0)) +
                                             (Number(pkg.childNoExtraBed || 0) * Number(pkg.childNoExtraBedPrice || 0)) +
                                             (Number(pkg.infantTour || 0) * Number(pkg.infantTourPrice || 0)) +
                                             (Number(pkg.infantExtraBed || 0) * Number(pkg.infantExtraBedPrice || 0)) +
-                                            (Number(pkg.infantSeat || 0) * Number(pkg.infantSeatPrice || 0));
+                                            (Number(pkg.infantSeat || 0) * Number(pkg.infantSeatPrice || 0)) +
+                                            manualAdditionalFee;
                                         const remainingForAdult = Math.max(0, Number(pkg.packageTotalAmount || 0) - knownSubtotal);
                                         const displayAdultPrice = Number(pkg.adultPrice || 0) > 0
                                             ? Number(pkg.adultPrice || 0)
@@ -783,6 +810,20 @@ export default function PackageReservationDetailModal({
                                                     <div className="flex justify-between">
                                                         <span className="text-gray-600">성인 {displayAdultPrice.toLocaleString()}동 × {pkg.adultCount}명</span>
                                                         <span className="font-medium text-gray-800">{(displayAdultPrice * pkg.adultCount).toLocaleString()}동</span>
+                                                    </div>
+                                                )}
+                                                {/* 수동 추가요금 항목 (노란색) */}
+                                                {additionalItems.length > 0 && additionalItems.map((item, i) => (
+                                                    <div key={i} className="flex justify-between bg-yellow-100 px-1 py-0.5 rounded font-semibold text-yellow-950">
+                                                        <span>{item.name} {Number(item.amount || 0).toLocaleString()}동</span>
+                                                        <span>{Number(item.amount || 0).toLocaleString()}동</span>
+                                                    </div>
+                                                ))}
+                                                {/* 수동요금 항목이 없지만 hasBirthdayEvent인 경우 (크루즈 birthday_event) */}
+                                                {hasBirthdayEvent && additionalItems.length === 0 && (
+                                                    <div className="flex justify-between bg-yellow-100 px-1 py-0.5 rounded font-semibold text-yellow-950">
+                                                        <span>생일 이벤트 1,000,000동 × 1명</span>
+                                                        <span>1,000,000동</span>
                                                     </div>
                                                 )}
                                                 {pkg.childExtraBed > 0 && pkg.childExtraBedPrice > 0 && (
@@ -882,8 +923,11 @@ export default function PackageReservationDetailModal({
                                                 {type === 'airport' ? (
                                                     <>
                                                         <div>공항명: {humanizeText(service.airportName || service.ra_airport_location, '미정')}</div>
-                                                        <div>픽업 장소: {airportLocations?.pickup || '미정'}</div>
-                                                        <div>샌딩 장소: {airportLocations?.sending || '미정'}</div>
+                                                        {humanizeWayType(service.category || service.way_type) === '픽업' ? (
+                                                            <div>하차 위치: {airportLocations?.sending || '미정'}</div>
+                                                        ) : (
+                                                            <div>승차 위치: {airportLocations?.pickup || '미정'}</div>
+                                                        )}
                                                     </>
                                                 ) : (
                                                     <>
@@ -892,16 +936,16 @@ export default function PackageReservationDetailModal({
                                                     </>
                                                 )}
                                                 {service.flightNumber && <div>항공편: {humanizeText(service.flightNumber)}</div>}
-                                                {service.passengerCount != null && <div>탑승 인원: {service.passengerCount}명</div>}
+                                                {type !== 'airport' && service.passengerCount != null && <div>탑승 인원: {service.passengerCount}명</div>}
                                                 {service.carCount != null && <div>차량수: {service.carCount}대</div>}
                                                 {service.luggageCount != null && <div>수하물: {service.luggageCount}개</div>}
                                                 {service.guestCount != null && <div>투숙 인원: {service.guestCount}명</div>}
-                                                {service.tourCapacity != null && <div>투어 인원: {service.tourCapacity}명</div>}
+                                                {type !== 'tour' && service.tourCapacity != null && <div>투어 인원: {service.tourCapacity}명</div>}
                                                 {service.vehicleNumber && <div>차량번호: {humanizeText(service.vehicleNumber)}</div>}
                                                 {service.seatNumber && <div>좌석: {humanizeText(service.seatNumber)}</div>}
                                                 {service.driverName && <div>기사: {humanizeText(service.driverName)}</div>}
                                                 {service.dispatchCode && <div>배차코드: {humanizeText(service.dispatchCode)}</div>}
-                                            {(service.adult != null || service.child != null || service.infant != null) && (
+                                                {type !== 'sht' && type !== 'airport' && type !== 'tour' && (service.adult != null || service.child != null || service.infant != null) && (
                                                     <div>인원 구성: 성인 {service.adult || 0}, 아동 {service.child || 0}, 유아 {service.infant || 0}</div>
                                                 )}
                                             </div>

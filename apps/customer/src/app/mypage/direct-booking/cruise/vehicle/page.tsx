@@ -57,6 +57,127 @@ const toVehicleDisplayType = (vehicleType?: string) => {
         : vehicleType;
 };
 
+type ShtSeatBucket = 'A' | 'B' | 'ALL';
+
+const getShtSeatBucket = (seat: string): ShtSeatBucket | null => {
+    const normalizedSeat = String(seat || '').trim().toUpperCase();
+    if (!normalizedSeat) return null;
+    if (normalizedSeat === 'ALL') return 'ALL';
+    if (normalizedSeat.startsWith('A')) return 'A';
+    if (normalizedSeat.startsWith('B') || normalizedSeat.startsWith('C')) return 'B';
+    return null;
+};
+
+const splitShtSeatsByBucket = (seatValue?: string | null): Array<{ bucket: ShtSeatBucket; seats: string[] }> => {
+    const seats = String(seatValue || '')
+        .split(/[,;\s]+/)
+        .map((seat) => seat.trim().toUpperCase())
+        .filter(Boolean);
+
+    if (seats.includes('ALL')) {
+        return [{ bucket: 'ALL', seats: ['ALL'] }];
+    }
+
+    const grouped = new Map<ShtSeatBucket, string[]>();
+    seats.forEach((seat) => {
+        const bucket = getShtSeatBucket(seat);
+        if (!bucket) return;
+        const current = grouped.get(bucket) || [];
+        current.push(seat);
+        grouped.set(bucket, current);
+    });
+
+    return Array.from(grouped.entries()).map(([bucket, groupedSeats]) => ({ bucket, seats: groupedSeats }));
+};
+
+const getShtVehicleTypeByBucket = (bucket: ShtSeatBucket) => {
+    if (bucket === 'ALL') return '스테이하롱 셔틀 리무진 단독';
+    if (bucket === 'A') return '스테이하롱 셔틀 리무진 A';
+    return '스테이하롱 셔틀 리무진 B';
+};
+
+const getShtPriceCodeForBucket = (baseCode: string, bucket: ShtSeatBucket) => {
+    const normalizedBaseCode = String(baseCode || '').trim().toUpperCase();
+    const token = bucket === 'ALL' ? 'SOLO' : bucket;
+
+    if (normalizedBaseCode.startsWith('SHT_LIMO_')) {
+        return normalizedBaseCode.replace(/SHT_LIMO_(SOLO|A|B)_/, `SHT_LIMO_${token}_`);
+    }
+
+    return normalizedBaseCode;
+};
+
+const buildShtReservationRows = async (params: {
+    reservationId: string;
+    seatValue?: string | null;
+    vehicleNumber?: string | null;
+    baseCode: string;
+    fallbackUnitPrice: number;
+    requestNote?: string | null;
+    usageDate: string | null;
+    shtCategory: 'Pickup' | 'Drop-off';
+    pickupLocation: string | null;
+    dropoffLocation: string | null;
+    totalPriceOverride?: number;
+}) => {
+    const seatGroups = splitShtSeatsByBucket(params.seatValue);
+    if (seatGroups.length === 0) return [];
+
+    const candidateCodes = seatGroups.map((group) => getShtPriceCodeForBucket(params.baseCode, group.bucket));
+    const { data: priceRows } = await supabase
+        .from('rentcar_price')
+        .select('rent_code, price')
+        .in('rent_code', candidateCodes);
+
+    const priceMap = new Map<string, number>();
+    (priceRows || []).forEach((row: any) => {
+        const rentCode = String(row?.rent_code || '').trim().toUpperCase();
+        if (!rentCode) return;
+        priceMap.set(rentCode, Number(row?.price || 0));
+    });
+
+    const breakdown = seatGroups.map((group) => {
+        const carPriceCode = getShtPriceCodeForBucket(params.baseCode, group.bucket);
+        const storedUnitPrice = priceMap.get(carPriceCode) || params.fallbackUnitPrice;
+        const passengerCount = group.bucket === 'ALL' ? 10 : group.seats.length;
+        const computedTotalPrice = group.bucket === 'ALL'
+            ? storedUnitPrice
+            : storedUnitPrice * group.seats.length;
+
+        return {
+            bucket: group.bucket,
+            seats: group.seats,
+            price_code: carPriceCode,
+            unit_price: storedUnitPrice,
+            quantity: passengerCount,
+            total_price: computedTotalPrice
+        };
+    });
+
+    const allSeats = seatGroups.flatMap((group) => group.seats);
+    const totalPassengerCount = breakdown.reduce((sum, item) => sum + item.quantity, 0);
+    const totalComputedPrice = breakdown.reduce((sum, item) => sum + item.total_price, 0);
+    const carTotalPrice = params.totalPriceOverride ?? totalComputedPrice;
+
+    const firstItem = breakdown[0];
+
+    return [{
+        reservation_id: params.reservationId,
+        vehicle_number: params.vehicleNumber || null,
+        seat_number: allSeats.join(','),
+        car_price_code: firstItem.price_code,
+        passenger_count: totalPassengerCount,
+        unit_price: (carTotalPrice > 0 && totalPassengerCount > 0) ? Math.round(carTotalPrice / totalPassengerCount) : firstItem.unit_price,
+        request_note: params.requestNote || null,
+        usage_date: params.usageDate,
+        sht_category: params.shtCategory,
+        pickup_location: params.pickupLocation,
+        dropoff_location: params.dropoffLocation,
+        car_total_price: carTotalPrice,
+        seat_pricing_breakdown: breakdown
+    }];
+};
+
 const LYRA_GRANZER_VEHICLE_DISCOUNT_CODE = 'LYRA-GRANZER-1N2D-VOUCHER-2026-30';
 const GRAND_PIONEERS_VEHICLE_DISCOUNT_CODE = 'GP-VERANDA-UP-VEHICLE-50-2026-05-30';
 const VEHICLE_DISCOUNT_RATE = 0.5;
@@ -596,9 +717,11 @@ function CruiseVehicleContent() {
     const handleShtSeatSelect = useCallback((seatInfo: { vehicle: string; seat: string; category: string }) => {
         setSelectedShtSeat(seatInfo);
         if (!seatInfo.seat) return;
-        const seats = seatInfo.seat.split(',').map(s => s.trim().toUpperCase());
-        const isAll = seats.includes('ALL');
-        const seatCount = isAll ? 10 : seats.length;
+        const seatGroups = splitShtSeatsByBucket(seatInfo.seat);
+        const isAll = seatGroups.some((group) => group.bucket === 'ALL');
+        const seatCount = isAll
+            ? 10
+            : seatGroups.reduce((sum, group) => sum + group.seats.length, 0);
 
         const fetchShtPrices = async () => {
             try {
@@ -613,16 +736,8 @@ function CruiseVehicleContent() {
                         .maybeSingle();
                     totalFetchedPrice = soloData?.price || 5400000;
                 } else {
-                    const seatTypes = new Set<string>();
-                    seats.forEach(seat => {
-                        if (seat.startsWith('A')) seatTypes.add('A');
-                        else if (seat.startsWith('B')) seatTypes.add('B');
-                        else if (seat.startsWith('C')) seatTypes.add('C');
-                    });
-                    for (const seatType of seatTypes) {
-                        const typePattern = seatType === 'A' ? '%스테이하롱 셔틀 리무진 A%'
-                            : seatType === 'B' ? '%스테이하롱 셔틀 리무진 B%'
-                                : '%스테이하롱 셔틀 리무진 C%';
+                    for (const group of seatGroups) {
+                        const typePattern = `%${getShtVehicleTypeByBucket(group.bucket)}%`;
                         const { data: typeData } = await supabase
                             .from('rentcar_price')
                             .select('price')
@@ -632,8 +747,7 @@ function CruiseVehicleContent() {
                             .limit(1)
                             .maybeSingle();
                         if (typeData?.price) {
-                            const sc = seats.filter(s => s.startsWith(seatType)).length;
-                            totalFetchedPrice += typeData.price * sc;
+                            totalFetchedPrice += typeData.price * group.seats.length;
                         }
                     }
                 }
@@ -1180,26 +1294,25 @@ function CruiseVehicleContent() {
                 const mergedShtNote = [discountNote, isCustomOtherDayRoundTripCategory(selectedCarCategory) ? otherDayRequestNote : null]
                     .filter(Boolean)
                     .join('\n');
-                const baseData = {
-                    reservation_id: vehicleReId,
-                    vehicle_number: selectedShtSeat?.vehicle || null,
-                    seat_number: selectedShtSeat?.seat || null,
-                    car_price_code: r.priceData?.rent_code || r.carCode || 'C013',
-                    passenger_count: inputCount,
-                    unit_price: unitPrice,
-                    request_note: mergedShtNote || null
-                };
+                const baseCode = r.priceData?.rent_code || r.carCode || 'C013';
 
                 if (selectedCarCategory === '편도') {
                     const isPickupDir = pyongdoDirection === 'pickup';
-                    await supabase.from('reservation_car_sht').insert({
-                        ...baseData,
-                        usage_date: pickupDateISO,
-                        sht_category: isPickupDir ? 'Pickup' : 'Drop-off',
-                        pickup_location: isPickupDir ? (pickupLocation || null) : pierLocation,
-                        dropoff_location: isPickupDir ? pierLocation : (dropoffLocation || null),
-                        car_total_price: totalPrice
+                    const oneWayRows = await buildShtReservationRows({
+                        reservationId: vehicleReId,
+                        seatValue: selectedShtSeat?.seat,
+                        vehicleNumber: selectedShtSeat?.vehicle,
+                        baseCode,
+                        fallbackUnitPrice: unitPrice,
+                        requestNote: mergedShtNote || null,
+                        usageDate: pickupDateISO,
+                        shtCategory: isPickupDir ? 'Pickup' : 'Drop-off',
+                        pickupLocation: isPickupDir ? (pickupLocation || null) : pierLocation,
+                        dropoffLocation: isPickupDir ? pierLocation : (dropoffLocation || null)
                     });
+                    if (oneWayRows.length > 0) {
+                        await supabase.from('reservation_car_sht').insert(oneWayRows);
+                    }
                 } else {
                     let dropoffDateISO: string | null = null;
                     if (pickupDate) {
@@ -1212,45 +1325,75 @@ function CruiseVehicleContent() {
                         }
                     }
                     if (selectedCarCategory === '다른날왕복' && effectiveOtherDayUsageOption === 'after_disembark') {
-                        await supabase.from('reservation_car_sht').insert({
-                            ...baseData,
-                            usage_date: checkin || null,
-                            sht_category: 'Pickup',
-                            pickup_location: otherDayRoundTripForm.embarkPickupHotel || null,
-                            dropoff_location: pierLocation,
-                            car_total_price: 0
+                        const pickupRows = await buildShtReservationRows({
+                            reservationId: vehicleReId,
+                            seatValue: selectedShtSeat?.seat,
+                            vehicleNumber: selectedShtSeat?.vehicle,
+                            baseCode,
+                            fallbackUnitPrice: unitPrice,
+                            requestNote: mergedShtNote || null,
+                            usageDate: checkin || null,
+                            shtCategory: 'Pickup',
+                            pickupLocation: otherDayRoundTripForm.embarkPickupHotel || null,
+                            dropoffLocation: pierLocation,
+                            totalPriceOverride: 0
                         });
-                        await supabase.from('reservation_car_sht').insert({
-                            ...baseData,
-                            usage_date: pickupDateISO,
-                            sht_category: 'Drop-off',
-                            pickup_location: otherDayRoundTripForm.ridePickupLocation || null,
-                            dropoff_location: otherDayRoundTripForm.rideDropoffLocation || null,
-                            car_total_price: totalPrice
+                        if (pickupRows.length > 0) {
+                            await supabase.from('reservation_car_sht').insert(pickupRows);
+                        }
+                        const dropoffRows = await buildShtReservationRows({
+                            reservationId: vehicleReId,
+                            seatValue: selectedShtSeat?.seat,
+                            vehicleNumber: selectedShtSeat?.vehicle,
+                            baseCode,
+                            fallbackUnitPrice: unitPrice,
+                            requestNote: mergedShtNote || null,
+                            usageDate: pickupDateISO,
+                            shtCategory: 'Drop-off',
+                            pickupLocation: otherDayRoundTripForm.ridePickupLocation || null,
+                            dropoffLocation: otherDayRoundTripForm.rideDropoffLocation || null
                         });
+                        if (dropoffRows.length > 0) {
+                            await supabase.from('reservation_car_sht').insert(dropoffRows);
+                        }
                     } else {
-                        await supabase.from('reservation_car_sht').insert({
-                            ...baseData,
-                            usage_date: pickupDateISO,
-                            sht_category: 'Pickup',
-                            pickup_location: isCustomOtherDayRoundTripCategory(selectedCarCategory)
+                        const pickupRows = await buildShtReservationRows({
+                            reservationId: vehicleReId,
+                            seatValue: selectedShtSeat?.seat,
+                            vehicleNumber: selectedShtSeat?.vehicle,
+                            baseCode,
+                            fallbackUnitPrice: unitPrice,
+                            requestNote: mergedShtNote || null,
+                            usageDate: pickupDateISO,
+                            shtCategory: 'Pickup',
+                            pickupLocation: isCustomOtherDayRoundTripCategory(selectedCarCategory)
                                 ? (otherDayRoundTripForm.ridePickupLocation || null)
                                 : (pickupLocation || null),
-                            dropoff_location: isCustomOtherDayRoundTripCategory(selectedCarCategory)
+                            dropoffLocation: isCustomOtherDayRoundTripCategory(selectedCarCategory)
                                 ? (otherDayRoundTripForm.rideDropoffLocation || pierLocation)
-                                : pierLocation,
-                            car_total_price: totalPrice
+                                : pierLocation
                         });
-                        await supabase.from('reservation_car_sht').insert({
-                            ...baseData,
-                            usage_date: dropoffDateISO,
-                            sht_category: 'Drop-off',
-                            pickup_location: pierLocation,
-                            dropoff_location: isCustomOtherDayRoundTripCategory(selectedCarCategory)
+                        if (pickupRows.length > 0) {
+                            await supabase.from('reservation_car_sht').insert(pickupRows);
+                        }
+                        const dropoffRows = await buildShtReservationRows({
+                            reservationId: vehicleReId,
+                            seatValue: selectedShtSeat?.seat,
+                            vehicleNumber: selectedShtSeat?.vehicle,
+                            baseCode,
+                            fallbackUnitPrice: unitPrice,
+                            requestNote: mergedShtNote || null,
+                            usageDate: dropoffDateISO,
+                            shtCategory: 'Drop-off',
+                            pickupLocation: pierLocation,
+                            dropoffLocation: isCustomOtherDayRoundTripCategory(selectedCarCategory)
                                 ? (otherDayRoundTripForm.postCruiseDropoffLocation || null)
                                 : (dropoffLocation || null),
-                            car_total_price: 0
+                            totalPriceOverride: 0
                         });
+                        if (dropoffRows.length > 0) {
+                            await supabase.from('reservation_car_sht').insert(dropoffRows);
+                        }
                     }
                 }
             } else {
@@ -1353,7 +1496,7 @@ function CruiseVehicleContent() {
             }
             const ok = await persistVehicle();
             if (!ok) return;
-            alert('차량 예약이 저장되었습니다!');
+            alert('예약 신청이 완료되었습니다.\n카카오 채널로 연락주세요.\n담당자의 안내에 따라 결제를 진행하셔야 예약이 완료됩니다.\n\n※ 신청서 제출 후 24시간 이내에 카카오톡 채널로 연락주지 않으시면, 신청서는 삭제됩니다.\n\n카카오채널 - http://pf.kakao.com/_zvsxaG/chat');
             router.push('/mypage/direct-booking?completed=cruise');
         } catch (error) {
             console.error('차량 예약 저장 오류:', error);

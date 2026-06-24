@@ -103,7 +103,7 @@ export default function AlertProvider({ children, siteName }: AlertProviderProps
                         aria-label="알림"
                     >
                         <div style={headerStyle}>{brandName}</div>
-                        <div style={bodyStyle}>{message}</div>
+                        <div style={bodyStyle}>{renderMessage(message)}</div>
                         <div style={footerStyle}>
                             <button type="button" style={buttonStyle} onClick={close}>
                                 확인
@@ -115,4 +115,26 @@ export default function AlertProvider({ children, siteName }: AlertProviderProps
             )}
         </>
     );
+}
+
+function renderMessage(text: string): React.ReactNode[] {
+    const urlRegex = /(https?:\/\/[^\s]+)/gi;
+    const parts = text.split(urlRegex);
+
+    return parts.map((part, index) => {
+        if (part.match(/^https?:\/\//i)) {
+            return (
+                <a
+                    key={index}
+                    href={part}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ color: "#0d6efd", textDecoration: "underline", wordBreak: "break-all" }}
+                >
+                    {part}
+                </a>
+            );
+        }
+        return part;
+    });
 }

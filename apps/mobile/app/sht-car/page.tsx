@@ -172,7 +172,7 @@ export default function ShtCarPage() {
             // reservation_car_sht 단일 조회
             let q = supabase
                 .from('reservation_car_sht')
-                .select('id, reservation_id, vehicle_number, seat_number, sht_category, pickup_datetime, pickup_location, dropoff_location, created_at')
+                .select('id, reservation_id, vehicle_number, seat_number, sht_category, pickup_datetime, pickup_location, dropoff_location, created_at, seat_pricing_breakdown')
                 .gte('pickup_datetime', startISO)
                 .lte('pickup_datetime', endISO)
                 .order('pickup_datetime', { ascending: true })

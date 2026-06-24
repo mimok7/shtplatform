@@ -1,0 +1,18 @@
+- [x] SHT 단가 계산/표시 관련 실제 사용 파일과 데이터 흐름 확인
+- [x] `rentcar_price` 기준 단가를 사용하도록 최소 범위 수정
+- [x] 예약 상세에서 SHT 단가/총액 표시가 저장값과 일치하는지 검증
+- [x] 관련 타입체크 또는 재현 가능한 확인 명령 실행
+- [x] 확인/출력 모달에서 `BC` 같은 복합 좌석군 가격 매핑 보정
+- [x] 패키지 예약 통합 상세 모달에서 수정 요금(total_amount) 미반영 오류 수정
+- [x] 매니저, 매니저1, 모바일앱 예약 상세의 패키지 총액 표시 방식 정합성 검증 및 동기화
+- [x] 예약확인서 인쇄/PDF 모달(ConfirmationGenerateModal) 스하 차량 요금 JSONB(seat_pricing_breakdown) 파싱 기반 단가 표시 보정
+- [x] 고객앱 예약확인서 인쇄/PDF 모달(ConfirmationGenerateModal) 스하 차량 요금 JSONB(seat_pricing_breakdown) 파싱 기반 단가 표시 보정
+- [x] 매니저 앱의 ManagerSidebar에 패키지 상품 관리 메뉴 추가
+- [x] 매니저 앱의 ManagerNav에 패키지 상품 메뉴 추가
+- [x] 고객앱 패키지 예약 페이지에서 크루즈 드랍 장소 및 복사 버튼 제거
+- [x] 고객앱 패키지 예약 페이지에서 하노이 투어 픽업 장소 및 복사 버튼 숨김 처리
+- [x] 고객앱 서버 액션 packageReservation.ts에서 하노이 투어 픽업 장소를 빈 값으로 강제 보정 처리
+- [x] 수정 사항에 대한 타입 체크 및 빌드 정상 여부 검증
+- [x] cruise/vehicle/page.tsx 예약 완료 alert 메시지 문구 보완
+- [x] AlertProvider.tsx에서 alert 메시지 내 URL 감지 및 하이퍼링크 렌더링 구현
+- [x] 수정 사항에 대한 타입 체크 및 정상 동작 검증

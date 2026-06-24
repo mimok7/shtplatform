@@ -1,4 +1,5 @@
 "use client";
+// 고객 예약 상세 뷰 페이지
 
 import React, { useEffect, useState, Suspense } from 'react';
 import { useRouter, useParams } from 'next/navigation';
@@ -7,6 +8,7 @@ import { getSessionUser } from '@/lib/authHelpers';
 import { formatKst } from '@/lib/kstDateTime';
 import PageWrapper from '@/components/PageWrapper';
 import SectionBox from '@/components/SectionBox';
+import { parseSeatPricingBreakdown } from '@sht/domain/sht';
 
 type ServiceType = 'cruise' | 'airport' | 'hotel' | 'rentcar' | 'tour' | 'ticket' | 'sht_car' | 'sht' | 'car' | 'package';
 
@@ -1324,6 +1326,33 @@ function ReservationViewInner() {
                         </div>
                       )}
                       {renderCustomerFriendlyInfo(it, reservation.re_type)}
+                      {/* SHT/스하차량: seat_pricing_breakdown JSONB 우선 표시 */}
+                      {['sht', 'sht_car'].includes(reservation.re_type) && (() => {
+                        const breakdown = parseSeatPricingBreakdown(it.seat_pricing_breakdown);
+                        if (!breakdown || breakdown.length === 0) return null;
+                        const total = breakdown.reduce((s, b) => s + b.total_price, 0);
+                        return (
+                          <div className="mt-3 pt-3 border-t border-gray-100">
+                            <div className="text-xs font-bold text-gray-500 mb-2">💰 좌석군별 요금 내역</div>
+                            <div className="space-y-1">
+                              {breakdown.map((b, bi) => (
+                                <div key={bi} className="flex items-center justify-between text-xs bg-gray-50 px-3 py-1.5 rounded border border-gray-200">
+                                  <span className="text-gray-700">
+                                    {b.bucket === 'ALL' ? '단독(ALL)' : `${b.bucket}석`} ({b.seats.join(', ')})
+                                  </span>
+                                  <span className="font-medium text-blue-700">
+                                    {b.unit_price.toLocaleString()}동 × {b.quantity} = {b.total_price.toLocaleString()}동
+                                  </span>
+                                </div>
+                              ))}
+                              <div className="flex items-center justify-between text-xs font-bold bg-blue-50 px-3 py-1.5 rounded border border-blue-200 mt-1">
+                                <span className="text-blue-700">합계</span>
+                                <span className="text-blue-800">{total.toLocaleString()}동</span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
                       {/* 승차 확인 버튼 - 숨김 처리 */}
                     </div>
                   ));

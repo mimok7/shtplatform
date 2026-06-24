@@ -4,6 +4,7 @@ import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import supabase from '@/lib/supabase';
 import { recordReservationChange } from '@/lib/reservationChangeTracker';
+import { saveAdditionalFeeTemplateFromInput } from '@/lib/additionalFeeTemplate';
 import ManagerLayout from '@/components/ManagerLayout';
 import {
     Save,
@@ -105,13 +106,121 @@ function PackageReservationEditContent() {
         manager_note: ''
     });
 
+    // 추가요금 및 할인 상태
+    const [additionalFee, setAdditionalFee] = useState(0);
+    const [manualAdditionalFee, setManualAdditionalFee] = useState(0);
+    const [manualAdditionalFeeInput, setManualAdditionalFeeInput] = useState('');
+    const [additionalFeeDetail, setAdditionalFeeDetail] = useState('');
+    const [additionalFeeItems, setAdditionalFeeItems] = useState<any[]>([]);
+    const [discountRate, setDiscountRate] = useState(0);
+    const [discountRateOrder, setDiscountRateOrder] = useState<number | null>(null);
+    const [additionalFeeOrder, setAdditionalFeeOrder] = useState<number | null>(null);
+    const [feeTemplates, setFeeTemplates] = useState<{ id: number; name: string; amount: number }[]>([]);
+    const [isAdditionalFeeInitialized, setIsAdditionalFeeInitialized] = useState(false);
+    const discountOrderRef = React.useRef(1);
+
+    const applyManualAdditionalFee = (nextValue: number) => {
+        setManualAdditionalFee(nextValue);
+        setManualAdditionalFeeInput(nextValue === 0 ? '' : String(nextValue));
+    };
+
+    const handleTotalAmountChange = (val: number) => {
+        setFormData(prev => ({ ...prev, total_amount: val }));
+        setPackageDetail(prev => prev ? { ...prev, total_price: val } : prev);
+    };
+
+    // 추가요금 템플릿 로딩
     useEffect(() => {
-        if (reservationId) {
-            loadPackageReservation();
-        } else {
-            router.push('/manager/reservation-edit?type=package');
+        supabase
+            .from('additional_fee_template')
+            .select('id, name, amount')
+            .or('service_type.is.null,service_type.eq.package')
+            .eq('is_active', true)
+            .order('sort_order')
+            .then(({ data }) => { if (data) setFeeTemplates(data); });
+    }, []);
+
+    // 추가요금 계산
+    const templateAdditionalFeeTotal = React.useMemo(() => {
+        return additionalFeeItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+    }, [additionalFeeItems]);
+
+    const totalAdditionalFee = React.useMemo(() => {
+        return templateAdditionalFeeTotal + (Number(manualAdditionalFee) || 0);
+    }, [manualAdditionalFee, templateAdditionalFeeTotal]);
+
+    const calculatedGrandTotalPrice = packageDetail?.total_price || 0;
+
+    // 순차 할인/추가요금 계산
+    const discountBreakdown = React.useMemo(() => {
+        let runningTotal = calculatedGrandTotalPrice;
+        const rows: Array<{ key: string; type: 'rate' | 'manual' | 'additional'; label: string; amount: number }> = [];
+        const steps: Array<{ type: 'rate' | 'additional'; order: number }> = [];
+
+        if (discountRate > 0 && discountRateOrder !== null) {
+            steps.push({ type: 'rate', order: discountRateOrder });
         }
-    }, [reservationId]);
+        if (totalAdditionalFee !== 0 && additionalFeeOrder !== null) {
+            steps.push({ type: 'additional', order: additionalFeeOrder });
+        }
+
+        steps.sort((a, b) => a.order - b.order);
+
+        steps.forEach((step) => {
+            if (step.type === 'rate') {
+                if (runningTotal <= 0) return;
+                const amount = Math.round(runningTotal * (discountRate / 100));
+                if (amount > 0) {
+                    rows.push({
+                        key: 'rate',
+                        type: 'rate',
+                        label: `할인요금 (${discountRate}%)`,
+                        amount,
+                    });
+                    runningTotal = Math.max(0, runningTotal - amount);
+                }
+            } else if (step.type === 'additional') {
+                if (totalAdditionalFee !== 0) {
+                    rows.push({
+                        key: 'additional',
+                        type: 'additional',
+                        label: totalAdditionalFee > 0 ? '추가요금' : '추가내역 차감',
+                        amount: totalAdditionalFee,
+                    });
+                    runningTotal = Math.max(0, runningTotal + totalAdditionalFee);
+                }
+            }
+        });
+
+        return {
+            rows,
+            total: rows.reduce((sum, row) => sum + (row.type === 'additional' ? Math.max(0, -row.amount) : row.amount), 0),
+            discountedSubtotal: runningTotal,
+        };
+    }, [calculatedGrandTotalPrice, discountRate, discountRateOrder, totalAdditionalFee, additionalFeeOrder]);
+
+    const discountAmount = React.useMemo(() => discountBreakdown.total, [discountBreakdown]);
+
+    const grandTotalPrice = React.useMemo(() => {
+        return Math.max(0, discountBreakdown.discountedSubtotal);
+    }, [discountBreakdown]);
+
+    useEffect(() => {
+        setAdditionalFee(totalAdditionalFee);
+        if (totalAdditionalFee !== 0) {
+            setAdditionalFeeOrder((prev) => prev ?? discountOrderRef.current++);
+        } else {
+            setAdditionalFeeOrder(null);
+        }
+    }, [totalAdditionalFee]);
+
+    // 최종 총 금액을 formData.total_amount에 실시간 반영
+    useEffect(() => {
+        setFormData(prev => {
+            if (prev.total_amount === grandTotalPrice) return prev;
+            return { ...prev, total_amount: grandTotalPrice };
+        });
+    }, [grandTotalPrice]);
 
     useEffect(() => {
         if (!packageDetail) return;
@@ -142,14 +251,12 @@ function PackageReservationEditContent() {
                 re_adult_count: Number(packageDetail.adult_count || 0),
                 re_child_count: childCount,
                 re_infant_count: infantCount,
-                total_amount: calculatedTotal,
             };
 
             if (
                 prev.re_adult_count === next.re_adult_count
                 && prev.re_child_count === next.re_child_count
                 && prev.re_infant_count === next.re_infant_count
-                && prev.total_amount === next.total_amount
             ) {
                 return prev;
             }
@@ -171,6 +278,14 @@ function PackageReservationEditContent() {
         packageDetail?.infant_extra_bed_price,
         packageDetail?.infant_seat_price,
     ]);
+
+    useEffect(() => {
+        if (reservationId) {
+            loadPackageReservation();
+        } else {
+            router.push('/manager/reservation-edit?type=package');
+        }
+    }, [reservationId]);
 
     const loadPackageReservation = async () => {
         try {
@@ -240,6 +355,64 @@ function PackageReservationEditContent() {
                 total_amount: resData.total_amount || 0,
                 manager_note: resData.manager_note || ''
             });
+
+            // price_breakdown 추가 요금 및 할인 정보 복원
+            const rawAdditionalFeeItems = Array.isArray(resData.price_breakdown?.additional_fee_items)
+                ? resData.price_breakdown.additional_fee_items
+                : [];
+            const savedAdditionalFeeItems = rawAdditionalFeeItems
+                .map((item: any, index: number) => ({
+                    key: String(item?.key || `saved-${index + 1}`),
+                    template_id: item?.template_id ? Number(item.template_id) : null,
+                    name: String(item?.name || '').trim(),
+                    amount: Number(item?.amount) || 0,
+                }))
+                .filter((item: any) => item.name && item.amount !== 0);
+            const savedTemplateAdditionalFeeTotal = savedAdditionalFeeItems.reduce((sum: number, item: any) => sum + item.amount, 0);
+
+            const savedAdditionalFeeTotal = Number(resData.price_breakdown?.additional_fee);
+            const fallbackManualAdditionalFee = Number.isFinite(savedAdditionalFeeTotal)
+                ? Math.max(0, savedAdditionalFeeTotal - savedTemplateAdditionalFeeTotal)
+                : 0;
+            const savedManualAdditionalFee = Number(
+                resData.price_breakdown?.additional_fee_manual
+                ?? fallbackManualAdditionalFee
+            );
+            const nextManualAdditionalFee = Number.isFinite(savedManualAdditionalFee)
+                ? savedManualAdditionalFee
+                : 0;
+
+            setAdditionalFeeItems(savedAdditionalFeeItems);
+            applyManualAdditionalFee(nextManualAdditionalFee);
+
+            const savedDiscountRate = Number(resData.price_breakdown?.discount_rate);
+            setDiscountRate(Number.isFinite(savedDiscountRate) ? savedDiscountRate : 0);
+
+            const savedDiscountSequence = Array.isArray(resData.price_breakdown?.discount_sequence)
+                ? resData.price_breakdown.discount_sequence
+                : [];
+            const rateIndex = savedDiscountSequence.findIndex((item: any) => item?.type === 'rate');
+            const nextRateOrder = rateIndex >= 0
+                ? rateIndex + 1
+                : (Number.isFinite(savedDiscountRate) && savedDiscountRate > 0 ? 1 : null);
+            setDiscountRateOrder(nextRateOrder);
+
+            const additionalFeeIndex = savedDiscountSequence.findIndex((item: any) => item?.type === 'additional');
+            const nextAdditionalFeeOrder = additionalFeeIndex >= 0
+                ? additionalFeeIndex + 1
+                : (nextRateOrder ? nextRateOrder + 1 : 1);
+            setAdditionalFeeOrder(nextAdditionalFeeOrder);
+
+            discountOrderRef.current = Math.max(nextRateOrder || 0, nextAdditionalFeeOrder || 0) + 1;
+
+            setAdditionalFeeDetail(
+                String(
+                    resData.price_breakdown?.additional_fee_detail
+                    || resData.price_breakdown?.additional_fee_note
+                    || ''
+                )
+            );
+            setIsAdditionalFeeInitialized(false);
 
             // 4. 하위 서비스 조회 (패키지에 포함된 모든 서비스)
             await loadPackageServices(reservationId!);
@@ -489,7 +662,46 @@ function PackageReservationEditContent() {
 
         setSaving(true);
         try {
-            // 1. 메인 예약 정보 업데이트
+            // 1. price_breakdown 정보 조립
+            const subtotal = packageDetail?.total_price || 0;
+            const discountSequence: Array<{ type: 'rate' | 'additional'; value: number; order: number }> = [];
+            const steps: Array<{ type: 'rate' | 'additional'; order: number }> = [];
+
+            if (discountRate > 0 && discountRateOrder !== null) {
+                steps.push({ type: 'rate', order: discountRateOrder });
+            }
+            if (totalAdditionalFee !== 0 && additionalFeeOrder !== null) {
+                steps.push({ type: 'additional', order: additionalFeeOrder });
+            }
+
+            steps.sort((a, b) => a.order - b.order);
+            steps.forEach((step, index) => {
+                discountSequence.push({
+                    type: step.type,
+                    value: step.type === 'rate' ? discountRate : totalAdditionalFee,
+                    order: index + 1
+                });
+            });
+
+            const priceBreakdown = {
+                pricing_version: 2,
+                service_type: 'package',
+                source: 'manager_reservation_edit',
+                subtotal,
+                calculated_total: subtotal,
+                discount_rate: discountRate,
+                discount_amount: discountAmount,
+                discount_manual_amount: 0,
+                discount_sequence: discountSequence,
+                adjustment_total: totalAdditionalFee,
+                additional_fee: totalAdditionalFee,
+                additional_fee_manual: manualAdditionalFee,
+                additional_fee_items: additionalFeeItems,
+                additional_fee_detail: additionalFeeDetail || null,
+                grand_total: grandTotalPrice
+            };
+
+            // 2. 메인 예약 정보 업데이트
             const paxCount = (formData.re_adult_count || 0) + (formData.re_child_count || 0) + (formData.re_infant_count || 0);
             const { error: mainError } = await supabase
                 .from('reservation')
@@ -499,15 +711,18 @@ function PackageReservationEditContent() {
                     re_child_count: formData.re_child_count,
                     re_infant_count: formData.re_infant_count,
                     pax_count: paxCount,
-                    total_amount: formData.total_amount,
+                    total_amount: grandTotalPrice, // 최종 요금
                     manager_note: formData.manager_note,
+                    price_breakdown: priceBreakdown,
+                    manual_additional_fee: totalAdditionalFee,
+                    manual_additional_fee_detail: additionalFeeDetail || null,
                     re_update_at: new Date().toISOString(),
                 })
                 .eq('re_id', reservationId);
 
             if (mainError) throw mainError;
 
-            // 1-1. reservation_package 상세 저장/업데이트
+            // 2-1. reservation_package 상세 저장/업데이트
             if (packageDetail) {
                 const payload = {
                     reservation_id: reservationId,
@@ -545,27 +760,96 @@ function PackageReservationEditContent() {
                 const { error: pkgDetailError } = await detailQuery;
 
                 if (pkgDetailError) {
-                    console.warn('reservation_package 저장 실패:', pkgDetailError);
+                    console.error('reservation_package 저장 실패:', pkgDetailError);
+                    throw new Error(`reservation_package 저장 실패: ${pkgDetailError.message}`);
                 }
             }
 
-            // 2. 각 서비스 업데이트
+            // 3. 각 서비스 업데이트
             for (const service of services) {
                 const tableName = service.type === 'sht' ? 'reservation_car_sht' : `reservation_${service.type}`;
-                const idField = service.type === 'airport' ? 'ra_id' : 'id';
-                const id = service.data[idField] || service.data.id || service.data.ra_id;
+                const idField = 'id';
+                const id = service.data.id || service.data.ra_id;
 
                 if (id) {
+                    let updatePayload: any = {};
+                    if (service.type === 'airport') {
+                        updatePayload = {
+                            ra_airport_location: service.data.ra_airport_location,
+                            ra_datetime: service.data.ra_datetime,
+                            ra_flight_number: service.data.ra_flight_number,
+                            way_type: service.data.way_type,
+                            request_note: service.data.request_note,
+                            accommodation_info: service.data.accommodation_info,
+                            total_price: Number(service.data.total_price || 0),
+                        };
+                    } else if (service.type === 'cruise') {
+                        updatePayload = {
+                            checkin: service.data.checkin,
+                            guest_count: Number(service.data.guest_count || 0),
+                            room_price_code: service.data.room_price_code,
+                            room_total_price: Number(service.data.room_total_price || 0),
+                            request_note: service.data.request_note,
+                        };
+                    } else if (service.type === 'tour') {
+                        updatePayload = {
+                            usage_date: service.data.usage_date,
+                            tour_price_code: service.data.tour_price_code,
+                            pickup_location: service.data.pickup_location,
+                            dropoff_location: service.data.dropoff_location,
+                            tour_capacity: Number(service.data.tour_capacity || 0),
+                            request_note: service.data.request_note,
+                            total_price: Number(service.data.total_price || 0),
+                        };
+                    } else if (service.type === 'hotel') {
+                        updatePayload = {
+                            checkin_date: service.data.checkin_date,
+                            nights: Number(service.data.nights || 1),
+                            hotel_price_code: service.data.hotel_price_code,
+                            guest_count: Number(service.data.guest_count || 0),
+                            request_note: service.data.request_note,
+                            total_price: Number(service.data.total_price || 0),
+                        };
+                    } else if (service.type === 'rentcar') {
+                        updatePayload = {
+                            pickup_datetime: service.data.pickup_datetime,
+                            pickup_location: service.data.pickup_location,
+                            destination: service.data.destination,
+                            rentcar_price_code: service.data.rentcar_price_code,
+                            request_note: service.data.request_note,
+                            total_price: Number(service.data.total_price || 0),
+                        };
+                    } else if (service.type === 'sht') {
+                        updatePayload = {
+                            sht_category: service.data.sht_category,
+                            pickup_datetime: service.data.pickup_datetime,
+                            vehicle_number: service.data.vehicle_number,
+                            seat_number: service.data.seat_number,
+                            pickup_location: service.data.pickup_location,
+                            dropoff_location: service.data.dropoff_location,
+                            request_note: service.data.request_note,
+                            car_total_price: Number(service.data.car_total_price || 0),
+                        };
+                    }
+
                     const { error: serviceError } = await supabase
                         .from(tableName)
-                        .update(service.data)
+                        .update(updatePayload)
                         .eq(idField, id);
 
                     if (serviceError) {
-                        console.warn(`${tableName} 업데이트 실패:`, serviceError);
+                        console.error(`${tableName} 업데이트 실패:`, serviceError);
+                        throw new Error(`${tableName} 업데이트 실패: ${serviceError.message}`);
                     }
                 }
             }
+
+            // 추가요금 템플릿 저장 (필요 시)
+            await saveAdditionalFeeTemplateFromInput({
+                serviceType: 'package',
+                detail: additionalFeeDetail,
+                amount: manualAdditionalFee,
+            });
 
             alert('패키지 예약이 저장되었습니다.');
             try {
@@ -601,7 +885,7 @@ function PackageReservationEditContent() {
                     rows: pkgRow ? { package: [pkgRow] } : {},
                     managerNote: '패키지 예약 매니저 직접 수정',
                     snapshotData: {
-                        total_amount: formData.total_amount,
+                        total_amount: grandTotalPrice,
                         manager_note: formData.manager_note,
                     },
                 });
@@ -726,6 +1010,38 @@ function PackageReservationEditContent() {
                                 <option value="exit">샌딩 (출국)</option>
                             </select>
                         </div>
+                        {data.way_type === 'exit' ? (
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">승차 위치 (샌딩)</label>
+                                <input
+                                    type="text"
+                                    value={data.accommodation_info || ''}
+                                    onChange={(e) => updateServiceData(index, 'accommodation_info', e.target.value)}
+                                    className="w-full px-3 py-2 border rounded-lg text-sm"
+                                    placeholder="예: OAKWOOD HA LONG"
+                                />
+                            </div>
+                        ) : (
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">하차 위치 (픽업)</label>
+                                <input
+                                    type="text"
+                                    value={data.accommodation_info || ''}
+                                    onChange={(e) => updateServiceData(index, 'accommodation_info', e.target.value)}
+                                    className="w-full px-3 py-2 border rounded-lg text-sm"
+                                    placeholder="예: OAKWOOD HA LONG"
+                                />
+                            </div>
+                        )}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">총 결제 금액 (동)</label>
+                            <input
+                                type="number"
+                                value={data.total_price || 0}
+                                onChange={(e) => updateServiceData(index, 'total_price', parseInt(e.target.value) || 0)}
+                                className="w-full px-3 py-2 border rounded-lg text-sm font-semibold text-blue-600"
+                            />
+                        </div>
                         <div className="md:col-span-2">
                             <label className="block text-sm font-medium text-gray-700 mb-1">요청사항</label>
                             <textarea
@@ -797,7 +1113,7 @@ function PackageReservationEditContent() {
                             <input
                                 type="date"
                                 value={data.usage_date || ''}
-                                onChange={(e) => updateServiceData(index, 'pickup_datetime', e.target.value)}
+                                onChange={(e) => updateServiceData(index, 'usage_date', e.target.value)}
                                 className="w-full px-3 py-2 border rounded-lg text-sm"
                             />
                         </div>
@@ -820,12 +1136,31 @@ function PackageReservationEditContent() {
                             />
                         </div>
                         <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">드롭 위치</label>
+                            <input
+                                type="text"
+                                value={data.dropoff_location || ''}
+                                onChange={(e) => updateServiceData(index, 'dropoff_location', e.target.value)}
+                                className="w-full px-3 py-2 border rounded-lg text-sm"
+                                placeholder="예: 하노이 호텔"
+                            />
+                        </div>
+                        <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">인원</label>
                             <input
                                 type="number"
                                 value={data.tour_capacity || 0}
                                 onChange={(e) => updateServiceData(index, 'tour_capacity', parseInt(e.target.value) || 0)}
                                 className="w-full px-3 py-2 border rounded-lg text-sm"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">총 결제 금액 (동)</label>
+                            <input
+                                type="number"
+                                value={data.total_price || 0}
+                                onChange={(e) => updateServiceData(index, 'total_price', parseInt(e.target.value) || 0)}
+                                className="w-full px-3 py-2 border rounded-lg text-sm font-semibold text-blue-600"
                             />
                         </div>
                         <div className="md:col-span-2">
@@ -879,6 +1214,15 @@ function PackageReservationEditContent() {
                                 className="w-full px-3 py-2 border rounded-lg text-sm"
                             />
                         </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">총 결제 금액 (동)</label>
+                            <input
+                                type="number"
+                                value={data.total_price || 0}
+                                onChange={(e) => updateServiceData(index, 'total_price', parseInt(e.target.value) || 0)}
+                                className="w-full px-3 py-2 border rounded-lg text-sm font-semibold text-blue-600"
+                            />
+                        </div>
                         <div className="md:col-span-2">
                             <label className="block text-sm font-medium text-gray-700 mb-1">요청사항</label>
                             <textarea
@@ -928,6 +1272,15 @@ function PackageReservationEditContent() {
                                 value={data.rentcar_price_code || ''}
                                 onChange={(e) => updateServiceData(index, 'rentcar_price_code', e.target.value)}
                                 className="w-full px-3 py-2 border rounded-lg text-sm"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">총 결제 금액 (동)</label>
+                            <input
+                                type="number"
+                                value={data.total_price || 0}
+                                onChange={(e) => updateServiceData(index, 'total_price', parseInt(e.target.value) || 0)}
+                                className="w-full px-3 py-2 border rounded-lg text-sm font-semibold text-blue-600"
                             />
                         </div>
                         <div className="md:col-span-2">
@@ -1001,6 +1354,15 @@ function PackageReservationEditContent() {
                                 className="w-full px-3 py-2 border rounded-lg text-sm"
                             />
                         </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">총 결제 금액 (동)</label>
+                            <input
+                                type="number"
+                                value={data.car_total_price || 0}
+                                onChange={(e) => updateServiceData(index, 'car_total_price', parseInt(e.target.value) || 0)}
+                                className="w-full px-3 py-2 border rounded-lg text-sm font-semibold text-blue-600"
+                            />
+                        </div>
                         <div className="md:col-span-2">
                             <label className="block text-sm font-medium text-gray-700 mb-1">요청사항</label>
                             <textarea
@@ -1044,7 +1406,7 @@ function PackageReservationEditContent() {
 
     return (
         <ManagerLayout title="📦 패키지 예약 수정" activeTab="reservation-edit">
-            <div className="max-w-4xl mx-auto space-y-6 pb-20">
+            <div className="w-full px-4 sm:px-6 lg:px-8 space-y-6 pb-20">
                 {/* 헤더 */}
                 <div className="flex items-center justify-between">
                     <button
@@ -1059,362 +1421,522 @@ function PackageReservationEditContent() {
                     </div>
                 </div>
 
-                {/* 패키지 정보 */}
-                <div className="bg-purple-50 rounded-lg p-6 border border-purple-200">
-                    <div className="flex items-center gap-3 mb-4">
-                        <Package className="w-8 h-8 text-purple-600" />
-                        <div>
-                            <h2 className="text-xl font-bold text-purple-800">
-                                {reservation.package_master?.name || '패키지'}
-                            </h2>
-                            <p className="text-sm text-purple-600">
-                                {reservation.package_master?.package_code}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* 좌측 폼 영역 (2/3) */}
+                    <div className="lg:col-span-2 space-y-6">
+                        {/* 패키지 정보 */}
+                        <div className="bg-purple-50 rounded-lg p-6 border border-purple-200">
+                            <div className="flex items-center gap-3 mb-4">
+                                <Package className="w-8 h-8 text-purple-600" />
+                                <div>
+                                    <h2 className="text-xl font-bold text-purple-800">
+                                        {reservation.package_master?.name || '패키지'}
+                                    </h2>
+                                    <p className="text-sm text-purple-600">
+                                        {reservation.package_master?.package_code}
+                                    </p>
+                                </div>
+                            </div>
+                            <p className="text-sm text-gray-600">
+                                {reservation.package_master?.description}
                             </p>
                         </div>
-                    </div>
-                    <p className="text-sm text-gray-600">
-                        {reservation.package_master?.description}
-                    </p>
-                </div>
 
-                {/* 고객 정보 */}
-                <div className="bg-white rounded-lg shadow-sm p-6">
-                    <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-                        <User className="w-5 h-5 text-blue-500" />
-                        고객 정보
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="flex items-center gap-2">
-                            <User className="w-4 h-4 text-gray-400" />
-                            <span className="text-gray-600">{reservation.users?.name || '정보 없음'}</span>
+                        {/* 고객 정보 */}
+                        <div className="bg-white rounded-lg shadow-sm p-6">
+                            <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                                <User className="w-5 h-5 text-blue-500" />
+                                고객 정보
+                            </h3>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="flex items-center gap-2">
+                                    <User className="w-4 h-4 text-gray-400" />
+                                    <span className="text-gray-600">{reservation.users?.name || '정보 없음'}</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <Mail className="w-4 h-4 text-gray-400" />
+                                    <span className="text-gray-600">{reservation.users?.email || '-'}</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <Phone className="w-4 h-4 text-gray-400" />
+                                    <span className="text-gray-600">{reservation.users?.phone_number || '-'}</span>
+                                </div>
+                            </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                            <Mail className="w-4 h-4 text-gray-400" />
-                            <span className="text-gray-600">{reservation.users?.email || '-'}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <Phone className="w-4 h-4 text-gray-400" />
-                            <span className="text-gray-600">{reservation.users?.phone_number || '-'}</span>
-                        </div>
-                    </div>
-                </div>
 
-                {/* 패키지 상세 (reservation_package) */}
-                {packageDetail && (
-                    <div className="bg-white rounded-lg shadow-sm p-6">
-                        <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-                            <Users className="w-5 h-5 text-purple-500" />
-                            패키지 인원/차량/가격 상세
-                        </h3>
+                        {/* 패키지 상세 (reservation_package) */}
+                        {packageDetail && (
+                            <div className="bg-white rounded-lg shadow-sm p-6">
+                                <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                                    <Users className="w-5 h-5 text-purple-500" />
+                                    패키지 인원/차량/가격 상세
+                                </h3>
 
-                        {/* 인원 구성 */}
-                        <div className="mb-4">
-                            <h4 className="text-sm font-semibold text-gray-700 mb-2">인원 구성</h4>
-                            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-                                {[
-                                    { label: '성인', key: 'adult_count' },
-                                    { label: '아동(EB)', key: 'child_extra_bed' },
-                                    { label: '아동(No EB)', key: 'child_no_extra_bed' },
-                                    { label: '유아(무료)', key: 'infant_free' },
-                                    { label: '유아(투어)', key: 'infant_tour' },
-                                    { label: '유아(EB)', key: 'infant_extra_bed' },
-                                    { label: '유아(좌석)', key: 'infant_seat' },
-                                ].map(({ label, key }) => (
-                                    <div key={key}>
-                                        <label className="block text-xs text-gray-500 mb-1">{label}</label>
+                                {/* 인원 구성 */}
+                                <div className="mb-4">
+                                    <h4 className="text-sm font-semibold text-gray-700 mb-2">인원 구성</h4>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+                                        {[
+                                            { label: '성인', key: 'adult_count' },
+                                            { label: '아동(EB)', key: 'child_extra_bed' },
+                                            { label: '아동(No EB)', key: 'child_no_extra_bed' },
+                                            { label: '유아(무료)', key: 'infant_free' },
+                                            { label: '유아(투어)', key: 'infant_tour' },
+                                            { label: '유아(EB)', key: 'infant_extra_bed' },
+                                            { label: '유아(좌석)', key: 'infant_seat' },
+                                        ].map(({ label, key }) => (
+                                            <div key={key}>
+                                                <label className="block text-xs text-gray-500 mb-1">{label}</label>
+                                                <input
+                                                    type="number"
+                                                    value={(packageDetail as any)[key] || 0}
+                                                    onChange={(e) => setPackageDetail(prev => prev ? { ...prev, [key]: parseInt(e.target.value) || 0 } : prev)}
+                                                    className="w-full px-2 py-1.5 border rounded text-sm text-center"
+                                                    min="0"
+                                                />
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* 차량 배정 */}
+                                <div className="mb-4">
+                                    <h4 className="text-sm font-semibold text-gray-700 mb-2">차량 배정</h4>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                                        {[
+                                            { label: '공항 차량', key: 'airport_vehicle' },
+                                            { label: '닌빈 차량', key: 'ninh_binh_vehicle' },
+                                            { label: '하노이 차량', key: 'hanoi_vehicle' },
+                                            { label: '크루즈 차량', key: 'cruise_vehicle' },
+                                        ].map(({ label, key }) => (
+                                            <div key={key}>
+                                                <label className="block text-xs text-gray-500 mb-1">{label}</label>
+                                                <input
+                                                    type="text"
+                                                    value={(packageDetail as any)[key] || ''}
+                                                    onChange={(e) => setPackageDetail(prev => prev ? { ...prev, [key]: e.target.value } : prev)}
+                                                    className="w-full px-2 py-1.5 border rounded text-sm"
+                                                />
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* SHT 좌석 */}
+                                <div className="mb-4">
+                                    <h4 className="text-sm font-semibold text-gray-700 mb-2">SHT 셔틀 좌석</h4>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                                        {[
+                                            { label: '픽업 차량번호', key: 'sht_pickup_vehicle' },
+                                            { label: '픽업 좌석', key: 'sht_pickup_seat' },
+                                            { label: '드랍 차량번호', key: 'sht_dropoff_vehicle' },
+                                            { label: '드랍 좌석', key: 'sht_dropoff_seat' },
+                                        ].map(({ label, key }) => (
+                                            <div key={key}>
+                                                <label className="block text-xs text-gray-500 mb-1">{label}</label>
+                                                <input
+                                                    type="text"
+                                                    value={(packageDetail as any)[key] || ''}
+                                                    onChange={(e) => setPackageDetail(prev => prev ? { ...prev, [key]: e.target.value } : prev)}
+                                                    className="w-full px-2 py-1.5 border rounded text-sm"
+                                                />
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* 가격 정보 */}
+                                <div className="mb-4">
+                                    <h4 className="text-sm font-semibold text-gray-700 mb-2">단가 설정 (동)</h4>
+                                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                                        {[
+                                            { label: '성인 단가', key: 'adult_price' },
+                                            { label: '아동(EB) 단가', key: 'child_extra_bed_price' },
+                                            { label: '아동(No EB) 단가', key: 'child_no_extra_bed_price' },
+                                            { label: '유아(투어) 단가', key: 'infant_tour_price' },
+                                            { label: '유아(EB) 단가', key: 'infant_extra_bed_price' },
+                                            { label: '유아(좌석) 단가', key: 'infant_seat_price' },
+                                        ].map(({ label, key }) => (
+                                            <div key={key}>
+                                                <label className="block text-xs text-gray-500 mb-1">{label}</label>
+                                                <input
+                                                    type="number"
+                                                    value={(packageDetail as any)[key] || 0}
+                                                    onChange={(e) => setPackageDetail(prev => prev ? { ...prev, [key]: parseInt(e.target.value) || 0 } : prev)}
+                                                    className="w-full px-2 py-1.5 border rounded text-sm text-right"
+                                                />
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="mb-4 bg-gray-50 border border-gray-200 rounded-lg p-4">
+                                    <h4 className="text-sm font-semibold text-gray-700 mb-2">금액 계산 상세</h4>
+                                    <div className="space-y-1 text-sm">
+                                        <div className="flex justify-between"><span>성인 ({packageDetail.adult_count || 0}명 x {(packageDetail.adult_price || 0).toLocaleString()}동)</span><span>{((packageDetail.adult_count || 0) * (packageDetail.adult_price || 0)).toLocaleString()}동</span></div>
+                                        <div className="flex justify-between"><span>아동(EB) ({packageDetail.child_extra_bed || 0}명 x {(packageDetail.child_extra_bed_price || 0).toLocaleString()}동)</span><span>{((packageDetail.child_extra_bed || 0) * (packageDetail.child_extra_bed_price || 0)).toLocaleString()}동</span></div>
+                                        <div className="flex justify-between"><span>아동(No EB) ({packageDetail.child_no_extra_bed || 0}명 x {(packageDetail.child_no_extra_bed_price || 0).toLocaleString()}동)</span><span>{((packageDetail.child_no_extra_bed || 0) * (packageDetail.child_no_extra_bed_price || 0)).toLocaleString()}동</span></div>
+                                        <div className="flex justify-between"><span>유아(투어) ({packageDetail.infant_tour || 0}명 x {(packageDetail.infant_tour_price || 0).toLocaleString()}동)</span><span>{((packageDetail.infant_tour || 0) * (packageDetail.infant_tour_price || 0)).toLocaleString()}동</span></div>
+                                        <div className="flex justify-between"><span>유아(EB) ({packageDetail.infant_extra_bed || 0}명 x {(packageDetail.infant_extra_bed_price || 0).toLocaleString()}동)</span><span>{((packageDetail.infant_extra_bed || 0) * (packageDetail.infant_extra_bed_price || 0)).toLocaleString()}동</span></div>
+                                        <div className="flex justify-between"><span>유아(좌석) ({packageDetail.infant_seat || 0}명 x {(packageDetail.infant_seat_price || 0).toLocaleString()}동)</span><span>{((packageDetail.infant_seat || 0) * (packageDetail.infant_seat_price || 0)).toLocaleString()}동</span></div>
+                                        <div className="border-t border-gray-300 pt-2 mt-2 flex justify-between font-bold text-indigo-700"><span>자동 계산 합계</span><span>{(packageDetail.total_price || 0).toLocaleString()}동</span></div>
+                                    </div>
+                                </div>
+
+                                {/* 패키지 합계 및 추가 요청 */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs text-gray-500 mb-1">패키지 총 금액 (동)</label>
                                         <input
                                             type="number"
-                                            value={(packageDetail as any)[key] || 0}
-                                            onChange={(e) => setPackageDetail(prev => prev ? { ...prev, [key]: parseInt(e.target.value) || 0 } : prev)}
-                                            className="w-full px-2 py-1.5 border rounded text-sm text-center"
-                                            min="0"
+                                            value={packageDetail.total_price || 0}
+                                            onChange={(e) => handleTotalAmountChange(parseInt(e.target.value) || 0)}
+                                            className="w-full px-3 py-2 border rounded-lg text-sm font-bold text-indigo-600"
                                         />
                                     </div>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* 차량 배정 */}
-                        <div className="mb-4">
-                            <h4 className="text-sm font-semibold text-gray-700 mb-2">차량 배정</h4>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-                                {[
-                                    { label: '공항 차량', key: 'airport_vehicle' },
-                                    { label: '닌빈 차량', key: 'ninh_binh_vehicle' },
-                                    { label: '하노이 차량', key: 'hanoi_vehicle' },
-                                    { label: '크루즈 차량', key: 'cruise_vehicle' },
-                                ].map(({ label, key }) => (
-                                    <div key={key}>
-                                        <label className="block text-xs text-gray-500 mb-1">{label}</label>
-                                        <input
-                                            type="text"
-                                            value={(packageDetail as any)[key] || ''}
-                                            onChange={(e) => setPackageDetail(prev => prev ? { ...prev, [key]: e.target.value } : prev)}
-                                            className="w-full px-2 py-1.5 border rounded text-sm"
+                                    <div>
+                                        <label className="block text-xs text-gray-500 mb-1">추가 요청사항</label>
+                                        <textarea
+                                            value={packageDetail.additional_requests || ''}
+                                            onChange={(e) => setPackageDetail(prev => prev ? { ...prev, additional_requests: e.target.value } : prev)}
+                                            className="w-full px-3 py-2 border rounded-lg text-sm"
+                                            rows={2}
                                         />
                                     </div>
-                                ))}
+                                </div>
                             </div>
+                        )}
+
+                        {/* 포함 서비스 (N개) */}
+                        <div className="bg-white rounded-lg shadow-sm p-6">
+                            <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                                <Package className="w-5 h-5 text-purple-500" />
+                                포함 서비스 ({services.length}개)
+                            </h3>
+
+                            {services.length === 0 ? (
+                                <div className="text-center py-8 text-gray-500">
+                                    <Package className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                                    <p>등록된 서비스가 없습니다.</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    {services.map((service, index) => (
+                                        <div key={index} className="border rounded-lg overflow-hidden">
+                                            {/* 서비스 헤더 */}
+                                            <div
+                                                className="flex items-center justify-between p-4 bg-gray-50 cursor-pointer hover:bg-gray-100"
+                                                onClick={() => toggleServiceExpand(index)}
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    {getServiceIcon(service.type)}
+                                                    <span className="font-medium">{getServiceDisplayLabel(service)}</span>
+                                                    {service.type === 'tour' && service.data.request_note && (
+                                                        <span className="text-sm text-gray-500">
+                                                            ({service.data.request_note.split('-').pop()?.trim() || ''})
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    {getServiceDisplayDate(service) ? (
+                                                        <span className="text-sm text-gray-500">
+                                                            {getServiceDisplayDate(service)}
+                                                        </span>
+                                                    ) : null}
+                                                    {service.isExpanded ? (
+                                                        <ChevronUp className="w-5 h-5 text-gray-400" />
+                                                    ) : (
+                                                        <ChevronDown className="w-5 h-5 text-gray-400" />
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* 서비스 폼 (펼침 시) */}
+                                            {service.isExpanded && (
+                                                <div className="p-4 border-t bg-white">
+                                                    {renderServiceForm(service, index)}
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
 
-                        {/* SHT 좌석 */}
-                        <div className="mb-4">
-                            <h4 className="text-sm font-semibold text-gray-700 mb-2">SHT 셔틀 좌석</h4>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-                                {[
-                                    { label: '픽업 차량번호', key: 'sht_pickup_vehicle' },
-                                    { label: '픽업 좌석', key: 'sht_pickup_seat' },
-                                    { label: '드랍 차량번호', key: 'sht_dropoff_vehicle' },
-                                    { label: '드랍 좌석', key: 'sht_dropoff_seat' },
-                                ].map(({ label, key }) => (
-                                    <div key={key}>
-                                        <label className="block text-xs text-gray-500 mb-1">{label}</label>
-                                        <input
-                                            type="text"
-                                            value={(packageDetail as any)[key] || ''}
-                                            onChange={(e) => setPackageDetail(prev => prev ? { ...prev, [key]: e.target.value } : prev)}
-                                            className="w-full px-2 py-1.5 border rounded text-sm"
-                                        />
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* 가격 정보 */}
-                        <div className="mb-4">
-                            <h4 className="text-sm font-semibold text-gray-700 mb-2">단가 설정 (동)</h4>
-                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-                                {[
-                                    { label: '성인 단가', key: 'adult_price' },
-                                    { label: '아동(EB) 단가', key: 'child_extra_bed_price' },
-                                    { label: '아동(No EB) 단가', key: 'child_no_extra_bed_price' },
-                                    { label: '유아(투어) 단가', key: 'infant_tour_price' },
-                                    { label: '유아(EB) 단가', key: 'infant_extra_bed_price' },
-                                    { label: '유아(좌석) 단가', key: 'infant_seat_price' },
-                                ].map(({ label, key }) => (
-                                    <div key={key}>
-                                        <label className="block text-xs text-gray-500 mb-1">{label}</label>
-                                        <input
-                                            type="number"
-                                            value={(packageDetail as any)[key] || 0}
-                                            onChange={(e) => setPackageDetail(prev => prev ? { ...prev, [key]: parseInt(e.target.value) || 0 } : prev)}
-                                            className="w-full px-2 py-1.5 border rounded text-sm text-right"
-                                        />
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-
-                        <div className="mb-4 bg-gray-50 border border-gray-200 rounded-lg p-4">
-                            <h4 className="text-sm font-semibold text-gray-700 mb-2">금액 계산 상세</h4>
-                            <div className="space-y-1 text-sm">
-                                <div className="flex justify-between"><span>성인 ({packageDetail.adult_count || 0}명 x {(packageDetail.adult_price || 0).toLocaleString()}동)</span><span>{((packageDetail.adult_count || 0) * (packageDetail.adult_price || 0)).toLocaleString()}동</span></div>
-                                <div className="flex justify-between"><span>아동(EB) ({packageDetail.child_extra_bed || 0}명 x {(packageDetail.child_extra_bed_price || 0).toLocaleString()}동)</span><span>{((packageDetail.child_extra_bed || 0) * (packageDetail.child_extra_bed_price || 0)).toLocaleString()}동</span></div>
-                                <div className="flex justify-between"><span>아동(No EB) ({packageDetail.child_no_extra_bed || 0}명 x {(packageDetail.child_no_extra_bed_price || 0).toLocaleString()}동)</span><span>{((packageDetail.child_no_extra_bed || 0) * (packageDetail.child_no_extra_bed_price || 0)).toLocaleString()}동</span></div>
-                                <div className="flex justify-between"><span>유아(투어) ({packageDetail.infant_tour || 0}명 x {(packageDetail.infant_tour_price || 0).toLocaleString()}동)</span><span>{((packageDetail.infant_tour || 0) * (packageDetail.infant_tour_price || 0)).toLocaleString()}동</span></div>
-                                <div className="flex justify-between"><span>유아(EB) ({packageDetail.infant_extra_bed || 0}명 x {(packageDetail.infant_extra_bed_price || 0).toLocaleString()}동)</span><span>{((packageDetail.infant_extra_bed || 0) * (packageDetail.infant_extra_bed_price || 0)).toLocaleString()}동</span></div>
-                                <div className="flex justify-between"><span>유아(좌석) ({packageDetail.infant_seat || 0}명 x {(packageDetail.infant_seat_price || 0).toLocaleString()}동)</span><span>{((packageDetail.infant_seat || 0) * (packageDetail.infant_seat_price || 0)).toLocaleString()}동</span></div>
-                                <div className="border-t border-gray-300 pt-2 mt-2 flex justify-between font-bold text-indigo-700"><span>자동 계산 합계</span><span>{(packageDetail.total_price || 0).toLocaleString()}동</span></div>
-                            </div>
-                        </div>
-
-                        {/* 패키지 합계 및 추가 요청 */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-xs text-gray-500 mb-1">패키지 총 금액 (동)</label>
-                                <input
-                                    type="number"
-                                    value={packageDetail.total_price || 0}
-                                    onChange={(e) => setPackageDetail(prev => prev ? { ...prev, total_price: parseInt(e.target.value) || 0 } : prev)}
-                                    className="w-full px-3 py-2 border rounded-lg text-sm font-bold text-indigo-600"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-xs text-gray-500 mb-1">추가 요청사항</label>
-                                <textarea
-                                    value={packageDetail.additional_requests || ''}
-                                    onChange={(e) => setPackageDetail(prev => prev ? { ...prev, additional_requests: e.target.value } : prev)}
-                                    className="w-full px-3 py-2 border rounded-lg text-sm"
-                                    rows={2}
-                                />
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* 예약 기본 정보 */}
-                <div className="bg-white rounded-lg shadow-sm p-6">
-                    <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-                        <Calendar className="w-5 h-5 text-green-500" />
-                        예약 정보
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">상태</label>
-                            <select
-                                value={formData.re_status}
-                                onChange={(e) => setFormData(prev => ({ ...prev, re_status: e.target.value }))}
-                                className="w-full px-3 py-2 border rounded-lg text-sm"
-                            >
-                                <option value="pending">대기중</option>
-                                <option value="approved">승인</option>
-                                <option value="confirmed">확정</option>
-                                <option value="processing">처리중</option>
-                                <option value="cancelled">취소</option>
-                                <option value="completed">완료</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">성인</label>
-                            <input
-                                type="number"
-                                value={formData.re_adult_count}
-                                onChange={(e) => {
-                                    const value = parseInt(e.target.value) || 0;
-                                    setFormData(prev => ({ ...prev, re_adult_count: value }));
-                                    setPackageDetail(prev => prev ? { ...prev, adult_count: value } : prev);
-                                }}
-                                className="w-full px-3 py-2 border rounded-lg text-sm"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">아동</label>
-                            <input
-                                type="number"
-                                value={formData.re_child_count}
-                                onChange={(e) => {
-                                    const value = parseInt(e.target.value) || 0;
-                                    setFormData(prev => ({ ...prev, re_child_count: value }));
-                                    setPackageDetail(prev => prev ? { ...prev, child_no_extra_bed: value, child_extra_bed: 0 } : prev);
-                                }}
-                                className="w-full px-3 py-2 border rounded-lg text-sm"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">유아</label>
-                            <input
-                                type="number"
-                                value={formData.re_infant_count}
-                                onChange={(e) => {
-                                    const value = parseInt(e.target.value) || 0;
-                                    setFormData(prev => ({ ...prev, re_infant_count: value }));
-                                    setPackageDetail(prev => prev ? {
-                                        ...prev,
-                                        infant_free: value,
-                                        infant_tour: 0,
-                                        infant_extra_bed: 0,
-                                        infant_seat: 0,
-                                    } : prev);
-                                }}
-                                className="w-full px-3 py-2 border rounded-lg text-sm"
-                            />
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">총 금액 (동)</label>
-                            <input
-                                type="number"
-                                value={formData.total_amount}
-                                onChange={(e) => setFormData(prev => ({ ...prev, total_amount: parseInt(e.target.value) || 0 }))}
-                                className="w-full px-3 py-2 border rounded-lg text-sm font-bold text-indigo-600"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">매니저 메모</label>
+                        {/* 매니저 전용 메모 (좌측 하단) */}
+                        <div className="bg-white rounded-lg shadow-sm p-6">
+                            <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                                <Edit3 className="w-5 h-5 text-gray-500" />
+                                매니저 메모
+                            </h3>
                             <textarea
                                 value={formData.manager_note}
                                 onChange={(e) => setFormData(prev => ({ ...prev, manager_note: e.target.value }))}
-                                className="w-full px-3 py-2 border rounded-lg text-sm resize-none"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none"
                                 rows={5}
                                 placeholder="매니저 전용 메모를 입력하세요..."
                             />
                         </div>
                     </div>
-                </div>
 
-                {/* 포함 서비스 (4개) */}
-                <div className="bg-white rounded-lg shadow-sm p-6">
-                    <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-                        <Package className="w-5 h-5 text-purple-500" />
-                        포함 서비스 ({services.length}개)
-                    </h3>
+                    {/* 우측 요약 및 추가요금 패널 영역 (1/3) */}
+                    <div className="lg:col-span-1 space-y-4">
+                        <div className="bg-white rounded-lg shadow-sm p-6">
+                            <h3 className="text-lg font-bold text-gray-900 mb-4">예약 정보</h3>
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700">상태</label>
+                                    <div className="mt-1">
+                                        <select
+                                            value={formData.re_status}
+                                            onChange={(e) => setFormData(prev => ({ ...prev, re_status: e.target.value }))}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white text-sm"
+                                        >
+                                            <option value="pending">대기중</option>
+                                            <option value="approved">승인</option>
+                                            <option value="confirmed">확정</option>
+                                            <option value="processing">처리중</option>
+                                            <option value="cancelled">취소</option>
+                                            <option value="completed">완료</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700">예약일</label>
+                                    <div className="text-gray-900 mt-1 flex items-center gap-2 text-sm">
+                                        <Calendar className="w-4 h-4 text-gray-400" />
+                                        {new Date(reservation.re_created_at).toLocaleDateString('ko-KR')}
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700">여행명</label>
+                                    <div className="text-gray-900 mt-1 text-sm font-medium">
+                                        {reservation.package_master?.name || '자동 생성 견적'}
+                                    </div>
+                                </div>
 
-                    {services.length === 0 ? (
-                        <div className="text-center py-8 text-gray-500">
-                            <Package className="w-12 h-12 mx-auto mb-2 text-gray-300" />
-                            <p>등록된 서비스가 없습니다.</p>
-                        </div>
-                    ) : (
-                        <div className="space-y-4">
-                            {services.map((service, index) => (
-                                <div key={index} className="border rounded-lg overflow-hidden">
-                                    {/* 서비스 헤더 */}
-                                    <div
-                                        className="flex items-center justify-between p-4 bg-gray-50 cursor-pointer hover:bg-gray-100"
-                                        onClick={() => toggleServiceExpand(index)}
-                                    >
-                                        <div className="flex items-center gap-3">
-                                            {getServiceIcon(service.type)}
-                                            <span className="font-medium">{getServiceDisplayLabel(service)}</span>
-                                            {service.type === 'tour' && service.data.request_note && (
-                                                <span className="text-sm text-gray-500">
-                                                    ({service.data.request_note.split('-').pop()?.trim() || ''})
-                                                </span>
-                                            )}
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            {getServiceDisplayDate(service) ? (
-                                                <span className="text-sm text-gray-500">
-                                                    {getServiceDisplayDate(service)}
-                                                </span>
-                                            ) : null}
-                                            {service.isExpanded ? (
-                                                <ChevronUp className="w-5 h-5 text-gray-400" />
-                                            ) : (
-                                                <ChevronDown className="w-5 h-5 text-gray-400" />
-                                            )}
+                                <div className="pt-4 mt-4 border-t border-gray-100 space-y-4">
+                                    <h4 className="text-sm font-bold text-gray-800">추가내역 / 추가요금</h4>
+                                    
+                                    <div>
+                                        <label className="block text-xs font-semibold text-gray-500 mb-2">할인요금</label>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {[3, 5, 7, 8].map((rate) => (
+                                                <button
+                                                    key={rate}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setDiscountRate(rate);
+                                                        setDiscountRateOrder((prev) => prev ?? discountOrderRef.current++);
+                                                    }}
+                                                    className={`px-2.5 py-1 text-xs rounded-lg border transition-colors ${discountRate === rate
+                                                        ? 'bg-purple-600 text-white border-purple-600 font-semibold'
+                                                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                                                        }`}
+                                                >
+                                                    {rate}%
+                                                </button>
+                                            ))}
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setDiscountRate(0);
+                                                    setDiscountRateOrder(null);
+                                                }}
+                                                className={`px-2.5 py-1 text-xs rounded-lg border transition-colors ${discountRate === 0
+                                                    ? 'bg-gray-700 text-white border-gray-700 font-semibold'
+                                                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                                                    }`}
+                                            >
+                                                할인 없음
+                                            </button>
                                         </div>
                                     </div>
 
-                                    {/* 서비스 폼 (펼침 시) */}
-                                    {service.isExpanded && (
-                                        <div className="p-4 border-t bg-white">
-                                            {renderServiceForm(service, index)}
+                                    <div>
+                                        <label className="block text-xs font-semibold text-gray-500 mb-1">추가내역 선택</label>
+                                        <select
+                                            title="추가내역 선택"
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white text-sm"
+                                            value=""
+                                            onChange={(e) => {
+                                                const tpl = feeTemplates.find(t => String(t.id) === e.target.value);
+                                                if (!tpl) return;
+                                                setAdditionalFeeItems((prev) => {
+                                                    if (prev.some((item) => item.template_id === tpl.id)) {
+                                                        return prev;
+                                                    }
+                                                    return [
+                                                        ...prev,
+                                                        {
+                                                            key: `tpl-${tpl.id}`,
+                                                            template_id: tpl.id,
+                                                            name: tpl.name,
+                                                            amount: Number(tpl.amount) || 0,
+                                                        },
+                                                    ];
+                                                });
+                                            }}
+                                        >
+                                            <option value="">-- 추가내역 선택 --</option>
+                                            {feeTemplates.map(t => (
+                                                <option key={t.id} value={t.id}>{t.name} ({t.amount.toLocaleString()}동)</option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-xs font-semibold text-gray-500 mb-1">직접입력 추가/차감 금액 (VND)</label>
+                                        <input
+                                            type="number"
+                                            value={manualAdditionalFeeInput}
+                                            onChange={(e) => {
+                                                const nextValue = e.target.value;
+                                                setManualAdditionalFeeInput(nextValue);
+
+                                                if (nextValue === '' || nextValue === '-') {
+                                                    setManualAdditionalFee(0);
+                                                    return;
+                                                }
+
+                                                const parsedValue = Number(nextValue);
+                                                if (Number.isFinite(parsedValue)) {
+                                                    setManualAdditionalFee(parsedValue);
+                                                }
+                                            }}
+                                            title="직접입력 추가/차감 금액"
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-sm"
+                                        />
+                                        <p className="text-[11px] text-gray-400 mt-1">할인은 음수(-)로 입력하면 추가내역 차감으로 저장됩니다.</p>
+                                    </div>
+
+                                    {additionalFeeItems.length > 0 && (
+                                        <div>
+                                            <label className="block text-xs font-semibold text-gray-500 mb-1">선택된 추가내역</label>
+                                            <div className="space-y-2">
+                                                {additionalFeeItems.map((item, index) => (
+                                                    <div key={`${item.key}-${index}`} className="flex items-center justify-between gap-2 rounded-lg border border-orange-200 bg-orange-50 px-3 py-1.5">
+                                                        <div className="min-w-0">
+                                                            <div className="text-xs font-medium text-gray-900 truncate">{item.name}</div>
+                                                            <div className={`text-[11px] font-semibold ${item.amount >= 0 ? 'text-orange-700' : 'text-purple-700'}`}>
+                                                                {item.amount >= 0 ? '+' : ''}{item.amount.toLocaleString()}동
+                                                            </div>
+                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setAdditionalFeeItems((prev) => prev.filter((fee) => fee.key !== item.key));
+                                                            }}
+                                                            className="flex-shrink-0 px-2 py-0.5 text-[11px] rounded border border-red-200 text-red-600 bg-white hover:bg-red-50"
+                                                        >
+                                                            삭제
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
                                         </div>
                                     )}
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
 
-                {/* 저장 버튼 */}
-                <div className="flex justify-end gap-3">
-                    <button
-                        onClick={() => router.push('/manager/reservation-edit?type=package')}
-                        className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-                    >
-                        취소
-                    </button>
-                    <button
-                        onClick={handleSave}
-                        disabled={saving}
-                        className="px-8 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-2 disabled:bg-purple-300"
-                    >
-                        {saving ? (
-                            <>
-                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                                저장 중...
-                            </>
-                        ) : (
-                            <>
-                                <Save className="w-4 h-4" />
-                                저장하기
-                            </>
-                        )}
-                    </button>
+                                    <div>
+                                        <label className="block text-xs font-semibold text-gray-500 mb-1">추가요금 내역</label>
+                                        <textarea
+                                            value={additionalFeeDetail}
+                                            onChange={(e) => setAdditionalFeeDetail(e.target.value)}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-sm"
+                                            rows={2}
+                                            placeholder="추가요금 사유 또는 내역을 입력하세요"
+                                        />
+                                    </div>
+
+                                    <div className="flex justify-end">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setDiscountRate(0);
+                                                setDiscountRateOrder(null);
+                                                applyManualAdditionalFee(0);
+                                                setAdditionalFeeItems([]);
+                                                setAdditionalFeeOrder(null);
+                                                setAdditionalFeeDetail('');
+                                                discountOrderRef.current = 1;
+                                            }}
+                                            className="px-3 py-1.5 text-xs rounded-lg border border-gray-300 text-gray-700 bg-white hover:bg-gray-50"
+                                        >
+                                            초기화
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="pt-4 mt-4 border-t border-gray-100 space-y-2">
+                                    <div className="space-y-1 pb-2">
+                                        <div className="flex justify-between text-sm text-gray-600">
+                                            <span>객실 금액</span>
+                                            <span className="font-semibold">{calculatedGrandTotalPrice.toLocaleString()}동</span>
+                                        </div>
+                                        {templateAdditionalFeeTotal !== 0 && (
+                                            <div className="flex justify-between text-sm text-gray-600">
+                                                <span>{templateAdditionalFeeTotal > 0 ? '추가요금(선택)' : '추가내역 차감(선택)'}</span>
+                                                <span className="font-semibold">{templateAdditionalFeeTotal > 0 ? '+' : ''}{templateAdditionalFeeTotal.toLocaleString()}동</span>
+                                            </div>
+                                        )}
+                                        {manualAdditionalFee !== 0 && (
+                                            <div className="flex justify-between text-sm text-gray-600">
+                                                <span>{manualAdditionalFee > 0 ? '추가요금(직접)' : '추가내역 차감(직접)'}</span>
+                                                <span className="font-semibold">{manualAdditionalFee > 0 ? '+' : ''}{manualAdditionalFee.toLocaleString()}동</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                    
+                                    {discountBreakdown.rows.length > 0 && <div className="border-t border-gray-200 my-2" />}
+                                    
+                                    {discountBreakdown.rows.map((row) => (
+                                        <div key={row.key} className={`flex justify-between text-sm ${
+                                            row.type === 'additional' && row.amount > 0 ? 'text-orange-600' : 'text-purple-600'
+                                        }`}>
+                                            <span>{row.label}</span>
+                                            <span className="font-semibold">
+                                                {row.type === 'additional'
+                                                    ? `${row.amount > 0 ? '+' : ''}${row.amount.toLocaleString()}동`
+                                                    : `-${row.amount.toLocaleString()}동`}
+                                            </span>
+                                        </div>
+                                    ))}
+
+                                    {additionalFeeDetail.trim() && (
+                                        <div className="text-xs text-gray-400 whitespace-pre-wrap mt-1">{additionalFeeDetail}</div>
+                                    )}
+
+                                    <div className="pt-2.5 border-t border-gray-200">
+                                        <label className="block text-sm font-semibold text-gray-700">최종 총 금액</label>
+                                        <div className="text-xl font-bold text-purple-600">
+                                            {grandTotalPrice.toLocaleString()}동
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 저장 버튼 */}
+                        <div className="bg-white rounded-lg shadow-sm p-6">
+                            <button
+                                onClick={handleSave}
+                                disabled={saving}
+                                className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed font-semibold text-sm shadow-sm transition-colors"
+                            >
+                                {saving ? (
+                                    <>
+                                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                        저장 중...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Save className="w-4 h-4" />
+                                        수정사항 저장
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </ManagerLayout>

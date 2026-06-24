@@ -42,7 +42,7 @@ export default function PackageDetailModalContainer({
         // 2. 패키지 예약 목록
         const { data: resData } = await supabase
           .from('reservation')
-          .select('re_id, re_type, re_status, re_created_at, package_id, total_amount, re_adult_count, re_child_count, re_infant_count')
+          .select('re_id, re_type, re_status, re_created_at, package_id, total_amount, re_adult_count, re_child_count, re_infant_count, manual_additional_fee, manual_additional_fee_detail, price_breakdown')
           .eq('re_user_id', userId)
           .eq('re_type', 'package');
         if (cancelled) return;
@@ -151,11 +151,13 @@ export default function PackageDetailModalContainer({
             re_child_count: pkg.re_child_count,
             re_infant_count: pkg.re_infant_count,
             package_master: pkgMaster || null,
+            manual_additional_fee: pkg.manual_additional_fee || 0,
+            manual_additional_fee_detail: pkg.manual_additional_fee_detail || null,
+            price_breakdown_additional_items: pkg.price_breakdown?.additional_fee_items || [],
             ...(pkgDetail || {}),
           });
         });
 
-        // 크루즈
         cruiseData.forEach((item: any) => {
           const priceInfo = roomPriceMap.get(item.room_price_code);
           const pkgRoot = packageRootMap.get(item.reservation_id);
@@ -170,6 +172,7 @@ export default function PackageDetailModalContainer({
             infant: pkgRoot?.infant || 0,
             totalPrice: item.room_total_price,
             note: item.request_note,
+            birthday_event: item.birthday_event === true || item.birthday_event === 'true',
           });
         });
 

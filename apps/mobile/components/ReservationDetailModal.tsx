@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
   Building,
@@ -62,6 +62,95 @@ const CHANGE_CHILDREN_BY_RETYPE: Record<string, string[]> = {
 };
 
 const formatMoney = (value: number): string => `${Number(value || 0).toLocaleString('ko-KR')}동`;
+
+const humanizeText = (value: any, fallback = '-'): string => {
+  const raw = String(value || '').trim();
+  if (!raw) return fallback;
+  if (/^updating$/i.test(raw)) return '미정';
+  return raw;
+};
+
+const humanizeWayType = (value: any): string => {
+  const raw = String(value || '').trim().toLowerCase();
+  if (!raw) return '-';
+  if (raw.includes('pickup') || raw.includes('entry') || raw.includes('픽업')) return '픽업';
+  if (raw.includes('sending') || raw.includes('sanding') || raw.includes('exit') || raw.includes('샌딩')) return '샌딩';
+  if (raw.includes('dropoff') || raw.includes('drop') || raw.includes('드롭')) return '드롭';
+  return humanizeText(value);
+};
+
+const getServiceDateValue = (service: any): string => {
+  return String(
+    service.checkin ||
+    service.checkinDate ||
+    service.checkin_date ||
+    service.tourDate ||
+    service.usage_date ||
+    service.usageDate ||
+    service.ra_datetime ||
+    service.pickup_datetime ||
+    service.pickupDatetime ||
+    service.return_datetime ||
+    service.returnDatetime ||
+    service.re_created_at ||
+    ''
+  ).trim();
+};
+
+const getDateKey = (value: string): string => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  const m = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (m) return m[1];
+
+  const d = new Date(raw.replace(' ', 'T'));
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toISOString().slice(0, 10);
+};
+
+const getTourDisplayName = (service: any): string => {
+  const forcedName = service?.forcedTourName || service?.displayTourName;
+  if (forcedName) return humanizeText(forcedName, '투어 프로그램');
+
+  const tourDateKey = getDateKey(getServiceDateValue(service));
+  if (tourDateKey.endsWith('08-03') || tourDateKey === '2026-08-03') {
+    return '닌빈 투어';
+  }
+  if (tourDateKey.endsWith('08-05') || tourDateKey === '2026-08-05') {
+    return '하노이 오후 투어';
+  }
+
+  const directName = service.tourName || service.tour_name || service.tour?.tour_name;
+  if (directName) return humanizeText(directName, '투어 프로그램');
+  return '투어 프로그램';
+};
+
+const getAirportDisplayLocations = (service: any): { pickup: string; sending: string } => {
+  const wayType = humanizeWayType(service.category || service.way_type);
+  const airport = humanizeText(service.airportName || service.ra_airport_location || service.airport_location, '미정');
+  const stay = humanizeText(service.accommodation_info || service.ra_accommodation_info, '');
+  const pickupRaw = humanizeText(service.pickupLocation || service.pickup_location || stay, '');
+  const dropRaw = humanizeText(service.dropoffLocation || service.destination || service.dropoff_location || stay, '');
+
+  if (wayType === '픽업') {
+    return {
+      pickup: pickupRaw !== '-' && pickupRaw ? pickupRaw : airport,
+      sending: dropRaw !== '-' && dropRaw ? dropRaw : '미정',
+    };
+  }
+
+  if (wayType === '샌딩') {
+    return {
+      pickup: pickupRaw !== '-' && pickupRaw ? pickupRaw : '미정',
+      sending: dropRaw !== '-' && dropRaw ? dropRaw : airport,
+    };
+  }
+
+  return {
+    pickup: pickupRaw !== '-' && pickupRaw ? pickupRaw : '미정',
+    sending: dropRaw !== '-' && dropRaw ? dropRaw : '미정',
+  };
+};
 const formatSignedAmount = (amount: number): string => `${amount > 0 ? '+' : ''}${Number(amount || 0).toLocaleString()}동`;
 
 const formatCruiseScheduleLabel = (value: any): string => {
@@ -179,6 +268,17 @@ const getCruiseDisplayTotal = (service: any): number => {
 };
 
 const getAmountSummaryLines = (service: any, type: string): string[] => {
+  if (type === 'sht') {
+    const lines = (Array.isArray(service?.shtPriceLines) && service.shtPriceLines.length > 0
+      ? service.shtPriceLines
+      : buildShtPriceLines([service]))
+      .map((line: any) => `${line.label} ${formatMoney(Number(line.unitPrice || 0))} × ${Number(line.quantity || 0)}석 = ${formatMoney(Number(line.total || 0))}`);
+
+    const total = Number(service?.shtDisplayTotal ?? service?.totalPrice ?? service?.car_total_price ?? 0);
+    lines.push(`총 합계 ${formatMoney(total)}`);
+    return lines;
+  }
+
   if (type === 'cruise') {
     const roomPb = getCruiseRoomPriceBreakdown(service);
     const unitFromPb = (key: string) => pickNumber(
@@ -563,6 +663,115 @@ const getTicketDisplayTotal = (service: any): number => {
   if (quantity > 0 && unitPrice > 0) return quantity * unitPrice;
 
   return 0;
+};
+
+const getShtPriceLineLabel = (service: any): string => {
+  const priceCode = String(service?.car_price_code || service?.rentcar_price_code || '').trim().toUpperCase();
+  if (priceCode.includes('_SOLO_')) return '단독';
+  if (priceCode.includes('_A_')) return 'A 좌석';
+  if (priceCode.includes('_B_')) return 'BC 좌석';
+
+  const seats = String(service?.seatNumber || service?.seat_number || '')
+    .split(/[,;\s]+/)
+    .map((seat) => seat.trim().toUpperCase())
+    .filter(Boolean);
+
+  if (seats.length > 0 && seats.every((seat) => seat.startsWith('A'))) return 'A 좌석';
+  if (seats.length > 0 && seats.every((seat) => seat.startsWith('B') || seat.startsWith('C'))) return 'BC 좌석';
+  return '좌석';
+};
+
+const buildShtPriceLines = (services: any[]) => {
+  return services
+    .map((service) => {
+      const unitPrice = Number(service?.unitPrice ?? service?.unit_price ?? 0);
+      const total = Number(service?.totalPrice ?? service?.car_total_price ?? 0);
+      const seats = String(service?.seatNumber || service?.seat_number || '')
+        .split(/[,;\s]+/)
+        .map((seat) => seat.trim())
+        .filter(Boolean);
+      const quantity = seats.includes('ALL')
+        ? 1
+        : Math.max(seats.length, Number(service?.passenger_count || 0), total > 0 && unitPrice > 0 ? Math.round(total / unitPrice) : 0);
+
+      return {
+        label: getShtPriceLineLabel(service),
+        quantity,
+        unitPrice,
+        total,
+      };
+    })
+    .filter((line) => line.quantity > 0 || line.total >= 0);
+};
+
+const aggregateDisplayServices = (services: any[]) => {
+  const aggregated: any[] = [];
+  const shtGroupMap = new Map<string, any>();
+
+  services.forEach((service) => {
+    if (String(service?.serviceType || '').toLowerCase() !== 'sht') {
+      aggregated.push(service);
+      return;
+    }
+
+    const category = String(service?.category || service?.sht_category || '').trim().toLowerCase();
+    const usageDate = String(service?.usageDate || service?.usage_date || '').trim();
+    const vehicleNumber = String(service?.vehicleNumber || service?.vehicle_number || '').trim();
+    const pickupLocation = String(service?.pickupLocation || service?.pickup_location || '').trim();
+    const dropoffLocation = String(service?.dropoffLocation || service?.dropoff_location || '').trim();
+    const reservationId = String(service?.reservation_id || service?.reservationId || '').trim();
+    const status = String(service?.status || service?.re_status || service?.reservation_status || '').trim().toLowerCase();
+    const pricingSource = getServicePricingSource(service);
+    const groupingKey = [
+      reservationId,
+      usageDate,
+      category,
+      vehicleNumber,
+      pickupLocation,
+      dropoffLocation,
+      status,
+      pricingSource,
+    ].join('::');
+
+    const existing = shtGroupMap.get(groupingKey);
+    if (!existing) {
+      const sourceRows = [service];
+      const seatNumbers = String(service?.seatNumber || service?.seat_number || '')
+        .split(/[,;\s]+/)
+        .map((seat) => seat.trim())
+        .filter(Boolean);
+
+      const aggregatedService = {
+        ...service,
+        seatNumber: seatNumbers.join(','),
+        totalPrice: undefined,
+        car_total_price: undefined,
+        unitPrice: undefined,
+        unit_price: undefined,
+        shtDisplayTotal: Number(service?.totalPrice ?? service?.car_total_price ?? 0),
+        shtPriceLines: buildShtPriceLines(sourceRows),
+        _sourceRows: sourceRows,
+      };
+      shtGroupMap.set(groupingKey, aggregatedService);
+      aggregated.push(aggregatedService);
+      return;
+    }
+
+    existing._sourceRows.push(service);
+    const mergedSeats = [
+      ...String(existing.seatNumber || '').split(/[,;\s]+/).map((seat) => seat.trim()).filter(Boolean),
+      ...String(service?.seatNumber || service?.seat_number || '').split(/[,;\s]+/).map((seat) => seat.trim()).filter(Boolean),
+    ];
+    existing.seatNumber = Array.from(new Set(mergedSeats)).join(',');
+    existing.totalPrice = undefined;
+    existing.car_total_price = undefined;
+    existing.unitPrice = undefined;
+    existing.unit_price = undefined;
+    existing.shtDisplayTotal = existing._sourceRows.reduce((sum: number, row: any) => sum + Number(row?.totalPrice ?? row?.car_total_price ?? 0), 0);
+    existing.shtPriceLines = buildShtPriceLines(existing._sourceRows);
+  });
+
+  return aggregated;
 };
 
 const getTicketDisplayLines = (service: any): Array<{ label: string; quantity: number; unitPrice: number; total: number; quantityUnit: string }> => {
@@ -950,8 +1159,10 @@ function ServiceCard({
         <div className="space-y-0.5">
           {(() => {
             const airportName = service.ra_airport_location || service.airportName || '-';
-            const cityName = service.placeName || service.location_name || service.accommodation_info || service.pickupLocation || service.dropoffLocation || '-';
-            const directionBadge = getAirportDirectionBadge(service);
+            const wayType = humanizeWayType(service.category || service.way_type);
+            const locs = getAirportDisplayLocations(service);
+            const locationLabel = wayType === '샌딩' ? '승차 위치' : '하차 위치';
+            const locationValue = wayType === '샌딩' ? locs.pickup : locs.sending;
             return (
               <>
                 <DetailLine label="일시" value={service.ra_datetime ? formatCompactDatetime(service.ra_datetime) : `${service.date || '-'} ${service.time || ''}`.trim()} />
@@ -959,9 +1170,8 @@ function ServiceCard({
                 <DetailLine label="항공편" value={service.flightNumber || service.ra_flight_number || '-'} />
                 <DetailLine label="경로" value={service.route || '-'} />
                 <DetailLine label="차량" value={service.carType || service.vehicleType || service.vehicle_type || '-'} />
-                <DetailLine label="인원" value={formatNonZeroCount(service.passengerCount ?? service.ra_passenger_count, '명')} />
                 <DetailLine label="차량수" value={formatNonZeroCount(service.carCount ?? service.ra_car_count, '대')} />
-                <DetailLine label={directionBadge === '샌딩' ? '샌딩위치' : '픽업위치'} value={cityName} />
+                <DetailLine label={locationLabel} value={locationValue} />
                 <DetailLine label="총 금액" value={<span className="font-bold text-blue-700">{formatMoney(Number(service.totalPrice || service.total_price || 0))}</span>} />
               </>
             );
@@ -1058,7 +1268,7 @@ function ServiceCard({
           <DetailLine label="패키지" value={service.package_name || service.package_code || '-'} />
           <DetailLine label="인원" value={`성인 ${Number(service.re_adult_count || 0)} / 아동 ${Number(service.re_child_count || 0)}`} />
           <DetailLine label="등록일" value={service.re_created_at ? formatDateOnlyKst(service.re_created_at) : '-'} />
-          <DetailLine label="패키지 총액" value={<span className="font-bold text-indigo-700">{formatMoney(getReservationStoredAmount(service))}</span>} />
+          <DetailLine label="패키지 총액" value={<span className="font-bold text-indigo-700">{formatMoney(getReservationTotalAmount(service) || getReservationStoredAmount(service))}</span>} />
         </div>
       )}
 
@@ -1591,7 +1801,7 @@ export default function ReservationDetailModal({
     : `견적ID ${item?.quoteId || item?.re_quote_id || item?.quote_id || '-'}`;
 
   const sortedGroups = (() => {
-    const list = visibleServices;
+    const list = aggregateDisplayServices(visibleServices);
     if (sortMode === 'date') {
       const groups: Record<string, any[]> = {};
       list.forEach((service) => {

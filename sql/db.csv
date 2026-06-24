@@ -1891,6 +1891,7 @@ tour_stats,tour_id,uuid,NULL 가능,null,1
 tour_stats,tour_name,text,NULL 가능,null,2
 tour_stats,total_reviews,bigint,NULL 가능,null,3
 tour_stats,avg_rating,numeric,NULL 가능,null,4
+
 tour_stats,total_bookings,bigint,NULL 가능,null,5
 tour_stats,total_revenue,numeric,NULL 가능,null,6
 users,id,uuid,NOT NULL,gen_random_uuid(),1
