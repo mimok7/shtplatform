@@ -638,11 +638,12 @@ function CruiseVehicleContent() {
             const { data, error } = await query.order('vehicle_type');
             if (error) throw error;
             const rawTypes = [...new Set((data || []).map((d: any) => d.vehicle_type).filter(Boolean))] as string[];
-            // SHT 변형(A/B/C/단독)은 표시 옵션에서 제외하고, 한 종류 이상 있으면 일반 '스테이하롱 셔틀 리무진' 1개로 통합 표시
+            // SHT 변형(A/B/C/단독)은 표시 옵션에서 제외 (스테이하롱 셔틀 리무진 숨김 처리 - 2026.06.30)
             // 단, 당일 크루즈는 스테이하롱 셔틀 리무진 운영 안 함 → 제외
             const hasSht = rawTypes.some(t => isShtVehicleType(t));
             let uniqueCarTypes = rawTypes.filter(t => !isShtVehicleType(t));
-            if (hasSht && !isDayTripCruiseSchedule(schedule)) uniqueCarTypes.push('스테이하롱 셔틀 리무진');
+            // 스테이하롱 셔틀 리무진 숨김 처리: 아래 조건문 비활성화 (차량 드롭다운에서 제외)
+            // if (hasSht && !isDayTripCruiseSchedule(schedule)) uniqueCarTypes.push('스테이하롱 셔틀 리무진');
             // 패키지 셔틀 리무진은 패키지 가능한 객실(FULL 프로모션 / 파라다이스 레거시 B,C)에서만 노출
             const packageEligible = isFullPromoOrLegacyC || isParadiseLegacyB;
             if (!packageEligible) {
