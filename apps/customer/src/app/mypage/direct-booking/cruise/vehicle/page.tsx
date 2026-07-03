@@ -1133,10 +1133,6 @@ function CruiseVehicleContent() {
                 alert(pyongdoDirection === 'dropoff' ? '드롭 일자를 입력해주세요.' : '픽업 일자를 입력해주세요.');
                 return false;
             }
-            if (!oneWayRideTime) {
-                alert(pyongdoDirection === 'dropoff' ? '드롭 시간을 입력해주세요.' : '픽업 시간을 입력해주세요.');
-                return false;
-            }
         }
         if (isCustomOtherDayRoundTripCategory(selectedCarCategory)) {
             const effectiveUsageOption = getEffectiveOtherDayUsageOption(selectedCarCategory, otherDayRoundTripForm);
@@ -1760,7 +1756,7 @@ function CruiseVehicleContent() {
                                             {pyongdoDirection === 'dropoff' ? '드롭일자 자동입력' : '체크인일자 자동입력'}
                                         </button>
                                     </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-1 gap-4">
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700 mb-2">
                                                 {pyongdoDirection === 'dropoff' ? '드롭 일자' : '픽업 일자'}
@@ -1769,17 +1765,6 @@ function CruiseVehicleContent() {
                                                 type="date"
                                                 value={oneWayRideDate}
                                                 onChange={(e) => setOneWayRideDate(e.target.value)}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                {pyongdoDirection === 'dropoff' ? '드롭 시간' : '픽업 시간'}
-                                            </label>
-                                            <input
-                                                type="time"
-                                                value={oneWayRideTime}
-                                                onChange={(e) => setOneWayRideTime(e.target.value)}
                                                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                                             />
                                         </div>
