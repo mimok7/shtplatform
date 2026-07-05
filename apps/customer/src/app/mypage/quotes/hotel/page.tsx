@@ -124,24 +124,15 @@ function NewHotelQuoteContent() {
     }
   }, [quoteId, router, mode, itemId, serviceRefId])
 
-  // 체크인/체크아웃 날짜가 설정되면 호텔 카드 데이터 로드
+  // 컴포넌트 마운트 시 호텔 카드 데이터 로드
   useEffect(() => {
-    if (formData.checkin_date && formData.checkout_date) {
-      loadHotelNameOptions()
-    } else {
-      setHotelNameOptions([])
-      setHotelCardsData([])
-      setSelectedHotelName('')
-      setRoomCardsData([])
-      setSelectedRoomName('')
-      setSelectedHotel(null)
-      setSelectedHotelCode('')
-    }
-  }, [formData.checkin_date, formData.checkout_date])
+    loadHotelNameOptions()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // 호텔 선택 시 객실 카드 로드
   useEffect(() => {
-    if (selectedHotelName && formData.checkin_date && formData.checkout_date) {
+    if (selectedHotelName) {
       loadRoomCards(selectedHotelName)
     } else {
       setRoomCardsData([])
@@ -149,7 +140,7 @@ function NewHotelQuoteContent() {
       setSelectedHotel(null)
       setSelectedHotelCode('')
     }
-  }, [selectedHotelName, formData.checkin_date, formData.checkout_date])
+  }, [selectedHotelName])
 
   // 요일 계산 함수
   const getWeekdayFromDate = useCallback((dateString: string) => {
@@ -158,101 +149,67 @@ function NewHotelQuoteContent() {
     return weekdays[date.getDay()]
   }, [])
 
-  const isWeekdayTypeMatched = useCallback((weekdayType: string | null | undefined, dateString: string) => {
-    if (!weekdayType) return true
-
-    const token = String(weekdayType).trim()
-    if (!token) return true
-
-    const upper = token.toUpperCase()
-    const day = getWeekdayFromDate(dateString)
-    const dayIndex = new Date(dateString).getDay()
-    const isWeekend = dayIndex === 5 || dayIndex === 6
-
-    if (upper === 'ALL' || upper === 'ANY') return true
-    if (upper === 'WEEKEND') return isWeekend
-    if (upper === 'WEEKDAY') return !isWeekend
-
-    if (token.includes(',')) {
-      return token.split(',').map((v) => v.trim()).includes(day)
-    }
-
-    if (/[일월화수목금토]/.test(token)) {
-      return token.includes(day)
-    }
-
-    return true
-  }, [getWeekdayFromDate])
-
   const loadHotelNameOptions = useCallback(async () => {
     try {
-      // hotel_price에서 직접 호텔 목록 구성 (hotel_info 의존 없음)
-      const { data: priceData, error: priceError } = await supabase
-        .from('hotel_price')
-        .select('hotel_code, hotel_name')
-        .lte('start_date', formData.checkin_date)
-        .gte('end_date', formData.checkin_date);
+      const { data: hotelData, error: hotelError } = await supabase
+        .from('hotel_info')
+        .select('*')
+        .eq('active', true)
+        .order('hotel_name');
 
-      if (priceError) throw priceError;
+      if (hotelError) throw hotelError;
 
-      if (!priceData || priceData.length === 0) {
-        console.warn('[hotel] 해당 날짜에 hotel_price 데이터 없음:', formData.checkin_date);
-        setHotelNameOptions([]);
-        setHotelCardsData([]);
+      if (hotelData && hotelData.length > 0) {
+        setHotelNameOptions((hotelData || []).map((h: any) => h.hotel_name));
+        setHotelCardsData(hotelData || []);
         return;
       }
 
-      // hotel_name 기준 그룹화
-      const grouped = new Map<string, { hotel_name: string; hotel_codes: string[] }>();
-      (priceData || []).forEach((row: any) => {
-        const name = (row.hotel_name || row.hotel_code || '').trim();
-        if (!name) return;
-        if (!grouped.has(name)) {
-          grouped.set(name, { hotel_name: name, hotel_codes: [row.hotel_code] });
-        } else {
-          const g = grouped.get(name)!;
-          if (!g.hotel_codes.includes(row.hotel_code)) g.hotel_codes.push(row.hotel_code);
-        }
-      });
+      const { data: priceNames, error: priceError } = await supabase
+        .from('hotel_price')
+        .select('hotel_code, hotel_name');
 
-      const cards = Array.from(grouped.values()).sort((a, b) =>
-        a.hotel_name.localeCompare(b.hotel_name, 'ko')
-      );
+      if (priceError) throw priceError;
 
-      setHotelNameOptions(cards.map((h) => h.hotel_name));
-      setHotelCardsData(cards);
+      const grouped = new Map<string, any>()
+      ;(priceNames || []).forEach((row: any) => {
+        const name = (row.hotel_name || row.hotel_code || '').trim()
+        if (!name) return
+        if (!grouped.has(name)) grouped.set(name, { hotel_code: row.hotel_code, hotel_name: name, active: true })
+      })
+
+      const hotels = Array.from(grouped.values()).sort((a: any, b: any) =>
+        (a.hotel_name || '').localeCompare(b.hotel_name || '', 'ko')
+      )
+      setHotelNameOptions(hotels.map((h: any) => h.hotel_name))
+      setHotelCardsData(hotels)
     } catch (error) {
       console.error('호텔 옵션 로드 실패:', error)
+      setHotelNameOptions([])
+      setHotelCardsData([])
     }
-  }, [formData.checkin_date, formData.checkout_date])
+  }, [])
 
   const loadRoomCards = useCallback(async (hotelName: string) => {
     try {
       // hotel_price에서 해당 호텔의 이용 가능한 객실 + 가격 조회
+      // hotel_name 기반 매칭 사용 (hotel_code는 합성코드라 hotel_info.hotel_code와 불일치)
       const hotelInfo = hotelCardsData.find((h: any) => h.hotel_name === hotelName)
       if (!hotelInfo) { setRoomCardsData([]); return }
-
-      const hotelCodes = (hotelInfo.hotel_codes && hotelInfo.hotel_codes.length > 0)
-        ? hotelInfo.hotel_codes
-        : [hotelInfo.hotel_code]
 
       const { data: priceRows, error } = await supabase
         .from('hotel_price')
         .select('*')
-        .in('hotel_code', hotelCodes)
-        .lte('start_date', formData.checkin_date)
-        .gte('end_date', formData.checkin_date)
+        .eq('hotel_name', hotelName)
         .order('base_price')
 
       if (error) throw error
 
-      const filteredRows = (priceRows || []).filter((p: any) => {
-        return isWeekdayTypeMatched(p.weekday_type, formData.checkin_date)
-      })
+      const fallbackRows = (priceRows || [])
 
       // room_type별 그룹화 (WEEKDAY/WEEKEND가 ALL보다 우선)
       const roomMap = new Map()
-      filteredRows.forEach((p: any) => {
+      fallbackRows.forEach((p: any) => {
         const existing = roomMap.get(p.room_type)
         if (!existing) {
           roomMap.set(p.room_type, p)
@@ -266,7 +223,7 @@ function NewHotelQuoteContent() {
       console.error('객실 카드 로드 실패:', error)
       setRoomCardsData([])
     }
-  }, [formData.checkin_date, formData.checkout_date, hotelCardsData, isWeekdayTypeMatched])
+  }, [hotelCardsData])
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -449,24 +406,25 @@ function NewHotelQuoteContent() {
                 </div>
               </div>
 
-              {/* 1단계: 호텔 선택 (드롭다운) */}
-              {hotelNameOptions.length > 0 && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    🏨 호텔 선택 * <span className="text-gray-400 font-normal text-xs">({hotelNameOptions.length}개 이용 가능)</span>
-                  </label>
-                  <select
-                    value={selectedHotelName}
-                    onChange={(e) => setSelectedHotelName(e.target.value)}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="">호텔을 선택해주세요</option>
-                    {hotelNameOptions.map(name => (
-                      <option key={name} value={name}>{name}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
+              {/* 1단계: 호텔 선택 (항상 표시) */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  🏨 호텔 선택 * <span className="text-gray-400 font-normal text-xs">({hotelNameOptions.length}개 이용 가능)</span>
+                </label>
+                <select
+                  value={selectedHotelName}
+                  onChange={(e) => setSelectedHotelName(e.target.value)}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">호텔을 선택해주세요</option>
+                  {hotelNameOptions.map(name => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
+                </select>
+                {hotelNameOptions.length === 0 && (
+                  <p className="text-xs text-gray-500 mt-2">표시 가능한 호텔 목록이 없습니다.</p>
+                )}
+              </div>
 
               {/* 선택된 호텔 정보 카드 */}
               {selectedHotelName && (
@@ -511,12 +469,22 @@ function NewHotelQuoteContent() {
                 </div>
               )}
 
-              {/* 2단계: 객실 선택 (카드 + 가격 비교) */}
-              {selectedHotelName && roomCardsData.length > 0 && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-3">
-                    🛏️ 객실 선택 * <span className="text-gray-400 font-normal text-xs">({roomCardsData.length}개 객실)</span>
-                  </label>
+              {/* 2단계: 객실 선택 (항상 표시) */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-3">
+                  🛏️ 객실 선택 * <span className="text-gray-400 font-normal text-xs">({roomCardsData.length}개 객실)</span>
+                </label>
+                {!selectedHotelName && (
+                  <div className="p-4 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-600">
+                    먼저 호텔을 선택해주세요.
+                  </div>
+                )}
+                {selectedHotelName && roomCardsData.length === 0 && (
+                  <div className="p-4 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-600">
+                    선택한 호텔에 표시 가능한 객실이 없습니다.
+                  </div>
+                )}
+                {selectedHotelName && roomCardsData.length > 0 && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {roomCardsData.map((room: any) => (
                       <div
@@ -561,8 +529,8 @@ function NewHotelQuoteContent() {
                       </div>
                     ))}
                   </div>
-                </div>
-              )}
+                )}
+              </div>
 
               {/* 특별 요청사항 */}
               <div>
