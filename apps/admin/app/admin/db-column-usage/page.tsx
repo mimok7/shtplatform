@@ -1,5 +1,5 @@
 'use client';
-// db.csv 기반 테이블/컬럼 사용처를 조회하는 관리자 페이지.
+// DB 메타데이터 기반 테이블/컬럼 사용처를 조회하는 관리자 페이지.
 import { useEffect, useMemo, useState } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import { getSupabase } from '@/lib/supabase';
@@ -126,9 +126,9 @@ export default function DbColumnUsagePage() {
     <AdminLayout title="DB 컬럼 사용처" activeTab="db-column-usage">
       <div className="space-y-4">
         <div className="bg-white border rounded-lg p-4">
-          <h2 className="text-lg font-semibold text-gray-900">db.csv 기반 컬럼 사용처 점검</h2>
+          <h2 className="text-lg font-semibold text-gray-900">DB 기반 컬럼 사용처 점검</h2>
           <p className="text-sm text-gray-600 mt-1">
-            sql/db.csv 기준으로 테이블/컬럼을 읽고, 저장소 파일에서 문자열 사용처를 분석합니다.
+            DB 메타데이터에서 테이블/컬럼을 직접 읽고, 저장소 파일에서 문자열 사용처를 분석합니다.
           </p>
           <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
             <span className="px-2 py-1 rounded bg-blue-50 text-blue-700 border border-blue-100">테이블 {totalTables}개</span>

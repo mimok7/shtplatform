@@ -73,7 +73,9 @@ function NewHotelQuoteContent() {
   // 호텔 선택 시 객실 옵션 업데이트
   useEffect(() => {
     if (selectedHotelId && formData.checkin_date && formData.checkout_date) {
-      loadRoomOptions(selectedHotelId)
+      const hotel = hotelOptions.find((h: any) => h.hotel_code === selectedHotelId)
+      const codes = hotel?.hotel_codes ?? [selectedHotelId]
+      loadRoomOptions(codes)
     } else {
       setRoomOptions([])
       setSelectedRoomId('')
@@ -83,7 +85,9 @@ function NewHotelQuoteContent() {
   // 객실 선택 시 가격 옵션 로드
   useEffect(() => {
     if (selectedHotelId && selectedRoomId && formData.checkin_date && formData.checkout_date) {
-      loadPricingOptions(selectedHotelId, selectedRoomId)
+      const hotel = hotelOptions.find((h: any) => h.hotel_code === selectedHotelId)
+      const codes = hotel?.hotel_codes ?? [selectedHotelId]
+      loadPricingOptions(codes, selectedRoomId)
     } else {
       setPricingOptions([])
       setSelectedPricingId('')
@@ -100,37 +104,49 @@ function NewHotelQuoteContent() {
 
   const loadHotelOptions = useCallback(async () => {
     try {
+      // hotel_price에서 직접 호텔 목록 구성 (hotel_info 의존 없음)
       const { data: priceData, error: priceError } = await supabase
         .from('hotel_price')
-        .select('hotel_code')
+        .select('hotel_code, hotel_name')
         .lte('start_date', formData.checkin_date)
         .gte('end_date', formData.checkin_date)
 
       if (priceError) throw priceError
 
-      const uniqueCodes = [...new Set((priceData || []).map((p: any) => p.hotel_code))];
-      if (uniqueCodes.length === 0) { setHotelOptions([]); return; }
+      if (!priceData || priceData.length === 0) {
+        console.warn('[hotel/new] 해당 날짜에 hotel_price 데이터 없음:', formData.checkin_date)
+        setHotelOptions([])
+        return
+      }
 
-      const { data: hotelData, error: hotelError } = await supabase
-        .from('hotel_info')
-        .select('*')
-        .in('hotel_code', uniqueCodes)
-        .eq('active', true)
-        .order('hotel_name')
+      // hotel_name 기준 그룹화 (hotel_code 배열 수집)
+      const grouped = new Map<string, { hotel_code: string; hotel_name: string; hotel_codes: string[] }>()
+      ;(priceData || []).forEach((row: any) => {
+        const name = (row.hotel_name || row.hotel_code || '').trim()
+        if (!name) return
+        if (!grouped.has(name)) {
+          grouped.set(name, { hotel_code: row.hotel_code, hotel_name: name, hotel_codes: [row.hotel_code] })
+        } else {
+          const g = grouped.get(name)!
+          if (!g.hotel_codes.includes(row.hotel_code)) g.hotel_codes.push(row.hotel_code)
+        }
+      })
 
-      if (hotelError) throw hotelError
-      setHotelOptions(hotelData || [])
+      const hotels = Array.from(grouped.values()).sort((a, b) =>
+        a.hotel_name.localeCompare(b.hotel_name, 'ko')
+      )
+      setHotelOptions(hotels)
     } catch (error) {
       console.error('호텔 옵션 로드 실패:', error)
     }
   }, [formData.checkin_date, formData.checkout_date])
 
-  const loadRoomOptions = useCallback(async (hotelCode: string) => {
+  const loadRoomOptions = useCallback(async (hotelCodes: string[]) => {
     try {
       const { data, error } = await supabase
         .from('hotel_price')
         .select('room_type, room_name, room_category')
-        .eq('hotel_code', hotelCode)
+        .in('hotel_code', hotelCodes)
         .lte('start_date', formData.checkin_date)
         .gte('end_date', formData.checkin_date)
 
@@ -151,12 +167,12 @@ function NewHotelQuoteContent() {
     }
   }, [formData.checkin_date, formData.checkout_date])
 
-  const loadPricingOptions = useCallback(async (hotelCode: string, roomType: string) => {
+  const loadPricingOptions = useCallback(async (hotelCodes: string[], roomType: string) => {
     try {
       const { data, error } = await supabase
         .from('hotel_price')
         .select('*')
-        .eq('hotel_code', hotelCode)
+        .in('hotel_code', hotelCodes)
         .eq('room_type', roomType)
         .lte('start_date', formData.checkin_date)
         .gte('end_date', formData.checkin_date)

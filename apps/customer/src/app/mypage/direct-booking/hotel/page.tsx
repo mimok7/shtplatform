@@ -195,7 +195,7 @@ function HotelDirectBookingContent() {
 
     const loadHotelNameOptions = useCallback(async () => {
         try {
-            // 1. hotel_price에서 체크인 날짜에 해당하는 호텔 코드/이름 조회
+            // hotel_price에서 직접 호텔 목록을 구성 (hotel_info 의존 없음)
             const { data: priceData, error: priceError } = await supabase
                 .from('hotel_price')
                 .select('hotel_code, hotel_name')
@@ -204,55 +204,31 @@ function HotelDirectBookingContent() {
 
             if (priceError) throw priceError;
 
-            const uniqueCodes = [...new Set((priceData || []).map((p: any) => p.hotel_code).filter(Boolean))];
-            if (uniqueCodes.length === 0) {
+            if (!priceData || priceData.length === 0) {
+                console.warn('[hotel] 해당 날짜에 hotel_price 데이터 없음:', formData.checkin_date);
                 setHotelNameOptions([]);
                 setHotelCardsData([]);
                 return;
             }
 
-            const baseCodes = uniqueCodes.map((code: string) => String(code).split('_')[0]);
-            const lookupCodes = [...new Set([...uniqueCodes, ...baseCodes])];
-
-            // 2. hotel_info에서 호텔 상세 정보 조회
-            const { data: hotelData, error: hotelError } = await supabase
-                .from('hotel_info')
-                .select('*')
-                .in('hotel_code', lookupCodes)
-                .eq('active', true)
-                .order('hotel_name');
-
-            if (hotelError) throw hotelError;
-
-            const infoMap = new Map((hotelData || []).map((h: any) => [h.hotel_code, h]));
-            const grouped = new Map<string, any>();
-
+            // hotel_name 기준 그룹화 (hotel_code 배열 수집)
+            const grouped = new Map<string, { hotel_name: string; hotel_codes: string[] }>();
             (priceData || []).forEach((row: any) => {
-                const code = row.hotel_code;
-                const baseCode = String(code || '').split('_')[0];
-                const info = infoMap.get(code) || infoMap.get(baseCode) || null;
-                const groupCode = info?.hotel_code || baseCode || code;
-                const groupName = info?.hotel_name || row.hotel_name || groupCode;
-                const key = `${groupCode}__${groupName}`;
-
-                if (!grouped.has(key)) {
-                    grouped.set(key, {
-                        ...(info || {}),
-                        hotel_code: groupCode,
-                        hotel_name: groupName,
-                        hotel_codes: [code],
-                    });
+                const name = (row.hotel_name || row.hotel_code || '').trim();
+                if (!name) return;
+                if (!grouped.has(name)) {
+                    grouped.set(name, { hotel_name: name, hotel_codes: [row.hotel_code] });
                 } else {
-                    const prev = grouped.get(key);
-                    if (!prev.hotel_codes.includes(code)) prev.hotel_codes.push(code);
+                    const g = grouped.get(name)!;
+                    if (!g.hotel_codes.includes(row.hotel_code)) g.hotel_codes.push(row.hotel_code);
                 }
             });
 
-            const cards = Array.from(grouped.values()).sort((a: any, b: any) =>
-                (a.hotel_name || '').localeCompare(b.hotel_name || '', 'ko')
+            const cards = Array.from(grouped.values()).sort((a, b) =>
+                a.hotel_name.localeCompare(b.hotel_name, 'ko')
             );
 
-            setHotelNameOptions(cards.map((h: any) => h.hotel_name));
+            setHotelNameOptions(cards.map((h) => h.hotel_name));
             setHotelCardsData(cards);
         } catch (error) {
             console.error('호텔 옵션 로드 실패:', error);
@@ -268,7 +244,6 @@ function HotelDirectBookingContent() {
             const hotelCodes = (hotelInfo.hotel_codes && hotelInfo.hotel_codes.length > 0)
                 ? hotelInfo.hotel_codes
                 : [hotelInfo.hotel_code];
-
             const { data: priceRows, error } = await supabase
                 .from('hotel_price')
                 .select('*')

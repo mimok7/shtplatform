@@ -1,18 +1,18 @@
-// db.csv를 읽어 테이블/컬럼 사용처를 분석해 반환하는 관리자 API.
+// DB 메타데이터를 직접 조회해 테이블/컬럼 사용처를 분석해 반환하는 관리자 API.
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { checkAdmin } from '@/lib/exportAuth';
+import serviceSupabase from '@/lib/serviceSupabase';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
 
-type DbCsvRow = {
+type DbColumnRow = {
   table: string;
   column: string;
   dataType: string;
   nullable: string;
-  defaultValue: string;
   position: number;
 };
 
@@ -53,86 +53,58 @@ const INCLUDE_EXTENSIONS = new Set([
   '.cjs',
 ]);
 
-function parseCsvLine(line: string): string[] {
-  const values: string[] = [];
-  let current = '';
-  let inQuotes = false;
-
-  for (let i = 0; i < line.length; i += 1) {
-    const ch = line[i];
-    if (ch === '"') {
-      if (inQuotes && line[i + 1] === '"') {
-        current += '"';
-        i += 1;
-      } else {
-        inQuotes = !inQuotes;
-      }
-      continue;
-    }
-
-    if (ch === ',' && !inQuotes) {
-      values.push(current);
-      current = '';
-      continue;
-    }
-
-    current += ch;
-  }
-
-  values.push(current);
-  return values;
-}
-
 function normalizePath(p: string): string {
   return p.replaceAll('\\', '/');
 }
 
-async function resolveDbCsvPath(): Promise<string> {
+async function resolveRepoRoot(): Promise<string> {
   const candidates = [
-    path.resolve(process.cwd(), '../../sql/db.csv'),
-    path.resolve(process.cwd(), '../sql/db.csv'),
-    path.resolve(process.cwd(), 'sql/db.csv'),
+    process.cwd(),
+    path.resolve(process.cwd(), '..'),
+    path.resolve(process.cwd(), '../..'),
+    path.resolve(process.cwd(), '../../..'),
   ];
 
-  for (const p of candidates) {
+  for (const candidate of candidates) {
     try {
-      await fs.access(p);
-      return p;
+      const appsDir = path.join(candidate, 'apps');
+      await fs.access(appsDir);
+      return candidate;
     } catch {
       // noop
     }
   }
 
-  throw new Error('sql/db.csv 파일을 찾을 수 없습니다.');
+  return process.cwd();
 }
 
-async function readDbCsvRows(): Promise<{ rows: DbCsvRow[]; repoRoot: string }> {
-  const dbCsvPath = await resolveDbCsvPath();
-  const repoRoot = path.dirname(path.dirname(dbCsvPath));
-  const raw = await fs.readFile(dbCsvPath, 'utf8');
-  const lines = raw.split(/\r?\n/).filter((line) => line.trim().length > 0);
-
-  if (lines.length < 2) {
-    return { rows: [], repoRoot };
+async function readDbRows(): Promise<{ rows: DbColumnRow[]; repoRoot: string }> {
+  if (!serviceSupabase) {
+    throw new Error('SUPABASE_SERVICE_ROLE_KEY 미설정');
   }
 
-  const rows: DbCsvRow[] = [];
-  for (let i = 1; i < lines.length; i += 1) {
-    const cols = parseCsvLine(lines[i]);
-    if (cols.length < 6) continue;
+  const { data, error } = await serviceSupabase
+    .from('information_schema.columns')
+    .select('table_name,column_name,data_type,is_nullable,ordinal_position')
+    .eq('table_schema', 'public')
+    .order('table_name', { ascending: true })
+    .order('ordinal_position', { ascending: true });
 
-    const table = (cols[0] || '').trim();
-    const column = (cols[1] || '').trim();
-    const dataType = (cols[2] || '').trim();
-    const nullable = (cols[3] || '').trim();
-    const defaultValue = (cols[4] || '').trim();
-    const position = Number((cols[5] || '').trim()) || 0;
-
-    if (!table || !column) continue;
-
-    rows.push({ table, column, dataType, nullable, defaultValue, position });
+  if (error) {
+    throw new Error(error.message || 'DB 메타데이터 조회에 실패했습니다.');
   }
 
+  const rows: DbColumnRow[] = (data || [])
+    .map((r: any) => ({
+      table: String(r.table_name || '').trim(),
+      column: String(r.column_name || '').trim(),
+      dataType: String(r.data_type || '').trim(),
+      nullable: String(r.is_nullable || '').trim(),
+      position: Number(r.ordinal_position || 0),
+    }))
+    .filter((r) => r.table && r.column);
+
+  const repoRoot = await resolveRepoRoot();
   return { rows, repoRoot };
 }
 
@@ -168,7 +140,7 @@ function toRelative(repoRoot: string, absolute: string): string {
   return normalizePath(path.relative(repoRoot, absolute));
 }
 
-async function buildUsageForTable(repoRoot: string, table: string, rows: DbCsvRow[]) {
+async function buildUsageForTable(repoRoot: string, table: string, rows: DbColumnRow[]) {
   const columns = rows
     .filter((r) => r.table === table)
     .sort((a, b) => a.position - b.position);
@@ -240,7 +212,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const { rows, repoRoot } = await readDbCsvRows();
+    const { rows, repoRoot } = await readDbRows();
     const { searchParams } = new URL(req.url);
     const mode = (searchParams.get('mode') || 'tables').trim();
 
@@ -270,7 +242,7 @@ export async function GET(req: NextRequest) {
 
       const exists = rows.some((r) => r.table === table);
       if (!exists) {
-        return NextResponse.json({ error: `db.csv에 없는 테이블입니다: ${table}` }, { status: 404 });
+        return NextResponse.json({ error: `DB 메타데이터에 없는 테이블입니다: ${table}` }, { status: 404 });
       }
 
       const payload = await buildUsageForTable(repoRoot, table, rows);
