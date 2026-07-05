@@ -233,6 +233,7 @@ export default function AdminLayout({ children, title, activeTab }: AdminLayoutP
       id: 'group-db', label: 'DB 도구', icon: '🗃️', items: [
         { id: 'sql-runner', label: 'SQL 실행', path: '/admin/sql-runner', icon: '⚡' },
         { id: 'database-schema', label: 'DB 스키마', path: '/admin/database-schema', icon: '🗃️' },
+        { id: 'db-column-usage', label: 'DB 컬럼 사용처', path: '/admin/db-column-usage', icon: '🔎' },
         { id: 'database', label: 'DB 관리', path: '/admin/database', icon: '🔧' },
       ]
     },
