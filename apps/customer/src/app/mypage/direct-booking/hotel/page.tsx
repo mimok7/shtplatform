@@ -36,7 +36,7 @@ function HotelDirectBookingContent() {
     const [formData, setFormData] = useState({
         checkin_date: '',
         checkout_date: '',
-        room_count: '',
+        room_count: '1',
         adult_count: '2',
         child_count: '0',
         special_requests: ''
@@ -105,7 +105,7 @@ function HotelDirectBookingContent() {
                 ...prev,
                 checkin_date: hotelRow.checkin_date || '',
                 checkout_date: checkoutDate,
-                room_count: hotelRow.room_count ? String(hotelRow.room_count) : '',
+                room_count: hotelRow.room_count ? String(hotelRow.room_count) : '1',
                 adult_count: String(hotelRow.guest_count || '2'),
                 child_count: '0',
                 special_requests: hotelRow.request_note || ''

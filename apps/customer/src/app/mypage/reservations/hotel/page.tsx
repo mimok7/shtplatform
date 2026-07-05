@@ -18,9 +18,11 @@ function HotelReservationContent() {
     const [form, setForm] = useState({
         // 서비스 타입별 폼 데이터
         serviceData: {
+            hotel_name: '',
+            room_name: '',
+            room_count: '1',
             checkin_date: '',
             checkout_date: '',
-            room_count: '',
             guest_count: 1,
             nights: 1,
             breakfast_service: '',
