@@ -124,6 +124,33 @@ function HotelDirectBookingContent() {
         return weekdays[date.getDay()];
     }, []);
 
+    const isWeekdayTypeMatched = useCallback((weekdayType: string | null | undefined, dateString: string) => {
+        if (!weekdayType) return true;
+
+        const token = String(weekdayType).trim();
+        if (!token) return true;
+
+        const upper = token.toUpperCase();
+        const day = getWeekdayFromDate(dateString);
+        const dayIndex = new Date(dateString).getDay();
+        const isWeekend = dayIndex === 5 || dayIndex === 6; // 금, 토
+
+        if (upper === 'ALL' || upper === 'ANY') return true;
+        if (upper === 'WEEKEND') return isWeekend;
+        if (upper === 'WEEKDAY') return !isWeekend;
+
+        // 레거시 값: '일,월,화,수,목,금,토' 또는 '금,토'
+        if (token.includes(',')) {
+            return token.split(',').map((v) => v.trim()).includes(day);
+        }
+
+        if (/[일월화수목금토]/.test(token)) {
+            return token.includes(day);
+        }
+
+        return true;
+    }, [getWeekdayFromDate]);
+
     // 박수 계산 함수
     const calculateNights = useCallback((checkin: string, checkout: string) => {
         if (!checkin || !checkout) return 0;
@@ -168,34 +195,65 @@ function HotelDirectBookingContent() {
 
     const loadHotelNameOptions = useCallback(async () => {
         try {
-            // 1. hotel_price에서 체크인 날짜에 해당하는 호텔 코드 조회
+            // 1. hotel_price에서 체크인 날짜에 해당하는 호텔 코드/이름 조회
             const { data: priceData, error: priceError } = await supabase
                 .from('hotel_price')
-                .select('hotel_code')
+                .select('hotel_code, hotel_name')
                 .lte('start_date', formData.checkin_date)
                 .gte('end_date', formData.checkin_date);
 
             if (priceError) throw priceError;
 
-            const uniqueCodes = [...new Set((priceData || []).map((p: any) => p.hotel_code))];
+            const uniqueCodes = [...new Set((priceData || []).map((p: any) => p.hotel_code).filter(Boolean))];
             if (uniqueCodes.length === 0) {
                 setHotelNameOptions([]);
                 setHotelCardsData([]);
                 return;
             }
 
+            const baseCodes = uniqueCodes.map((code: string) => String(code).split('_')[0]);
+            const lookupCodes = [...new Set([...uniqueCodes, ...baseCodes])];
+
             // 2. hotel_info에서 호텔 상세 정보 조회
             const { data: hotelData, error: hotelError } = await supabase
                 .from('hotel_info')
                 .select('*')
-                .in('hotel_code', uniqueCodes)
+                .in('hotel_code', lookupCodes)
                 .eq('active', true)
                 .order('hotel_name');
 
             if (hotelError) throw hotelError;
 
-            setHotelNameOptions((hotelData || []).map((h: any) => h.hotel_name));
-            setHotelCardsData(hotelData || []);
+            const infoMap = new Map((hotelData || []).map((h: any) => [h.hotel_code, h]));
+            const grouped = new Map<string, any>();
+
+            (priceData || []).forEach((row: any) => {
+                const code = row.hotel_code;
+                const baseCode = String(code || '').split('_')[0];
+                const info = infoMap.get(code) || infoMap.get(baseCode) || null;
+                const groupCode = info?.hotel_code || baseCode || code;
+                const groupName = info?.hotel_name || row.hotel_name || groupCode;
+                const key = `${groupCode}__${groupName}`;
+
+                if (!grouped.has(key)) {
+                    grouped.set(key, {
+                        ...(info || {}),
+                        hotel_code: groupCode,
+                        hotel_name: groupName,
+                        hotel_codes: [code],
+                    });
+                } else {
+                    const prev = grouped.get(key);
+                    if (!prev.hotel_codes.includes(code)) prev.hotel_codes.push(code);
+                }
+            });
+
+            const cards = Array.from(grouped.values()).sort((a: any, b: any) =>
+                (a.hotel_name || '').localeCompare(b.hotel_name || '', 'ko')
+            );
+
+            setHotelNameOptions(cards.map((h: any) => h.hotel_name));
+            setHotelCardsData(cards);
         } catch (error) {
             console.error('호텔 옵션 로드 실패:', error);
         }
@@ -207,26 +265,22 @@ function HotelDirectBookingContent() {
             const hotelInfo = hotelCardsData.find((h: any) => h.hotel_name === hotelName);
             if (!hotelInfo) { setRoomCardsData([]); return; }
 
+            const hotelCodes = (hotelInfo.hotel_codes && hotelInfo.hotel_codes.length > 0)
+                ? hotelInfo.hotel_codes
+                : [hotelInfo.hotel_code];
+
             const { data: priceRows, error } = await supabase
                 .from('hotel_price')
                 .select('*')
-                .eq('hotel_code', hotelInfo.hotel_code)
+                .in('hotel_code', hotelCodes)
                 .lte('start_date', formData.checkin_date)
                 .gte('end_date', formData.checkin_date)
                 .order('base_price');
 
             if (error) throw error;
 
-            // 체크인 요일에 맞는 weekday_type 필터링
-            const checkinDate = new Date(formData.checkin_date);
-            const dayOfWeek = checkinDate.getDay(); // 0=일, 6=토
-            const isWeekend = dayOfWeek === 5 || dayOfWeek === 6; // 금·토 = 주말
-
             const filteredRows = (priceRows || []).filter((p: any) => {
-                if (p.weekday_type === 'ALL') return true;
-                if (isWeekend && p.weekday_type === 'WEEKEND') return true;
-                if (!isWeekend && p.weekday_type === 'WEEKDAY') return true;
-                return false;
+                return isWeekdayTypeMatched(p.weekday_type, formData.checkin_date);
             });
 
             // room_type별 그룹화 (WEEKDAY/WEEKEND가 ALL보다 우선)
@@ -248,7 +302,7 @@ function HotelDirectBookingContent() {
             console.error('객실 카드 로드 실패:', error);
             setRoomCardsData([]);
         }
-    }, [formData.checkin_date, formData.checkout_date, hotelCardsData]);
+    }, [formData.checkin_date, formData.checkout_date, hotelCardsData, isWeekdayTypeMatched]);
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();

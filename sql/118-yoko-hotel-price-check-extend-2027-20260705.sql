@@ -25,6 +25,68 @@ BEGIN
 END $$;
 
 -- ============================================================================
+-- 0-1) 가시성 점검/보정: hotel_price.hotel_code 와 hotel_info.hotel_code 매칭 정규화
+--      원인: 화면은 hotel_price.hotel_code -> hotel_info.hotel_code 직접 매칭
+--      보정: hotel_info의 실제 요코 코드(예: YOKO, YOKO_*)로 정규화
+-- ============================================================================
+DO $$
+DECLARE
+  v_target_code text;
+BEGIN
+  SELECT hi.hotel_code
+  INTO v_target_code
+  FROM public.hotel_info hi
+  WHERE hi.hotel_code = 'YOKO'
+     OR hi.hotel_code ILIKE 'YOKO%'
+     OR hi.hotel_name ILIKE '%요코%'
+     OR hi.hotel_name ILIKE '%yoko%'
+  ORDER BY CASE WHEN hi.hotel_code = 'YOKO' THEN 0 ELSE 1 END, hi.hotel_code
+  LIMIT 1;
+
+  IF v_target_code IS NULL THEN
+    INSERT INTO public.hotel_info (
+      hotel_code, hotel_name, product_type, active, currency, notes
+    )
+    VALUES (
+      'YOKO', 'Yoko Onsen Resort', 'HOTEL', true, 'VND', '자동 생성: 요코 호텔 가격 FK 보정'
+    )
+    ON CONFLICT (hotel_code) DO NOTHING;
+
+    v_target_code := 'YOKO';
+  END IF;
+
+  UPDATE public.hotel_price hp
+  SET hotel_code = v_target_code
+  WHERE (
+      hp.hotel_code = 'YOKO'
+      OR hp.hotel_code ILIKE 'YOKO%'
+      OR hp.hotel_name ILIKE '%요코%'
+      OR hp.hotel_name ILIKE '%yoko%'
+    )
+    AND hp.hotel_code <> v_target_code;
+END $$;
+
+SELECT
+  hp.hotel_code,
+  COUNT(*)::int AS rows,
+  CASE WHEN hi.hotel_code IS NULL THEN 'UNMATCHED' ELSE 'MATCHED' END AS info_match
+FROM public.hotel_price hp
+LEFT JOIN public.hotel_info hi ON hi.hotel_code = hp.hotel_code
+WHERE hp.hotel_code = 'YOKO' OR hp.hotel_code ILIKE 'YOKO%'
+GROUP BY hp.hotel_code, hi.hotel_code
+ORDER BY hp.hotel_code;
+
+SELECT
+  hp.hotel_code,
+  COUNT(*)::int AS rows,
+  CASE WHEN hi.hotel_code IS NULL THEN 'UNMATCHED' ELSE 'MATCHED' END AS info_match
+FROM public.hotel_price hp
+LEFT JOIN public.hotel_info hi ON hi.hotel_code = hp.hotel_code
+WHERE hp.hotel_code = 'YOKO' OR hp.hotel_code ILIKE 'YOKO%'
+GROUP BY hp.hotel_code, hi.hotel_code
+ORDER BY hp.hotel_code;
+
+-- ============================================================================
 -- 1) 점검: 요코 호텔 2026 가격 중 8월(또는 그 이전) 종료 항목
 -- ============================================================================
 WITH yoko_2026 AS (
@@ -32,7 +94,7 @@ WITH yoko_2026 AS (
   FROM public.hotel_price hp
   WHERE (
       hp.hotel_code = 'YOKO'
-      OR hp.hotel_code LIKE 'YOKO_%'
+      OR hp.hotel_code ILIKE 'YOKO%'
       OR hp.hotel_name ILIKE '%요코%'
       OR hp.hotel_name ILIKE '%yoko%'
     )
@@ -62,13 +124,17 @@ WITH latest_2026 AS (
   SELECT
     hp.*,
     ROW_NUMBER() OVER (
-      PARTITION BY hp.hotel_code, hp.room_type, hp.room_name, COALESCE(hp.weekday_type, 'ALL')
+      PARTITION BY
+        hp.hotel_code,
+        hp.room_type,
+        hp.room_name,
+        COALESCE(hp.weekday_type, 'ALL')
       ORDER BY hp.end_date DESC, hp.start_date DESC, hp.created_at DESC
     ) AS rn
   FROM public.hotel_price hp
   WHERE (
       hp.hotel_code = 'YOKO'
-      OR hp.hotel_code LIKE 'YOKO_%'
+      OR hp.hotel_code ILIKE 'YOKO%'
       OR hp.hotel_name ILIKE '%요코%'
       OR hp.hotel_name ILIKE '%yoko%'
     )
@@ -168,7 +234,11 @@ WITH source_2026 AS (
   SELECT
     hp.*,
     ROW_NUMBER() OVER (
-      PARTITION BY hp.hotel_code, hp.room_type, hp.room_name, COALESCE(hp.weekday_type, 'ALL')
+      PARTITION BY
+        hp.hotel_code,
+        hp.room_type,
+        hp.room_name,
+        COALESCE(hp.weekday_type, 'ALL')
       ORDER BY
         CASE WHEN DATE '2026-12-31' BETWEEN hp.start_date AND hp.end_date THEN 0 ELSE 1 END,
         hp.end_date DESC,
@@ -178,7 +248,7 @@ WITH source_2026 AS (
   FROM public.hotel_price hp
   WHERE (
       hp.hotel_code = 'YOKO'
-      OR hp.hotel_code LIKE 'YOKO_%'
+      OR hp.hotel_code ILIKE 'YOKO%'
       OR hp.hotel_name ILIKE '%요코%'
       OR hp.hotel_name ILIKE '%yoko%'
     )
@@ -281,7 +351,7 @@ WITH yoko_2026 AS (
   FROM public.hotel_price hp
   WHERE (
       hp.hotel_code = 'YOKO'
-      OR hp.hotel_code LIKE 'YOKO_%'
+      OR hp.hotel_code ILIKE 'YOKO%'
       OR hp.hotel_name ILIKE '%요코%'
       OR hp.hotel_name ILIKE '%yoko%'
     )
@@ -314,7 +384,7 @@ SELECT
 FROM public.hotel_price
 WHERE (
     hotel_code = 'YOKO'
-    OR hotel_code LIKE 'YOKO_%'
+  OR hotel_code ILIKE 'YOKO%'
     OR hotel_name ILIKE '%요코%'
     OR hotel_name ILIKE '%yoko%'
   )
