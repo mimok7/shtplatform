@@ -90,14 +90,36 @@ export default function MyConfirmationsPage() {
                 return;
             }
 
-            // 4. 해당 quote 정보 조회
-            // 매니저가 확인서를 생성한 건만 노출 (status='confirmed' 또는 confirmed_at 존재)
-            const { data: quotesData, error: quotesError } = await supabase
+            // 4. 매니저가 예약확인서를 생성/발송한 내역(confirmation_status 가 generated 또는 sent) 확인
+            const { data: confStatuses, error: confError } = await supabase
+                .from('confirmation_status')
+                .select('reservation_id')
+                .in('reservation_id', completedReservationIds)
+                .in('status', ['generated', 'sent']);
+
+            if (confError) {
+                console.error('예약확인서 상태 조회 실패:', confError);
+            }
+
+            const validReservationIds = confStatuses?.map(cs => cs.reservation_id) || [];
+            const validQuoteIds = myReservations
+                .filter(r => validReservationIds.includes(r.re_id))
+                .map(r => r.re_quote_id);
+
+            // 5. 해당 quote 정보 조회
+            // 매니저가 확인서를 생성한 건(validQuoteIds에 포함)이거나 기존 확인 완료(status='confirmed' 또는 confirmed_at 존재) 조건 충족 시 노출
+            let query = supabase
                 .from('quote')
                 .select('*')
-                .in('id', myQuoteIds)
-                .or('status.eq.confirmed,confirmed_at.not.is.null')
-                .order('created_at', { ascending: false });
+                .in('id', myQuoteIds);
+
+            const orConditions = ['status.eq.confirmed', 'confirmed_at.not.is.null'];
+            if (validQuoteIds.length > 0) {
+                orConditions.push(`id.in.(${validQuoteIds.map(id => `"${id}"`).join(',')})`);
+            }
+            query = query.or(orConditions.join(','));
+
+            const { data: quotesData, error: quotesError } = await query.order('created_at', { ascending: false });
 
             if (quotesError) {
                 console.error('견적 조회 실패:', quotesError);

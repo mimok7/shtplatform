@@ -76,3 +76,11 @@ SHT 단가 오표시 이슈 조사 시작.
 - 적용 파일:
   - `apps/customer/src/app/mypage/quotes/[id]/view/page.tsx`
   - `apps/quote/app/mypage/quotes/[id]/view/page.tsx`
+
+추가 작업 메모 (2026. 07. 08 - 서비스 워커 caches.match await 누락 버그 수정)
+
+- 고객앱의 서비스 워커(`apps/customer/public/sw.js`) 내 `FetchEvent` 처리 중, 네트워크 오류 등으로 `fetch` 실패 시 캐시 백업 데이터를 가져오는 `catch` 블록에서 `caches.match(event.request)`를 `await` 없이 반환하여 Promise 자체가 전달되는 현상 발견.
+- 이로 인해 브라우저 콘솔에 `TypeError: Failed to convert value to 'Response'` 에러가 발생하고 네트워크 페치 오류로 인해 예약확인서(`confirmations`) 페이지 로드 및 기타 API 요청이 실패함.
+- `caches.match` 호출 앞에 `await` 키워드를 추가하여 올바른 `Response` 객체(혹은 null/undefined)가 반환되도록 조치함.
+- 적용 파일:
+  - `apps/customer/public/sw.js`

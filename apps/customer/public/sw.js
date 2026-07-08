@@ -70,7 +70,8 @@ self.addEventListener('fetch', event => {
           return (await caches.match('/offline.html')) || (await caches.match('/')) || new Response('Offline - please check connection');
         }
 
-        return caches.match(event.request) || new Response('Offline - please check connection');
+        const cachedResponse = await caches.match(event.request);
+        return cachedResponse || new Response('Offline - please check connection');
       })
   );
 });
