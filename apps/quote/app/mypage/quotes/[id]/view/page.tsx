@@ -60,6 +60,7 @@ export default function QuoteDetailPage() {
   const [detailedServices, setDetailedServices] = useState<any>({
     rooms: [], cars: [], airports: [], hotels: [], rentcars: [], tours: []
   });
+  const [confirmationStatus, setConfirmationStatus] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -108,6 +109,12 @@ export default function QuoteDetailPage() {
         .select('id, name, email, phone_number')
         .eq('id', quoteData.user_id)
         .maybeSingle();
+      const { data: confData } = await supabase
+        .from('confirmation_status')
+        .select('status')
+        .eq('quote_id', quoteId)
+        .maybeSingle();
+      setConfirmationStatus(confData?.status || null);
       setQuote({ ...quoteData, users: userData || undefined });
     } catch (e) {
       console.error('견적 로드 오류:', e);
@@ -519,7 +526,7 @@ export default function QuoteDetailPage() {
               💳 결제하기
             </button>
           )}
-          {quote.payment_status === 'paid' && (
+          {(quote.payment_status === 'paid' || ['generated', 'sent'].includes(confirmationStatus || '')) && (
             <button
               onClick={() => window.open(`/customer/confirmation?quote_id=${quote.id}&token=customer`, '_blank')}
               className="flex-1 px-4 py-3 rounded-xl bg-blue-500 text-white text-sm font-bold hover:bg-blue-600 transition"
