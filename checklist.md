@@ -18,3 +18,10 @@
 - [x] 그랜드 파이어니스 크루즈 2027년도 모든 객실 1N2D 시즌 1 요금 시작일을 1월 1일로 확장 적용 완료
 - [x] 결제 완료 고객에 대해 매니저가 예약확인서를 생성하면 고객앱 마이페이지에 버튼이 노출되도록 보완
 - [x] 서비스 워커 sw.js의 caches.match await 누락 버그 해결 (TypeError: Failed to convert value to 'Response' 에러 해결)
+
+## PWA 아이콘 교체 (2026. 07. 15)
+
+- [x] 앱별 PWA 원본 아이콘과 manifest 참조 확인
+- [x] admin, manager, manager1, mobile의 192px·512px PNG 생성
+- [x] 아이콘 파일 형식·크기·알파 채널 검증
+- [x] 앱별 타입체크 또는 빌드 검증

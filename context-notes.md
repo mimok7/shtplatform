@@ -84,3 +84,9 @@ SHT 단가 오표시 이슈 조사 시작.
 - `caches.match` 호출 앞에 `await` 키워드를 추가하여 올바른 `Response` 객체(혹은 null/undefined)가 반환되도록 조치함.
 - 적용 파일:
   - `apps/customer/public/sw.js`
+
+추가 작업 메모 (2026. 07. 15 - PWA 앱별 아이콘 교체)
+
+- 사용자가 제공한 공용 원본 아이콘을 앱별로 매핑함. `adminpwa.png`는 admin, `managerpwa.png`는 manager, `manager1pwa.png`는 manager1, `mobilepwa.png`는 mobile에 적용함.
+- 각 앱의 manifest와 Next metadata가 `/icon-192.png`, `/icon-512.png`를 참조하고 있어 참조 경로는 변경하지 않고 앱별 public 파일만 교체하는 방식으로 결정함.
+- 원본이 모두 정사각형 PNG이므로 시각적 내용을 재생성하지 않고 고품질 보간으로 192x192 및 512x512 PNG를 생성함. 기존 PWA 설치 및 서비스 워커 경로와의 호환성을 유지하기 위한 결정임.
