@@ -90,3 +90,10 @@ SHT 단가 오표시 이슈 조사 시작.
 - 사용자가 제공한 공용 원본 아이콘을 앱별로 매핑함. `adminpwa.png`는 admin, `managerpwa.png`는 manager, `manager1pwa.png`는 manager1, `mobilepwa.png`는 mobile에 적용함.
 - 각 앱의 manifest와 Next metadata가 `/icon-192.png`, `/icon-512.png`를 참조하고 있어 참조 경로는 변경하지 않고 앱별 public 파일만 교체하는 방식으로 결정함.
 - 원본이 모두 정사각형 PNG이므로 시각적 내용을 재생성하지 않고 고품질 보간으로 192x192 및 512x512 PNG를 생성함. 기존 PWA 설치 및 서비스 워커 경로와의 호환성을 유지하기 위한 결정임.
+
+추가 작업 메모 (2026. 07. 16 - 씨스타 크루즈 셔틀 리무진 요금 추가)
+
+- `sql/db.csv`와 `sql/031-rentcar-2026-data.sql` 기준으로 `public.rentcar_price` 컬럼을 확인했다.
+- 씨스타의 기존 크루즈명은 `씨스타 크루즈`이며, 2026·2027 각각 편도 500,000동과 숙박 일정 왕복(`다른날왕복`) 1,000,000동으로 등록한다.
+- 신규 SQL 파일은 `sql/120-seastar-cruise-shuttle-limousine-20260716.sql`이며, `WITH source_rows`, `NOT EXISTS`, 트랜잭션, 명시적 형변환, `RETURNING`, 검증 `SELECT`를 포함한다.
+
