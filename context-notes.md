@@ -95,6 +95,17 @@ SHT 단가 오표시 이슈 조사 시작.
 - 자동 전송은 `vercel.json`의 `/api/cron/homepage-sync`에서 매주 일요일 18:00 UTC, 월요일 03:00 KST에 실행한다.
 - `pnpm --filter @sht/admin typecheck`, `pnpm --filter @sht/admin build`, 홈페이지 `npm run build`로 정적 검증했다. 실제 전송은 홈페이지 마이그레이션 적용 및 양쪽 환경 변수 설정 후 가능하다.
 
+## 홈페이지 원본 카탈로그 전체 읽기 전용 확장 (2026. 07. 17)
+
+- 플랫폼 DB는 예약·결제·고객 정보를 전송하거나 수정하지 않고, 홈페이지 카탈로그에 필요한 상품 원본만 SELECT로 읽는다.
+- 스키마 기준 크루즈 핵심 후보는 `cruise_info`, `cruise_rate_card`, `cruise_rate_card_inclusions`, `cruise_location`, `cruise_promotion`, `cruise_promotion_rate`, `cruise_holiday_surcharge`, `cruise_tour_options`, `cruise_info_by_category`, `cruise_info_view`, `cruise_rooms_view`이다. 뷰는 원본 테이블과 중복 여부 및 실제 데이터 유무를 확인한 뒤 선택한다.
+- 호텔은 `hotel_info`, `hotel_price`, 공항은 `airport_name`, `airport_price`, 투어는 `tour`, `tour_pricing`, `tour_schedule`, `tour_inclusions`, `tour_exclusions`, `tour_important_info`, `tour_addon_options`, `tour_payment_pricing`, `tour_cancellation_policy`, `tour_cruise_integration`을 우선 점검한다.
+- 홈페이지에는 원본 JSON 스테이징과 가공 v2 데이터만 작성한다. 플랫폼의 상품 원본에는 INSERT·UPDATE·DELETE를 수행하지 않는다.
+- 읽기 전용 건수 점검 결과는 크루즈 `cruise_info` 89, `cruise_rate_card` 776, 포함사항 162, 프로모션 요금 52, 휴일 할증 128, 옵션 11건이다. 호텔은 정보 8·요금 164건, 공항은 명칭 4·요금 80건, 투어는 상품 10·요금 66·일정 57·포함 61·제외 39·중요정보 98·옵션 48·결제요금 6·취소정책 26·크루즈연동 2건이다.
+- 플랫폼 전송 허용 목록은 크루즈 11개(`cruise_info`, `cruise_rate_card`, `cruise_rate_card_inclusions`, `cruise_location`, `cruise_promotion`, `cruise_promotion_rate`, `cruise_holiday_surcharge`, `cruise_tour_options`, `cruise_info_by_category`, `cruise_info_view`, `cruise_rooms_view`), 호텔 2개, 공항 요금과 공항명 조회, 투어 10개 상세 원본 및 기존 차량 요금이다.
+- 홈페이지 DB에 `catalog_product_details_v2`, `catalog_reference_data_v2`를 추가했다. 상품에 연결되는 원본은 상세로, 공통 크루즈 위치·뷰 데이터는 참조로 보존한다. 상태 화면은 테이블별 미변환 원본·미변환 요금을 함께 표시한다.
+- 플랫폼의 `homepageSync.ts`는 `.select()`만 사용하며 쓰기 메서드 정적 검색 결과가 없다. 홈페이지 변환 RPC는 `anon`, `authenticated`의 실행 권한을 명시적으로 회수하고 `service_role`만 허용했다.
+
 추가 작업 메모 (2026. 07. 15 - PWA 앱별 아이콘 교체)
 
 - 사용자가 제공한 공용 원본 아이콘을 앱별로 매핑함. `adminpwa.png`는 admin, `managerpwa.png`는 manager, `manager1pwa.png`는 manager1, `mobilepwa.png`는 mobile에 적용함.

@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabaseServer';
 import serviceSupabase from '@/lib/serviceSupabase';
-import { pushHomepageCatalog } from '@/lib/homepageSync';
+import { getHomepageCatalogStatus, pushHomepageCatalog, refreshHomepageCatalog } from '@/lib/homepageSync';
 
 async function isAdmin(request: NextRequest) {
   if (!serviceSupabase) return false;
@@ -27,8 +27,19 @@ async function isAdmin(request: NextRequest) {
 export async function POST(request: NextRequest) {
   if (!(await isAdmin(request))) return NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 });
   try {
+    const body = await request.json().catch(() => ({}));
+    if (body.action === 'transform') return NextResponse.json({ ok: true, ...(await refreshHomepageCatalog()) });
     return NextResponse.json({ ok: true, ...(await pushHomepageCatalog('manual')) });
   } catch (error: any) {
     return NextResponse.json({ error: error?.message || '홈페이지 전송에 실패했습니다.' }, { status: 502 });
+  }
+}
+
+export async function GET(request: NextRequest) {
+  if (!(await isAdmin(request))) return NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 });
+  try {
+    return NextResponse.json(await getHomepageCatalogStatus());
+  } catch (error: any) {
+    return NextResponse.json({ error: error?.message || '홈페이지 변환 현황을 조회하지 못했습니다.' }, { status: 502 });
   }
 }
