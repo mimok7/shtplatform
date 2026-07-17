@@ -211,6 +211,7 @@ export default function AdminLayout({ children, title, activeTab }: AdminLayoutP
       id: 'group-data', label: '데이터/동기화', icon: '🔗', items: [
         { id: 'data-management', label: '데이터 연결', path: '/admin/data-management', icon: '🔗' },
         { id: 'sync', label: '데이터 동기화', path: '/admin/sync', icon: '🔄' },
+        { id: 'homepage-sync', label: '홈페이지 전송', path: '/admin/homepage-sync', icon: '🏠' },
         { id: 'sync-shcc', label: 'sh_cc 동기화', path: '/admin/sync-shcc-to-reservation', icon: '🚗' },
         { id: 'base-prices', label: '가격 동기화', path: '/admin/base-prices', icon: '🏷️' },
         { id: 'fix-quantities', label: '수량 수정', path: '/admin/fix-quantities', icon: '🛠️' },

@@ -24,6 +24,10 @@
     {
       "path": "/api/cron/payment-notifications-generate",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/homepage-sync",
+      "schedule": "0 18 * * 0"
     }
   ]
 }

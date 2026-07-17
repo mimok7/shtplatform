@@ -85,6 +85,16 @@ SHT 단가 오표시 이슈 조사 시작.
 - 적용 파일:
   - `apps/customer/public/sw.js`
 
+## 홈페이지 상품 데이터 푸시 (2026. 07. 17)
+
+- 예약 플랫폼 DB를 상품 원본으로 유지하고, 홈페이지 DB에는 상품 카탈로그만 단방향으로 복제한다.
+- 회원, 예약, 결제 및 service-role 키는 전송 대상에서 제외한다.
+- 즉시 전송은 관리자 인증 API로, 자동 전송은 admin Vercel Cron의 주간 호출로 구성한다.
+- 홈페이지는 수신 원본을 별도 스테이징 테이블에 저장한다. 기존 v2 큐레이션 데이터의 설명·추천 태그는 덮어쓰지 않는다.
+- 플랫폼 관리 화면은 `/admin/homepage-sync`, 수동 전송 API는 `/api/admin/homepage-sync`로 추가한다.
+- 자동 전송은 `vercel.json`의 `/api/cron/homepage-sync`에서 매주 일요일 18:00 UTC, 월요일 03:00 KST에 실행한다.
+- `pnpm --filter @sht/admin typecheck`, `pnpm --filter @sht/admin build`, 홈페이지 `npm run build`로 정적 검증했다. 실제 전송은 홈페이지 마이그레이션 적용 및 양쪽 환경 변수 설정 후 가능하다.
+
 추가 작업 메모 (2026. 07. 15 - PWA 앱별 아이콘 교체)
 
 - 사용자가 제공한 공용 원본 아이콘을 앱별로 매핑함. `adminpwa.png`는 admin, `managerpwa.png`는 manager, `manager1pwa.png`는 manager1, `mobilepwa.png`는 mobile에 적용함.
@@ -96,4 +106,3 @@ SHT 단가 오표시 이슈 조사 시작.
 - `sql/db.csv`와 `sql/031-rentcar-2026-data.sql` 기준으로 `public.rentcar_price` 컬럼을 확인했다.
 - 씨스타의 기존 크루즈명은 `씨스타 크루즈`이며, 2026·2027 각각 편도 500,000동과 숙박 일정 왕복(`다른날왕복`) 1,000,000동으로 등록한다.
 - 신규 SQL 파일은 `sql/120-seastar-cruise-shuttle-limousine-20260716.sql`이며, `WITH source_rows`, `NOT EXISTS`, 트랜잭션, 명시적 형변환, `RETURNING`, 검증 `SELECT`를 포함한다.
-
