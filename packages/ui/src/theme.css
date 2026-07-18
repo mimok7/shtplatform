@@ -107,7 +107,7 @@ html[data-sht-theme] :where(
   button[class*='text-indigo-'],
   a[class*='text-blue-'],
   a[class*='text-indigo-'],
-  [aria-current='page']
+  [aria-current='page']:not([data-sht-theme-ignore])
 ) {
   color: var(--sht-primary) !important;
 }

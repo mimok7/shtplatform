@@ -130,7 +130,7 @@ export default function ThemeManagementPage() {
           <p className="mb-3 text-xs font-bold tracking-[0.16em] text-gray-500">DESIGN SYSTEM / APP THEMES</p>
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <h1 data-sht-theme-ignore className="text-[8px] font-extrabold tracking-tight text-gray-900">앱별 테마 설정</h1>
+              <h1 data-sht-theme-ignore className="text-xl font-extrabold tracking-tight text-gray-900">앱별 테마 설정</h1>
               <p className="mt-3 max-w-3xl text-sm leading-7 text-gray-600">
                 기능과 문구는 그대로 유지하면서 앱별 글꼴, 글씨 크기, 버튼 색상과 모양,
                 입력창, 카드, 표, 내비게이션 디자인을 한 번에 변경합니다.
