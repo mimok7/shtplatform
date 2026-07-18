@@ -277,7 +277,7 @@ export default function AdminLayout({ children, title, activeTab }: AdminLayoutP
       key={tab.id}
       href={tab.path}
       data-sht-theme-ignore
-      className={`flex items-center justify-start gap-3 ${indent ? 'pl-7 pr-3' : 'px-3'} py-2 text-xs rounded-md transition-colors ${computedActiveTab === tab.id ? 'bg-blue-600 text-white hover:bg-blue-700' : 'text-gray-700 hover:bg-gray-50'}`}
+      className={`flex items-center justify-start gap-3 ${indent ? 'pl-7 pr-3' : 'px-3'} py-2 text-[11px] rounded-md transition-colors ${computedActiveTab === tab.id ? 'bg-blue-700 !text-white hover:bg-blue-800' : 'text-gray-700 hover:bg-gray-50'}`}
       aria-current={computedActiveTab === tab.id ? 'page' : undefined}
     >
       <span className="text-lg inline-block w-6 text-center">{tab.icon}</span>
@@ -318,7 +318,7 @@ export default function AdminLayout({ children, title, activeTab }: AdminLayoutP
                   A
                 </div>
                 <div>
-                  <h1 data-sht-theme-ignore className="text-xl font-bold text-blue-900">관리자 패널</h1>
+                  <h1 data-sht-theme-ignore className="text-sm font-bold text-blue-900">관리자 패널</h1>
                   <p className="text-blue-700 text-sm">스테이하롱 크루즈</p>
                 </div>
               </div>
@@ -358,7 +358,7 @@ export default function AdminLayout({ children, title, activeTab }: AdminLayoutP
                           type="button"
                           data-sht-theme-ignore
                           onClick={() => toggleGroup(group.id)}
-                          className={`w-full flex items-center justify-between px-3 py-2 text-xs rounded-md transition-colors ${hasActive ? 'bg-blue-600 text-white hover:bg-blue-700' : 'text-gray-600 hover:bg-gray-50'}`}
+                          className={`w-full flex items-center justify-between px-3 py-2 text-[11px] rounded-md transition-colors ${hasActive ? 'bg-blue-700 !text-white hover:bg-blue-800' : 'text-gray-600 hover:bg-gray-50'}`}
                           aria-expanded={isOpen}
                         >
                           <span className="flex items-center gap-3">

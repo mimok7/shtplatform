@@ -398,34 +398,45 @@ export default function AdminBackupPage() {
     <AdminLayout title="백업 관리" activeTab="backup">
       <div className="space-y-6">
         {/* 탭 네비게이션 */}
-        <div className="flex gap-2 border-b border-gray-200">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200">
+          <div className="flex gap-2">
+            <button
+              onClick={() => {
+                setTab('info');
+                setError('');
+                setSuccess('');
+              }}
+              className={`px-4 py-2 font-medium border-b-2 transition-colors ${
+                tab === 'info'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              📋 백업 정보
+            </button>
+            <button
+              onClick={() => {
+                setTab('restore');
+                setError('');
+                setSuccess('');
+              }}
+              className={`px-4 py-2 font-medium border-b-2 transition-colors ${
+                tab === 'restore'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              🔄 복원 마법사
+            </button>
+          </div>
           <button
-            onClick={() => {
-              setTab('info');
-              setError('');
-              setSuccess('');
-            }}
-            className={`px-4 py-2 font-medium border-b-2 transition-colors ${
-              tab === 'info'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-600 hover:text-gray-900'
-            }`}
+            type="button"
+            data-sht-theme-ignore
+            onClick={startBackup}
+            disabled={backupStarting || backupSetup === null}
+            className="mb-2 inline-flex items-center rounded-md bg-blue-700 px-4 py-2 text-sm font-bold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            📋 백업 정보
-          </button>
-          <button
-            onClick={() => {
-              setTab('restore');
-              setError('');
-              setSuccess('');
-            }}
-            className={`px-4 py-2 font-medium border-b-2 transition-colors ${
-              tab === 'restore'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            🔄 복원 마법사
+            {backupStarting ? '백업 시작 중...' : '지금 바로 백업'}
           </button>
         </div>
 
@@ -469,20 +480,6 @@ export default function AdminBackupPage() {
                     >
                       오류 해결 가이드
                     </a>
-                    <button
-                      type="button"
-                      onClick={startBackup}
-                      disabled={backupStarting || !backupReady}
-                      className="inline-flex items-center px-3 py-1.5 text-xs rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {backupStarting
-                        ? '백업 시작 중...'
-                        : backupSetup === null
-                          ? '백업 설정 확인 중...'
-                          : backupReady
-                            ? '지금 백업 생성'
-                            : '백업 설정 필요'}
-                    </button>
                   </div>
                   {backupSetup && !backupReady && (
                     <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
