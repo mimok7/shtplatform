@@ -9,7 +9,7 @@ const PG_DUMP_COMMAND = `pg_dump --no-owner --no-privileges \\
   --format=custom \\
   --file "backup_$(date +%F).dump"`;
 
-const GITHUB_ACTION_CRON = `name: Daily Supabase Backup
+const GITHUB_ACTION_CRON = `name: Supabase Backup
 
 on:
   schedule:
@@ -27,15 +27,19 @@ jobs:
         env:
           SUPABASE_DB_URL: \${{ secrets.SUPABASE_DB_URL }}
         run: |
-          ts=$(date +%F)
-          pg_dump --no-owner --no-privileges --dbname "$SUPABASE_DB_URL" --file "backup_$ts.sql"
-          gzip -f "backup_$ts.sql"
+          ts=$(date -u +%Y%m%dT%H%M%SZ)
+          pg_dump --format=custom --no-owner --no-privileges --file "supabase-backup-$ts.dump" "$SUPABASE_DB_URL"
+          pg_restore --list "supabase-backup-$ts.dump" > "manifest-$ts.txt"
+          gzip -9 "supabase-backup-$ts.dump"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: supabase-backup
-          path: backup_*.sql.gz`;
+          name: supabase-backup-\${{ github.run_id }}
+          path: |
+            supabase-backup-*.dump.gz
+            manifest-*.txt
+          retention-days: 90`;
 
 type Tab = 'info' | 'restore';
 type Artifact = {
@@ -61,6 +65,7 @@ export default function AdminBackupPage() {
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [tables, setTables] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [backupStarting, setBackupStarting] = useState(false);
   const [error, setError] = useState<string>('');
   const [success, setSuccess] = useState<string>('');
   const [restoreStep, setRestoreStep] = useState<RestoreStep>('select');
@@ -131,6 +136,31 @@ export default function AdminBackupPage() {
       setError(e.message || '데이터 로드 실패');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const startBackup = async () => {
+    setBackupStarting(true);
+    setError('');
+    setSuccess('');
+    try {
+      const { data: { session } } = await getSupabase().auth.getSession();
+      const authHeaders: Record<string, string> = session?.access_token
+        ? { Authorization: `Bearer ${session.access_token}` }
+        : {};
+      const response = await fetch('/api/admin/backup/run', {
+        method: 'POST',
+        headers: authHeaders,
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error || '백업 시작에 실패했습니다.');
+      }
+      setSuccess(data.message);
+    } catch (e: any) {
+      setError(e.message || '백업 시작 중 오류가 발생했습니다.');
+    } finally {
+      setBackupStarting(false);
     }
   };
 
@@ -368,6 +398,17 @@ export default function AdminBackupPage() {
           </button>
         </div>
 
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <p className="text-sm text-red-700">❌ {error}</p>
+          </div>
+        )}
+        {success && (
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+            <p className="text-sm text-green-700">✅ {success}</p>
+          </div>
+        )}
+
         {/* 정보 탭 */}
         {tab === 'info' && (
           <div className="space-y-6">
@@ -397,6 +438,14 @@ export default function AdminBackupPage() {
                     >
                       오류 해결 가이드
                     </a>
+                    <button
+                      type="button"
+                      onClick={startBackup}
+                      disabled={backupStarting}
+                      className="inline-flex items-center px-3 py-1.5 text-xs rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {backupStarting ? '백업 시작 중...' : '지금 백업 생성'}
+                    </button>
                   </div>
                 </div>
                 <div className="text-xs text-gray-500">기준 시각: {today}</div>
@@ -443,7 +492,7 @@ export default function AdminBackupPage() {
                   <ul className="space-y-1">
                     <li>1. 매일 UTC 18:00 (KST 03:00)</li>
                     <li>2. 수동 실행(workflow_dispatch) 지원</li>
-                    <li>3. GitHub Artifact 30일 보관</li>
+                    <li>3. GitHub Artifact 90일 보관</li>
                   </ul>
                 </div>
               </div>
@@ -655,18 +704,6 @@ export default function AdminBackupPage() {
                 </div>
               )}
             </div>
-
-            {/* 에러/성공 메시지 */}
-            {error && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                <p className="text-sm text-red-700">❌ {error}</p>
-              </div>
-            )}
-            {success && (
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                <p className="text-sm text-green-700">✅ {success}</p>
-              </div>
-            )}
 
             {/* Step 1: 백업 선택 */}
             {restoreStep === 'select' && (

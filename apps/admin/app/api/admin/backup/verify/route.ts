@@ -4,7 +4,7 @@ import serviceSupabase from '@/lib/serviceSupabase';
 import unzipper from 'unzipper';
 
 const GITHUB_OWNER = process.env.GITHUB_BACKUP_OWNER || 'mimok7';
-const GITHUB_REPO = process.env.GITHUB_BACKUP_REPO || 'admin';
+const GITHUB_REPO = process.env.GITHUB_BACKUP_REPO || 'shtplatform';
 const GITHUB_TOKEN = process.env.GITHUB_BACKUP_TOKEN || process.env.GITHUB_TOKEN || '';
 const VERIFY_WORKFLOW = process.env.GITHUB_VERIFY_WORKFLOW || 'backup-restore-verify.yml';
 

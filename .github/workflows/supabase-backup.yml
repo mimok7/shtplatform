@@ -1,0 +1,42 @@
+# Supabase 논리 백업 Artifact를 매일 및 수동으로 생성하는 GitHub Actions 워크플로
+name: Supabase Backup
+
+on:
+  schedule:
+    - cron: '0 18 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: PostgreSQL client 설치
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client gzip
+
+      - name: PostgreSQL custom 백업 생성 및 검증
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+          test -n "$SUPABASE_DB_URL"
+          backup_dir="backup"
+          timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
+          dump_file="$backup_dir/supabase-backup-$timestamp.dump"
+
+          mkdir -p "$backup_dir"
+          pg_dump --format=custom --no-owner --no-privileges --file "$dump_file" "$SUPABASE_DB_URL"
+          pg_restore --list "$dump_file" > "$backup_dir/manifest-$timestamp.txt"
+          sha256sum "$dump_file" > "$backup_dir/checksum-$timestamp.sha256"
+          gzip -9 "$dump_file"
+
+      - name: 복원 가능한 백업 Artifact 업로드
+        uses: actions/upload-artifact@v4
+        with:
+          name: supabase-backup-${{ github.run_id }}
+          path: backup/
+          if-no-files-found: error
+          retention-days: 90

@@ -211,6 +211,22 @@ SHT 단가 오표시 이슈 조사 시작.
 - `apps/admin/app/admin/themes/page.tsx`의 저장 흐름을 `auth.getUser()`에서 `auth.getSession()`으로 교체했다. 원격 사용자 확인 요청을 없애고 세션에 있는 사용자 ID를 `updated_by`에 저장한다.
 - 공통 헤더의 `관리자 패널`과 테마 화면의 `앱별 테마 설정`을 8px로 축소했다. 두 제목은 `data-sht-theme-ignore`를 사용하므로 계절 테마의 전역 `h1` 크기에 의해 다시 커지지 않는다.
 - `pnpm --dir apps/admin typecheck`가 통과했고 `/admin/themes`는 HTTP 200을 반환했다.
+
+백업 생성·목록·복원 점검 작업 시작.
+
+- 현재 원격 저장소는 `mimok7/shtplatform`이지만 백업 관련 API의 기본 저장소는 `mimok7/admin`으로 설정돼 있어 정상 Artifact를 조회하지 못한다.
+- `.github/workflows`에는 백업을 생성하는 워크플로가 없고 CI만 존재한다. 따라서 복원 화면은 조회할 Artifact가 없는 상태가 된다.
+- 복원 API는 GitHub Artifact 내부에서 PostgreSQL custom format의 `.dump` 또는 `.dump.gz` 파일을 찾고 `pg_restore`로 복원한다. 화면의 기존 SQL gzip 예시는 이 형식과 호환되지 않는다.
+- 매일과 수동 실행 모두 지원하는 `pg_dump --format=custom` 기반 Artifact를 추가하고, 관리자 화면에서 워크플로를 수동 실행할 수 있게 한다.
+
+백업 생성·목록·복원 구현 결과.
+
+- `.github/workflows/supabase-backup.yml`에 KST 03:00 자동 실행과 수동 실행을 추가했다. 이 워크플로는 custom format `.dump`를 생성하고 `pg_restore --list`로 검증한 후 `.dump.gz`, 매니페스트, 체크섬을 90일 보관 Artifact로 업로드한다.
+- Artifact 이름은 `supabase-backup-<run id>`라서 관리자 목록 API의 필터와 일치한다. 복원 API가 찾는 `.dump.gz` 파일 형식과도 일치한다.
+- 백업·복원·이전·검증 API의 기본 GitHub 저장소를 실제 원격 저장소인 `mimok7/shtplatform`으로 변경했다. 환경변수로 다른 저장소를 명시한 경우에는 해당 값이 우선한다.
+- 관리자 백업 화면에 `지금 백업 생성` 버튼을 추가했다. 서버 API가 GitHub workflow_dispatch를 호출하고, 완료 메시지 후 복원 마법사에서 목록을 새로고침하도록 안내한다.
+- 실제 첫 Artifact 생성에는 GitHub 저장소 Secret `SUPABASE_DB_URL`과 배포 서버 환경변수 `GITHUB_BACKUP_TOKEN`의 Actions 쓰기 권한이 필요하다. 비밀값은 저장소에 작성하지 않았다.
+- `pnpm --dir apps/admin typecheck`, 백업 워크플로 필수 항목 정적 검사, `/admin/backup` HTTP 200을 확인했다.
 - 최근 개발 서버 로그의 `subscribe-push` 빈 JSON 오류는 테마 저장과 별개인 푸시 구독 요청에서 발생한 기존 오류이며, 이번 파일 변경과 직접 관련이 없다.
 
 관리자 제목 및 메뉴 가독성 보정 작업 시작.

@@ -15,7 +15,7 @@ export const runtime = 'nodejs';
 export const maxDuration = 300; // 5분
 
 const GITHUB_OWNER = process.env.GITHUB_BACKUP_OWNER || 'mimok7';
-const GITHUB_REPO = process.env.GITHUB_BACKUP_REPO || 'admin';
+const GITHUB_REPO = process.env.GITHUB_BACKUP_REPO || 'shtplatform';
 const GITHUB_TOKEN = process.env.GITHUB_BACKUP_TOKEN || process.env.GITHUB_TOKEN || '';
 
 // pg_restore 바이너리 경로 (환경별 자동 탐지)
