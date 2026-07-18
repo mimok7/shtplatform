@@ -42,6 +42,7 @@ jobs:
           retention-days: 90`;
 
 const BACKUP_START_TIMEOUT_MS = 10_000;
+const BACKUP_LIST_TIMEOUT_MS = 8_000;
 
 type Tab = 'info' | 'restore';
 type Artifact = {
@@ -72,6 +73,8 @@ export default function AdminBackupPage() {
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [tables, setTables] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [artifactsLoading, setArtifactsLoading] = useState(false);
+  const [tablesLoading, setTablesLoading] = useState(false);
   const [backupStarting, setBackupStarting] = useState(false);
   const [backupSetup, setBackupSetup] = useState<BackupSetup | null>(null);
   const [error, setError] = useState<string>('');
@@ -120,46 +123,63 @@ export default function AdminBackupPage() {
 
   // 백업 파일과 DB 테이블 목록 로드
   useEffect(() => {
-    if (tab === 'restore' && (artifacts.length === 0 || tables.length === 0)) {
+    if (tab === 'restore') {
       fetchArtifactsAndTables();
     }
-  }, [tab, artifacts.length, tables.length]);
+  }, [tab]);
 
   const fetchArtifactsAndTables = async () => {
-    setLoading(true);
     setError('');
+    setArtifactsLoading(true);
+    setTablesLoading(true);
+
+    const fetchWithTimeout = async (path: string, headers: HeadersInit) => {
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), BACKUP_LIST_TIMEOUT_MS);
+      try {
+        return await fetch(path, { cache: 'no-store', headers, signal: controller.signal });
+      } finally {
+        window.clearTimeout(timeout);
+      }
+    };
+
     try {
       const { data: { session } } = await getSupabase().auth.getSession();
       const authHeaders: HeadersInit = session?.access_token
         ? { Authorization: `Bearer ${session.access_token}` }
         : {};
 
-      const [artRes, tableRes] = await Promise.all([
-        fetch('/api/admin/backup/artifacts', { cache: 'no-store', headers: authHeaders }),
-        fetch('/api/admin/backup/tables', { cache: 'no-store', headers: authHeaders }),
+      const addListError = (error: unknown) => {
+        const message = error instanceof DOMException && error.name === 'AbortError'
+          ? '목록 조회가 8초 안에 완료되지 않았습니다.'
+          : error instanceof Error ? error.message : '목록 조회에 실패했습니다.';
+        setError((current) => current ? `${current} ${message}` : message);
+      };
+
+      await Promise.all([
+        fetchWithTimeout('/api/admin/backup/artifacts', authHeaders)
+          .then(async (response) => {
+            if (!response.ok) throw new Error(`Artifact 조회 실패: ${response.status}`);
+            const data = await response.json();
+            if (!data.ok || !Array.isArray(data.artifacts)) throw new Error(data.error || 'Artifact 데이터 구조 오류');
+            setArtifacts(data.artifacts);
+          })
+          .catch(addListError)
+          .finally(() => setArtifactsLoading(false)),
+        fetchWithTimeout('/api/admin/backup/tables', authHeaders)
+          .then(async (response) => {
+            if (!response.ok) throw new Error(`테이블 조회 실패: ${response.status}`);
+            const data = await response.json();
+            if (!data.ok || !Array.isArray(data.tables)) throw new Error(data.error || '테이블 데이터 구조 오류');
+            setTables(data.tables);
+          })
+          .catch(addListError)
+          .finally(() => setTablesLoading(false)),
       ]);
-
-      if (!artRes.ok) throw new Error(`Artifact 조회 실패: ${artRes.status}`);
-      if (!tableRes.ok) throw new Error(`테이블 조회 실패: ${tableRes.status}`);
-
-      const artData = await artRes.json();
-      const tableData = await tableRes.json();
-
-      if (artData.ok && Array.isArray(artData.artifacts)) {
-        setArtifacts(artData.artifacts);
-      } else {
-        throw new Error(artData.error || 'Artifact 데이터 구조 오류');
-      }
-
-      if (tableData.ok && Array.isArray(tableData.tables)) {
-        setTables(tableData.tables);
-      } else {
-        throw new Error(tableData.error || '테이블 데이터 구조 오류');
-      }
     } catch (e: any) {
       setError(e.message || '데이터 로드 실패');
-    } finally {
-      setLoading(false);
+      setArtifactsLoading(false);
+      setTablesLoading(false);
     }
   };
 
@@ -681,7 +701,7 @@ export default function AdminBackupPage() {
                     </button>
                   </div>
 
-                  {loading && <p className="text-xs text-gray-600">백업 파일/테이블 목록 로드 중...</p>}
+                  {(artifactsLoading || tablesLoading) && <p className="text-xs text-gray-600">백업 목록을 불러오는 중입니다.</p>}
 
                   <div>
                     <label className="block text-xs font-semibold text-red-900 mb-1">
@@ -782,7 +802,7 @@ export default function AdminBackupPage() {
                   </p>
                 </div>
 
-                {loading ? (
+                {artifactsLoading ? (
                   <div className="text-center py-6">
                     <p className="text-gray-600">로딩 중...</p>
                   </div>
@@ -838,6 +858,9 @@ export default function AdminBackupPage() {
                   </p>
                 </div>
 
+                {tablesLoading ? (
+                  <div className="border border-gray-200 rounded-lg p-6 text-center text-sm text-gray-600">테이블 목록을 불러오는 중입니다.</div>
+                ) : (
                 <div className="border border-gray-200 rounded-lg overflow-hidden">
                   <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex items-center justify-between">
                     <label className="flex items-center gap-2 cursor-pointer">
@@ -869,6 +892,7 @@ export default function AdminBackupPage() {
                     ))}
                   </div>
                 </div>
+                )}
 
                 <div className="flex gap-3 justify-end">
                   <button

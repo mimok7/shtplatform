@@ -265,6 +265,11 @@ PostgreSQL 17 백업 클라이언트 보정.
 - GitHub Actions 로그에서 데이터베이스 연결은 성공했으나 서버가 PostgreSQL 17.4이고 설치된 `pg_dump`가 16.14라 백업이 중단됐다.
 - Ubuntu 기본 패키지 버전에 의존하지 않고 `postgres:17` 컨테이너의 `pg_dump`, `pg_restore`를 사용하도록 변경한다.
 
+백업 Artifact 목록 로딩 분리.
+
+- 기존 복원 화면은 Artifact API와 테이블 OpenAPI 조회를 `Promise.all`로 묶어 테이블 조회가 지연되면 Step 1의 Artifact 목록도 계속 로딩으로 표시됐다.
+- Artifact와 테이블에 독립 로딩 상태를 적용했다. Artifact 요청이 완료되면 Step 1은 즉시 표시하며 테이블 실패·지연은 Step 2에만 영향을 준다.
+
 백업 화면 상단 실행 버튼 및 관리자 메뉴 가독성 작업 시작.
 
 - 기존 `지금 백업 생성` 버튼은 백업 정보 탭 내부에 있고, 설정 미완료 시 `백업 설정 필요`로 바뀌어 사용자가 즉시 실행 버튼을 찾기 어렵다.
