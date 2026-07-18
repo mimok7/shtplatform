@@ -1,5 +1,7 @@
 import React from 'react';
 import '../styles/globals.css';
+import '@sht/ui/theme.css';
+import { ShtThemeProvider } from '@sht/ui/theme';
 import Header from '@/components/Header';
 import AlertProvider from '@/components/AlertProvider';
 import AuthInitializer from '@/components/AuthInitializer';
@@ -24,20 +26,22 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ko" suppressHydrationWarning>
       <body className="bg-background text-foreground">
-        <ServiceWorkerRegister />
-        <PushNotificationManager />
-        <ConsoleErrorOnly />
-        <QueryProvider>
-          <AlertProvider siteName="스테이 하롱 트레블">
-            <AuthInitializer />
-            <TabSessionGuard loginPath="/login" />
-            {/* ✅ 머릿글 */}
-            <Header />
+        <ShtThemeProvider appId="manager">
+          <ServiceWorkerRegister />
+          <PushNotificationManager />
+          <ConsoleErrorOnly />
+          <QueryProvider>
+            <AlertProvider siteName="스테이 하롱 트레블">
+              <AuthInitializer />
+              <TabSessionGuard loginPath="/login" />
+              {/* ✅ 머릿글 */}
+              <Header />
 
-            {/* ✅ 본문: 전체 너비 사용 (페이지별 레이아웃에서 여백 처리) */}
-            <main className="w-full">{children}</main>
-          </AlertProvider>
-        </QueryProvider>
+              {/* ✅ 본문: 전체 너비 사용 (페이지별 레이아웃에서 여백 처리) */}
+              <main className="w-full">{children}</main>
+            </AlertProvider>
+          </QueryProvider>
+        </ShtThemeProvider>
       </body>
     </html>
   );

@@ -1,0 +1,223 @@
+/* 앱별 계절 테마의 글꼴·색상·버튼·입력창·카드·표 스타일 */
+:root {
+  --sht-canvas: #f4f4ed;
+  --sht-surface: #ffffff;
+  --sht-surface-muted: #ebeee7;
+  --sht-text: #173437;
+  --sht-text-muted: #6f817d;
+  --sht-heading: #062f33;
+  --sht-primary: #062f33;
+  --sht-primary-hover: #0a464b;
+  --sht-primary-text: #ffffff;
+  --sht-primary-soft: #e4eed4;
+  --sht-accent: #d9ff72;
+  --sht-border: rgba(6, 47, 51, 0.18);
+  --sht-focus: #bce94b;
+  --sht-font-family: 'Pretendard Variable', 'Pretendard', 'Noto Sans KR', sans-serif;
+  --sht-font-size-body: 15px;
+  --sht-font-size-title: clamp(2rem, 4vw, 3.75rem);
+  --sht-font-size-heading: clamp(1.25rem, 2vw, 1.75rem);
+  --sht-font-size-label: 12px;
+  --sht-button-radius: 2px;
+  --sht-button-height: 40px;
+  --sht-button-padding-x: 16px;
+  --sht-button-font-size: 13px;
+  --sht-button-font-weight: 700;
+  --sht-button-letter-spacing: -0.01em;
+  --sht-input-radius: 2px;
+  --sht-card-radius: 2px;
+  --sht-card-shadow: none;
+}
+
+html[data-sht-theme] body {
+  background-color: var(--sht-canvas);
+  color: var(--sht-text);
+  font-family: var(--sht-font-family);
+  font-size: var(--sht-font-size-body);
+  word-break: keep-all;
+}
+
+html[data-sht-theme] :where(h1, h2, h3, h4, h5, h6) {
+  color: var(--sht-heading);
+  font-family: var(--sht-font-family);
+  letter-spacing: -0.035em;
+}
+
+html[data-sht-theme] h1 {
+  font-size: var(--sht-font-size-title);
+  font-weight: 750;
+  line-height: 1.05;
+}
+
+html[data-sht-theme] :where(h2, h3) {
+  font-size: var(--sht-font-size-heading);
+  line-height: 1.2;
+}
+
+html[data-sht-theme] :where(button, [role='button'], input, textarea, select) {
+  font-family: var(--sht-font-family);
+}
+
+html[data-sht-theme] :where(button:not([data-sht-theme-ignore]), [role='button']:not([data-sht-theme-ignore])) {
+  border-radius: var(--sht-button-radius) !important;
+  font-size: var(--sht-button-font-size);
+  font-weight: var(--sht-button-font-weight);
+  letter-spacing: var(--sht-button-letter-spacing);
+}
+
+html[data-sht-theme] :where(button:not([aria-label]):not([data-sht-theme-ignore]), [role='button']:not([aria-label]):not([data-sht-theme-ignore])) {
+  min-height: var(--sht-button-height);
+  padding-inline: var(--sht-button-padding-x);
+}
+
+html[data-sht-theme] :where(
+  button[class*='bg-blue-'],
+  button[class*='bg-indigo-'],
+  button[class*='bg-cyan-'],
+  button[class*='bg-teal-'],
+  a[class*='bg-blue-'],
+  a[class*='bg-indigo-'],
+  a[class*='bg-cyan-'],
+  a[class*='bg-teal-'],
+  input[type='submit'],
+  .btn-selected
+) {
+  border-color: var(--sht-primary) !important;
+  background-color: var(--sht-primary) !important;
+  color: var(--sht-primary-text) !important;
+}
+
+html[data-sht-theme] :where(
+  button[class*='bg-blue-'],
+  button[class*='bg-indigo-'],
+  button[class*='bg-cyan-'],
+  button[class*='bg-teal-'],
+  a[class*='bg-blue-'],
+  a[class*='bg-indigo-'],
+  a[class*='bg-cyan-'],
+  a[class*='bg-teal-'],
+  input[type='submit'],
+  .btn-selected
+):hover {
+  background-color: var(--sht-primary-hover) !important;
+}
+
+html[data-sht-theme] :where(
+  button[class*='text-blue-'],
+  button[class*='text-indigo-'],
+  a[class*='text-blue-'],
+  a[class*='text-indigo-'],
+  [aria-current='page']
+) {
+  color: var(--sht-primary) !important;
+}
+
+html[data-sht-theme] :where(input, textarea, select) {
+  border-color: var(--sht-border);
+  border-radius: var(--sht-input-radius) !important;
+  background-color: var(--sht-surface);
+  color: var(--sht-text);
+}
+
+html[data-sht-theme] :where(input, textarea, select):focus {
+  border-color: var(--sht-focus) !important;
+  outline: 2px solid color-mix(in srgb, var(--sht-focus) 45%, transparent);
+  outline-offset: 1px;
+}
+
+html[data-sht-theme] :where(.card, [class*='bg-white'][class*='rounded'][class*='border']) {
+  border-color: var(--sht-border) !important;
+  border-radius: var(--sht-card-radius) !important;
+  background-color: var(--sht-surface) !important;
+  box-shadow: var(--sht-card-shadow) !important;
+}
+
+html[data-sht-theme] :where(table) {
+  border-color: var(--sht-border);
+  color: var(--sht-text);
+}
+
+html[data-sht-theme] :where(thead, th) {
+  background-color: var(--sht-surface-muted);
+  color: var(--sht-heading);
+  font-size: var(--sht-font-size-label);
+  letter-spacing: 0.04em;
+}
+
+html[data-sht-theme] :where(td, th) {
+  border-color: var(--sht-border) !important;
+}
+
+html[data-sht-theme] :where([class*='bg-gray-50'], [class*='bg-slate-50']) {
+  background-color: var(--sht-surface-muted);
+}
+
+html[data-sht-theme] :where([class*='text-gray-500'], [class*='text-gray-600'], [class*='text-slate-500'], [class*='text-slate-600']) {
+  color: var(--sht-text-muted);
+}
+
+html[data-sht-app='mobile'] {
+  --sht-button-height: 44px;
+}
+
+.sht-theme-preview {
+  background: var(--sht-canvas);
+  color: var(--sht-text);
+  font-family: var(--sht-font-family);
+}
+
+.sht-theme-preview__heading {
+  color: var(--sht-heading);
+  font-size: var(--sht-font-size-heading);
+  font-weight: 750;
+  letter-spacing: -0.035em;
+}
+
+.sht-theme-preview__label {
+  color: var(--sht-text-muted);
+  font-size: var(--sht-font-size-label);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.sht-theme-preview__button {
+  min-height: var(--sht-button-height);
+  padding-inline: var(--sht-button-padding-x);
+  border: 1px solid var(--sht-primary);
+  border-radius: var(--sht-button-radius);
+  background: var(--sht-primary);
+  color: var(--sht-primary-text);
+  font-size: var(--sht-button-font-size);
+  font-weight: var(--sht-button-font-weight);
+  letter-spacing: var(--sht-button-letter-spacing);
+}
+
+.sht-theme-preview__button--secondary {
+  background: var(--sht-surface);
+  color: var(--sht-primary);
+}
+
+.sht-theme-preview__input {
+  border: 1px solid var(--sht-border);
+  border-radius: var(--sht-input-radius);
+  background: var(--sht-surface);
+  color: var(--sht-text);
+}
+
+.sht-theme-preview__card {
+  border: 1px solid var(--sht-border);
+  border-radius: var(--sht-card-radius);
+  background: var(--sht-surface);
+  box-shadow: var(--sht-card-shadow);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-sht-theme] *,
+  html[data-sht-theme] *::before,
+  html[data-sht-theme] *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

@@ -1,5 +1,7 @@
 import React from 'react';
 import '../styles/globals.css';
+import '@sht/ui/theme.css';
+import { ShtThemeProvider } from '@sht/ui/theme';
 import AlertProvider from '@/components/AlertProvider';
 import AuthInitializer from '@/components/AuthInitializer';
 import TabSessionGuard from '@/components/TabSessionGuard';
@@ -22,15 +24,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ko">
       <body className="bg-background text-foreground" suppressHydrationWarning>
-        <ServiceWorkerRegister />
-        <PushNotificationManager />
-        <QueryProvider>
-          <AlertProvider siteName="스테이 하롱 관리자">
-            <AuthInitializer />
-            <TabSessionGuard loginPath="/login" />
-            <main className="w-full">{children}</main>
-          </AlertProvider>
-        </QueryProvider>
+        <ShtThemeProvider appId="admin">
+          <ServiceWorkerRegister />
+          <PushNotificationManager />
+          <QueryProvider>
+            <AlertProvider siteName="스테이 하롱 관리자">
+              <AuthInitializer />
+              <TabSessionGuard loginPath="/login" />
+              <main className="w-full">{children}</main>
+            </AlertProvider>
+          </QueryProvider>
+        </ShtThemeProvider>
       </body>
     </html>
   );

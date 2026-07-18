@@ -1,5 +1,7 @@
 import React from 'react';
 import '../styles/globals.css';
+import '@sht/ui/theme.css';
+import { ShtThemeProvider } from '@sht/ui/theme';
 import ConsoleErrorOnly from '@/components/ConsoleErrorOnly';
 import TabSessionGuard from '@/components/TabSessionGuard';
 import ServiceWorkerRegister from '@/components/ServiceWorkerRegister';
@@ -20,11 +22,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ko" suppressHydrationWarning>
       <body className="bg-background text-foreground">
-        <ServiceWorkerRegister />
-        <PushNotificationManager />
-        <ConsoleErrorOnly />
-        <TabSessionGuard loginPath="/login" />
-        <main className="w-full">{children}</main>
+        <ShtThemeProvider appId="manager1">
+          <ServiceWorkerRegister />
+          <PushNotificationManager />
+          <ConsoleErrorOnly />
+          <TabSessionGuard loginPath="/login" />
+          <main className="w-full">{children}</main>
+        </ShtThemeProvider>
       </body>
     </html>
   );

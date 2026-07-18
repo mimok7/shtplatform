@@ -117,3 +117,50 @@ SHT 단가 오표시 이슈 조사 시작.
 - `sql/db.csv`와 `sql/031-rentcar-2026-data.sql` 기준으로 `public.rentcar_price` 컬럼을 확인했다.
 - 씨스타의 기존 크루즈명은 `씨스타 크루즈`이며, 2026·2027 각각 편도 500,000동과 숙박 일정 왕복(`다른날왕복`) 1,000,000동으로 등록한다.
 - 신규 SQL 파일은 `sql/120-seastar-cruise-shuttle-limousine-20260716.sql`이며, `WITH source_rows`, `NOT EXISTS`, 트랜잭션, 명시적 형변환, `RETURNING`, 검증 `SELECT`를 포함한다.
+관리자 동기화 메뉴 및 페이지 삭제 작업 시작.
+
+- 삭제 대상은 사용자 동기화, 인증 동기화, 데이터 동기화, sh_cc 동기화, 가격 동기화, 수량 수정이다.
+- `apps/admin/components/AdminLayout.tsx`에 6개 메뉴가 등록되어 있다.
+- 이번 요청은 메뉴와 페이지 삭제이므로 공통 라이브러리와 API 구현은 보존한다.
+
+적용 및 검증 결과.
+
+- `AdminLayout.tsx`에서 6개 메뉴 항목을 제거했다.
+- 6개 라우트의 `page.tsx`를 삭제했다.
+- `apps/admin` 소스 검색에서 관련 라우트와 메뉴 문구 잔여 참조가 없음을 확인했다. 수량 관련 공통 라이브러리 로그는 보존했다.
+- `pnpm --dir apps/admin build`가 성공했다. 기존 ESLint 경고는 있으나 빌드를 막지 않았다.
+- 초기 `typecheck`는 삭제 전 라우트를 참조하는 기존 `.next/types` 생성 파일 때문에 실패했으며, 이후 production build 성공으로 새 라우트 구성이 정상 반영됨을 확인했다.
+앱별 계절 테마 시스템 작업 시작.
+
+- 기능과 데이터 흐름은 유지하고 UI 표현만 변경한다.
+- 지원 테마는 기본, 봄, 여름, 가을, 겨울, 크리스마스로 시작한다.
+- 테마 토큰에는 글꼴, 제목/본문/보조 글씨 크기, 버튼 배경/글자/테두리 색, 버튼 높이/패딩/모서리/굵기, 입력창/카드/표/사이드바 색을 포함한다.
+- 지원 앱은 admin, customer, customer1, manager, manager1, mobile, partner, quote, cancel 9개로 확인했다.
+- 공통 구현은 `@sht/ui` 패키지에 두고 각 앱 루트 레이아웃에는 앱 식별자만 전달한다.
+- Supabase 설정은 앱별 `theme_id`만 저장하며, CSS 토큰 정의는 코드에 둔다.
+- 연결된 Supabase 도구에는 SHT 프로젝트가 없으므로 다른 프로젝트에 DDL을 적용하지 않는다. 저장소 SQL과 런타임 기본값을 먼저 구현한다.
+
+앱별 계절 테마 시스템 구현 결과.
+
+- 개인 Codex 스킬 `recommend-sht-app-theme`를 생성하고 `quick_validate.py` 검증을 통과했다.
+- 공통 UI 패키지에 6개 테마의 디자인 토큰, 앱별 설정 로더, 전역 테마 CSS를 추가했다.
+- 디자인 토큰은 글꼴, 제목/본문/라벨 크기, 버튼 배경/글자/테두리, 높이/패딩/모서리/굵기/자간, 입력창, 카드, 표, 내비게이션을 포함한다.
+- 9개 앱의 루트 레이아웃에 `ShtThemeProvider`와 공통 테마 CSS를 연결했다.
+- 관리자 콘텐츠 메뉴에 `/admin/themes`를 추가하고 앱 선택, 6개 테마 비교, 실제 토큰 미리보기, 변경 저장 기능을 구현했다.
+- `sql/121-app-theme-settings-20260718.sql`에 앱별 테마 테이블, 공개 읽기, 관리자 전용 입력/수정 RLS, 기본 행 9개를 추가했다.
+- SHT Supabase 프로젝트 `jkhookaflhibrcafmlxn`은 현재 연결된 Supabase 도구 목록에 없고 `SUPABASE_DB_URL`도 없어서 SQL은 원격 DB에 적용하지 않았다.
+
+검증 결과.
+
+- `python .../quick_validate.py C:\Users\tvxqc\.codex\skills\recommend-sht-app-theme` 통과.
+- `pnpm --dir apps/admin typecheck` 통과.
+- `pnpm --dir apps/customer1 typecheck` 통과.
+- `pnpm --dir apps/manager typecheck` 통과.
+- `pnpm --dir apps/manager1 typecheck` 통과.
+- `pnpm --dir apps/mobile typecheck` 통과.
+- `pnpm --dir apps/partner typecheck` 통과.
+- `pnpm --dir apps/quote typecheck` 통과.
+- `pnpm --dir apps/cancel typecheck` 통과.
+- `pnpm --dir apps/customer typecheck`는 기존 `src/app/mypage/reservations/hotel/page.tsx` 78, 133행의 `hotel_name`, `room_name` 누락 타입 오류로 실패했다. 테마 변경 파일의 오류는 아니다.
+- `pnpm --dir apps/admin build` 통과. `/admin/themes` 정적 라우트 생성 확인.
+- 기존 관리자 개발 서버는 작업 전부터 실행 중인 인스턴스여서 브라우저에서 새 공통 패키지를 반영하지 못했고 관리자 권한 확인 화면에 머물렀다. 기존 서버와 인증 상태는 변경하지 않았다.

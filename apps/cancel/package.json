@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@sht/ui": "workspace:*",
     "@supabase/supabase-js": "^2.52.1",
     "next": "^15.5.15",
     "nodemailer": "^6.9.14",

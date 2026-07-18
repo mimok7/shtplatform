@@ -5,6 +5,8 @@ import QueryProvider from '../components/QueryProvider';
 import TabSessionGuard from '../components/TabSessionGuard';
 import ServiceWorkerRegister from '../components/ServiceWorkerRegister';
 import '../styles/globals.css';
+import '@sht/ui/theme.css';
+import { ShtThemeProvider } from '@sht/ui/theme';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -27,15 +29,17 @@ export default function RootLayout({
   return (
     <html lang="ko">
       <body className={`${inter.className} bg-white text-gray-900 antialiased flex flex-col min-h-screen`}>
-        <ServiceWorkerRegister />
-        <QueryProvider>
-          <AlertProvider>
-            <TabSessionGuard loginPath="/login" />
-            <main className="flex-1 w-full">
-              {children}
-            </main>
-          </AlertProvider>
-        </QueryProvider>
+        <ShtThemeProvider appId="customer1">
+          <ServiceWorkerRegister />
+          <QueryProvider>
+            <AlertProvider>
+              <TabSessionGuard loginPath="/login" />
+              <main className="flex-1 w-full">
+                {children}
+              </main>
+            </AlertProvider>
+          </QueryProvider>
+        </ShtThemeProvider>
       </body>
     </html>
   );

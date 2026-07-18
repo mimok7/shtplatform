@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@sht/domain": "workspace:*",
+    "@sht/ui": "workspace:*",
     "@supabase/supabase-js": "^2.100.0",
     "html2pdf.js": "^0.10.3",
     "lucide-react": "^1.0.0",

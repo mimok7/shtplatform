@@ -29,6 +29,9 @@ importers:
       '@sht/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@sht/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       '@supabase/ssr':
         specifier: ^0.9.0
         version: 0.9.0(@supabase/supabase-js@2.104.1)
@@ -144,6 +147,9 @@ importers:
 
   apps/cancel:
     dependencies:
+      '@sht/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       '@supabase/supabase-js':
         specifier: ^2.52.1
         version: 2.105.4
@@ -187,6 +193,9 @@ importers:
       '@sht/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@sht/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       '@supabase/ssr':
         specifier: ^0.9.0
         version: 0.9.0(@supabase/supabase-js@2.104.1)
@@ -281,6 +290,9 @@ importers:
       '@sht/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@sht/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       '@supabase/supabase-js':
         specifier: ^2.52.1
         version: 2.104.1
@@ -324,6 +336,9 @@ importers:
       '@sht/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@sht/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       '@supabase/ssr':
         specifier: ^0.9.0
         version: 0.9.0(@supabase/supabase-js@2.104.1)
@@ -424,6 +439,9 @@ importers:
       '@sht/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@sht/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       '@supabase/supabase-js':
         specifier: ^2.52.1
         version: 2.104.1
@@ -470,6 +488,9 @@ importers:
       '@sht/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@sht/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       '@supabase/supabase-js':
         specifier: ^2.100.0
         version: 2.105.4
@@ -525,6 +546,9 @@ importers:
 
   apps/partner:
     dependencies:
+      '@sht/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       '@supabase/ssr':
         specifier: ^0.9.0
         version: 0.9.0(@supabase/supabase-js@2.104.1)
@@ -592,6 +616,9 @@ importers:
       '@sht/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@sht/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       '@supabase/supabase-js':
         specifier: ^2.52.1
         version: 2.104.1

@@ -11,6 +11,8 @@ import QueryProvider from '../components/QueryProvider';
 import ServiceWorkerRegister from '../components/ServiceWorkerRegister';
 import PushNotificationManager from '../components/PushNotificationManager';
 import '../styles/globals.css';
+import '@sht/ui/theme.css';
+import { ShtThemeProvider } from '@sht/ui/theme';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -42,21 +44,23 @@ export default function RootLayout({
   return (
     <html lang="ko" suppressHydrationWarning>
       <body className={`${inter.className} bg-slate-100 text-foreground antialiased flex flex-col min-h-screen`}>
-        <ServiceWorkerRegister />
-        <PushNotificationManager />
-        <QueryProvider>
-          <AlertProvider>
-            <ToastProvider>
-              <AuthInitializer />
-              <TabSessionGuard loginPath="/login" />
-              <NewHomeHeader />
-              <main className="flex-1 w-full">
-                {children}
-              </main>
-              <NewHomeFooter />
-            </ToastProvider>
-          </AlertProvider>
-        </QueryProvider>
+        <ShtThemeProvider appId="customer">
+          <ServiceWorkerRegister />
+          <PushNotificationManager />
+          <QueryProvider>
+            <AlertProvider>
+              <ToastProvider>
+                <AuthInitializer />
+                <TabSessionGuard loginPath="/login" />
+                <NewHomeHeader />
+                <main className="flex-1 w-full">
+                  {children}
+                </main>
+                <NewHomeFooter />
+              </ToastProvider>
+            </AlertProvider>
+          </QueryProvider>
+        </ShtThemeProvider>
       </body>
     </html>
   );

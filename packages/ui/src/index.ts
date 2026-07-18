@@ -5,4 +5,6 @@ export * from './QueryProvider';
 export * from './AppShell';
 export * from './UnifiedConfirmation';
 export * from './ShtCarSeatMap';
+export * from './ShtThemeProvider';
+export * from './theme';
 export { cn } from './cn';

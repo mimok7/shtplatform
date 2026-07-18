@@ -220,6 +220,7 @@ export default function AdminLayout({ children, title, activeTab }: AdminLayoutP
     },
     {
       id: 'group-content', label: '콘텐츠', icon: '📦', items: [
+        { id: 'themes', label: '테마 관리', path: '/admin/themes', icon: 'T' },
         { id: 'packages', label: '패키지 관리', path: '/admin/packages', icon: '📦' },
         { id: 'reports', label: '리포트', path: '/admin/reports', icon: '📄' },
       ]
