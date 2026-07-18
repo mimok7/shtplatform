@@ -317,7 +317,7 @@ export default function AdminLayout({ children, title, activeTab }: AdminLayoutP
                   A
                 </div>
                 <div>
-                  <h1 className="text-xl font-bold text-blue-900">관리자 패널</h1>
+                  <h1 data-sht-theme-ignore className="text-[8px] font-bold text-blue-900">관리자 패널</h1>
                   <p className="text-blue-700 text-sm">스테이하롱 크루즈</p>
                 </div>
               </div>

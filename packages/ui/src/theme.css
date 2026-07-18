@@ -37,19 +37,19 @@ html[data-sht-theme] body {
   word-break: keep-all;
 }
 
-html[data-sht-theme] :where(h1, h2, h3, h4, h5, h6) {
+html[data-sht-theme] :where(h1, h2, h3, h4, h5, h6):not([data-sht-theme-ignore]) {
   color: var(--sht-heading);
   font-family: var(--sht-font-family);
   letter-spacing: -0.035em;
 }
 
-html[data-sht-theme] h1 {
+html[data-sht-theme] h1:not([data-sht-theme-ignore]) {
   font-size: var(--sht-font-size-title);
   font-weight: 750;
   line-height: 1.05;
 }
 
-html[data-sht-theme] :where(h2, h3) {
+html[data-sht-theme] :where(h2, h3):not([data-sht-theme-ignore]) {
   font-size: var(--sht-font-size-heading);
   line-height: 1.2;
 }
