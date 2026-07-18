@@ -10,7 +10,7 @@ import {
   type ShtThemeId,
 } from './theme';
 
-const THEME_CACHE_PREFIX = 'sht-app-theme:';
+const THEME_CACHE_PREFIX = 'sht-app-theme:v2:';
 export const SHT_THEME_UPDATED_EVENT = 'sht-theme-updated';
 
 type ThemeUpdatedDetail = {
@@ -20,11 +20,20 @@ type ThemeUpdatedDetail = {
 
 function applyThemeToDocument(appId: ShtAppId, themeId: ShtThemeId) {
   const root = document.documentElement;
-  const theme = getShtThemeDefinition(themeId);
 
   root.dataset.shtApp = appId;
-  root.dataset.shtTheme = themeId;
+  Object.keys(getShtThemeDefinition(DEFAULT_SHT_THEME).tokens).forEach((key) => {
+    const cssName = key.replace(/[A-Z]/g, (character) => `-${character.toLowerCase()}`);
+    root.style.removeProperty(`--sht-${cssName}`);
+  });
 
+  if (themeId === DEFAULT_SHT_THEME) {
+    delete root.dataset.shtTheme;
+    return;
+  }
+
+  const theme = getShtThemeDefinition(themeId);
+  root.dataset.shtTheme = themeId;
   Object.entries(theme.tokens).forEach(([key, value]) => {
     const cssName = key.replace(/[A-Z]/g, (character) => `-${character.toLowerCase()}`);
     root.style.setProperty(`--sht-${cssName}`, value);

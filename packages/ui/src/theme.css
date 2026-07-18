@@ -15,8 +15,8 @@
   --sht-focus: #bce94b;
   --sht-font-family: 'Pretendard Variable', 'Pretendard', 'Noto Sans KR', sans-serif;
   --sht-font-size-body: 15px;
-  --sht-font-size-title: clamp(2rem, 4vw, 3.75rem);
-  --sht-font-size-heading: clamp(1.25rem, 2vw, 1.75rem);
+  --sht-font-size-title: clamp(1.125rem, 2vw, 1.75rem);
+  --sht-font-size-heading: clamp(1rem, 1.4vw, 1.25rem);
   --sht-font-size-label: 12px;
   --sht-button-radius: 2px;
   --sht-button-height: 40px;
@@ -156,7 +156,7 @@ html[data-sht-theme] :where([class*='text-gray-500'], [class*='text-gray-600'], 
   color: var(--sht-text-muted);
 }
 
-html[data-sht-app='mobile'] {
+html[data-sht-theme][data-sht-app='mobile'] {
   --sht-button-height: 44px;
 }
 
@@ -168,7 +168,7 @@ html[data-sht-app='mobile'] {
 
 .sht-theme-preview__heading {
   color: var(--sht-heading);
-  font-size: var(--sht-font-size-heading);
+  font-size: var(--sht-font-size-title);
   font-weight: 750;
   letter-spacing: -0.035em;
 }

@@ -79,7 +79,13 @@ export default function ThemeManagementPage() {
   const selectTheme = (themeId: ShtThemeId) => {
     setSettings((current) => ({ ...current, [selectedApp]: themeId }));
     setDirtyApps((current) => new Set(current).add(selectedApp));
-    setMessage('');
+    setMessage('미리보기만 변경했습니다. 저장하기 전에는 실제 앱에 적용되지 않습니다.');
+  };
+
+  const resetAllThemes = () => {
+    setSettings({ ...INITIAL_SETTINGS });
+    setDirtyApps(new Set(SHT_APP_IDS));
+    setMessage('모든 앱을 기본 디자인으로 선택했습니다. 저장해야 실제 앱에 반영됩니다.');
   };
 
   const saveSettings = async () => {
@@ -122,20 +128,32 @@ export default function ThemeManagementPage() {
           <p className="mb-3 text-xs font-bold tracking-[0.16em] text-gray-500">DESIGN SYSTEM / APP THEMES</p>
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <h1 className="text-3xl font-extrabold tracking-tight text-gray-900">앱별 테마 설정</h1>
+              <h1 className="text-xl font-extrabold tracking-tight text-gray-900">앱별 테마 설정</h1>
               <p className="mt-3 max-w-3xl text-sm leading-7 text-gray-600">
                 기능과 문구는 그대로 유지하면서 앱별 글꼴, 글씨 크기, 버튼 색상과 모양,
                 입력창, 카드, 표, 내비게이션 디자인을 한 번에 변경합니다.
               </p>
             </div>
-            <button
-              type="button"
-              onClick={saveSettings}
-              disabled={saving || loading || dirtyApps.size === 0}
-              className="border border-[#062f33] bg-[#062f33] px-6 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              {saving ? '저장 중' : `변경사항 저장 ${dirtyApps.size > 0 ? `(${dirtyApps.size})` : ''}`}
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                data-sht-theme-ignore
+                onClick={resetAllThemes}
+                disabled={saving || loading}
+                className="border border-gray-400 bg-white px-5 py-3 text-sm font-bold text-gray-700 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                전체 기본으로 되돌리기
+              </button>
+              <button
+                type="button"
+                data-sht-theme-ignore
+                onClick={saveSettings}
+                disabled={saving || loading || dirtyApps.size === 0}
+                className="border border-[#062f33] bg-[#062f33] px-6 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {saving ? '저장 중' : `변경사항 저장 ${dirtyApps.size > 0 ? `(${dirtyApps.size})` : ''}`}
+              </button>
+            </div>
           </div>
           {message && <p className="mt-4 border-l-4 border-[#d9ff72] pl-3 text-sm text-gray-700">{message}</p>}
           {loadError && <p className="mt-4 border-l-4 border-red-500 pl-3 text-sm text-red-700">{loadError}</p>}
@@ -178,7 +196,7 @@ export default function ThemeManagementPage() {
                   <p className="mb-2 text-xs font-bold tracking-[0.14em] text-gray-500">02 / 계절 테마</p>
                   <h2 className="text-xl font-bold text-gray-900">{SHT_APP_LABELS[selectedApp]} 앱에 적용할 테마</h2>
                 </div>
-                <p className="text-xs text-gray-500">선택 후 상단의 변경사항 저장 버튼을 눌러 적용합니다.</p>
+                <p className="text-xs font-medium text-amber-700">선택은 미리보기만 바꾸며 저장 전에는 실제 앱에 적용되지 않습니다.</p>
               </div>
 
               <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
@@ -207,6 +225,11 @@ export default function ThemeManagementPage() {
                       <span className="block text-[10px] font-bold tracking-[0.16em] text-gray-500">{theme.eyebrow}</span>
                       <span className="mt-1 block text-base font-extrabold text-gray-900">{theme.label}</span>
                       <span className="mt-2 block text-xs leading-5 text-gray-600">{theme.description}</span>
+                      {theme.id === DEFAULT_SHT_THEME && (
+                        <span className="mt-3 inline-block bg-gray-100 px-2 py-1 text-[11px] font-bold text-gray-600">
+                          원래 UI 유지
+                        </span>
+                      )}
                     </button>
                   );
                 })}
@@ -214,7 +237,12 @@ export default function ThemeManagementPage() {
             </section>
 
             <section>
-              <p className="mb-3 text-xs font-bold tracking-[0.14em] text-gray-500">03 / 실제 토큰 미리보기</p>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs font-bold tracking-[0.14em] text-gray-500">03 / 저장 전 미리보기</p>
+                <span className="bg-amber-50 px-2 py-1 text-xs font-bold text-amber-700">
+                  미리보기 전용 · 아직 적용되지 않음
+                </span>
+              </div>
               <div
                 data-sht-theme={selectedTheme.id}
                 className="sht-theme-preview border p-5 md:p-8"
