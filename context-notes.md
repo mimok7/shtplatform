@@ -164,3 +164,19 @@ SHT 단가 오표시 이슈 조사 시작.
 - `pnpm --dir apps/customer typecheck`는 기존 `src/app/mypage/reservations/hotel/page.tsx` 78, 133행의 `hotel_name`, `room_name` 누락 타입 오류로 실패했다. 테마 변경 파일의 오류는 아니다.
 - `pnpm --dir apps/admin build` 통과. `/admin/themes` 정적 라우트 생성 확인.
 - 기존 관리자 개발 서버는 작업 전부터 실행 중인 인스턴스여서 브라우저에서 새 공통 패키지를 반영하지 못했고 관리자 권한 확인 화면에 머물렀다. 기존 서버와 인증 상태는 변경하지 않았다.
+관리자 Next.js 누락 청크 오류 복구 시작.
+
+- 오류는 `.next/server/webpack-runtime.js`가 존재하지 않는 `./7351.js`를 요구하는 생성 산출물 불일치다.
+- 직전 작업 중 실행 중인 개발 서버와 `next build`가 동일한 `apps/admin/.next` 경로를 사용했다.
+- 소스 수정 없이 포트 3004 관리자 프로세스만 재시작하고 `.next`만 재생성한다.
+
+관리자 Next.js 누락 청크 오류 복구 결과.
+
+- 포트 3004 관리자 프로세스 트리만 종료했다.
+- 절대 경로 `C:\SHT-DATA\sht-platform\apps\admin\.next`를 확인한 뒤 생성 산출물만 정리했다.
+- `pnpm --filter @sht/admin dev`를 숨김 프로세스로 다시 시작했다.
+- 새 서버는 Next.js 15.5.15로 4.2초 만에 준비됐으며 포트 3004를 정상 수신 중이다.
+- `/admin/reports`는 832개 모듈로 다시 컴파일되어 HTTP 200을 반환했다.
+- `/admin/themes`는 814개 모듈로 다시 컴파일되어 HTTP 200을 반환했다.
+- 새 `webpack-runtime.js`에는 `7351` 참조가 없으며 두 라우트의 서버 페이지 파일이 정상 생성됐다.
+- 서버 오류 로그에 `Cannot find module` 또는 누락 청크 오류가 다시 발생하지 않았다.
