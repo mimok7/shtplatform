@@ -57,6 +57,11 @@ interface GeneratedScript {
   linux: { filename: string; content: string };
 }
 
+type BackupSetup = {
+  SUPABASE_DB_URL: boolean;
+  GITHUB_BACKUP_TOKEN: boolean;
+};
+
 export default function AdminBackupPage() {
   const [copied, setCopied] = useState<string>('');
   const [tab, setTab] = useState<Tab>('info');
@@ -66,6 +71,7 @@ export default function AdminBackupPage() {
   const [tables, setTables] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [backupStarting, setBackupStarting] = useState(false);
+  const [backupSetup, setBackupSetup] = useState<BackupSetup | null>(null);
   const [error, setError] = useState<string>('');
   const [success, setSuccess] = useState<string>('');
   const [restoreStep, setRestoreStep] = useState<RestoreStep>('select');
@@ -92,6 +98,22 @@ export default function AdminBackupPage() {
       minute: '2-digit',
       second: '2-digit',
     });
+  }, []);
+
+  const backupReady = backupSetup !== null
+    && backupSetup.SUPABASE_DB_URL
+    && backupSetup.GITHUB_BACKUP_TOKEN;
+
+  useEffect(() => {
+    fetch('/api/admin/backup/setup-status', { cache: 'no-store' })
+      .then((response) => response.json())
+      .then((data) => {
+        setBackupSetup({
+          SUPABASE_DB_URL: data.env?.SUPABASE_DB_URL === true,
+          GITHUB_BACKUP_TOKEN: data.env?.GITHUB_BACKUP_TOKEN === true,
+        });
+      })
+      .catch(() => setBackupSetup({ SUPABASE_DB_URL: false, GITHUB_BACKUP_TOKEN: false }));
   }, []);
 
   // 백업 파일과 DB 테이블 목록 로드
@@ -140,6 +162,15 @@ export default function AdminBackupPage() {
   };
 
   const startBackup = async () => {
+    if (backupSetup === null) {
+      setError('백업 설정을 확인 중입니다. 잠시 후 다시 시도하세요.');
+      return;
+    }
+    if (!backupReady) {
+      setError('백업 실행 설정이 필요합니다. 설정 체크리스트에서 필수 환경변수를 등록하세요.');
+      return;
+    }
+
     setBackupStarting(true);
     setError('');
     setSuccess('');
@@ -441,12 +472,34 @@ export default function AdminBackupPage() {
                     <button
                       type="button"
                       onClick={startBackup}
-                      disabled={backupStarting}
+                      disabled={backupStarting || !backupReady}
                       className="inline-flex items-center px-3 py-1.5 text-xs rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      {backupStarting ? '백업 시작 중...' : '지금 백업 생성'}
+                      {backupStarting
+                        ? '백업 시작 중...'
+                        : backupSetup === null
+                          ? '백업 설정 확인 중...'
+                          : backupReady
+                            ? '지금 백업 생성'
+                            : '백업 설정 필요'}
                     </button>
                   </div>
+                  {backupSetup && !backupReady && (
+                    <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                      <p className="font-semibold">수동 백업을 시작할 수 없습니다.</p>
+                      <p className="mt-1">
+                        {!backupSetup.SUPABASE_DB_URL && '`SUPABASE_DB_URL`'}
+                        {!backupSetup.SUPABASE_DB_URL && !backupSetup.GITHUB_BACKUP_TOKEN && ', '}
+                        {!backupSetup.GITHUB_BACKUP_TOKEN && '`GITHUB_BACKUP_TOKEN`'}
+                        {!backupSetup.SUPABASE_DB_URL || !backupSetup.GITHUB_BACKUP_TOKEN
+                          ? ' 환경변수를 설정하세요.'
+                          : ''}
+                      </p>
+                      <a href="/admin/backup/setup" className="mt-2 inline-block font-semibold text-amber-800 underline">
+                        백업 설정 체크리스트 열기
+                      </a>
+                    </div>
+                  )}
                 </div>
                 <div className="text-xs text-gray-500">기준 시각: {today}</div>
               </div>

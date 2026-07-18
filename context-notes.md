@@ -227,6 +227,19 @@ SHT 단가 오표시 이슈 조사 시작.
 - 관리자 백업 화면에 `지금 백업 생성` 버튼을 추가했다. 서버 API가 GitHub workflow_dispatch를 호출하고, 완료 메시지 후 복원 마법사에서 목록을 새로고침하도록 안내한다.
 - 실제 첫 Artifact 생성에는 GitHub 저장소 Secret `SUPABASE_DB_URL`과 배포 서버 환경변수 `GITHUB_BACKUP_TOKEN`의 Actions 쓰기 권한이 필요하다. 비밀값은 저장소에 작성하지 않았다.
 - `pnpm --dir apps/admin typecheck`, 백업 워크플로 필수 항목 정적 검사, `/admin/backup` HTTP 200을 확인했다.
+
+수동 백업 실행 설정 오류 점검 시작.
+
+- `POST /api/admin/backup/run`의 500은 API 컴파일 오류가 아니라 `GITHUB_BACKUP_TOKEN` 미설정 응답이다.
+- 실행 중인 `GET /api/admin/backup/setup-status` 결과에서 `SUPABASE_DB_URL`과 `GITHUB_BACKUP_TOKEN`이 모두 `false`다. 따라서 GitHub Actions 실행과 이후 복원 API의 DB 접속이 모두 불가능하다.
+- 비밀값은 코드나 저장소 파일에 추가하지 않는다. 백업 화면에서 설정 상태를 확인하고 미설정 상태에서는 500 요청 대신 설정 체크리스트로 안내한다.
+
+수동 백업 실행 설정 오류 보정 결과.
+
+- 백업 화면은 `/api/admin/backup/setup-status`에서 `SUPABASE_DB_URL`, `GITHUB_BACKUP_TOKEN` 상태를 읽는다.
+- 둘 중 하나라도 없으면 `지금 백업 생성` 버튼을 `백업 설정 필요`로 비활성화하고, 누락된 변수 이름과 설정 체크리스트 링크를 표시한다.
+- 현재 로컬 서버의 상태 API는 두 변수 모두 `false`를 반환했다. 따라서 기존 500은 환경 설정 전에는 발생하지 않는다.
+- `pnpm --dir apps/admin typecheck`가 통과했고 `/admin/backup`은 HTTP 200을 반환했다.
 - 최근 개발 서버 로그의 `subscribe-push` 빈 JSON 오류는 테마 저장과 별개인 푸시 구독 요청에서 발생한 기존 오류이며, 이번 파일 변경과 직접 관련이 없다.
 
 관리자 제목 및 메뉴 가독성 보정 작업 시작.
