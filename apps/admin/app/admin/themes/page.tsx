@@ -130,9 +130,18 @@ export default function ThemeManagementPage() {
   };
 
   const resetAllThemes = () => {
-    setSettings({ ...INITIAL_SETTINGS });
-    setDirtyApps(new Set(SHT_APP_IDS));
-    setMessage('모든 앱을 변경 전 원래 디자인으로 표시했습니다. 저장해야 실제 앱에 반영됩니다.');
+    const themeChangedApps = SHT_APP_IDS.filter((appId) => settings[appId].themeId !== DEFAULT_SHT_THEME);
+
+    if (themeChangedApps.length === 0) {
+      setMessage('모든 앱이 이미 기본 테마입니다. 글씨 크기와 메뉴 설정은 그대로 유지했습니다.');
+      return;
+    }
+
+    setSettings((current) => Object.fromEntries(
+      SHT_APP_IDS.map((appId) => [appId, { ...current[appId], themeId: DEFAULT_SHT_THEME }]),
+    ) as ThemeSettings);
+    setDirtyApps((current) => new Set([...current, ...themeChangedApps]));
+    setMessage('테마만 변경 전 기본 상태로 표시했습니다. 글씨 크기와 메뉴 설정은 유지됩니다. 저장해야 실제 앱에 반영됩니다.');
   };
 
   const saveSettings = async () => {
@@ -204,7 +213,7 @@ export default function ThemeManagementPage() {
                 disabled={saving || loading}
                 className="border border-gray-400 bg-white px-5 py-3 text-sm font-bold text-gray-700 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                전체 변경 전으로 표시
+                전체 테마만 변경 전으로 표시
               </button>
               <button
                 type="button"
@@ -302,7 +311,7 @@ export default function ThemeManagementPage() {
               <div className="mb-4">
                 <p className="mb-2 text-xs font-bold tracking-[0.14em] text-gray-500">03 / 글씨 크기</p>
                 <h2 className="text-xl font-bold text-gray-900">{SHT_APP_LABELS[selectedApp]} 앱의 글씨 크기</h2>
-                <p className="mt-2 text-sm text-gray-600">기본값은 모든 계절 테마에서 동일합니다. 항목별로 선택하면 저장 전 미리보기에 바로 반영됩니다.</p>
+                <p className="mt-2 text-sm text-gray-600">기본값은 모든 계절 테마에서 동일합니다. 항목별로 선택하면 저장 전 미리보기에 바로 반영되며, 테마 복원 시에도 유지됩니다.</p>
               </div>
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 {SHT_TYPOGRAPHY_FIELDS.map((field) => (
