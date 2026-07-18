@@ -29,6 +29,7 @@ type ThemeSetting = {
 type ThemeSettings = Record<ShtAppId, ThemeSetting>;
 
 const TYPOGRAPHY_COLUMN_SQL = 'sql/122-app-theme-typography-settings-20260718.sql';
+const THEME_SAVE_TIMEOUT_MS = 8_000;
 
 const INITIAL_SETTINGS = Object.fromEntries(
   SHT_APP_IDS.map((appId) => [appId, { themeId: DEFAULT_SHT_THEME, typography: {} }]),
@@ -143,35 +144,43 @@ export default function ThemeManagementPage() {
     setSaving(true);
     setMessage('');
 
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
     const rows = Array.from(dirtyApps).map((appId) => ({
       app_id: appId,
       theme_id: settings[appId].themeId,
       typography: settings[appId].typography,
-      updated_by: session?.user.id ?? null,
       updated_at: new Date().toISOString(),
     }));
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), THEME_SAVE_TIMEOUT_MS);
 
-    const { error } = await supabase
-      .from('app_theme_settings')
-      .upsert(rows, { onConflict: 'app_id' });
+    try {
+      const { error } = await supabase
+        .from('app_theme_settings')
+        .upsert(rows, { onConflict: 'app_id' })
+        .abortSignal(controller.signal);
 
-    if (error) {
+      if (error) {
+        setMessage(
+          error.message.includes('typography')
+            ? `글씨 크기 설정 컬럼이 없습니다. ${TYPOGRAPHY_COLUMN_SQL}을 먼저 실행해 주세요.`
+            : `저장하지 못했습니다. ${error.message}`,
+        );
+        return;
+      }
+
+      rows.forEach((row) => notifyShtThemeUpdated(row.app_id, row.theme_id, row.typography));
+      setDirtyApps(new Set());
+      setMessage(`${rows.length}개 앱의 테마를 저장했습니다.`);
+    } catch (error) {
       setMessage(
-        error.message.includes('typography')
-          ? `글씨 크기 설정 컬럼이 없습니다. ${TYPOGRAPHY_COLUMN_SQL}을 먼저 실행해 주세요.`
-          : `저장하지 못했습니다. ${error.message}`,
+        error instanceof DOMException && error.name === 'AbortError'
+          ? '저장 요청이 8초 안에 완료되지 않았습니다. 네트워크와 데이터베이스 연결을 확인한 뒤 다시 시도해 주세요.'
+          : `저장하지 못했습니다. ${error instanceof Error ? error.message : '알 수 없는 오류입니다.'}`,
       );
+    } finally {
+      window.clearTimeout(timeout);
       setSaving(false);
-      return;
     }
-
-    rows.forEach((row) => notifyShtThemeUpdated(row.app_id, row.theme_id, row.typography));
-    setDirtyApps(new Set());
-    setMessage(`${rows.length}개 앱의 테마를 저장했습니다.`);
-    setSaving(false);
   };
 
   return (
