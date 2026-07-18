@@ -260,6 +260,11 @@ SHT 단가 오표시 이슈 조사 시작.
 - 클라이언트 요청은 10초, GitHub Actions workflow dispatch는 5초 안에 응답하지 않으면 중단하고 안내한다.
 - 백업 생성 자체는 GitHub Actions에서 비동기로 진행되며, 시작 API는 workflow dispatch가 수락되는 즉시 완료된다.
 
+PostgreSQL 17 백업 클라이언트 보정.
+
+- GitHub Actions 로그에서 데이터베이스 연결은 성공했으나 서버가 PostgreSQL 17.4이고 설치된 `pg_dump`가 16.14라 백업이 중단됐다.
+- Ubuntu 기본 패키지 버전에 의존하지 않고 `postgres:17` 컨테이너의 `pg_dump`, `pg_restore`를 사용하도록 변경한다.
+
 백업 화면 상단 실행 버튼 및 관리자 메뉴 가독성 작업 시작.
 
 - 기존 `지금 백업 생성` 버튼은 백업 정보 탭 내부에 있고, 설정 미완료 시 `백업 설정 필요`로 바뀌어 사용자가 즉시 실행 버튼을 찾기 어렵다.

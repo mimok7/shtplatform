@@ -20,16 +20,16 @@ jobs:
   backup:
     runs-on: ubuntu-latest
     steps:
-      - name: Install PostgreSQL client
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client gzip
+      - name: Prepare PostgreSQL 17 client
+        run: docker pull postgres:17
 
       - name: Dump database
         env:
           SUPABASE_DB_URL: \${{ secrets.SUPABASE_DB_URL }}
         run: |
           ts=$(date -u +%Y%m%dT%H%M%SZ)
-          pg_dump --format=custom --no-owner --no-privileges --file "supabase-backup-$ts.dump" "$SUPABASE_DB_URL"
-          pg_restore --list "supabase-backup-$ts.dump" > "manifest-$ts.txt"
+          docker run --rm -v "$PWD:/backup" postgres:17 pg_dump --format=custom --no-owner --no-privileges --file "/backup/supabase-backup-$ts.dump" "$SUPABASE_DB_URL"
+          docker run --rm -v "$PWD:/backup" postgres:17 pg_restore --list "/backup/supabase-backup-$ts.dump" > "manifest-$ts.txt"
           gzip -9 "supabase-backup-$ts.dump"
 
       - name: Upload artifact

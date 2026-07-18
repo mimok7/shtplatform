@@ -186,3 +186,11 @@
 - [x] 클라이언트·GitHub Actions 요청 시간 제한 추가
 - [ ] 관리자 타입 검사와 API 정적 검증
 - [ ] 변경사항 논리 단위 커밋
+
+## PostgreSQL 17 백업 클라이언트 보정
+
+- [x] GitHub Actions 백업 실패 로그 확인
+- [x] Supabase 서버와 pg_dump 클라이언트 버전 불일치 확인
+- [x] PostgreSQL 17 클라이언트 컨테이너로 워크플로 변경
+- [ ] 워크플로 정적 검증 및 백업 Artifact 생성 확인
+- [ ] 변경사항 논리 단위 커밋

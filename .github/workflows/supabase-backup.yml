@@ -14,8 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - name: PostgreSQL client 설치
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client gzip
+      - name: PostgreSQL 17 client 준비
+        run: docker pull postgres:17
 
       - name: PostgreSQL custom 백업 생성 및 검증
         env:
@@ -28,8 +28,10 @@ jobs:
           dump_file="$backup_dir/supabase-backup-$timestamp.dump"
 
           mkdir -p "$backup_dir"
-          pg_dump --format=custom --no-owner --no-privileges --file "$dump_file" "$SUPABASE_DB_URL"
-          pg_restore --list "$dump_file" > "$backup_dir/manifest-$timestamp.txt"
+          docker run --rm -v "$PWD:/backup" postgres:17 pg_dump \
+            --format=custom --no-owner --no-privileges \
+            --file "/backup/$dump_file" "$SUPABASE_DB_URL"
+          docker run --rm -v "$PWD:/backup" postgres:17 pg_restore --list "/backup/$dump_file" > "$backup_dir/manifest-$timestamp.txt"
           sha256sum "$dump_file" > "$backup_dir/checksum-$timestamp.sha256"
           gzip -9 "$dump_file"
 
