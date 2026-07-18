@@ -1,5 +1,5 @@
 // Service Worker for PWA offline support + Web Push (admin)
-const CACHE_NAME = 'sht-admin-cache-v1';
+const CACHE_NAME = 'sht-admin-cache-v2';
 const ASSETS_TO_CACHE = [
   '/',
   '/icon-192.png',
@@ -35,6 +35,13 @@ self.addEventListener('fetch', event => {
       !event.request.url.startsWith(self.location.origin)) {
     return;
   }
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request).catch(() => caches.match(event.request).then(response => response || caches.match('/'))),
+    );
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request).then(response => {
       if (response) return response;

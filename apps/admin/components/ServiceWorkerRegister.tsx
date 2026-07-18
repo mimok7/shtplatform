@@ -9,6 +9,7 @@ export default function ServiceWorkerRegister() {
         .register('/sw.js')
         .then(registration => {
           console.log('✅ Service Worker registered (admin):', registration);
+          registration.update().catch(() => {});
         })
         .catch(error => {
           console.warn('⚠️ Service Worker registration failed (admin):', error);
