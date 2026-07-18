@@ -8,6 +8,7 @@ const GITHUB_REPO = process.env.GITHUB_BACKUP_REPO || 'shtplatform';
 const GITHUB_TOKEN = process.env.GITHUB_BACKUP_TOKEN || process.env.GITHUB_TOKEN || '';
 const BACKUP_WORKFLOW = process.env.GITHUB_BACKUP_WORKFLOW || 'supabase-backup.yml';
 const BACKUP_BRANCH = process.env.GITHUB_BACKUP_BRANCH || 'main';
+const GITHUB_DISPATCH_TIMEOUT_MS = 5_000;
 
 async function checkAdmin(req: NextRequest): Promise<{ ok: boolean; error?: string; status?: number }> {
   if (!serviceSupabase) {
@@ -50,6 +51,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), GITHUB_DISPATCH_TIMEOUT_MS);
     const response = await fetch(
       `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/workflows/${BACKUP_WORKFLOW}/dispatches`,
       {
@@ -60,8 +63,9 @@ export async function POST(req: NextRequest) {
           'X-GitHub-Api-Version': '2022-11-28',
         },
         body: JSON.stringify({ ref: BACKUP_BRANCH }),
+        signal: controller.signal,
       },
-    );
+    ).finally(() => clearTimeout(timeout));
 
     if (!response.ok) {
       return NextResponse.json(
@@ -75,6 +79,12 @@ export async function POST(req: NextRequest) {
       message: '백업 생성을 시작했습니다. 완료 후 복원 마법사에서 목록을 새로고침하세요.',
     });
   } catch (error: any) {
+    if (error?.name === 'AbortError') {
+      return NextResponse.json(
+        { error: 'GitHub Actions 연결이 5초 안에 응답하지 않았습니다. 잠시 후 다시 시도해 주세요.' },
+        { status: 504 },
+      );
+    }
     return NextResponse.json({ error: error?.message || '백업 시작 중 서버 오류' }, { status: 500 });
   }
 }

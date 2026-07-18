@@ -41,6 +41,8 @@ jobs:
             manifest-*.txt
           retention-days: 90`;
 
+const BACKUP_START_TIMEOUT_MS = 10_000;
+
 type Tab = 'info' | 'restore';
 type Artifact = {
   id: string;
@@ -174,6 +176,9 @@ export default function AdminBackupPage() {
     setBackupStarting(true);
     setError('');
     setSuccess('');
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), BACKUP_START_TIMEOUT_MS);
+
     try {
       const { data: { session } } = await getSupabase().auth.getSession();
       const authHeaders: Record<string, string> = session?.access_token
@@ -182,6 +187,7 @@ export default function AdminBackupPage() {
       const response = await fetch('/api/admin/backup/run', {
         method: 'POST',
         headers: authHeaders,
+        signal: controller.signal,
       });
       const data = await response.json();
       if (!response.ok || !data.ok) {
@@ -189,8 +195,13 @@ export default function AdminBackupPage() {
       }
       setSuccess(data.message);
     } catch (e: any) {
-      setError(e.message || '백업 시작 중 오류가 발생했습니다.');
+      setError(
+        e instanceof DOMException && e.name === 'AbortError'
+          ? '백업 시작 요청이 10초 안에 완료되지 않았습니다. GitHub 연결과 백업 토큰 설정을 확인해 주세요.'
+          : e.message || '백업 시작 중 오류가 발생했습니다.',
+      );
     } finally {
+      window.clearTimeout(timeout);
       setBackupStarting(false);
     }
   };
@@ -429,15 +440,6 @@ export default function AdminBackupPage() {
               🔄 복원 마법사
             </button>
           </div>
-          <button
-            type="button"
-            data-sht-theme-ignore
-            onClick={startBackup}
-            disabled={backupStarting || backupSetup === null}
-            className="mb-2 inline-flex items-center rounded-md bg-blue-700 px-4 py-2 text-sm font-bold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {backupStarting ? '백업 시작 중...' : '지금 바로 백업'}
-          </button>
         </div>
 
         {error && (
@@ -480,6 +482,15 @@ export default function AdminBackupPage() {
                     >
                       오류 해결 가이드
                     </a>
+                    <button
+                      type="button"
+                      data-sht-theme-ignore
+                      onClick={startBackup}
+                      disabled={backupStarting || backupSetup === null}
+                      className="inline-flex items-center rounded-md bg-blue-700 px-3 py-1.5 text-xs font-bold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {backupStarting ? '백업 시작 중...' : '지금 백업 시작'}
+                    </button>
                   </div>
                   {backupSetup && !backupReady && (
                     <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
