@@ -10,17 +10,37 @@ import {
   SHT_APP_IDS,
   SHT_APP_LABELS,
   SHT_THEME_DEFINITIONS,
+  SHT_TYPOGRAPHY_FIELDS,
+  SHT_TYPOGRAPHY_OPTIONS,
   type ShtAppId,
   type ShtThemeId,
+  type ShtTypographyField,
+  type ShtTypographyOverrides,
+  normalizeShtTypographyOverrides,
 } from '@sht/ui/theme';
 import AdminLayout from '@/components/AdminLayout';
 import supabase from '@/lib/supabase';
 
-type ThemeSettings = Record<ShtAppId, ShtThemeId>;
+type ThemeSetting = {
+  themeId: ShtThemeId;
+  typography: ShtTypographyOverrides;
+};
+
+type ThemeSettings = Record<ShtAppId, ThemeSetting>;
+
+const TYPOGRAPHY_COLUMN_SQL = 'sql/122-app-theme-typography-settings-20260718.sql';
 
 const INITIAL_SETTINGS = Object.fromEntries(
-  SHT_APP_IDS.map((appId) => [appId, DEFAULT_SHT_THEME]),
+  SHT_APP_IDS.map((appId) => [appId, { themeId: DEFAULT_SHT_THEME, typography: {} }]),
 ) as ThemeSettings;
+
+const TYPOGRAPHY_LABELS: Record<ShtTypographyField, string> = {
+  body: '본문 글씨',
+  title: '제목 글씨',
+  heading: '소제목 글씨',
+  label: '라벨 글씨',
+  button: '버튼 글씨',
+};
 
 export default function ThemeManagementPage() {
   const [settings, setSettings] = useState<ThemeSettings>(INITIAL_SETTINGS);
@@ -37,12 +57,14 @@ export default function ThemeManagementPage() {
 
     const { data, error } = await supabase
       .from('app_theme_settings')
-      .select('app_id, theme_id');
+      .select('app_id, theme_id, typography');
 
     if (error) {
       setLoadError(
         error.code === '42P01'
           ? '테마 설정 테이블이 없습니다. sql/121-app-theme-settings-20260718.sql을 먼저 실행해 주세요.'
+          : error.message.includes('typography')
+            ? `글씨 크기 설정 컬럼이 없습니다. ${TYPOGRAPHY_COLUMN_SQL}을 먼저 실행해 주세요.`
           : `테마 설정을 불러오지 못했습니다. ${error.message}`,
       );
       setLoading(false);
@@ -50,13 +72,16 @@ export default function ThemeManagementPage() {
     }
 
     const nextSettings = { ...INITIAL_SETTINGS };
-    (data ?? []).forEach((row: { app_id?: unknown; theme_id?: unknown }) => {
+    (data ?? []).forEach((row: { app_id?: unknown; theme_id?: unknown; typography?: unknown }) => {
       if (
         typeof row.app_id === 'string'
         && SHT_APP_IDS.includes(row.app_id as ShtAppId)
         && isShtThemeId(row.theme_id)
       ) {
-        nextSettings[row.app_id as ShtAppId] = row.theme_id;
+        nextSettings[row.app_id as ShtAppId] = {
+          themeId: row.theme_id,
+          typography: normalizeShtTypographyOverrides(row.typography),
+        };
       }
     });
 
@@ -69,7 +94,8 @@ export default function ThemeManagementPage() {
     loadSettings();
   }, [loadSettings]);
 
-  const selectedThemeId = settings[selectedApp];
+  const selectedSetting = settings[selectedApp];
+  const selectedThemeId = selectedSetting.themeId;
   const selectedTheme = useMemo(
     () => SHT_THEME_DEFINITIONS.find((theme) => theme.id === selectedThemeId)
       ?? SHT_THEME_DEFINITIONS[0]!,
@@ -77,9 +103,27 @@ export default function ThemeManagementPage() {
   );
 
   const selectTheme = (themeId: ShtThemeId) => {
-    setSettings((current) => ({ ...current, [selectedApp]: themeId }));
+    setSettings((current) => ({
+      ...current,
+      [selectedApp]: { ...current[selectedApp], themeId },
+    }));
     setDirtyApps((current) => new Set(current).add(selectedApp));
     setMessage('미리보기만 변경했습니다. 저장하기 전에는 실제 앱에 적용되지 않습니다.');
+  };
+
+  const selectTypography = (field: ShtTypographyField, value: string) => {
+    setSettings((current) => ({
+      ...current,
+      [selectedApp]: {
+        ...current[selectedApp],
+        typography: Object.fromEntries(
+          Object.entries({ ...current[selectedApp].typography, [field]: value })
+            .filter(([key, selected]) => selected !== SHT_TYPOGRAPHY_OPTIONS[key as ShtTypographyField].find((option) => option.label === '기본')?.value),
+        ),
+      },
+    }));
+    setDirtyApps((current) => new Set(current).add(selectedApp));
+    setMessage('글씨 크기는 미리보기에서만 변경했습니다. 저장하기 전에는 실제 앱에 적용되지 않습니다.');
   };
 
   const resetAllThemes = () => {
@@ -102,7 +146,8 @@ export default function ThemeManagementPage() {
     } = await supabase.auth.getSession();
     const rows = Array.from(dirtyApps).map((appId) => ({
       app_id: appId,
-      theme_id: settings[appId],
+      theme_id: settings[appId].themeId,
+      typography: settings[appId].typography,
       updated_by: session?.user.id ?? null,
       updated_at: new Date().toISOString(),
     }));
@@ -112,12 +157,16 @@ export default function ThemeManagementPage() {
       .upsert(rows, { onConflict: 'app_id' });
 
     if (error) {
-      setMessage(`저장하지 못했습니다. ${error.message}`);
+      setMessage(
+        error.message.includes('typography')
+          ? `글씨 크기 설정 컬럼이 없습니다. ${TYPOGRAPHY_COLUMN_SQL}을 먼저 실행해 주세요.`
+          : `저장하지 못했습니다. ${error.message}`,
+      );
       setSaving(false);
       return;
     }
 
-    rows.forEach((row) => notifyShtThemeUpdated(row.app_id, row.theme_id));
+    rows.forEach((row) => notifyShtThemeUpdated(row.app_id, row.theme_id, row.typography));
     setDirtyApps(new Set());
     setMessage(`${rows.length}개 앱의 테마를 저장했습니다.`);
     setSaving(false);
@@ -167,7 +216,7 @@ export default function ThemeManagementPage() {
             <div className="border-y border-gray-300">
               {SHT_APP_IDS.map((appId) => {
                 const active = selectedApp === appId;
-                const theme = SHT_THEME_DEFINITIONS.find((item) => item.id === settings[appId]);
+                const theme = SHT_THEME_DEFINITIONS.find((item) => item.id === settings[appId].themeId);
                 return (
                   <button
                     key={appId}
@@ -239,8 +288,33 @@ export default function ThemeManagementPage() {
             </section>
 
             <section>
+              <div className="mb-4">
+                <p className="mb-2 text-xs font-bold tracking-[0.14em] text-gray-500">03 / 글씨 크기</p>
+                <h2 className="text-xl font-bold text-gray-900">{SHT_APP_LABELS[selectedApp]} 앱의 글씨 크기</h2>
+                <p className="mt-2 text-sm text-gray-600">기본값은 모든 계절 테마에서 동일합니다. 항목별로 선택하면 저장 전 미리보기에 바로 반영됩니다.</p>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                {SHT_TYPOGRAPHY_FIELDS.map((field) => (
+                  <label key={field} className="border border-gray-300 bg-white p-4 text-sm font-bold text-gray-800">
+                    <span className="mb-2 block">{TYPOGRAPHY_LABELS[field]}</span>
+                    <select
+                      data-sht-theme-ignore
+                      value={selectedSetting.typography[field] ?? SHT_TYPOGRAPHY_OPTIONS[field].find((option) => option.label === '기본')?.value ?? ''}
+                      onChange={(event) => selectTypography(field, event.target.value)}
+                      className="w-full border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-800"
+                    >
+                      {SHT_TYPOGRAPHY_OPTIONS[field].map((option) => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                ))}
+              </div>
+            </section>
+
+            <section>
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <p className="text-xs font-bold tracking-[0.14em] text-gray-500">03 / 저장 전 미리보기</p>
+                <p className="text-xs font-bold tracking-[0.14em] text-gray-500">04 / 저장 전 미리보기</p>
                 <span className="bg-amber-50 px-2 py-1 text-xs font-bold text-amber-700">
                   미리보기 전용 · 아직 적용되지 않음
                 </span>
@@ -248,7 +322,7 @@ export default function ThemeManagementPage() {
               <div
                 data-sht-theme={selectedTheme.id}
                 className="sht-theme-preview border p-5 md:p-8"
-                style={getShtThemeStyle(selectedTheme.id)}
+                style={getShtThemeStyle(selectedTheme.id, selectedSetting.typography)}
               >
                 <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
                   <div>

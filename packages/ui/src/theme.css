@@ -58,6 +58,30 @@ html[data-sht-theme] :where(button, [role='button'], input, textarea, select) {
   font-family: var(--sht-font-family);
 }
 
+html[data-sht-typography='custom'][data-sht-type-body='custom'] body {
+  font-size: var(--sht-font-size-body);
+}
+
+html[data-sht-typography='custom'][data-sht-type-title='custom'] h1:not([data-sht-theme-ignore]) {
+  font-size: var(--sht-font-size-title);
+}
+
+html[data-sht-typography='custom'][data-sht-type-heading='custom'] :where(h2, h3):not([data-sht-theme-ignore]) {
+  font-size: var(--sht-font-size-heading);
+}
+
+html[data-sht-typography='custom'][data-sht-type-label='custom'] :where(thead, th) {
+  font-size: var(--sht-font-size-label);
+}
+
+html[data-sht-typography='custom'][data-sht-type-label='custom'] label {
+  font-size: var(--sht-font-size-label);
+}
+
+html[data-sht-typography='custom'][data-sht-type-button='custom'] :where(button:not([data-sht-theme-ignore]), [role='button']:not([data-sht-theme-ignore])) {
+  font-size: var(--sht-button-font-size);
+}
+
 html[data-sht-theme] :where(button:not([data-sht-theme-ignore]), [role='button']:not([data-sht-theme-ignore])) {
   border-radius: var(--sht-button-radius) !important;
   font-size: var(--sht-button-font-size);

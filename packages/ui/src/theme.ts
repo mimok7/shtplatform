@@ -55,6 +55,50 @@ export type ShtThemeTokens = {
   cardShadow: string;
 };
 
+export const SHT_TYPOGRAPHY_FIELDS = [
+  'body',
+  'title',
+  'heading',
+  'label',
+  'button',
+] as const;
+
+export type ShtTypographyField = (typeof SHT_TYPOGRAPHY_FIELDS)[number];
+export type ShtTypographyOverrides = Partial<Record<ShtTypographyField, string>>;
+
+export const SHT_TYPOGRAPHY_OPTIONS: Record<
+  ShtTypographyField,
+  ReadonlyArray<{ label: string; value: string }>
+> = {
+  body: [
+    { label: '작게', value: '13px' },
+    { label: '조금 작게', value: '14px' },
+    { label: '기본', value: '15px' },
+    { label: '조금 크게', value: '16px' },
+    { label: '크게', value: '17px' },
+  ],
+  title: [
+    { label: '작게', value: 'clamp(1rem, 1.6vw, 1.5rem)' },
+    { label: '기본', value: 'clamp(1.125rem, 2vw, 1.75rem)' },
+    { label: '크게', value: 'clamp(1.25rem, 2.4vw, 2rem)' },
+  ],
+  heading: [
+    { label: '작게', value: 'clamp(0.9375rem, 1.2vw, 1.125rem)' },
+    { label: '기본', value: 'clamp(1rem, 1.4vw, 1.25rem)' },
+    { label: '크게', value: 'clamp(1.125rem, 1.6vw, 1.375rem)' },
+  ],
+  label: [
+    { label: '작게', value: '11px' },
+    { label: '기본', value: '12px' },
+    { label: '크게', value: '13px' },
+  ],
+  button: [
+    { label: '작게', value: '12px' },
+    { label: '기본', value: '13px' },
+    { label: '크게', value: '14px' },
+  ],
+};
+
 export type ShtThemeDefinition = {
   id: ShtThemeId;
   label: string;
@@ -135,13 +179,13 @@ export const SHT_THEME_DEFINITIONS: readonly ShtThemeDefinition[] = [
       focus: '#e26f8e',
       fontFamily: "'Noto Sans KR', 'Pretendard Variable', 'Pretendard', sans-serif",
       fontSizeBody: '15px',
-      fontSizeTitle: 'clamp(1.125rem, 2vw, 1.7rem)',
+      fontSizeTitle: 'clamp(1.125rem, 2vw, 1.75rem)',
       fontSizeHeading: 'clamp(1rem, 1.4vw, 1.25rem)',
       fontSizeLabel: '12px',
       buttonRadius: '10px',
       buttonHeight: '42px',
       buttonPaddingX: '18px',
-      buttonFontSize: '14px',
+      buttonFontSize: '13px',
       buttonFontWeight: '700',
       buttonLetterSpacing: '-0.015em',
       inputRadius: '8px',
@@ -177,7 +221,7 @@ export const SHT_THEME_DEFINITIONS: readonly ShtThemeDefinition[] = [
       buttonRadius: '4px',
       buttonHeight: '42px',
       buttonPaddingX: '18px',
-      buttonFontSize: '14px',
+      buttonFontSize: '13px',
       buttonFontWeight: '750',
       buttonLetterSpacing: '-0.01em',
       inputRadius: '4px',
@@ -207,7 +251,7 @@ export const SHT_THEME_DEFINITIONS: readonly ShtThemeDefinition[] = [
       focus: '#c97822',
       fontFamily: "'Spoqa Han Sans Neo', 'Pretendard Variable', 'Pretendard', sans-serif",
       fontSizeBody: '15px',
-      fontSizeTitle: 'clamp(1.125rem, 2vw, 1.7rem)',
+      fontSizeTitle: 'clamp(1.125rem, 2vw, 1.75rem)',
       fontSizeHeading: 'clamp(1rem, 1.4vw, 1.25rem)',
       fontSizeLabel: '12px',
       buttonRadius: '2px',
@@ -242,10 +286,10 @@ export const SHT_THEME_DEFINITIONS: readonly ShtThemeDefinition[] = [
       border: '#c4d5df',
       focus: '#70b8e4',
       fontFamily: "'Pretendard Variable', 'Pretendard', 'Noto Sans KR', sans-serif",
-      fontSizeBody: '14px',
-      fontSizeTitle: 'clamp(1.125rem, 2vw, 1.65rem)',
-      fontSizeHeading: 'clamp(1rem, 1.4vw, 1.2rem)',
-      fontSizeLabel: '11px',
+      fontSizeBody: '15px',
+      fontSizeTitle: 'clamp(1.125rem, 2vw, 1.75rem)',
+      fontSizeHeading: 'clamp(1rem, 1.4vw, 1.25rem)',
+      fontSizeLabel: '12px',
       buttonRadius: '6px',
       buttonHeight: '40px',
       buttonPaddingX: '16px',
@@ -279,13 +323,13 @@ export const SHT_THEME_DEFINITIONS: readonly ShtThemeDefinition[] = [
       focus: '#be2f3b',
       fontFamily: "'Noto Sans KR', 'Pretendard Variable', 'Pretendard', sans-serif",
       fontSizeBody: '15px',
-      fontSizeTitle: 'clamp(1.125rem, 2vw, 1.7rem)',
+      fontSizeTitle: 'clamp(1.125rem, 2vw, 1.75rem)',
       fontSizeHeading: 'clamp(1rem, 1.4vw, 1.25rem)',
       fontSizeLabel: '12px',
       buttonRadius: '2px',
       buttonHeight: '42px',
       buttonPaddingX: '18px',
-      buttonFontSize: '14px',
+      buttonFontSize: '13px',
       buttonFontWeight: '750',
       buttonLetterSpacing: '-0.01em',
       inputRadius: '2px',
@@ -305,8 +349,36 @@ export function getShtThemeDefinition(themeId: ShtThemeId): ShtThemeDefinition {
   return SHT_THEME_DEFINITIONS.find((theme) => theme.id === themeId) ?? SHT_THEME_DEFINITIONS[0]!;
 }
 
-export function getShtThemeStyle(themeId: ShtThemeId): CSSProperties {
+export function normalizeShtTypographyOverrides(value: unknown): ShtTypographyOverrides {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+
+  return SHT_TYPOGRAPHY_FIELDS.reduce<ShtTypographyOverrides>((overrides, field) => {
+    const selected = (value as Record<string, unknown>)[field];
+    if (typeof selected === 'string' && SHT_TYPOGRAPHY_OPTIONS[field].some((option) => option.value === selected)) {
+      overrides[field] = selected;
+    }
+    return overrides;
+  }, {});
+}
+
+export function getShtTypographyStyle(typographyOverrides: ShtTypographyOverrides): CSSProperties {
+  const typography = normalizeShtTypographyOverrides(typographyOverrides);
+
+  return {
+    ...(typography.body ? { '--sht-font-size-body': typography.body } : {}),
+    ...(typography.title ? { '--sht-font-size-title': typography.title } : {}),
+    ...(typography.heading ? { '--sht-font-size-heading': typography.heading } : {}),
+    ...(typography.label ? { '--sht-font-size-label': typography.label } : {}),
+    ...(typography.button ? { '--sht-button-font-size': typography.button } : {}),
+  } as CSSProperties;
+}
+
+export function getShtThemeStyle(
+  themeId: ShtThemeId,
+  typographyOverrides: ShtTypographyOverrides = {},
+): CSSProperties {
   const tokens = getShtThemeDefinition(themeId).tokens;
+  const typography = normalizeShtTypographyOverrides(typographyOverrides);
 
   return {
     '--sht-canvas': tokens.canvas,
@@ -323,14 +395,14 @@ export function getShtThemeStyle(themeId: ShtThemeId): CSSProperties {
     '--sht-border': tokens.border,
     '--sht-focus': tokens.focus,
     '--sht-font-family': tokens.fontFamily,
-    '--sht-font-size-body': tokens.fontSizeBody,
-    '--sht-font-size-title': tokens.fontSizeTitle,
-    '--sht-font-size-heading': tokens.fontSizeHeading,
-    '--sht-font-size-label': tokens.fontSizeLabel,
+    '--sht-font-size-body': typography.body ?? tokens.fontSizeBody,
+    '--sht-font-size-title': typography.title ?? tokens.fontSizeTitle,
+    '--sht-font-size-heading': typography.heading ?? tokens.fontSizeHeading,
+    '--sht-font-size-label': typography.label ?? tokens.fontSizeLabel,
     '--sht-button-radius': tokens.buttonRadius,
     '--sht-button-height': tokens.buttonHeight,
     '--sht-button-padding-x': tokens.buttonPaddingX,
-    '--sht-button-font-size': tokens.buttonFontSize,
+    '--sht-button-font-size': typography.button ?? tokens.buttonFontSize,
     '--sht-button-font-weight': tokens.buttonFontWeight,
     '--sht-button-letter-spacing': tokens.buttonLetterSpacing,
     '--sht-input-radius': tokens.inputRadius,

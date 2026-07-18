@@ -5,9 +5,13 @@ import { useEffect, type ReactNode } from 'react';
 import {
   DEFAULT_SHT_THEME,
   getShtThemeDefinition,
+  getShtThemeStyle,
+  getShtTypographyStyle,
   isShtThemeId,
+  normalizeShtTypographyOverrides,
   type ShtAppId,
   type ShtThemeId,
+  type ShtTypographyOverrides,
 } from './theme';
 
 const THEME_CACHE_PREFIX = 'sht-app-theme:v3:';
@@ -16,12 +20,24 @@ export const SHT_THEME_UPDATED_EVENT = 'sht-theme-updated';
 type ThemeUpdatedDetail = {
   appId: ShtAppId;
   themeId: ShtThemeId;
+  typography: ShtTypographyOverrides;
 };
 
-function applyThemeToDocument(appId: ShtAppId, themeId: ShtThemeId) {
+function applyThemeToDocument(
+  appId: ShtAppId,
+  themeId: ShtThemeId,
+  typography: ShtTypographyOverrides = {},
+) {
   const root = document.documentElement;
+  const normalizedTypography = normalizeShtTypographyOverrides(typography);
 
   root.dataset.shtApp = appId;
+  delete root.dataset.shtTypography;
+  delete root.dataset.shtTypeBody;
+  delete root.dataset.shtTypeTitle;
+  delete root.dataset.shtTypeHeading;
+  delete root.dataset.shtTypeLabel;
+  delete root.dataset.shtTypeButton;
   Object.keys(getShtThemeDefinition(DEFAULT_SHT_THEME).tokens).forEach((key) => {
     const cssName = key.replace(/[A-Z]/g, (character) => `-${character.toLowerCase()}`);
     root.style.removeProperty(`--sht-${cssName}`);
@@ -29,18 +45,25 @@ function applyThemeToDocument(appId: ShtAppId, themeId: ShtThemeId) {
 
   if (themeId === DEFAULT_SHT_THEME) {
     delete root.dataset.shtTheme;
+    if (Object.keys(normalizedTypography).length === 0) return;
+
+    root.dataset.shtTypography = 'custom';
+    Object.keys(normalizedTypography).forEach((field) => {
+      root.dataset[`shtType${field.charAt(0).toUpperCase()}${field.slice(1)}`] = 'custom';
+    });
+    Object.entries(getShtTypographyStyle(normalizedTypography)).forEach(([cssName, value]) => {
+      root.style.setProperty(cssName, String(value));
+    });
     return;
   }
 
-  const theme = getShtThemeDefinition(themeId);
   root.dataset.shtTheme = themeId;
-  Object.entries(theme.tokens).forEach(([key, value]) => {
-    const cssName = key.replace(/[A-Z]/g, (character) => `-${character.toLowerCase()}`);
-    root.style.setProperty(`--sht-${cssName}`, value);
+  Object.entries(getShtThemeStyle(themeId, normalizedTypography)).forEach(([cssName, value]) => {
+    root.style.setProperty(cssName, String(value));
   });
 }
 
-async function fetchAppTheme(appId: ShtAppId): Promise<ShtThemeId | null> {
+async function fetchAppTheme(appId: ShtAppId): Promise<ThemeUpdatedDetail | null> {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -49,7 +72,7 @@ async function fetchAppTheme(appId: ShtAppId): Promise<ShtThemeId | null> {
   }
 
   const response = await fetch(
-    `${supabaseUrl}/rest/v1/app_theme_settings?app_id=eq.${encodeURIComponent(appId)}&select=theme_id`,
+    `${supabaseUrl}/rest/v1/app_theme_settings?app_id=eq.${encodeURIComponent(appId)}&select=theme_id,typography`,
     {
       headers: {
         apikey: supabaseKey,
@@ -63,17 +86,28 @@ async function fetchAppTheme(appId: ShtAppId): Promise<ShtThemeId | null> {
     return null;
   }
 
-  const rows = (await response.json()) as Array<{ theme_id?: unknown }>;
-  return isShtThemeId(rows[0]?.theme_id) ? rows[0].theme_id : null;
+  const rows = (await response.json()) as Array<{ theme_id?: unknown; typography?: unknown }>;
+  const themeId = rows[0]?.theme_id;
+  if (!isShtThemeId(themeId)) return null;
+
+  return {
+    appId,
+    themeId,
+    typography: normalizeShtTypographyOverrides(rows[0]?.typography),
+  };
 }
 
-export function notifyShtThemeUpdated(appId: ShtAppId, themeId: ShtThemeId) {
+export function notifyShtThemeUpdated(
+  appId: ShtAppId,
+  themeId: ShtThemeId,
+  typography: ShtTypographyOverrides = {},
+) {
   if (typeof window === 'undefined') return;
 
   window.localStorage.setItem(`${THEME_CACHE_PREFIX}${appId}`, themeId);
   window.dispatchEvent(
     new CustomEvent<ThemeUpdatedDetail>(SHT_THEME_UPDATED_EVENT, {
-      detail: { appId, themeId },
+      detail: { appId, themeId, typography: normalizeShtTypographyOverrides(typography) },
     }),
   );
 }
@@ -94,10 +128,10 @@ export function ShtThemeProvider({
     applyThemeToDocument(appId, initialTheme);
 
     fetchAppTheme(appId)
-      .then((themeId) => {
-        if (!active || !themeId) return;
-        window.localStorage.setItem(cacheKey, themeId);
-        applyThemeToDocument(appId, themeId);
+      .then((theme) => {
+        if (!active || !theme) return;
+        window.localStorage.setItem(cacheKey, theme.themeId);
+        applyThemeToDocument(appId, theme.themeId, theme.typography);
       })
       .catch(() => {
         if (active) applyThemeToDocument(appId, initialTheme);
@@ -106,7 +140,7 @@ export function ShtThemeProvider({
     const handleThemeUpdated = (event: Event) => {
       const detail = (event as CustomEvent<ThemeUpdatedDetail>).detail;
       if (detail?.appId === appId && isShtThemeId(detail.themeId)) {
-        applyThemeToDocument(appId, detail.themeId);
+        applyThemeToDocument(appId, detail.themeId, detail.typography);
       }
     };
 
