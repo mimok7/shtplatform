@@ -85,7 +85,7 @@ export default function ThemeManagementPage() {
   const resetAllThemes = () => {
     setSettings({ ...INITIAL_SETTINGS });
     setDirtyApps(new Set(SHT_APP_IDS));
-    setMessage('모든 앱을 기본 디자인으로 선택했습니다. 저장해야 실제 앱에 반영됩니다.');
+    setMessage('모든 앱을 변경 전 원래 디자인으로 표시했습니다. 저장해야 실제 앱에 반영됩니다.');
   };
 
   const saveSettings = async () => {
@@ -144,7 +144,7 @@ export default function ThemeManagementPage() {
                 disabled={saving || loading}
                 className="border border-gray-400 bg-white px-5 py-3 text-sm font-bold text-gray-700 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                전체 기본으로 되돌리기
+                전체 변경 전으로 표시
               </button>
               <button
                 type="button"

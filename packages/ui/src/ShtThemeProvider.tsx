@@ -10,7 +10,7 @@ import {
   type ShtThemeId,
 } from './theme';
 
-const THEME_CACHE_PREFIX = 'sht-app-theme:v2:';
+const THEME_CACHE_PREFIX = 'sht-app-theme:v3:';
 export const SHT_THEME_UPDATED_EVENT = 'sht-theme-updated';
 
 type ThemeUpdatedDetail = {
