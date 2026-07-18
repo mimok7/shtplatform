@@ -61,6 +61,8 @@ export const SHT_TYPOGRAPHY_FIELDS = [
   'heading',
   'label',
   'button',
+  'mainMenu',
+  'subMenu',
 ] as const;
 
 export type ShtTypographyField = (typeof SHT_TYPOGRAPHY_FIELDS)[number];
@@ -96,6 +98,16 @@ export const SHT_TYPOGRAPHY_OPTIONS: Record<
     { label: '작게', value: '12px' },
     { label: '기본', value: '13px' },
     { label: '크게', value: '14px' },
+  ],
+  mainMenu: [
+    { label: '작게', value: '11px' },
+    { label: '기본', value: '12px' },
+    { label: '크게', value: '13px' },
+  ],
+  subMenu: [
+    { label: '작게', value: '10px' },
+    { label: '기본', value: '11px' },
+    { label: '크게', value: '12px' },
   ],
 };
 
@@ -370,6 +382,8 @@ export function getShtTypographyStyle(typographyOverrides: ShtTypographyOverride
     ...(typography.heading ? { '--sht-font-size-heading': typography.heading } : {}),
     ...(typography.label ? { '--sht-font-size-label': typography.label } : {}),
     ...(typography.button ? { '--sht-button-font-size': typography.button } : {}),
+    ...(typography.mainMenu ? { '--sht-main-menu-font-size': typography.mainMenu } : {}),
+    ...(typography.subMenu ? { '--sht-sub-menu-font-size': typography.subMenu } : {}),
   } as CSSProperties;
 }
 
@@ -403,6 +417,8 @@ export function getShtThemeStyle(
     '--sht-button-height': tokens.buttonHeight,
     '--sht-button-padding-x': tokens.buttonPaddingX,
     '--sht-button-font-size': typography.button ?? tokens.buttonFontSize,
+    ...(typography.mainMenu ? { '--sht-main-menu-font-size': typography.mainMenu } : {}),
+    ...(typography.subMenu ? { '--sht-sub-menu-font-size': typography.subMenu } : {}),
     '--sht-button-font-weight': tokens.buttonFontWeight,
     '--sht-button-letter-spacing': tokens.buttonLetterSpacing,
     '--sht-input-radius': tokens.inputRadius,

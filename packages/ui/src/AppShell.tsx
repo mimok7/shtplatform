@@ -35,6 +35,7 @@ export function AppShell({ brand, nav, rightSlot, children }: AppShellProps) {
                   <Link
                     key={item.href}
                     href={item.href as never}
+                    data-sht-menu="main"
                     className={cn(
                       'rounded px-3 py-1.5 text-sm transition',
                       active
@@ -57,6 +58,7 @@ export function AppShell({ brand, nav, rightSlot, children }: AppShellProps) {
               <Link
                 key={item.href}
                 href={item.href as never}
+                data-sht-menu="main"
                 className={cn(
                   'whitespace-nowrap rounded px-2 py-1 text-xs',
                   active ? 'bg-brand-50 text-brand-600' : 'text-gray-500',

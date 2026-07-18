@@ -277,6 +277,7 @@ export default function AdminLayout({ children, title, activeTab }: AdminLayoutP
       key={tab.id}
       href={tab.path}
       data-sht-theme-ignore
+      data-sht-menu={indent ? 'sub' : 'main'}
       className={`flex items-center justify-start gap-3 ${indent ? 'pl-7 pr-3' : 'px-3'} py-2 text-[11px] rounded-md transition-colors ${computedActiveTab === tab.id ? 'bg-blue-700 !text-white hover:bg-blue-800' : 'text-gray-700 hover:bg-gray-50'}`}
       aria-current={computedActiveTab === tab.id ? 'page' : undefined}
     >
@@ -357,6 +358,7 @@ export default function AdminLayout({ children, title, activeTab }: AdminLayoutP
                         <button
                           type="button"
                           data-sht-theme-ignore
+                          data-sht-menu="main"
                           onClick={() => toggleGroup(group.id)}
                           className={`w-full flex items-center justify-between px-3 py-2 text-[11px] rounded-md transition-colors ${hasActive ? 'bg-blue-700 !text-white hover:bg-blue-800' : 'text-gray-600 hover:bg-gray-50'}`}
                           aria-expanded={isOpen}

@@ -40,6 +40,8 @@ const TYPOGRAPHY_LABELS: Record<ShtTypographyField, string> = {
   heading: '소제목 글씨',
   label: '라벨 글씨',
   button: '버튼 글씨',
+  mainMenu: '주메뉴 글씨',
+  subMenu: '부메뉴 글씨',
 };
 
 export default function ThemeManagementPage() {
@@ -293,7 +295,7 @@ export default function ThemeManagementPage() {
                 <h2 className="text-xl font-bold text-gray-900">{SHT_APP_LABELS[selectedApp]} 앱의 글씨 크기</h2>
                 <p className="mt-2 text-sm text-gray-600">기본값은 모든 계절 테마에서 동일합니다. 항목별로 선택하면 저장 전 미리보기에 바로 반영됩니다.</p>
               </div>
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 {SHT_TYPOGRAPHY_FIELDS.map((field) => (
                   <label key={field} className="border border-gray-300 bg-white p-4 text-sm font-bold text-gray-800">
                     <span className="mb-2 block">{TYPOGRAPHY_LABELS[field]}</span>
@@ -340,6 +342,10 @@ export default function ThemeManagementPage() {
                       >
                         상세 보기
                       </button>
+                    </div>
+                    <div className="mt-6 border-t pt-4" style={{ borderColor: 'var(--sht-border)' }}>
+                      <p className="sht-theme-preview__menu-main">예약 관리</p>
+                      <p className="sht-theme-preview__menu-sub mt-2">예약 목록 · 예약 수정 · 결제 관리</p>
                     </div>
                   </div>
                   <div className="sht-theme-preview__card p-5">

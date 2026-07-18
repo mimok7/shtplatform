@@ -38,6 +38,8 @@ function applyThemeToDocument(
   delete root.dataset.shtTypeHeading;
   delete root.dataset.shtTypeLabel;
   delete root.dataset.shtTypeButton;
+  delete root.dataset.shtTypeMainMenu;
+  delete root.dataset.shtTypeSubMenu;
   Object.keys(getShtThemeDefinition(DEFAULT_SHT_THEME).tokens).forEach((key) => {
     const cssName = key.replace(/[A-Z]/g, (character) => `-${character.toLowerCase()}`);
     root.style.removeProperty(`--sht-${cssName}`);
@@ -55,6 +57,13 @@ function applyThemeToDocument(
       root.style.setProperty(cssName, String(value));
     });
     return;
+  }
+
+  if (Object.keys(normalizedTypography).length > 0) {
+    root.dataset.shtTypography = 'custom';
+    Object.keys(normalizedTypography).forEach((field) => {
+      root.dataset[`shtType${field.charAt(0).toUpperCase()}${field.slice(1)}`] = 'custom';
+    });
   }
 
   root.dataset.shtTheme = themeId;

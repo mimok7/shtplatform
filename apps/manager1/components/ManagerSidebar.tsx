@@ -22,6 +22,7 @@ function NavItem({ icon, label, isActive, onClick }: NavItemProps) {
   return (
     <button
       onClick={onClick}
+      data-sht-menu="sub"
       className={`w-full flex items-center px-2 py-1.5 text-xs rounded-md transition-colors ${
         isActive
           ? 'bg-blue-100 text-blue-700 font-semibold'
@@ -193,7 +194,7 @@ export default function ManagerSidebar({ activeTab, userEmail, onLogout, userRol
           {canSeeCafeGuide && (
             <div className="bg-white rounded-lg shadow-sm border border-blue-200">
               <div className="px-3 py-2 rounded-t-lg border-b bg-blue-50 border-blue-200">
-                <h3 className="text-sm font-semibold flex items-center text-blue-600">
+                <h3 data-sht-menu="main" className="text-sm font-semibold flex items-center text-blue-600">
                   <span className="mr-2">📂</span>
                   관리 기타
                 </h3>

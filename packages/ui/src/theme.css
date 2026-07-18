@@ -82,6 +82,14 @@ html[data-sht-typography='custom'][data-sht-type-button='custom'] :where(button:
   font-size: var(--sht-button-font-size);
 }
 
+html[data-sht-typography='custom'][data-sht-type-main-menu='custom'] [data-sht-menu='main'] {
+  font-size: var(--sht-main-menu-font-size) !important;
+}
+
+html[data-sht-typography='custom'][data-sht-type-sub-menu='custom'] [data-sht-menu='sub'] {
+  font-size: var(--sht-sub-menu-font-size) !important;
+}
+
 html[data-sht-theme] :where(button:not([data-sht-theme-ignore]), [role='button']:not([data-sht-theme-ignore])) {
   border-radius: var(--sht-button-radius) !important;
   font-size: var(--sht-button-font-size);
@@ -219,6 +227,17 @@ html[data-sht-theme][data-sht-app='mobile'] {
 .sht-theme-preview__button--secondary {
   background: var(--sht-surface);
   color: var(--sht-primary);
+}
+
+.sht-theme-preview__menu-main {
+  color: var(--sht-heading);
+  font-size: var(--sht-main-menu-font-size, 12px);
+  font-weight: 700;
+}
+
+.sht-theme-preview__menu-sub {
+  color: var(--sht-text-muted);
+  font-size: var(--sht-sub-menu-font-size, 11px);
 }
 
 .sht-theme-preview__input {

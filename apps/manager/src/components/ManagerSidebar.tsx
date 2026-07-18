@@ -22,6 +22,7 @@ function NavItem({ icon, label, path, isActive, onClick }: NavItemProps) {
     return (
         <button
             onClick={onClick}
+            data-sht-menu="sub"
             className={`w-full flex items-center px-2.5 py-2 text-xs leading-tight rounded-md transition-colors ${isActive
                 ? 'bg-blue-100 text-blue-700 font-semibold'
                 : 'text-gray-600 hover:bg-gray-50 hover:text-gray-700'
@@ -124,6 +125,7 @@ export default function ManagerSidebar({ activeTab, userEmail, onLogout, userRol
             <button
                 type="button"
                 onClick={() => toggleGroup(groupKey)}
+                data-sht-menu="main"
                 className={`w-full flex items-center justify-between px-3 py-2 rounded-t-md border-b ${headerClass}`}
             >
                 <h3 className="text-xs font-semibold flex items-center text-blue-600">
