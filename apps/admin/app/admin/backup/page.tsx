@@ -105,6 +105,33 @@ export default function AdminBackupPage() {
     });
   }, []);
 
+  const recentBackupDays = useMemo(() => {
+    const dayKeyFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' });
+    const dayLabelFormatter = new Intl.DateTimeFormat('ko-KR', {
+      timeZone: 'Asia/Seoul',
+      month: 'long',
+      day: 'numeric',
+      weekday: 'short',
+    });
+    const artifactsByDay = new Map<string, Artifact[]>();
+
+    artifacts.forEach((artifact) => {
+      const dayKey = dayKeyFormatter.format(new Date(artifact.created_at));
+      artifactsByDay.set(dayKey, [...(artifactsByDay.get(dayKey) ?? []), artifact]);
+    });
+
+    return Array.from({ length: 7 }, (_, index) => {
+      const date = new Date();
+      date.setDate(date.getDate() - index);
+      const dayKey = dayKeyFormatter.format(date);
+      return {
+        dayKey,
+        label: dayLabelFormatter.format(date),
+        artifacts: artifactsByDay.get(dayKey) ?? [],
+      };
+    });
+  }, [artifacts]);
+
   const backupReady = backupSetup !== null
     && backupSetup.SUPABASE_DB_URL
     && backupSetup.GITHUB_BACKUP_TOKEN;
@@ -123,15 +150,14 @@ export default function AdminBackupPage() {
 
   // 백업 파일과 DB 테이블 목록 로드
   useEffect(() => {
-    if (tab === 'restore') {
-      fetchArtifactsAndTables();
-    }
+    if (tab === 'info') fetchArtifactsAndTables(false);
+    if (tab === 'restore') fetchArtifactsAndTables(true);
   }, [tab]);
 
-  const fetchArtifactsAndTables = async () => {
+  const fetchArtifactsAndTables = async (includeTables: boolean = true) => {
     setError('');
     setArtifactsLoading(true);
-    setTablesLoading(true);
+    setTablesLoading(includeTables);
 
     const fetchWithTimeout = async (path: string, headers: HeadersInit) => {
       const controller = new AbortController();
@@ -156,7 +182,7 @@ export default function AdminBackupPage() {
         setError((current) => current ? `${current} ${message}` : message);
       };
 
-      await Promise.all([
+      const requests = [
         fetchWithTimeout('/api/admin/backup/artifacts', authHeaders)
           .then(async (response) => {
             if (!response.ok) throw new Error(`Artifact 조회 실패: ${response.status}`);
@@ -166,7 +192,10 @@ export default function AdminBackupPage() {
           })
           .catch(addListError)
           .finally(() => setArtifactsLoading(false)),
-        fetchWithTimeout('/api/admin/backup/tables', authHeaders)
+      ];
+
+      if (includeTables) {
+        requests.push(fetchWithTimeout('/api/admin/backup/tables', authHeaders)
           .then(async (response) => {
             if (!response.ok) throw new Error(`테이블 조회 실패: ${response.status}`);
             const data = await response.json();
@@ -174,8 +203,10 @@ export default function AdminBackupPage() {
             setTables(data.tables);
           })
           .catch(addListError)
-          .finally(() => setTablesLoading(false)),
-      ]);
+          .finally(() => setTablesLoading(false)));
+      }
+
+      await Promise.all(requests);
     } catch (e: any) {
       setError(e.message || '데이터 로드 실패');
       setArtifactsLoading(false);
@@ -533,6 +564,42 @@ export default function AdminBackupPage() {
               </div>
             </div>
 
+            <div className="bg-white rounded-lg shadow-sm p-6 border border-emerald-100">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h4 className="text-base font-semibold text-gray-900">최근 7일 백업 결과</h4>
+                  <p className="mt-1 text-xs text-gray-500">GitHub Actions Artifact 생성 시각을 한국 시간 기준으로 표시합니다.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => fetchArtifactsAndTables(false)}
+                  disabled={artifactsLoading}
+                  className="rounded-md border border-emerald-300 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {artifactsLoading ? '백업 결과 불러오는 중...' : '백업 결과 새로고침'}
+                </button>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-7">
+                {recentBackupDays.map((day) => {
+                  const latestArtifact = day.artifacts[0];
+                  return (
+                    <div key={day.dayKey} className={`border p-3 ${latestArtifact ? 'border-emerald-200 bg-emerald-50' : 'border-gray-200 bg-gray-50'}`}>
+                      <p className="text-xs font-bold text-gray-800">{day.label}</p>
+                      {latestArtifact ? (
+                        <>
+                          <p className="mt-2 text-xs font-semibold text-emerald-700">완료 · {day.artifacts.length}개</p>
+                          <p className="mt-1 break-all text-[11px] text-gray-600">{latestArtifact.name}</p>
+                          <p className="mt-1 text-[11px] text-gray-500">{formatFileSize(latestArtifact.size_in_bytes)} · {formatDate(latestArtifact.created_at)}</p>
+                        </>
+                      ) : (
+                        <p className="mt-2 text-xs text-gray-500">백업 파일 없음</p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-100">
                 <h4 className="text-base font-semibold text-gray-900 mb-3">권장 백업 정책</h4>
@@ -811,7 +878,7 @@ export default function AdminBackupPage() {
                     <p className="text-sm text-yellow-800">
                       ⚠️ 사용 가능한 백업 파일이 없습니다.{' '}
                       <button
-                        onClick={fetchArtifactsAndTables}
+                        onClick={() => fetchArtifactsAndTables(true)}
                         className="underline hover:text-yellow-900"
                       >
                         새로고침
