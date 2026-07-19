@@ -491,34 +491,16 @@ export default function PackageReservationDetailModal({
                 ].filter(Boolean)
             ));
 
-            const [{ data: packageMasters }, { data: packageItems }] = await Promise.all([
-                packageIds.length > 0
-                    ? supabase
-                        .from('package_master')
-                        .select('id, name, package_code, description, base_price, price_child_extra_bed, price_child_no_extra_bed, price_infant_tour, price_infant_extra_bed, price_infant_seat')
-                        .in('id', packageIds)
-                    : Promise.resolve({ data: [] as any[] }),
-                packageIds.length > 0
-                    ? supabase
-                        .from('package_items')
-                        .select('package_id, service_type, item_order, description')
-                        .in('package_id', packageIds)
-                    : Promise.resolve({ data: [] as any[] }),
-            ]);
+            const { data: packageMasters } = packageIds.length > 0
+                ? await supabase
+                    .from('package_master')
+                    .select('id, name, package_code, description, base_price, price_child_extra_bed, price_child_no_extra_bed, price_infant_tour, price_infant_extra_bed, price_infant_seat')
+                    .in('id', packageIds)
+                : { data: [] as any[] };
 
             if (cancelled) return;
 
             const masterMap = new Map((packageMasters || []).map((pkg: any) => [pkg.id, pkg]));
-            const includedToursByPackageId = new Map<string, string[]>();
-            (packageItems || [])
-                .filter((item: any) => item?.service_type === 'tour' && String(item?.description || '').trim())
-                .sort((a: any, b: any) => Number(a?.item_order || 0) - Number(b?.item_order || 0))
-                .forEach((item: any) => {
-                    const packageId = String(item.package_id || '');
-                    const names = includedToursByPackageId.get(packageId) || [];
-                    names.push(String(item.description).trim());
-                    includedToursByPackageId.set(packageId, names);
-                });
             const nextMap: Record<string, any> = {};
 
             (packageDetails || []).forEach((detail: any) => {
@@ -527,7 +509,6 @@ export default function PackageReservationDetailModal({
                 nextMap[reservationId] = {
                     ...detail,
                     package_master: masterMap.get(detail?.package_id),
-                    includedTourNames: includedToursByPackageId.get(String(detail?.package_id || '')) || [],
                 };
             });
 
@@ -537,7 +518,6 @@ export default function PackageReservationDetailModal({
                 nextMap[reservationId] = {
                     ...(nextMap[reservationId] || {}),
                     package_master: nextMap[reservationId]?.package_master || masterMap.get(root?.package_id),
-                    includedTourNames: nextMap[reservationId]?.includedTourNames || includedToursByPackageId.get(String(root?.package_id || '')) || [],
                 };
             });
 
@@ -665,17 +645,7 @@ export default function PackageReservationDetailModal({
     }, [packageRoots]);
 
     const packageServices = useMemo(() => {
-        const includedToursByReservationId = new Map(
-            packageRootRows.map((pkg: any) => [String(pkg?.reservation_id || pkg?.re_id || ''), pkg?.includedTourNames || []])
-        );
-        const nonPackage = filteredServices
-            .filter((s) => s?.serviceType !== 'package')
-            .map((service) => ({
-                ...service,
-                includedTourNames: service?.serviceType === 'tour'
-                    ? includedToursByReservationId.get(String(service?.reservation_id || service?.re_id || '')) || []
-                    : [],
-            }));
+        const nonPackage = filteredServices.filter((s) => s?.serviceType !== 'package');
 
         // 모든 서비스의 중복 제거 (reservation_id + serviceType + 주요 식별자 조합)
         const seen = new Set<string>();
@@ -745,7 +715,7 @@ export default function PackageReservationDetailModal({
 
             return 0;
         });
-    }, [filteredServices, packageRootRows]);
+    }, [filteredServices]);
 
     const totalAmount = useMemo(
         () => packageRootRows.reduce((sum, p) => sum + Number(p?.packageTotalAmount || 0), 0),
@@ -933,7 +903,6 @@ export default function PackageReservationDetailModal({
                                     const cruiseNameValue = cruiseFromNote.cruiseName || service.cruiseName || service.cruise;
                                     const roomTypeValue = cruiseFromNote.roomType || service.roomType;
                                     const airportLocations = type === 'airport' ? getAirportDisplayLocations(service) : null;
-                                    const includedTourNames = Array.isArray(service.includedTourNames) ? service.includedTourNames : [];
                                     const hasTourNameSource = type === 'tour' || !!(service.tourName || service.tour_name || service.tour?.tour_name);
                                     const unitAmount = Number(service.unitAmount || 0);
                                     return (
@@ -958,9 +927,7 @@ export default function PackageReservationDetailModal({
                                                 )}
                                                 {cruiseNameValue && <div>크루즈: {humanizeServiceName(cruiseNameValue, '크루즈 프로그램')}</div>}
                                                 {roomTypeValue && <div>객실타입: {humanizeServiceName(roomTypeValue, '객실 타입 확정 예정')}</div>}
-                                                {type === 'tour' && includedTourNames.length > 0
-                                                    ? <div>포함 투어: {includedTourNames.join(', ')}</div>
-                                                    : hasTourNameSource && <div>투어명: {getTourDisplayName(service)}</div>}
+                                                {hasTourNameSource && <div>투어명: {getTourDisplayName(service)}</div>}
                                                 {service.hotelName && <div>호텔명: {humanizeServiceName(service.hotelName, '호텔')}</div>}
                                                 {(service.category || service.way_type) && <div>구분: {humanizeWayType(service.category || service.way_type)}</div>}
                                                 {service.route && <div>경로: {humanizeText(service.route)}</div>}
