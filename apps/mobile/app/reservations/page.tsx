@@ -11,6 +11,7 @@ import {
   Ship, Plane, Building, MapPin, Car, Bus, Package, Home
 } from 'lucide-react';
 import ReservationDetailModal from '@/components/ReservationDetailModal';
+import PackageReservationDetailModal from '@/components/PackageReservationDetailModal';
 import { fetchPromotionSequenceMap } from '@/lib/promotionSequence';
 
 /* ── 타입 정의 ─────────────────────────────── */
@@ -18,6 +19,11 @@ interface ServiceReservation {
   re_id: string;
   re_type: string;
   re_status: string;
+  package_id?: string | null;
+  total_amount?: number | null;
+  re_adult_count?: number | null;
+  re_child_count?: number | null;
+  re_infant_count?: number | null;
   price_breakdown?: Record<string, any> | null;
 }
 
@@ -98,7 +104,7 @@ export default function ReservationsPage() {
 
         let query = supabase
           .from('reservation')
-          .select('re_id, re_type, re_status, re_created_at, re_quote_id, re_user_id, price_breakdown')
+          .select('re_id, re_type, re_status, re_created_at, re_quote_id, re_user_id, package_id, total_amount, re_adult_count, re_child_count, re_infant_count, price_breakdown')
           .order('re_created_at', { ascending: false })
           .order('re_id', { ascending: false })
           .range(from, to);
@@ -216,7 +222,17 @@ export default function ReservationsPage() {
           }
         }
 
-        grouped[key].services.push({ re_id: r.re_id, re_type: r.re_type, re_status: r.re_status, price_breakdown: r.price_breakdown || null });
+        grouped[key].services.push({
+          re_id: r.re_id,
+          re_type: r.re_type,
+          re_status: r.re_status,
+          package_id: r.package_id || null,
+          total_amount: r.total_amount ?? null,
+          re_adult_count: r.re_adult_count ?? null,
+          re_child_count: r.re_child_count ?? null,
+          re_infant_count: r.re_infant_count ?? null,
+          price_breakdown: r.price_breakdown || null,
+        });
         grouped[key].hasPromotion = grouped[key].hasPromotion || hasPromotionBreakdown(r.price_breakdown);
       });
 
@@ -484,9 +500,13 @@ export default function ReservationsPage() {
         packageIds.length > 0 ? supabase.from('reservation_package').select('*').in('reservation_id', packageIds) : { data: [] },
       ]);
 
-      const packageMasterIds = Array.from(new Set(
-        (packageRes.data || []).map((row: any) => String(row.package_id || '').trim()).filter(Boolean),
-      ));
+      const packageMasterIds = Array.from(new Set([
+        ...serviceRows
+          .filter((service) => service.re_type === 'package')
+          .map((service) => String(service.package_id || '').trim())
+          .filter(Boolean),
+        ...(packageRes.data || []).map((row: any) => String(row.package_id || '').trim()).filter(Boolean),
+      ]));
       const { data: packageMasters } = packageMasterIds.length > 0
         ? await supabase.from('package_master').select('id, name, package_code').in('id', packageMasterIds)
         : { data: [] };
@@ -597,19 +617,23 @@ export default function ReservationsPage() {
         });
       });
 
-      (packageRes.data || []).forEach((r: any) => {
-        const packageInfo: any = packageMasterMap.get(String(r.package_id || ''));
+      const packageDetailMap = new Map((packageRes.data || []).map((row: any) => [String(row.reservation_id || ''), row]));
+      serviceRows.filter((service) => service.re_type === 'package').forEach((service) => {
+        const r: any = packageDetailMap.get(String(service.re_id)) || {};
+        const packageInfo: any = packageMasterMap.get(String(r.package_id || service.package_id || ''));
         modalItems.push({
           ...baseHeader, ...r,
           serviceType: 'package', re_type: 'package',
-          reservation_id: r.reservation_id, reservationId: r.reservation_id, re_id: r.reservation_id,
-          status: statusMap.get(r.reservation_id) || 'pending',
+          reservation_id: service.re_id, reservationId: service.re_id, re_id: service.re_id,
+          status: service.re_status || 'pending',
           package_name: packageInfo?.name || '',
           package_code: packageInfo?.package_code || '',
-          re_adult_count: Number(r.adult_count || 0),
-          re_child_count: Number(r.child_extra_bed || 0) + Number(r.child_no_extra_bed || 0),
-          re_infant_count: Number(r.infant_free || 0) + Number(r.infant_tour || 0) + Number(r.infant_extra_bed || 0) + Number(r.infant_seat || 0),
-          totalPrice: Number(r.total_price || 0),
+          package_description: packageInfo?.description || '',
+          re_adult_count: Number(service.re_adult_count ?? r.adult_count ?? 0),
+          re_child_count: Number(service.re_child_count ?? (Number(r.child_extra_bed || 0) + Number(r.child_no_extra_bed || 0))),
+          re_infant_count: Number(service.re_infant_count ?? (Number(r.infant_free || 0) + Number(r.infant_tour || 0) + Number(r.infant_extra_bed || 0) + Number(r.infant_seat || 0))),
+          total_amount: Number(service.total_amount || 0),
+          totalPrice: Number(service.total_amount || r.total_price || 0),
           note: r.additional_requests || '',
         });
       });
@@ -726,6 +750,8 @@ export default function ReservationsPage() {
     if (pendingCount > 0) return { count, label: '승인 처리' };
     return { count, label: '확정 처리' };
   }, [detailItem]);
+
+  const isPackageDetail = !!detailItem?.services?.some((service) => service.re_type === 'package');
 
   const moveToReservationEdit = () => {
     if (!detailItem) return;
@@ -938,7 +964,7 @@ export default function ReservationsPage() {
       </div>
 
       <ReservationDetailModal
-        isOpen={detailOpen}
+        isOpen={detailOpen && !isPackageDetail}
         onClose={() => setDetailOpen(false)}
         onEdit={detailItem ? (() => moveToReservationEdit()) : undefined}
         onProcess={detailItem ? handleDetailProcess : undefined}
@@ -948,6 +974,12 @@ export default function ReservationsPage() {
         item={detailModalItem}
         items={detailModalItems}
         modalTitle={detailModalTitle}
+      />
+      <PackageReservationDetailModal
+        isOpen={detailOpen && isPackageDetail}
+        onClose={() => setDetailOpen(false)}
+        userName={detailItem?.users?.name || ''}
+        items={detailModalItems}
       />
     </div>
   );
