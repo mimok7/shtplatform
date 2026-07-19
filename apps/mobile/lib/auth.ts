@@ -93,5 +93,5 @@ export const canAccessManagerApp = async (user: User | null | undefined): Promis
 };
 
 export const isPublicPath = (pathname: string): boolean => {
-  return pathname === '/' || pathname === '/login';
+  return pathname === '/login';
 };

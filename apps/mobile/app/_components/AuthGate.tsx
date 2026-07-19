@@ -28,7 +28,6 @@ export default function AuthGate({ children }: AuthGateProps) {
     if (!hasSupabaseEnv) {
       if (!cancelled) {
         router.replace('/login?error=missing-env');
-        setChecking(false);
       }
       return;
     }
@@ -40,7 +39,6 @@ export default function AuthGate({ children }: AuthGateProps) {
 
         if (!session) {
           router.replace('/login');
-          if (!cancelled) setChecking(false);
           return;
         }
 
@@ -50,14 +48,13 @@ export default function AuthGate({ children }: AuthGateProps) {
           await supabase.auth.signOut({ scope: 'local' });
           clearManagerAccessCache(session.user.id);
           router.replace('/login?error=forbidden');
-          if (!cancelled) setChecking(false);
           return;
         }
 
         if (!cancelled) setChecking(false);
       } catch (err) {
         if (!cancelled) {
-          setChecking(false);
+          router.replace('/login');
         }
       }
     };
@@ -68,6 +65,7 @@ export default function AuthGate({ children }: AuthGateProps) {
       if (cancelled) return;
 
       if (!session) {
+        setChecking(true);
         router.replace('/login');
         return;
       }
@@ -78,6 +76,7 @@ export default function AuthGate({ children }: AuthGateProps) {
         if (!canAccess) {
           await supabase.auth.signOut({ scope: 'local' });
           clearManagerAccessCache(session.user.id);
+          setChecking(true);
           router.replace('/login?error=forbidden');
         }
       })();
