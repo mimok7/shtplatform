@@ -418,3 +418,11 @@ PostgreSQL 17 백업 클라이언트 보정.
 - 실제 석초롱 패키지로 7월 17일 `닌빈 한국어 가이드 투어`, 7월 18일 `그랜드 파이어니스`, 7월 19일 `공항 샌딩, 하노이 오후 투어`가 날짜별로 표시됨을 확인했다.
 - 390px 화면에서 패키지 1건, 포함 서비스 5건, 총액 55,250,000동, 두 투어와 `야경투어 추가` 비고가 표시됨을 확인했다. `/reservations`에서도 동일 패키지 상세가 포함 서비스 5건으로 열렸다.
 - `pnpm --dir apps/mobile typecheck`가 통과했다. 변경 파일 ESLint는 오류 0건으로 통과했고 기존 경고 14건만 남아 있다.
+
+매니저·매니저1 예약 상세 2열 UI 작업 시작.
+
+- 대상은 `apps/manager/src/components`와 `apps/manager1/components`의 `UserReservationDetailModal`, `PackageReservationDetailModal`이다.
+- 두 앱 모두 서비스 세부 정보가 `grid-cols-1`로 표시되고 모달 컨테이너가 `max-w-xl`로 제한되어 있다.
+- 데스크톱 가독성을 위해 정보 행은 기본 2열로, 좁은 화면에서는 단일 열로 유지한다. 모달은 서비스 정보를 충분히 담도록 `max-w-6xl`로 확장한다.
+- 예약 통합 상세의 크루즈·공항·호텔·투어·차량·스하 차량 정보 그리드 7곳과 패키지 상세의 패키지 예약·포함 서비스 정보 그리드 2곳을 각 앱에서 `grid-cols-1 md:grid-cols-2`로 변경했다.
+- 두 앱의 두 모달 컨테이너 모두 `max-w-xl`에서 `max-w-6xl`로 확장했다. `pnpm --dir apps/manager typecheck`, `pnpm --dir apps/manager1 typecheck`가 모두 통과했다.
