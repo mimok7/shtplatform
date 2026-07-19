@@ -728,7 +728,7 @@ export default function PackageReservationDetailModal({
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-            <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="bg-white rounded-xl shadow-2xl max-w-xl w-full max-h-[90vh] overflow-hidden flex flex-col">
                 <div className="bg-white border-b border-gray-100 px-6 py-4 shrink-0 flex justify-between items-start">
                     <div className="flex-1">
                         <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
@@ -762,7 +762,7 @@ export default function PackageReservationDetailModal({
                         <div className="text-center py-10 text-gray-500">패키지 예약 상세를 불러오는 중...</div>
                     ) : (
                         <>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            <div className="grid grid-cols-2 gap-3">
                                 <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-3">
                                     <div className="text-xs text-indigo-700">패키지 예약 건수</div>
                                     <div className="text-xl font-bold text-indigo-900">{packageRootRows.length}건</div>
@@ -771,7 +771,7 @@ export default function PackageReservationDetailModal({
                                     <div className="text-xs text-blue-700">포함 서비스 건수</div>
                                     <div className="text-xl font-bold text-blue-900">{packageServices.length}건</div>
                                 </div>
-                                <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                                <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-right">
                                     <div className="text-xs text-emerald-700">패키지 총액 합계 (예약 단위 단일요금)</div>
                                     <div className="text-xl font-bold text-emerald-900">{formatAmount(displayTotalAmount)}</div>
                                 </div>
