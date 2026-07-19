@@ -857,21 +857,6 @@ export default function PackageReservationDetailModal({
                                                     </div>
                                                 )}
                                             </div>
-                                            <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-gray-700 bg-white border border-indigo-100 rounded p-2">
-                                                <div>아동: 엑스트라베드 {pkg.childExtraBed || 0}, 베드없음 {pkg.childNoExtraBed || 0}</div>
-                                                <div>유아: 무료 {pkg.infantFree || 0}, 투어 {pkg.infantTour || 0}, 엑스트라베드 {pkg.infantExtraBed || 0}, 좌석 {pkg.infantSeat || 0}</div>
-                                                <div>공항 차량: {humanizeText(pkg.airportVehicle, '미정')}</div>
-                                                <div>닌빈 차량: {humanizeText(pkg.ninhBinhVehicle, '미정')}</div>
-                                                <div>하노이 차량: {humanizeText(pkg.hanoiVehicle, '미정')}</div>
-                                                <div>크루즈 차량: {humanizeText(pkg.cruiseVehicle, '미정')}</div>
-                                                <div>스하 픽업: {humanizeText(pkg.shtPickupVehicle, '미정')} / {humanizeText(pkg.shtPickupSeat, '좌석 미정')}</div>
-                                                <div>스하 드롭: {humanizeText(pkg.shtDropoffVehicle, '미정')} / {humanizeText(pkg.shtDropoffSeat, '좌석 미정')}</div>
-                                            </div>
-                                            {pkg.package_description && (
-                                                <div className="mt-2 text-xs text-gray-600 bg-white border border-gray-200 rounded p-2 whitespace-pre-line">
-                                                    {humanizeText(pkg.package_description)}
-                                                </div>
-                                            )}
                                         </div>
                                         );
                                     })}
