@@ -820,7 +820,7 @@ export default function PackageReservationDetailModal({
                                                 {getStatusBadge(pkg.re_status || pkg.service?.re_status)}
                                             </div>
                                             <div className="mt-2 grid grid-cols-1 gap-2 text-sm text-gray-700">
-                                                <div>예약일: {formatKst(pkg.re_created_at || pkg.service?.re_created_at)}</div>
+                                                <div><span className="text-blue-700">예약일:</span> {formatKst(pkg.re_created_at || pkg.service?.re_created_at)}</div>
                                                 {(pkg.adultCount > 0 || pkg.childCount > 0 || pkg.infantCount > 0) && (
                                                     <div>
                                                         인원: {[
