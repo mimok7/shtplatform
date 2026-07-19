@@ -105,18 +105,7 @@ function humanizeServiceName(value: any, fallbackLabel: string): string {
 }
 
 function getTourDisplayName(service: any): string {
-    const forcedName = service?.forcedTourName || service?.displayTourName;
-    if (forcedName) return humanizeText(forcedName, '투어 프로그램');
-
-    const tourDateKey = getDateKey(getServiceDateValue(service));
-    if (tourDateKey.endsWith('08-03') || tourDateKey === '2026-08-03') {
-        return '닌빈 투어';
-    }
-    if (tourDateKey.endsWith('08-05') || tourDateKey === '2026-08-05') {
-        return '하노이 오후 투어';
-    }
-
-    const directName = service.tourName || service.tour_name || service.tour?.tour_name;
+    const directName = service.tourDbName || service.tourName || service.tour_name || service.tour?.tour_name;
     if (directName && !isCodeLike(directName)) return humanizeText(directName, '투어 프로그램');
 
     const note = formatNote(service.note || service.request_note);
@@ -130,14 +119,6 @@ function getTourDisplayName(service: any): string {
 
     if (directName) return humanizeServiceName(directName, '투어 프로그램');
     return '투어 프로그램';
-}
-
-function isUnknownTourService(service: any): boolean {
-    if (service?.serviceType !== 'tour') return false;
-    const name = getTourDisplayName(service);
-    const rawName = String(service?.tourName || service?.tour_name || '').trim();
-    const note = formatNote(service?.note || service?.request_note);
-    return name === '투어 프로그램' && (!rawName || isCodeLike(rawName)) && !note;
 }
 
 function formatAmount(value: any): string {
@@ -245,14 +226,6 @@ function getDateKey(value: string): string {
 
     const d = new Date(raw.replace(' ', 'T'));
     if (Number.isNaN(d.getTime())) return '';
-    return d.toISOString().slice(0, 10);
-}
-
-function plusDays(dateKey: string, days: number): string {
-    if (!dateKey) return '';
-    const d = new Date(`${dateKey}T00:00:00`);
-    if (Number.isNaN(d.getTime())) return '';
-    d.setDate(d.getDate() + days);
     return d.toISOString().slice(0, 10);
 }
 
@@ -483,6 +456,7 @@ export default function PackageReservationDetailModal({
     loading,
 }: PackageReservationDetailModalProps) {
     const [packageDetailMap, setPackageDetailMap] = useState<Record<string, any>>({});
+    const [tourNameMap, setTourNameMap] = useState<Record<string, string>>({});
 
     const packageRootIds = useMemo(() => {
         const list = Array.isArray(allUserServices) ? allUserServices : [];
@@ -555,6 +529,45 @@ export default function PackageReservationDetailModal({
         };
     }, [allUserServices, isOpen, packageRootIds]);
 
+    useEffect(() => {
+        if (!isOpen) {
+            setTourNameMap({});
+            return;
+        }
+
+        const tourPriceCodes = Array.from(new Set(
+            (Array.isArray(allUserServices) ? allUserServices : [])
+                .filter((service: any) => service?.serviceType === 'tour' || service?.re_type === 'tour')
+                .map((service: any) => String(service?.tour_price_code || '').trim())
+                .filter(Boolean)
+        ));
+        if (tourPriceCodes.length === 0) {
+            setTourNameMap({});
+            return;
+        }
+
+        let cancelled = false;
+        const loadTourNames = async () => {
+            const { data, error } = await supabase
+                .from('tour_pricing')
+                .select('pricing_id, tour:tour_id(tour_name)')
+                .in('pricing_id', tourPriceCodes);
+
+            if (cancelled || error) return;
+            const nextMap: Record<string, string> = {};
+            (data || []).forEach((price: any) => {
+                const name = String(price?.tour?.tour_name || '').trim();
+                if (price?.pricing_id && name) nextMap[String(price.pricing_id)] = name;
+            });
+            setTourNameMap(nextMap);
+        };
+
+        void loadTourNames();
+        return () => {
+            cancelled = true;
+        };
+    }, [allUserServices, isOpen]);
+
     const filteredServices = useMemo(() => {
         const list = Array.isArray(allUserServices) ? allUserServices : [];
         const packageReservationIds = new Set(
@@ -570,8 +583,13 @@ export default function PackageReservationDetailModal({
                 return s?.serviceType === 'package' || s?.re_type === 'package' || s?.isPackageService || packageReservationIds.has(reservationId);
             })
             : list;
-        return scoped.map(normalizePackageService);
-    }, [allUserServices]);
+        return scoped.map(normalizePackageService).map((service) => ({
+            ...service,
+            tourDbName: service?.serviceType === 'tour'
+                ? tourNameMap[String(service?.tour_price_code || '')]
+                : undefined,
+        }));
+    }, [allUserServices, tourNameMap]);
 
     const packageRoots = useMemo(
         () => filteredServices
@@ -641,42 +659,14 @@ export default function PackageReservationDetailModal({
             .filter(Boolean)
             .sort()[0] || '';
 
-        const nextDayOfPickup = plusDays(pickupAirportDate, 1);
-
         const filteredByPickupTourRule = deduped.filter((s) => {
             if (s?.serviceType !== 'tour') return true;
             const tourDateKey = getDateKey(getServiceDateValue(s));
             return !(pickupAirportDate && tourDateKey === pickupAirportDate);
         });
 
-        const enrichedTours = filteredByPickupTourRule.map((s) => {
-            if (s?.serviceType !== 'tour') return s;
-            const tourDateKey = getDateKey(getServiceDateValue(s));
-            if (nextDayOfPickup && tourDateKey === nextDayOfPickup) {
-                return { ...s, forcedTourName: '닌빈 투어' };
-            }
-            return s;
-        });
-
-        // 다음날 투어가 명시적으로 매칭되지 않아도, 픽업 이후 첫 투어명이 미정이면 닌빈 투어로 보정
-        const toursAfterPickup = enrichedTours
-            .filter((s) => s?.serviceType === 'tour')
-            .map((s) => ({ s, t: getTimeValue(getServiceDateValue(s)) }))
-            .filter((row) => row.t !== Number.MAX_SAFE_INTEGER)
-            .sort((a, b) => a.t - b.t);
-
-        const pickupTime = getTimeValue(`${pickupAirportDate}T00:00:00`);
-        const firstTourAfterPickup = toursAfterPickup.find((row) => pickupAirportDate && row.t > pickupTime);
-
-        const finalTours = enrichedTours.map((s) => {
-            if (s?.serviceType !== 'tour') return s;
-            if (!firstTourAfterPickup || s !== firstTourAfterPickup.s) return s;
-            if (!isUnknownTourService(s)) return s;
-            return { ...s, forcedTourName: '닌빈 투어' };
-        });
-
         // 날짜순 정렬 + 같은 날짜 공항은 픽업 먼저, 샌딩 나중
-        return [...finalTours].sort((a, b) => {
+        return [...filteredByPickupTourRule].sort((a, b) => {
             const ta = getTimeValue(getServiceDateValue(a));
             const tb = getTimeValue(getServiceDateValue(b));
             const dateA = getServiceDateValue(a).slice(0, 10);
@@ -802,7 +792,15 @@ export default function PackageReservationDetailModal({
                                             </div>
                                             <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-gray-700">
                                                 <div>예약일: {formatKst(pkg.re_created_at || pkg.service?.re_created_at)}</div>
-                                                <div>인원: 성인 {pkg.adultCount || 0}, 아동 {pkg.childCount || 0}, 유아 {pkg.infantCount || 0}</div>
+                                                {(pkg.adultCount > 0 || pkg.childCount > 0 || pkg.infantCount > 0) && (
+                                                    <div>
+                                                        인원: {[
+                                                            pkg.adultCount > 0 && `성인 ${pkg.adultCount}`,
+                                                            pkg.childCount > 0 && `아동 ${pkg.childCount}`,
+                                                            pkg.infantCount > 0 && `유아 ${pkg.infantCount}`,
+                                                        ].filter(Boolean).join(', ')}
+                                                    </div>
+                                                )}
                                                 <div className="font-semibold text-emerald-700">총액 (단일요금): {formatAmount(pkg.packageTotalAmount)}</div>
                                             </div>
                                             <div className="mt-2 bg-white border border-indigo-100 rounded p-2 text-xs space-y-1">

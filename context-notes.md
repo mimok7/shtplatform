@@ -1,3 +1,15 @@
+패키지 예약 통합 상세 인원·투어명 표시 보정 시작.
+
+- 패키지 루트의 인원은 `reservation.re_adult_count`, `re_child_count`, `re_infant_count`에서 전달된다. 0명인 아동·유아 라벨은 표시하지 않는다.
+- 통합 모달 제공자는 `reservation_tour`만 조회해 `tour_price_code`를 전달하므로, 모달에서 `tour_pricing -> tour.tour_name` 관계를 조회해 DB의 실제 투어명을 보강한다.
+- 기존 날짜 기반 강제 투어명 보정은 DB 값을 덮어쓸 수 있어 제거한다.
+
+구현 및 검증 결과.
+
+- 인원은 양수인 성인·아동·유아 항목만 조합해 렌더링한다. 따라서 `성인 5, 아동 0, 유아 0`은 `성인 5`로 표시된다.
+- 모달이 열리면 표시 대상의 `tour_price_code`를 기준으로 `tour_pricing`과 `tour`를 조인 조회하고, 반환된 `tour.tour_name`을 최우선 표시한다.
+- `pnpm --filter @sht/manager typecheck`, `pnpm --filter @sht/manager1 typecheck`, `git diff --check`를 통과했다.
+
 SHT 단가 오표시 이슈 조사 시작.
 
 - 사용자 제보 케이스는 예약 `28083a11-5adb-4327-ab8f-333625f11e71` 기준이며, 좌석은 `A1,A2`이고 기대 단가는 `850,000동`이다.
