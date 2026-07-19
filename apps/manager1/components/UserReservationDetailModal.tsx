@@ -1355,7 +1355,7 @@ export default function UserReservationDetailModal({
                                         </div>
                                     )}
                                     <div className="bg-blue-50 rounded-lg p-3 mb-2 border border-blue-100">
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                                        <div className="grid grid-cols-1 gap-2 text-sm">
                                             <div><strong>크루즈명:</strong> <span className="font-semibold text-blue-800">{service.cruiseName || service.cruise || '크루즈'}</span></div>
                                             <div><strong>객실타입:</strong> {service.roomType}</div>
                                             <div><strong>객실수:</strong> {service.room_count || service.roomCount || 0}실</div>
@@ -1480,7 +1480,7 @@ export default function UserReservationDetailModal({
 
                             return (
                                 <div className="bg-green-50 rounded-lg p-3 mb-2 border border-green-100">
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                                    <div className="grid grid-cols-1 gap-2 text-sm">
                                         <div><strong>구분:</strong> {service.category || service.way_type || '-'}</div>
                                         <div><strong>경로:</strong> {service.route || '-'}</div>
                                         <div><strong>차량:</strong> {service.carType || '-'}</div>
@@ -1531,7 +1531,7 @@ export default function UserReservationDetailModal({
                             );
                             return (
                         <div className="bg-orange-50 rounded-lg p-3 mb-2 border border-orange-100">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                            <div className="grid grid-cols-1 gap-2 text-sm">
                                 <div><strong>호텔명:</strong> <span className="font-semibold text-orange-800">{service.hotelName}</span></div>
                                 <div><strong>객실타입:</strong> {service.roomType}</div>
                                 <div><strong>체크인:</strong> {service.checkinDate}</div>
@@ -1588,7 +1588,7 @@ export default function UserReservationDetailModal({
                 {type === 'tour' && (
                     <>
                         <div className="bg-purple-50 rounded-lg p-3 mb-2 border border-purple-100">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                            <div className="grid grid-cols-1 gap-2 text-sm">
                                 <div><strong>투어명:</strong> <span className="font-semibold text-purple-800">{service.tourName}</span></div>
                                 {service.tourDate && <div><strong>투어일자:</strong> {service.tourDate}</div>}
                                 {service.tourCapacity && <div><strong>인원수:</strong> {service.tourCapacity}명</div>}
@@ -1617,7 +1617,7 @@ export default function UserReservationDetailModal({
                 {type === 'ticket' && (
                     <>
                         <div className="bg-teal-50 rounded-lg p-3 mb-2 border border-teal-100">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                            <div className="grid grid-cols-1 gap-2 text-sm">
                                 <div><strong>티켓명:</strong> <span className="font-semibold text-teal-800">{service.ticketName || service.ticket_name || service.program_selection || '-'}</span></div>
                                 <div><strong>이용일자:</strong> {service.usageDate || service.usage_date || '-'}</div>
                                 <div><strong>수량:</strong> {Number(service.ticketQuantity || service.ticket_quantity || 0)}매</div>
@@ -1647,7 +1647,7 @@ export default function UserReservationDetailModal({
                     <>
                         {/* 차량 기본 정보 */}
                         <div className="bg-red-50 rounded-lg p-3 mb-2 border border-red-100">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                            <div className="grid grid-cols-1 gap-2 text-sm">
                                 <div><strong>차량 타입:</strong> <span className="font-semibold">{service.carType || '-'}{service.capacity && <span className="text-xs font-normal text-gray-500 ml-1">({service.capacity}인승)</span>}</span></div>
                                 {service.route && <div><strong>경로:</strong> {service.route}</div>}
                                 {(service.category || service.way_type) && <div><strong>이용방식:</strong> {service.category || service.way_type}</div>}
@@ -1731,7 +1731,7 @@ export default function UserReservationDetailModal({
                 {type === 'sht' && (
                     <>
                         <div className="bg-indigo-50 rounded-lg p-3 mb-2 border border-indigo-100">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                            <div className="grid grid-cols-1 gap-2 text-sm">
                                 <div><strong>사용일:</strong> {service.usageDate ? formatDateOnlyKst(service.usageDate) : '-'}</div>
                                 <div><strong>구분:</strong> {service.category || '-'}</div>
                                 <div><strong>차량번호:</strong> {service.vehicleNumber}</div>
@@ -1835,7 +1835,7 @@ export default function UserReservationDetailModal({
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-            <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="bg-white rounded-xl shadow-2xl max-w-xl w-full max-h-[90vh] overflow-hidden flex flex-col">
                 {/* 헤더 */}
                 <div className="bg-white border-b border-gray-100 px-6 py-4 shrink-0">
                     <div className="flex justify-between items-start">
