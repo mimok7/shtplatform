@@ -1835,7 +1835,7 @@ export default function UserReservationDetailModal({
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-            <div className="bg-white rounded-xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
                 {/* 헤더 */}
                 <div className="bg-white border-b border-gray-100 px-6 py-4 shrink-0">
                     <div className="flex justify-between items-start">
