@@ -762,7 +762,7 @@ export default function PackageReservationDetailModal({
                         <div className="text-center py-10 text-gray-500">패키지 예약 상세를 불러오는 중...</div>
                     ) : (
                         <>
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-4 gap-3">
                                 <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-3">
                                     <div className="text-xs text-indigo-700">패키지 예약 건수</div>
                                     <div className="text-xl font-bold text-indigo-900">{packageRootRows.length}건</div>
@@ -771,7 +771,7 @@ export default function PackageReservationDetailModal({
                                     <div className="text-xs text-blue-700">포함 서비스 건수</div>
                                     <div className="text-xl font-bold text-blue-900">{packageServices.length}건</div>
                                 </div>
-                                <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-right">
+                                <div className="col-span-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-right">
                                     <div className="text-xs text-emerald-700">패키지 총액 합계 (예약 단위 단일요금)</div>
                                     <div className="text-xl font-bold text-emerald-900">{formatAmount(displayTotalAmount)}</div>
                                 </div>
@@ -830,7 +830,10 @@ export default function PackageReservationDetailModal({
                                                         ].filter(Boolean).join(', ')}
                                                     </div>
                                                 )}
-                                                <div className="font-semibold text-emerald-700">총액 (단일요금): {formatAmount(pkg.packageTotalAmount)}</div>
+                                                <div className="flex items-center justify-between gap-2 font-semibold text-emerald-700">
+                                                    <span>총액 (단일요금):</span>
+                                                    <span className="text-right">{formatAmount(pkg.packageTotalAmount)}</span>
+                                                </div>
                                             </div>
                                             <div className="mt-2 bg-white border border-indigo-100 rounded p-2 text-xs space-y-1">
                                                 {pkg.adultCount > 0 && displayAdultPrice > 0 && (
