@@ -6,6 +6,7 @@ import supabase from '@/lib/supabase';
 import { calculateReservationPricing } from '@/lib/pricing';
 import { saveAdditionalFeeTemplateFromInput } from '@/lib/additionalFeeTemplate';
 import { recordReservationChange } from '@/lib/reservationChangeTracker';
+import { getKstTodayDateKey } from '@/lib/dateKst';
 import ManagerLayout from '../_components/MobileReservationLayout';
 import StepperNumberInput from '../_components/StepperNumberInput';
 import {
@@ -121,7 +122,7 @@ function TicketReservationEditContent() {
     };
 
     const ticketFinalTotal = Math.max(0, (formData.total_price || 0) + additionalFee);
-    const todayText = useState(() => new Date().toISOString().slice(0, 10))[0];
+    const todayText = useState(getKstTodayDateKey)[0];
 
     const getUnitByChannel = (option: TicketPriceOption, channel: PriceChannel) => {
         if (channel === 'official') return Number(option.official_price_vnd || 0);

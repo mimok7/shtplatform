@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { MobileQuoteLayout } from '../_components/MobileQuoteShell';
 import supabase from '@/lib/supabase';
 import { PackageWithItems } from '@/lib/types';
+import { getKstTodayDateKey } from '@/lib/dateKst';
 import {
     Package, Ship, Hotel, Car, MapPin, Plane,
     Loader2, CheckCircle2, Copy, RefreshCw
@@ -55,7 +56,7 @@ function PackageQuoteForm() {
         adultCount: 2,
         childCount: 0,
         infantCount: 0,
-        departureDate: new Date().toISOString().split('T')[0],
+        departureDate: getKstTodayDateKey(),
         requestNote: ''
     });
 

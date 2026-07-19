@@ -5,6 +5,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import ManagerLayout from '../_components/MobileReservationLayout';
 import supabase from '@/lib/supabase';
+import { toKstDateKey, toKstDateLabel } from '@/lib/dateKst';
 import {
     Ship, Plane, Building, MapPin, Car, Calendar, RefreshCw,
     Trash2, CheckSquare, Square, ChevronDown, ChevronUp, X, Edit2,
@@ -81,13 +82,11 @@ function toYMD(dateStr: string): string {
 }
 
 function fmtDate(dateStr: string): string {
-    const d = parseDate(dateStr);
-    return d ? d.toLocaleDateString('ko-KR') : (dateStr || '-');
+    return toKstDateLabel(dateStr, dateStr || '-');
 }
 
 function todayYMD(): string {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    return toKstDateKey(new Date());
 }
 
 interface CardItem {

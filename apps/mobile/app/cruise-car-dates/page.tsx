@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import supabase from '@/lib/supabase';
 import { ArrowLeft, Calendar, CheckSquare, Home, Square } from 'lucide-react';
+import { getKstTodayDateKey } from '@/lib/dateKst';
 
 type FixKind =
   | 'set_one_way_pickup'
@@ -34,9 +35,9 @@ const toDateOnly = (value: any) => String(value || '').slice(0, 10);
 
 const addDays = (dateStr: string, days: number) => {
   if (!dateStr) return '';
-  const date = new Date(`${dateStr}T00:00:00`);
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day + days));
   if (Number.isNaN(date.getTime())) return '';
-  date.setDate(date.getDate() + days);
   return date.toISOString().slice(0, 10);
 };
 
@@ -235,7 +236,7 @@ export default function MobileCruiseCarDatesPage() {
   const [syncingAll, setSyncingAll] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getKstTodayDateKey();
 
   const load = useCallback(async () => {
     setLoading(true);

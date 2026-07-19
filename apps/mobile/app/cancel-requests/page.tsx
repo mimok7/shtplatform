@@ -6,6 +6,7 @@ import Link from 'next/link';
 import supabase from '@/lib/supabase';
 import { ArrowLeft, Home } from 'lucide-react';
 import ReservationDetailModal from '@/components/ReservationDetailModal';
+import { toKstDateKey } from '@/lib/dateKst';
 
 type RequestStatus = 'pending' | 'approved' | 'rejected' | 'cancelled' | 'completed';
 
@@ -127,8 +128,10 @@ function calcCancelFee(
         return { daysUntil: null, penaltyRate: 0, refundRate: 1, penaltyAmount: 0, refundAmount: paid, label: '자연재해: 위약금 없음 (전액 환불)', cannotCancel: false };
     }
     if (!checkinDate) return { daysUntil: null, penaltyRate: 0, refundRate: 1, penaltyAmount: 0, refundAmount: paid, label: '이용일 미확인', cannotCancel: false };
-    const today = new Date(); today.setHours(0, 0, 0, 0);
-    const checkin = new Date(checkinDate); checkin.setHours(0, 0, 0, 0);
+    const checkinKey = toKstDateKey(checkinDate);
+    if (!checkinKey) return { daysUntil: null, penaltyRate: 0, refundRate: 1, penaltyAmount: 0, refundAmount: paid, label: '이용일 미확인', cannotCancel: false };
+    const today = new Date(`${toKstDateKey(new Date())}T00:00:00+09:00`);
+    const checkin = new Date(`${checkinKey}T00:00:00+09:00`);
     const daysUntil = Math.floor((checkin.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
     let penaltyRate: number; let label: string; let cannotCancel = false;
     if (daysUntil > 30) { penaltyRate = 0; label = '위약금 없음'; }
@@ -620,7 +623,7 @@ export default function MobileCancelRequestsPage() {
         try {
             const basePaymentPayload = {
                 reservation_id: row.reservation_id,
-                payment_date: new Date().toISOString().slice(0, 10),
+                payment_date: toKstDateKey(new Date()),
                 payment_status: 'completed',
                 payment_method: row.refund_bank_name ? 'bank_transfer' : null,
                 created_by: userId,
@@ -806,7 +809,9 @@ export default function MobileCancelRequestsPage() {
                                                 </span>
                                                 <span className="rounded bg-purple-100 px-2 py-0.5 text-purple-800">{REASON_LABEL[row.cancel_reason_category] || row.cancel_reason_category}</span>
                                                 <span className="rounded bg-gray-100 px-2 py-0.5">{row.cancellation_type === 'full' ? '전체' : '부분'}</span>
-                                                <span className="ml-auto text-gray-400">{new Date(row.submitted_at).toLocaleString('ko-KR')}</span>
+                                                <span className="ml-auto text-gray-400">
+                                                    {new Date(row.submitted_at).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })}
+                                                </span>
                                             </div>
                                             <p className="text-xs">사유: {row.cancel_reason_detail || '-'}</p>
                                             <div className="rounded bg-gray-50 px-2 py-1.5 text-xs space-y-0.5 border border-gray-100">

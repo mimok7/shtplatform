@@ -126,3 +126,17 @@ export const toKstDateTimeParts = (value: string | Date | null | undefined) => {
     time: toKstTimeLabel(value),
   };
 };
+
+export const getKstTodayDateKey = (): string => toKstDateKey(new Date());
+
+export const getKstDayUtcRange = (value: string | Date = new Date()) => {
+  const dateKey = toKstDateKey(value);
+  if (!dateKey) return { start: '', end: '' };
+
+  const startDate = new Date(`${dateKey}T00:00:00+09:00`);
+  const endDate = new Date(startDate.getTime() + 24 * 60 * 60 * 1000);
+  return {
+    start: startDate.toISOString(),
+    end: endDate.toISOString(),
+  };
+};

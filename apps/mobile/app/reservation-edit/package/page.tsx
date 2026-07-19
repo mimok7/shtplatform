@@ -1717,7 +1717,7 @@ function PackageReservationEditContent() {
                             <label className="block text-sm font-semibold text-gray-700">예약일</label>
                             <div className="text-gray-900 mt-1 flex items-center gap-2 text-sm">
                                 <Calendar className="w-4 h-4 text-gray-400" />
-                                {new Date(reservation.re_created_at).toLocaleDateString('ko-KR')}
+                                {new Date(reservation.re_created_at).toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' })}
                             </div>
                         </div>
                         <div>

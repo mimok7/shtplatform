@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import supabase from '@/lib/supabase';
 import ManagerLayout from '@/components/ManagerLayout';
 import { Bell, RefreshCw, CheckCheck, AlertTriangle, Car, CalendarDays, User } from 'lucide-react';
+import { toKstDateKey } from '@/lib/dateKst';
 
 type NotificationItem = {
   id: string;
@@ -74,7 +75,7 @@ const formatRelativeTime = (dateStr: string) => {
   if (diffHr < 24) return `${diffHr}시간 전`;
   const diffDay = Math.floor(diffHr / 24);
   if (diffDay < 7) return `${diffDay}일 전`;
-  return d.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
+  return d.toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul', month: 'short', day: 'numeric' });
 };
 
 const isShtCarRelated = (item: NotificationItem) => {
@@ -192,7 +193,7 @@ const normalizeDateValue = (value: unknown): string | null => {
 
   const parsed = new Date(text);
   if (Number.isNaN(parsed.getTime())) return null;
-  return parsed.toISOString().split('T')[0];
+  return toKstDateKey(parsed);
 };
 
 const getFilterBaseDate = (item: NotificationItem): string | null => {
@@ -855,14 +856,12 @@ export default function MobileNotificationsPage() {
 
         {/* 필터 적용 */}
         {(() => {
-          const todayStart = new Date();
-          todayStart.setHours(0, 0, 0, 0);
+          const todayKey = toKstDateKey(new Date());
           const dateFiltered = hideOld
             ? notifications.filter((n) => {
               const baseDate = getFilterBaseDate(n);
               if (!baseDate) return false;
-              const targetDate = new Date(`${baseDate}T00:00:00`);
-              return !Number.isNaN(targetDate.getTime()) && targetDate >= todayStart;
+              return baseDate >= todayKey;
             })
             : notifications;
 

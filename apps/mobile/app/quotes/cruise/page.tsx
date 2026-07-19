@@ -7,6 +7,7 @@ import supabase from '@/lib/supabase';
 import { getExchangeRate, formatExchangeRate } from '../../../lib/exchangeRate';
 import { vndToKrw, roundKrwToHundred } from '../../../lib/exchangeRate';
 import { resolveLocalQuoteTitle, ensureQuoteTitle } from '../../../lib/getQuoteTitle';
+import { getKstDayUtcRange, getKstTodayDateKey } from '@/lib/dateKst';
 import {
     CruisePriceCalculator,
     CruiseRateCard,
@@ -77,9 +78,7 @@ function ManagerServiceTabs({ active, pageRawRate }: { active: 'cruise' | 'airpo
             try {
                 const { data: authData } = await supabase.auth.getUser();
                 const user = (authData as any)?.user;
-                const today = new Date();
-                const start = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();
-                const next = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).toISOString();
+                const { start, end: next } = getKstDayUtcRange();
                 let q = supabase.from('quote').select('id,title,created_at').gte('created_at', start).lt('created_at', next).order('created_at', { ascending: false });
                 if (user?.id) q = q.eq('user_id', user.id);
                 const { data } = await q;
@@ -152,7 +151,7 @@ function ManagerCruiseQuoteForm() {
 
     // 폼 상태 (cruise_rate_card 기반 - sht-customer와 동일)
     const [form, setForm] = useState({
-        checkin: new Date().toISOString().split('T')[0],
+        checkin: getKstTodayDateKey(),
         schedule: '1박2일',
         cruise_name: '',
         room_type: '',

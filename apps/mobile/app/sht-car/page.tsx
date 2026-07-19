@@ -703,6 +703,7 @@ export default function ShtCarPage() {
         const date = toKstDateKey(value || '');
         if (!date) return '-';
         return new Date(date).toLocaleDateString('ko-KR', {
+            timeZone: 'Asia/Seoul',
             year: 'numeric',
             month: '2-digit',
             day: '2-digit',
@@ -1375,6 +1376,7 @@ export default function ShtCarPage() {
                                                 <Calendar className="w-5 h-5 text-blue-600" />
                                                 <h4 className="text-lg font-semibold text-blue-800">
                                                     {new Date(date).toLocaleDateString('ko-KR', {
+                                                        timeZone: 'Asia/Seoul',
                                                         year: 'numeric',
                                                         month: 'long',
                                                         day: 'numeric',

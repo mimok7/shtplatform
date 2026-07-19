@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import supabase from '@/lib/supabase';
+import { getKstDayUtcRange, getKstTodayDateKey, toKstDateKey, toLocalDateKey } from '@/lib/dateKst';
 
 interface SeatReservation {
     id: string;
@@ -68,10 +69,7 @@ const ALL_SEATS = [
 ];
 
 const toDateKey = (value?: string | null): string => {
-    if (!value) return '';
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return '';
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    return toKstDateKey(value);
 };
 
 const normalizeCategory = (raw?: string | null): CategoryType => {
@@ -116,8 +114,8 @@ export default function ShtCarSeatMap({
     const [allData, setAllData] = useState<SeatReservation[]>([]);
     const [currentDate, setCurrentDate] = useState(() => {
         if (usageDate) return usageDate;
-        if (selectedDate) return selectedDate.toISOString().split('T')[0];
-        return new Date().toISOString().split('T')[0];
+        if (selectedDate) return toLocalDateKey(selectedDate);
+        return getKstTodayDateKey();
     });
     const [activeSelection, setActiveSelection] = useState<{ vehicle: string; category: CategoryType }>({
         vehicle: 'Vehicle 1',
@@ -133,7 +131,7 @@ export default function ShtCarSeatMap({
     useEffect(() => {
         if (!isOpen) return;
 
-        const initialDate = usageDate || (selectedDate ? selectedDate.toISOString().split('T')[0] : new Date().toISOString().split('T')[0]);
+        const initialDate = usageDate || (selectedDate ? toLocalDateKey(selectedDate) : getKstTodayDateKey());
         const initialVehicle = vehicleNumber && VEHICLES.includes(vehicleNumber) ? vehicleNumber : 'Vehicle 1';
 
         setCurrentDate(initialDate);
@@ -144,9 +142,7 @@ export default function ShtCarSeatMap({
 
         const loadData = async () => {
             try {
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-                const todayISO = today.toISOString();
+                const { start: todayISO } = getKstDayUtcRange();
 
                 const { data, error } = await supabase
                     .from('reservation_car_sht')
@@ -385,9 +381,9 @@ export default function ShtCarSeatMap({
 
     const changeDate = (delta: number) => {
         try {
-            const d = new Date(currentDate);
-            d.setDate(d.getDate() + delta);
-            const newDate = d.toISOString().split('T')[0];
+            const [year, month, day] = currentDate.split('-').map(Number);
+            const d = new Date(Date.UTC(year, month - 1, day + delta));
+            const newDate = d.toISOString().slice(0, 10);
             setCurrentDate(newDate);
             setSelectedSeats([]);
             setSelectedReservedInfo(null);
@@ -548,9 +544,7 @@ export default function ShtCarSeatMap({
                         <button
                             type="button"
                             onClick={() => {
-                                const today = new Date();
-                                const iso = today.toISOString().split('T')[0];
-                                setCurrentDate(iso);
+                                setCurrentDate(getKstTodayDateKey());
                                 setSelectedSeats([]);
                                 setSelectedReservedInfo(null);
                             }}

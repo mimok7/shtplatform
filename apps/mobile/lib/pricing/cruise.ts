@@ -2,6 +2,7 @@
  * 크루즈 요금 계산기 (cruise_rate_card + cruise_holiday_surcharge + cruise_tour_options)
  */
 import type { SupabaseClient as TypedSupabaseClient } from '@supabase/supabase-js';
+import { getKstTodayDateKey } from '@/lib/dateKst';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type SupabaseLike = TypedSupabaseClient<any, any, any>;
@@ -223,7 +224,7 @@ export class CruisePriceCalculator {
       p_checkin_date: filter.checkin_date,
       p_cruise_name: filter.cruise_name || null,
       p_room_type: filter.room_type || null,
-      p_booking_date: new Date().toISOString().slice(0, 10),
+      p_booking_date: getKstTodayDateKey(),
     });
 
     if (!error && data) return data as CruiseRateCard[];

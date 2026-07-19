@@ -7,6 +7,7 @@ import supabase from '@/lib/supabase';
 import { getExchangeRate } from '../../../lib/exchangeRate';
 import TourFormLite from '@/components/TourFormLite';
 import { vndToKrw, roundKrwToHundred } from '@/lib/exchangeRate';
+import { getKstDayUtcRange } from '@/lib/dateKst';
 
 function ManagerServiceTabs({ active }: { active: 'cruise' | 'airport' | 'hotel' | 'rentcar' | 'tour' | 'package' }) {
     const router = useRouter();
@@ -26,9 +27,7 @@ function ManagerServiceTabs({ active }: { active: 'cruise' | 'airport' | 'hotel'
             try {
                 const { data: authData } = await supabase.auth.getUser();
                 const user = (authData as any)?.user;
-                const today = new Date();
-                const start = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();
-                const next = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).toISOString();
+                const { start, end: next } = getKstDayUtcRange();
                 let q = supabase.from('quote').select('id,title,created_at').gte('created_at', start).lt('created_at', next).order('created_at', { ascending: false });
                 if (user?.id) q = q.eq('user_id', user.id);
                 const { data } = await q;
