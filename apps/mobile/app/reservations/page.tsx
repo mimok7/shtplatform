@@ -104,7 +104,7 @@ export default function ReservationsPage() {
 
         let query = supabase
           .from('reservation')
-          .select('re_id, re_type, re_status, re_created_at, re_quote_id, re_user_id, package_id, total_amount, re_adult_count, re_child_count, re_infant_count, price_breakdown')
+          .select('re_id, re_type, re_status, re_created_at, re_quote_id, re_user_id, package_id, total_amount, re_adult_count, re_child_count, re_infant_count, manual_additional_fee, manual_additional_fee_detail, price_breakdown')
           .order('re_created_at', { ascending: false })
           .order('re_id', { ascending: false })
           .range(from, to);
@@ -477,15 +477,18 @@ export default function ReservationsPage() {
         return;
       }
 
-      const cruiseIds = serviceRows.filter(s => s.re_type === 'cruise').map(s => s.re_id);
-      const carIds = serviceRows.filter(s => ['car', 'cruise'].includes(s.re_type)).map(s => s.re_id);
-      const airportIds = serviceRows.filter(s => s.re_type === 'airport').map(s => s.re_id);
-      const hotelIds = serviceRows.filter(s => s.re_type === 'hotel').map(s => s.re_id);
-      const tourIds = serviceRows.filter(s => s.re_type === 'tour').map(s => s.re_id);
-      const ticketIds = serviceRows.filter(s => s.re_type === 'ticket').map(s => s.re_id);
-      const rentcarIds = serviceRows.filter(s => s.re_type === 'rentcar').map(s => s.re_id);
-      const shtIds = serviceRows.filter(s => ['sht', 'car_sht'].includes(s.re_type)).map(s => s.re_id);
       const packageIds = serviceRows.filter(s => s.re_type === 'package').map(s => s.re_id);
+      const detailIds = (types: string[]) => packageIds.length > 0
+        ? packageIds
+        : serviceRows.filter(s => types.includes(s.re_type)).map(s => s.re_id);
+      const cruiseIds = detailIds(['cruise']);
+      const carIds = detailIds(['car', 'cruise']);
+      const airportIds = detailIds(['airport']);
+      const hotelIds = detailIds(['hotel']);
+      const tourIds = detailIds(['tour']);
+      const ticketIds = detailIds(['ticket']);
+      const rentcarIds = detailIds(['rentcar']);
+      const shtIds = detailIds(['sht', 'car_sht']);
 
       // 서비스 상세 데이터만 조회 (가격 테이블은 모달 내부 enrich에서 처리)
       const [cruiseRes, cruiseCarRes, airportRes, hotelRes, tourRes, ticketRes, rentcarRes, shtRes, packageRes] = await Promise.all([
@@ -508,7 +511,10 @@ export default function ReservationsPage() {
         ...(packageRes.data || []).map((row: any) => String(row.package_id || '').trim()).filter(Boolean),
       ]));
       const { data: packageMasters } = packageMasterIds.length > 0
-        ? await supabase.from('package_master').select('id, name, package_code').in('id', packageMasterIds)
+        ? await supabase
+          .from('package_master')
+          .select('id, name, package_code, description, base_price, price_child_extra_bed, price_child_no_extra_bed, price_infant_tour, price_infant_extra_bed, price_infant_seat')
+          .in('id', packageMasterIds)
         : { data: [] };
       const packageMasterMap = new Map((packageMasters || []).map((row: any) => [String(row.id), row]));
 
@@ -523,6 +529,7 @@ export default function ReservationsPage() {
         customerEnglishName: reservation.users?.english_name || '',
         email: reservation.users?.email || '',
         phone: reservation.users?.phone || '',
+        quote_title: reservation.quote?.title || '',
         re_created_at: reservation.re_created_at,
         modal_title: modalTitle,
       };
@@ -629,11 +636,16 @@ export default function ReservationsPage() {
           package_name: packageInfo?.name || '',
           package_code: packageInfo?.package_code || '',
           package_description: packageInfo?.description || '',
+          package_master: packageInfo || null,
           re_adult_count: Number(service.re_adult_count ?? r.adult_count ?? 0),
           re_child_count: Number(service.re_child_count ?? (Number(r.child_extra_bed || 0) + Number(r.child_no_extra_bed || 0))),
           re_infant_count: Number(service.re_infant_count ?? (Number(r.infant_free || 0) + Number(r.infant_tour || 0) + Number(r.infant_extra_bed || 0) + Number(r.infant_seat || 0))),
           total_amount: Number(service.total_amount || 0),
           totalPrice: Number(service.total_amount || r.total_price || 0),
+          manual_additional_fee: Number(service.manual_additional_fee || 0),
+          manual_additional_fee_detail: service.manual_additional_fee_detail || null,
+          price_breakdown: service.price_breakdown || null,
+          price_breakdown_additional_items: service.price_breakdown?.additional_fee_items || [],
           note: r.additional_requests || '',
         });
       });
@@ -980,6 +992,7 @@ export default function ReservationsPage() {
         onClose={() => setDetailOpen(false)}
         userName={detailItem?.users?.name || ''}
         items={detailModalItems}
+        loading={detailLoading}
       />
     </div>
   );

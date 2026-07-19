@@ -61,8 +61,20 @@ const isPastDate = (dateStr: string) => {
 const normalizeWayType = (value: string | null | undefined) => {
   const way = (value || '').toLowerCase();
   if (way === 'pickup' || way === '픽업') return '픽업';
-  if (way === 'sending' || way === 'dropoff' || way === '샌딩') return '샌딩';
+  if (way === 'sending' || way === 'sanding' || way === 'dropoff' || way === '샌딩') return '샌딩';
   return value || '';
+};
+
+const getCruiseNameFromNote = (value: any) => {
+  const roomLine = String(value || '')
+    .replace(/\[\s*/g, '')
+    .replace(/\s*\]/g, '')
+    .split('\n')
+    .map((line) => line.trim())
+    .find((line) => line.startsWith('객실:'));
+  const tokens = String(roomLine || '').replace(/^객실:\s*/, '').trim().split(/\s+/).filter(Boolean);
+  const roomIndex = tokens.findIndex((token) => /(스위트|캐빈|룸|디럭스|베란다|씨뷰|오션|패밀리)/.test(token));
+  return roomIndex > 0 ? tokens.slice(0, roomIndex).join(' ') : '';
 };
 
 const inferShtDirectionLabel = (item: any): string => {
@@ -280,12 +292,14 @@ export default function SchedulePage() {
   const [selectedItem, setSelectedItem] = useState<any | null>(null);
   const [selectedItems, setSelectedItems] = useState<any[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
 
   const openDetail = async (item: any) => {
     // 먼저 모달을 열고 클릭된 아이템 단일 표시 (로딩 중 fallback)
     setSelectedItem(item);
     setSelectedItems([item]);
     setModalOpen(true);
+    setDetailLoading(item?.source !== 'sh');
 
     if (item?.source === 'sh') {
       // 구 sh 소스: allData 캐시에서 같은 orderId 그룹핑
@@ -293,17 +307,21 @@ export default function SchedulePage() {
         const related = allData.filter(d => d?.source === 'sh' && d?.orderId === item.orderId);
         if (related.length > 0) setSelectedItems(related);
       }
+      setDetailLoading(false);
       return;
     }
 
     // 신 reservation 소스: quoteId 기준 DB 직접 조회 (reservations 페이지와 동일)
     const quoteId = item?.quoteId || item?.re_quote_id;
-    if (!quoteId) return;
+    if (!quoteId) {
+      setDetailLoading(false);
+      return;
+    }
 
     try {
       const { data: allReservationsRaw } = await supabase
         .from('reservation')
-        .select('re_id, re_type, re_status, re_user_id, re_created_at, re_quote_id, order_id, price_breakdown')
+        .select('re_id, re_type, re_status, re_user_id, re_created_at, re_quote_id, order_id, package_id, total_amount, re_adult_count, re_child_count, re_infant_count, manual_additional_fee, manual_additional_fee_detail, price_breakdown, manager_note')
         .eq('re_quote_id', quoteId);
 
       const allReservations = (allReservationsRaw || []).filter((row: any) => {
@@ -315,25 +333,39 @@ export default function SchedulePage() {
 
       const userId = item.re_user_id || allReservations[0]?.re_user_id;
       let userData: any = null;
+      let quoteTitle = '';
       if (userId) {
-        const { data } = await supabase
-          .from('users')
-          .select('name, english_name, email, phone_number')
-          .eq('id', userId)
-          .single();
+        const [{ data }, { data: quoteData }] = await Promise.all([
+          supabase
+            .from('users')
+            .select('name, english_name, email, phone_number')
+            .eq('id', userId)
+            .single(),
+          supabase
+            .from('quote')
+            .select('title')
+            .eq('id', quoteId)
+            .maybeSingle(),
+        ]);
         userData = data;
+        quoteTitle = quoteData?.title || '';
       }
 
-      const cruiseIds = allReservations.filter(s => s.re_type === 'cruise').map(s => s.re_id);
-      const carIds = allReservations.filter(s => ['car', 'cruise'].includes(s.re_type)).map(s => s.re_id);
-      const airportIds = allReservations.filter(s => s.re_type === 'airport').map(s => s.re_id);
-      const hotelIds = allReservations.filter(s => s.re_type === 'hotel').map(s => s.re_id);
-      const tourIds = allReservations.filter(s => s.re_type === 'tour').map(s => s.re_id);
-      const ticketIds = allReservations.filter(s => s.re_type === 'ticket').map(s => s.re_id);
-      const rentcarIds = allReservations.filter(s => s.re_type === 'rentcar').map(s => s.re_id);
-      const shtIds = allReservations.filter(s => ['sht', 'car_sht'].includes(s.re_type)).map(s => s.re_id);
+      const isPackageItem = getServiceType(item) === 'package';
+      const packageIds = allReservations.filter(s => s.re_type === 'package').map(s => s.re_id);
+      const detailIds = (types: string[]) => isPackageItem
+        ? packageIds
+        : allReservations.filter(s => types.includes(s.re_type)).map(s => s.re_id);
+      const cruiseIds = detailIds(['cruise']);
+      const carIds = detailIds(['car', 'cruise']);
+      const airportIds = detailIds(['airport']);
+      const hotelIds = detailIds(['hotel']);
+      const tourIds = detailIds(['tour']);
+      const ticketIds = detailIds(['ticket']);
+      const rentcarIds = detailIds(['rentcar']);
+      const shtIds = detailIds(['sht', 'car_sht']);
 
-      const [cruiseRes, cruiseCarRes, airportRes, hotelRes, tourRes, ticketRes, rentcarRes, shtRes] = await Promise.all([
+      const [cruiseRes, cruiseCarRes, airportRes, hotelRes, tourRes, ticketRes, rentcarRes, shtRes, packageDetailRes] = await Promise.all([
         cruiseIds.length > 0 ? supabase.from('reservation_cruise').select('*').in('reservation_id', cruiseIds) : { data: [] },
         carIds.length > 0 ? supabase.from('reservation_cruise_car').select('*').in('reservation_id', carIds) : { data: [] },
         airportIds.length > 0 ? supabase.from('reservation_airport').select('*').in('reservation_id', airportIds) : { data: [] },
@@ -342,7 +374,21 @@ export default function SchedulePage() {
         ticketIds.length > 0 ? supabase.from('reservation_ticket').select('*').in('reservation_id', ticketIds) : { data: [] },
         rentcarIds.length > 0 ? supabase.from('reservation_rentcar').select('*').in('reservation_id', rentcarIds) : { data: [] },
         shtIds.length > 0 ? supabase.from('reservation_car_sht').select('*').in('reservation_id', shtIds) : { data: [] },
+        packageIds.length > 0 ? supabase.from('reservation_package').select('*').in('reservation_id', packageIds) : { data: [] },
       ]);
+
+      const packageMasterIds = Array.from(new Set([
+        ...allReservations.filter((row) => row.re_type === 'package').map((row) => row.package_id),
+        ...(packageDetailRes.data || []).map((row: any) => row.package_id),
+      ].filter(Boolean)));
+      const { data: packageMasters } = packageMasterIds.length > 0
+        ? await supabase
+          .from('package_master')
+          .select('id, name, package_code, description, base_price, price_child_extra_bed, price_child_no_extra_bed, price_infant_tour, price_infant_extra_bed, price_infant_seat')
+          .in('id', packageMasterIds)
+        : { data: [] };
+      const packageDetailMap = new Map((packageDetailRes.data || []).map((row: any) => [String(row.reservation_id || ''), row]));
+      const packageMasterMap = new Map((packageMasters || []).map((row: any) => [String(row.id || ''), row]));
 
       const statusMap = new Map(allReservations.map(s => [s.re_id, s.re_status]));
       const typeMap = new Map(allReservations.map(s => [s.re_id, s.re_type]));
@@ -356,10 +402,35 @@ export default function SchedulePage() {
         customerEnglishName: userData?.english_name || item.customerEnglishName || '',
         email: userData?.email || item.email || '',
         phone: userData?.phone_number || item.phone || '',
+        quote_title: quoteTitle,
         re_created_at: allReservations[0]?.re_created_at || '',
       };
 
       const modalItems: any[] = [];
+      const packageRootItems = allReservations
+        .filter((row) => row.re_type === 'package')
+        .map((row) => {
+          const detail: any = packageDetailMap.get(String(row.re_id)) || {};
+          const master: any = packageMasterMap.get(String(detail.package_id || row.package_id || '')) || {};
+          return {
+            ...baseHeader,
+            ...row,
+            ...detail,
+            serviceType: 'package',
+            re_type: 'package',
+            reservation_id: row.re_id,
+            reservationId: row.re_id,
+            re_id: row.re_id,
+            status: row.re_status,
+            package_master: master,
+            package_name: master.name || '',
+            package_code: master.package_code || '',
+            package_description: master.description || '',
+            totalPrice: Number(row.total_amount || detail.total_price || 0),
+            price_breakdown_additional_items: row.price_breakdown?.additional_fee_items || [],
+            note: detail.additional_requests || row.manager_note || '',
+          };
+        });
 
       (cruiseRes.data || []).forEach((r: any) => {
         modalItems.push({
@@ -450,15 +521,21 @@ export default function SchedulePage() {
       });
 
       if (modalItems.length > 0) {
-        if (getServiceType(item) === 'package') {
-          setSelectedItems([item, ...modalItems]);
+        if (isPackageItem) {
+          setSelectedItem(packageRootItems[0] || item);
+          setSelectedItems([...packageRootItems, ...modalItems]);
         } else {
           setSelectedItems(modalItems);
           setSelectedItem(modalItems[0]);
         }
+      } else if (isPackageItem && packageRootItems.length > 0) {
+        setSelectedItem(packageRootItems[0]);
+        setSelectedItems(packageRootItems);
       }
     } catch (err) {
       console.error('상세 조회 실패:', err);
+    } finally {
+      setDetailLoading(false);
     }
   };
 
@@ -766,10 +843,16 @@ export default function SchedulePage() {
       const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       const cruiseRoomCodes = Array.from(new Set((cruiseData || []).map((x: any) => x.room_price_code).filter(Boolean)));
       const validUuidRoomCodes = cruiseRoomCodes.filter((c: string) => UUID_RE.test(c));
-      const cruiseRateData = validUuidRoomCodes.length > 0
-        ? await fetchRowsByIds('cruise_rate_card', 'id', validUuidRoomCodes)
-        : [];
-      const cruiseRateMap = new Map((cruiseRateData || []).map((x: any) => [String(x.id || '').trim(), x]));
+      const roomTypeCodes = cruiseRoomCodes.filter((c: string) => !UUID_RE.test(c));
+      const [cruiseRateById, cruiseRateByRoomType] = await Promise.all([
+        validUuidRoomCodes.length > 0 ? fetchRowsByIds('cruise_rate_card', 'id', validUuidRoomCodes) : [],
+        roomTypeCodes.length > 0 ? fetchRowsByIds('cruise_rate_card', 'room_type', roomTypeCodes) : [],
+      ]);
+      const cruiseRateMap = new Map<string, any>();
+      [...cruiseRateById, ...cruiseRateByRoomType].forEach((row: any) => {
+        if (row.id) cruiseRateMap.set(String(row.id).trim(), row);
+        if (row.room_type) cruiseRateMap.set(String(row.room_type).trim(), row);
+      });
 
       // 투어명 매핑: tour_price_code → tour_name (tour_pricing JOIN tour)
       const tourPriceCodes = Array.from(new Set((tourData || []).map((x: any) => x.tour_price_code).filter(Boolean)));
@@ -808,30 +891,54 @@ export default function SchedulePage() {
       const packageByRid = new Map((packageData || []).map((row: any) => [String(row.reservation_id || ''), row]));
       const packageMasterById = new Map((packageMasters || []).map((row: any) => [String(row.id || ''), row]));
       const packageDatesByRid = new Map<string, Set<string>>();
-      const packageDateCandidates = [
-        ...(cruiseData || []).map((row: any) => [row.reservation_id, row.checkin]),
-        ...(carData || []).flatMap((row: any) => [
-          [row.reservation_id, row.pickup_datetime],
-          [row.reservation_id, row.return_datetime],
-        ]),
-        ...(airportData || []).map((row: any) => [row.reservation_id, row.ra_datetime]),
-        ...(hotelData || []).map((row: any) => [row.reservation_id, row.checkin_date]),
-        ...(tourData || []).map((row: any) => [row.reservation_id, row.usage_date]),
-        ...(rentcarData || []).flatMap((row: any) => [
-          [row.reservation_id, row.pickup_datetime],
-          [row.reservation_id, row.return_datetime],
-        ]),
-        ...(shtData || []).flatMap((row: any) => [
-          [row.reservation_id, row.usage_date],
-          [row.reservation_id, row.pickup_datetime],
-        ]),
-      ] as Array<[string, string]>;
-      packageDateCandidates.forEach(([reservationId, date]) => {
+      const packageServiceNamesByRidDate = new Map<string, Map<string, Set<string>>>();
+      const addPackageScheduleService = (reservationId: any, date: any, serviceName: string) => {
         const id = String(reservationId || '').trim();
         const dateKey = toKstDateKey(date);
         if (!id || !dateKey) return;
         if (!packageDatesByRid.has(id)) packageDatesByRid.set(id, new Set());
         packageDatesByRid.get(id)!.add(dateKey);
+        if (!packageServiceNamesByRidDate.has(id)) packageServiceNamesByRidDate.set(id, new Map());
+        const byDate = packageServiceNamesByRidDate.get(id)!;
+        if (!byDate.has(dateKey)) byDate.set(dateKey, new Set());
+        byDate.get(dateKey)!.add(serviceName);
+      };
+
+      (cruiseData || []).forEach((row: any) => {
+        const info = cruiseRateMap.get(String(row.room_price_code || '').trim());
+        addPackageScheduleService(
+          row.reservation_id,
+          row.checkin,
+          info?.cruise_name || row.cruise_name || getCruiseNameFromNote(row.request_note) || '크루즈',
+        );
+      });
+      (carData || []).forEach((row: any) => {
+        const vehicle = row.vehicle_type || row.car_price_code || '차량';
+        addPackageScheduleService(row.reservation_id, row.pickup_datetime, `크루즈 차량 픽업 · ${vehicle}`);
+        addPackageScheduleService(row.reservation_id, row.return_datetime, `크루즈 차량 드롭 · ${vehicle}`);
+      });
+      (airportData || []).forEach((row: any) => {
+        const wayType = normalizeWayType(row.way_type || row.ra_way_type || row.service_type || '');
+        addPackageScheduleService(row.reservation_id, row.ra_datetime, `공항 ${wayType || '이동'}`);
+      });
+      (hotelData || []).forEach((row: any) => {
+        addPackageScheduleService(row.reservation_id, row.checkin_date, row.hotel_category || '호텔');
+      });
+      (tourData || []).forEach((row: any) => {
+        const tourName = tourNameMap.get(String(row.tour_price_code || '')) || row.tour_name || '투어';
+        addPackageScheduleService(row.reservation_id, row.usage_date, tourName);
+      });
+      (rentcarData || []).forEach((row: any) => {
+        const rentCode = String(row.rentcar_price_code || '').trim();
+        const rentInfo = rentcarPriceMap.get(rentCode) || rentcarPriceMap.get(rentCode.replace(/\s+/g, ''));
+        const vehicle = rentInfo?.vehicle_type || row.vehicle_type || rentCode || '렌터카';
+        addPackageScheduleService(row.reservation_id, row.pickup_datetime, `렌터카 픽업 · ${vehicle}`);
+        addPackageScheduleService(row.reservation_id, row.return_datetime, `렌터카 반납 · ${vehicle}`);
+      });
+      (shtData || []).forEach((row: any) => {
+        const category = String(row.sht_category || row.category || '').toLowerCase();
+        const direction = category.includes('drop') || category.includes('드롭') ? '드롭' : '픽업';
+        addPackageScheduleService(row.reservation_id, row.usage_date || row.pickup_datetime, `스하 차량 ${direction}`);
       });
 
       const newMapped = reservations.flatMap((r: any) => {
@@ -1069,6 +1176,9 @@ export default function SchedulePage() {
             re_type: 'package',
             packageName: packageMaster.name || packageMaster.package_code || '패키지',
             packageDate,
+            packageServiceNames: Array.from(
+              packageServiceNamesByRidDate.get(String(r.re_id))?.get(packageDate) || [],
+            ),
             adult: Number(r.re_adult_count || 0),
             child: Number(r.re_child_count || 0),
             toddler: Number(r.re_infant_count || 0),
@@ -1457,6 +1567,9 @@ export default function SchedulePage() {
             <>
               <Row label="패키지" value={item.packageName || '패키지'} bold />
               <DateRow dateLabel={dateLabel} />
+              {item.packageServiceNames?.length > 0 && (
+                <Row label="서비스" value={item.packageServiceNames.join(', ')} bold />
+              )}
               {(item.adult || item.child || item.toddler) && (
                 <Row label="인원" value={formatGuests(item)} />
               )}
@@ -1634,6 +1747,7 @@ export default function SchedulePage() {
         onClose={() => setModalOpen(false)}
         userName={selectedItem?.customerName || ''}
         items={selectedItems}
+        loading={detailLoading}
       />
     </div>
   );
