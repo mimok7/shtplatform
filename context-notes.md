@@ -10,6 +10,17 @@
 - 모달이 열리면 표시 대상의 `tour_price_code`를 기준으로 `tour_pricing`과 `tour`를 조인 조회하고, 반환된 `tour.tour_name`을 최우선 표시한다.
 - `pnpm --filter @sht/manager typecheck`, `pnpm --filter @sht/manager1 typecheck`, `git diff --check`를 통과했다.
 
+패키지 예약 투어 행 보정 시작.
+
+- 상품 구성 표시뿐 아니라 실제 `reservation_tour`에도 패키지당 투어 2건이 저장되도록 현재 예약 일정·가격코드·중복 상태를 확인한 뒤, 누락 행만 추가한다.
+
+패키지 예약 투어 행 보정 결과.
+
+- 대상 예약의 `reservation_tour`에는 7월 16일 빈 행, 7월 17일 가격코드 누락 행, 7월 19일 하노이 오후 투어 행의 총 3건이 있었다.
+- 7월 16일 빈 행은 `tour_price_code IS NULL`과 빈 `request_note`까지 일치하는 행 ID로 한정해 삭제했다.
+- 7월 17일 행에는 5인·2026년 유효 닌빈 한국어 가이드 투어 가격코드 `ead3fa39-6cd9-43a7-abe7-e7c978375c7d`를 연결했다. `야경투어 추가`는 비고로 유지했다.
+- 재조회 결과 7월 17일 닌빈 한국어 가이드 투어와 7월 19일 하노이 오후 투어, 총 2건이 확인됐다.
+
 패키지 투어명 DB 조회 재점검.
 
 - 현재 표시 실패 사례는 `reservation_tour`에 `tour_name`이 없고 `tour_price_code`만 저장되는 구조에서 발생한다.
