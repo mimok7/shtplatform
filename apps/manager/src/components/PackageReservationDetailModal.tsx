@@ -764,15 +764,15 @@ export default function PackageReservationDetailModal({
                         <>
                             <div className="grid grid-cols-4 gap-3">
                                 <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-3">
-                                    <div className="text-xs text-indigo-700">패키지 예약 건수</div>
+                                    <div className="text-xs font-semibold text-indigo-700">패키지 예약 건수</div>
                                     <div className="text-xl font-bold text-indigo-900">{packageRootRows.length}건</div>
                                 </div>
                                 <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
-                                    <div className="text-xs text-blue-700">포함 서비스 건수</div>
+                                    <div className="text-xs font-semibold text-blue-700">포함 서비스 건수</div>
                                     <div className="text-xl font-bold text-blue-900">{packageServices.length}건</div>
                                 </div>
                                 <div className="col-span-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-right">
-                                    <div className="text-xs text-emerald-700">패키지 총액 합계 (예약 단위 단일요금)</div>
+                                    <div className="text-xs font-semibold text-emerald-700">패키지 총액 합계 (예약 단위 단일요금)</div>
                                     <div className="text-xl font-bold text-emerald-900">{formatAmount(displayTotalAmount)}</div>
                                 </div>
                             </div>
@@ -820,10 +820,10 @@ export default function PackageReservationDetailModal({
                                                 {getStatusBadge(pkg.re_status || pkg.service?.re_status)}
                                             </div>
                                             <div className="mt-2 grid grid-cols-1 gap-2 text-sm text-gray-700">
-                                                <div><span className="text-blue-700">예약일:</span> {formatKst(pkg.re_created_at || pkg.service?.re_created_at)}</div>
+                                                <div><span className="font-semibold text-blue-700">예약일:</span> {formatKst(pkg.re_created_at || pkg.service?.re_created_at)}</div>
                                                 {(pkg.adultCount > 0 || pkg.childCount > 0 || pkg.infantCount > 0) && (
                                                     <div>
-                                                        인원: {[
+                                                        <span className="font-semibold text-blue-700">인원:</span> {[
                                                             pkg.adultCount > 0 && `성인 ${pkg.adultCount}`,
                                                             pkg.childCount > 0 && `아동 ${pkg.childCount}`,
                                                             pkg.infantCount > 0 && `유아 ${pkg.infantCount}`,
@@ -831,7 +831,7 @@ export default function PackageReservationDetailModal({
                                                     </div>
                                                 )}
                                                 <div className="flex items-center justify-between gap-2 font-semibold text-emerald-700">
-                                                    <span>총액 (단일요금):</span>
+                                                    <span className="font-semibold text-blue-700">총액 (단일요금):</span>
                                                     <span className="text-right">{formatAmount(pkg.packageTotalAmount)}</span>
                                                 </div>
                                             </div>
@@ -922,59 +922,59 @@ export default function PackageReservationDetailModal({
                                                 {(service.checkin || service.checkinDate || service.tourDate || service.usageDate || service.ra_datetime || service.pickupDatetime || service.pickupDate || service.pickupTime) && (
                                                     <div>
                                                         <Calendar className="inline w-4 h-4 mr-1 text-gray-500" />
-                                                        일정: {formatKstMerged(service.checkin || service.checkinDate || service.tourDate || service.usageDate || service.ra_datetime || service.pickupDatetime, service.pickupDate || service.pickup_date, service.pickupTime || service.pickup_time)}
+                                                        <span className="font-semibold text-blue-700">일정:</span> {formatKstMerged(service.checkin || service.checkinDate || service.tourDate || service.usageDate || service.ra_datetime || service.pickupDatetime, service.pickupDate || service.pickup_date, service.pickupTime || service.pickup_time)}
                                                     </div>
                                                 )}
                                                 {(service.returnDatetime || service.returnDate || service.returnTime || service.return_date || service.return_time) && (
-                                                    <div>리턴 일정: {formatKstMerged(service.returnDatetime || service.return_datetime, service.returnDate || service.return_date, service.returnTime || service.return_time)}</div>
+                                                    <div><span className="font-semibold text-blue-700">리턴 일정:</span> {formatKstMerged(service.returnDatetime || service.return_datetime, service.returnDate || service.return_date, service.returnTime || service.return_time)}</div>
                                                 )}
-                                                {cruiseNameValue && <div>크루즈: {humanizeServiceName(cruiseNameValue, '크루즈 프로그램')}</div>}
-                                                {roomTypeValue && <div>객실타입: {humanizeServiceName(roomTypeValue, '객실 타입 확정 예정')}</div>}
-                                                {hasTourNameSource && <div>투어명: {getTourDisplayName(service)}</div>}
-                                                {service.hotelName && <div>호텔명: {humanizeServiceName(service.hotelName, '호텔')}</div>}
-                                                {(service.category || service.way_type) && <div>구분: {humanizeWayType(service.category || service.way_type)}</div>}
-                                                {service.route && <div>경로: {humanizeText(service.route)}</div>}
-                                                {service.carType && <div>차량타입: {humanizeServiceName(service.carType, '차량 배정 예정')}</div>}
+                                                {cruiseNameValue && <div><span className="font-semibold text-blue-700">크루즈:</span> {humanizeServiceName(cruiseNameValue, '크루즈 프로그램')}</div>}
+                                                {roomTypeValue && <div><span className="font-semibold text-blue-700">객실타입:</span> {humanizeServiceName(roomTypeValue, '객실 타입 확정 예정')}</div>}
+                                                {hasTourNameSource && <div><span className="font-semibold text-blue-700">투어명:</span> {getTourDisplayName(service)}</div>}
+                                                {service.hotelName && <div><span className="font-semibold text-blue-700">호텔명:</span> {humanizeServiceName(service.hotelName, '호텔')}</div>}
+                                                {(service.category || service.way_type) && <div><span className="font-semibold text-blue-700">구분:</span> {humanizeWayType(service.category || service.way_type)}</div>}
+                                                {service.route && <div><span className="font-semibold text-blue-700">경로:</span> {humanizeText(service.route)}</div>}
+                                                {service.carType && <div><span className="font-semibold text-blue-700">차량타입:</span> {humanizeServiceName(service.carType, '차량 배정 예정')}</div>}
                                                 {type === 'airport' ? (
                                                     <>
-                                                        <div>공항명: {humanizeText(service.airportName || service.ra_airport_location, '미정')}</div>
+                                                        <div><span className="font-semibold text-blue-700">공항명:</span> {humanizeText(service.airportName || service.ra_airport_location, '미정')}</div>
                                                         {humanizeWayType(service.category || service.way_type) === '픽업' ? (
-                                                            <div>하차 위치: {airportLocations?.sending || '미정'}</div>
+                                                            <div><span className="font-semibold text-blue-700">하차 위치:</span> {airportLocations?.sending || '미정'}</div>
                                                         ) : (
-                                                            <div>승차 위치: {airportLocations?.pickup || '미정'}</div>
+                                                            <div><span className="font-semibold text-blue-700">승차 위치:</span> {airportLocations?.pickup || '미정'}</div>
                                                         )}
                                                     </>
                                                 ) : (
                                                     <>
-                                                        {(service.pickupLocation || service.pickup_location) && <div>픽업: {humanizeText(service.pickupLocation || service.pickup_location, '미정')}</div>}
-                                                        {(service.dropoffLocation || service.destination || service.dropoff_location) && <div>드롭: {humanizeText(service.dropoffLocation || service.destination || service.dropoff_location, '미정')}</div>}
+                                                        {(service.pickupLocation || service.pickup_location) && <div><span className="font-semibold text-blue-700">픽업:</span> {humanizeText(service.pickupLocation || service.pickup_location, '미정')}</div>}
+                                                        {(service.dropoffLocation || service.destination || service.dropoff_location) && <div><span className="font-semibold text-blue-700">드롭:</span> {humanizeText(service.dropoffLocation || service.destination || service.dropoff_location, '미정')}</div>}
                                                     </>
                                                 )}
-                                                {service.flightNumber && <div>항공편: {humanizeText(service.flightNumber)}</div>}
-                                                {type !== 'airport' && service.passengerCount != null && <div>탑승 인원: {service.passengerCount}명</div>}
-                                                {service.carCount != null && <div>차량수: {service.carCount}대</div>}
-                                                {service.luggageCount != null && <div>수하물: {service.luggageCount}개</div>}
-                                                {service.guestCount != null && <div>투숙 인원: {service.guestCount}명</div>}
-                                                {type !== 'tour' && service.tourCapacity != null && <div>투어 인원: {service.tourCapacity}명</div>}
-                                                {service.vehicleNumber && <div>차량번호: {humanizeText(service.vehicleNumber)}</div>}
-                                                {service.seatNumber && <div>좌석: {humanizeText(service.seatNumber)}</div>}
-                                                {service.driverName && <div>기사: {humanizeText(service.driverName)}</div>}
-                                                {service.dispatchCode && <div>배차코드: {humanizeText(service.dispatchCode)}</div>}
+                                                {service.flightNumber && <div><span className="font-semibold text-blue-700">항공편:</span> {humanizeText(service.flightNumber)}</div>}
+                                                {type !== 'airport' && service.passengerCount != null && <div><span className="font-semibold text-blue-700">탑승 인원:</span> {service.passengerCount}명</div>}
+                                                {service.carCount != null && <div><span className="font-semibold text-blue-700">차량수:</span> {service.carCount}대</div>}
+                                                {service.luggageCount != null && <div><span className="font-semibold text-blue-700">수하물:</span> {service.luggageCount}개</div>}
+                                                {service.guestCount != null && <div><span className="font-semibold text-blue-700">투숙 인원:</span> {service.guestCount}명</div>}
+                                                {type !== 'tour' && service.tourCapacity != null && <div><span className="font-semibold text-blue-700">투어 인원:</span> {service.tourCapacity}명</div>}
+                                                {service.vehicleNumber && <div><span className="font-semibold text-blue-700">차량번호:</span> {humanizeText(service.vehicleNumber)}</div>}
+                                                {service.seatNumber && <div><span className="font-semibold text-blue-700">좌석:</span> {humanizeText(service.seatNumber)}</div>}
+                                                {service.driverName && <div><span className="font-semibold text-blue-700">기사:</span> {humanizeText(service.driverName)}</div>}
+                                                {service.dispatchCode && <div><span className="font-semibold text-blue-700">배차코드:</span> {humanizeText(service.dispatchCode)}</div>}
                                                 {type !== 'sht' && type !== 'airport' && type !== 'tour' && (service.adult != null || service.child != null || service.infant != null) && (
-                                                    <div>인원 구성: 성인 {service.adult || 0}, 아동 {service.child || 0}, 유아 {service.infant || 0}</div>
+                                                    <div><span className="font-semibold text-blue-700">인원 구성:</span> 성인 {service.adult || 0}, 아동 {service.child || 0}, 유아 {service.infant || 0}</div>
                                                 )}
                                             </div>
 
                                             <div className="mt-2 pt-2 border-t border-gray-100">
                                                 <div className="flex justify-between items-center">
-                                                    <span className="text-gray-500 text-sm">금액</span>
+                                                    <span className="font-semibold text-blue-700 text-sm">금액</span>
                                                     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700">패키지 포함</span>
                                                 </div>
                                             </div>
 
                                             {formatNote(service.note || service.request_note) && (
                                                 <div className="mt-2 text-xs text-gray-600 bg-gray-50 p-2 rounded whitespace-pre-line">
-                                                    비고: {formatNote(service.note || service.request_note)}
+                                                <span className="font-semibold text-blue-700">비고:</span> {formatNote(service.note || service.request_note)}
                                                 </div>
                                             )}
                                         </div>
