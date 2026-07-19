@@ -68,6 +68,9 @@ function TicketReservationEditContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const reservationId = searchParams.get('id');
+    const newUserId = searchParams.get('userId');
+    const newQuoteId = searchParams.get('quoteId');
+    const isCreateMode = !reservationId && !!newUserId;
 
     const [reservation, setReservation] = useState<TicketReservation | null>(null);
     const [loading, setLoading] = useState(true);
@@ -180,12 +183,16 @@ function TicketReservationEditContent() {
     };
 
     useEffect(() => {
-        if (!reservationId) {
+        if (reservationId) {
+            void loadReservation();
+            return;
+        }
+        if (!newUserId) {
             router.push('/manager/reservation-edit');
             return;
         }
-        void loadReservation();
-    }, [reservationId]);
+        void loadNewReservation();
+    }, [reservationId, newUserId, newQuoteId]);
 
     useEffect(() => {
         supabase
@@ -389,8 +396,44 @@ function TicketReservationEditContent() {
         }
     };
 
+    const loadNewReservation = async () => {
+        try {
+            setLoading(true);
+            const { data: userRow, error: userError } = await supabase
+                .from('users')
+                .select('name, email, phone_number')
+                .eq('id', newUserId)
+                .single();
+            if (userError || !userRow) throw userError || new Error('고객 정보 조회 실패');
+
+            let quoteInfo: { title: string } | null = null;
+            if (newQuoteId) {
+                const { data } = await supabase.from('quote').select('title').eq('id', newQuoteId).single();
+                quoteInfo = data || null;
+            }
+
+            setReservation({
+                reservation_id: '', ticket_type: 'dragon', ticket_name: '', program_selection: '',
+                ticket_quantity: 1, adult_count: 1, child_count: 0, shuttle_count: 0,
+                usage_date: '', shuttle_required: false, pickup_location: '', dropoff_location: '',
+                unit_price: 0, total_price: 0, request_note: '',
+                reservation: {
+                    re_id: '', re_status: 'pending', re_created_at: new Date().toISOString(),
+                    users: { name: userRow.name || '이름 없음', email: userRow.email || '', phone: userRow.phone_number || '' },
+                    quote: quoteInfo,
+                },
+            });
+        } catch (err) {
+            console.error('❌ 티켓 신규 예약 고객 로드 실패:', err);
+            alert('고객 정보를 불러오는데 실패했습니다.');
+            router.push('/manager/reservation-edit/new');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleSave = async () => {
-        if (!reservationId) return;
+        if (!reservationId && !newUserId) return;
 
         try {
             setSaving(true);
@@ -449,15 +492,39 @@ function TicketReservationEditContent() {
                 },
             });
 
+            let targetReservationId = reservationId;
+            if (!targetReservationId) {
+                const { data: createdReservation, error: createError } = await supabase
+                    .from('reservation')
+                    .insert({
+                        re_user_id: newUserId,
+                        re_quote_id: newQuoteId || null,
+                        re_type: 'ticket',
+                        re_status: 'pending',
+                        total_amount: pricing.total_amount,
+                        pax_count: formData.ticket_quantity,
+                        re_adult_count: formData.adult_count,
+                        re_child_count: formData.child_count,
+                        reservation_date: formData.usage_date || null,
+                        price_breakdown: pricing.price_breakdown,
+                        manual_additional_fee: additionalFee,
+                        manual_additional_fee_detail: additionalFeeDetail || null,
+                    })
+                    .select('re_id')
+                    .single();
+                if (createError || !createdReservation) throw createError || new Error('티켓 예약 생성 실패');
+                targetReservationId = createdReservation.re_id;
+            }
+
             const { data: updatedData, error: updateError } = await supabase
                 .from('reservation_ticket')
                 .update(payload)
-                .eq('reservation_id', reservationId)
+                .eq('reservation_id', targetReservationId)
                 .select();
             if (updateError) throw updateError;
 
             if (!updatedData || updatedData.length === 0) {
-                const { error: insertError } = await supabase.from('reservation_ticket').insert({ reservation_id: reservationId, ...payload });
+                const { error: insertError } = await supabase.from('reservation_ticket').insert({ reservation_id: targetReservationId, ...payload });
                 if (insertError) throw insertError;
             }
 
@@ -474,7 +541,7 @@ function TicketReservationEditContent() {
                     manual_additional_fee_detail: additionalFeeDetail || null,
                     re_update_at: new Date().toISOString(),
                 })
-                .eq('re_id', reservationId);
+                .eq('re_id', targetReservationId);
 
             if (reservationError) console.error('⚠️ 예약 테이블 동기화 실패:', reservationError);
 
@@ -483,6 +550,12 @@ function TicketReservationEditContent() {
                 detail: additionalFeeDetail,
                 amount: additionalFee,
             });
+
+            if (isCreateMode) {
+                alert('티켓 예약이 생성되었습니다.');
+                router.push(`/manager/reservation-edit/ticket?id=${targetReservationId}`);
+                return;
+            }
 
             alert('티켓 예약이 성공적으로 수정되었습니다.');
             router.refresh();

@@ -7,7 +7,7 @@ import ManagerLayout from '../_components/MobileReservationLayout';
 import ShtCarSeatMap from '@/components/ShtCarSeatMap';
 import {
     Search, User, Ship, Plane, Building, Car, MapPin, Bus,
-    ArrowLeft, Check, ChevronDown, ChevronUp
+    ArrowLeft, Check, ChevronDown, ChevronUp, Ticket
 } from 'lucide-react';
 
 // ═══════════════════════════════════════════
@@ -20,7 +20,7 @@ interface UserInfo {
     phone_number: string;
 }
 
-type ServiceType = 'cruise' | 'cruise_vehicle' | 'airport' | 'hotel' | 'tour' | 'rentcar';
+type ServiceType = 'cruise' | 'cruise_vehicle' | 'airport' | 'hotel' | 'tour' | 'rentcar' | 'ticket';
 
 interface CruiseReservationSummary {
     reservationId: string;
@@ -66,6 +66,7 @@ const SERVICE_LIST: { type: ServiceType; label: string; icon: React.ReactNode; c
     { type: 'hotel', label: '호텔', icon: <Building className="w-6 h-6" />, color: 'purple' },
     { type: 'tour', label: '투어', icon: <MapPin className="w-6 h-6" />, color: 'orange' },
     { type: 'rentcar', label: '렌터카', icon: <Car className="w-6 h-6" />, color: 'red' },
+    { type: 'ticket', label: '티켓', icon: <Ticket className="w-6 h-6" />, color: 'amber' },
 ];
 
 // ═══════════════════════════════════════════
@@ -2580,7 +2581,15 @@ function NewReservationContent() {
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                 {SERVICE_LIST.map(service => (
                                     <div key={service.type}
-                                        onClick={() => { setSelectedService(service.type); setStep(3); }}
+                                        onClick={() => {
+                                            if (service.type === 'ticket') {
+                                                const params = new URLSearchParams({ userId: selectedCustomer.id });
+                                                if (quoteId) params.set('quoteId', quoteId);
+                                                router.push(`/reservation-edit/ticket?${params.toString()}`);
+                                                return;
+                                            }
+                                            setSelectedService(service.type); setStep(3);
+                                        }}
                                         className={`p-6 rounded-lg border-2 cursor-pointer transition-all hover:shadow-md
                                             ${selectedService === service.type ? `border-${service.color}-500 bg-${service.color}-50` : 'border-gray-200 hover:border-gray-400'}`}>
                                         <div className={`text-${service.color}-600 mb-3`}>{service.icon}</div>
