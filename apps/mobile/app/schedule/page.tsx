@@ -10,6 +10,7 @@ import {
   ChevronLeft, ChevronRight, Search, ArrowLeft, Home
 } from 'lucide-react';
 import ReservationDetailModal from '@/components/ReservationDetailModal';
+import PackageReservationDetailModal from '@/components/PackageReservationDetailModal';
 import { fetchPromotionSequenceMap } from '@/lib/promotionSequence';
 import { toKstDateKey, toKstDateLabel, toKstDateTimeParts, toLocalDateKey } from '@/lib/dateKst';
 
@@ -229,6 +230,7 @@ const getDateField = (item: any): string | null => {
   if (item.tourDate) return item.tourDate;
   if (item.usage_date) return item.usage_date;
   if (item.pickupDate) return item.pickupDate;
+  if (item.packageDate) return item.packageDate;
   if (item.re_created_at) return item.re_created_at;
   return null;
 };
@@ -487,8 +489,12 @@ export default function SchedulePage() {
       });
 
       if (modalItems.length > 0) {
-        setSelectedItems(modalItems);
-        setSelectedItem(modalItems[0]);
+        if (getServiceType(item) === 'package') {
+          setSelectedItems([item, ...modalItems]);
+        } else {
+          setSelectedItems(modalItems);
+          setSelectedItem(modalItems[0]);
+        }
       }
     } catch (err) {
       console.error('상세 조회 실패:', err);
@@ -747,7 +753,7 @@ export default function SchedulePage() {
       const reservationIds = Array.from(new Set(reservations.map((r: any) => r.re_id).filter(Boolean)));
       const userIds = Array.from(new Set(reservations.map((r: any) => r.re_user_id).filter(Boolean)));
 
-      const [usersData, cruiseData, carData, airportData, hotelData, tourData, ticketData, rentcarData, shtData] = await Promise.all([
+      const [usersData, cruiseData, carData, airportData, hotelData, tourData, ticketData, rentcarData, shtData, packageData] = await Promise.all([
         fetchRowsByIds('users', 'id', userIds),
         fetchRowsByIds('reservation_cruise', 'reservation_id', reservationIds),
         fetchRowsByIds('reservation_cruise_car', 'reservation_id', reservationIds),
@@ -757,7 +763,14 @@ export default function SchedulePage() {
         fetchRowsByIds('reservation_ticket', 'reservation_id', reservationIds),
         fetchRowsByIds('reservation_rentcar', 'reservation_id', reservationIds),
         fetchRowsByIds('reservation_car_sht', 'reservation_id', reservationIds),
+        fetchRowsByIds('reservation_package', 'reservation_id', reservationIds),
       ]);
+
+      const packageMasterIds = Array.from(new Set([
+        ...reservations.map((row: any) => row.package_id).filter(Boolean),
+        ...(packageData || []).map((row: any) => row.package_id).filter(Boolean),
+      ]));
+      const packageMasters = await fetchRowsByIds('package_master', 'id', packageMasterIds);
 
       // 렌트카 코드 -> vehicle_type/way_type/route 매핑
       const rentcarPriceCodes = Array.from(new Set((rentcarData || []).map((x: any) => x.rentcar_price_code).filter(Boolean)));
@@ -831,6 +844,24 @@ export default function SchedulePage() {
       const ticketByRid = groupByReservationId(ticketData || []);
       const rentcarByRid = groupByReservationId(rentcarData || []);
       const shtByRid = groupByReservationId(shtData || []);
+      const packageByRid = new Map((packageData || []).map((row: any) => [String(row.reservation_id || ''), row]));
+      const packageMasterById = new Map((packageMasters || []).map((row: any) => [String(row.id || ''), row]));
+      const packageDateByRid = new Map<string, string>();
+      const packageDateCandidates = [
+        ...(cruiseData || []).map((row: any) => [row.reservation_id, row.checkin]),
+        ...(airportData || []).map((row: any) => [row.reservation_id, row.ra_datetime]),
+        ...(hotelData || []).map((row: any) => [row.reservation_id, row.checkin_date]),
+        ...(tourData || []).map((row: any) => [row.reservation_id, row.usage_date]),
+        ...(rentcarData || []).map((row: any) => [row.reservation_id, row.pickup_datetime]),
+        ...(shtData || []).map((row: any) => [row.reservation_id, row.usage_date || row.pickup_datetime]),
+      ] as Array<[string, string]>;
+      packageDateCandidates.forEach(([reservationId, date]) => {
+        const id = String(reservationId || '').trim();
+        const value = String(date || '').trim();
+        if (!id || !toKstDateKey(value)) return;
+        const previous = packageDateByRid.get(id);
+        if (!previous || value < previous) packageDateByRid.set(id, value);
+      });
 
       const newMapped = reservations.flatMap((r: any) => {
         const user = usersById.get(r.re_user_id);
@@ -1055,13 +1086,18 @@ export default function SchedulePage() {
         }
 
         if (r.re_type === 'package') {
+          const packageDetail = packageByRid.get(String(r.re_id)) || {};
+          const packageMaster = packageMasterById.get(String(packageDetail.package_id || r.package_id || '')) || {};
           return [{
             ...base,
             re_type: 'package',
+            packageName: packageMaster.name || packageMaster.package_code || '패키지',
+            packageDate: packageDateByRid.get(String(r.re_id)) || r.re_created_at || '',
             adult: Number(r.re_adult_count || 0),
             child: Number(r.re_child_count || 0),
             toddler: Number(r.re_infant_count || 0),
-            requestNote: r.notes || '',
+            totalPrice: Number(r.total_amount || packageDetail.total_price || 0),
+            requestNote: packageDetail.additional_requests || r.notes || '',
           }];
         }
 
@@ -1454,11 +1490,12 @@ export default function SchedulePage() {
           )}
           {type === 'package' && (
             <>
-              <Row label="패키지" value="예약" bold />
+              <Row label="패키지" value={item.packageName || '패키지'} bold />
               <DateRow dateLabel={dateLabel} />
               {(item.adult || item.child || item.toddler) && (
                 <Row label="인원" value={formatGuests(item)} />
               )}
+              {item.totalPrice > 0 && <Row label="총액" value={`${Number(item.totalPrice).toLocaleString('ko-KR')}동`} />}
             </>
           )}
           {type === 'rentcar' && (
@@ -1493,6 +1530,8 @@ export default function SchedulePage() {
     if (item.toddler > 0) parts.push(`🍼 ${item.toddler}명`);
     return parts.length > 0 ? parts.join(' ') : '-';
   };
+
+  const isPackageDetail = !!selectedItem && getServiceType(selectedItem) === 'package';
 
   /* ── UI ──────────────────────────────────── */
   return (
@@ -1619,10 +1658,16 @@ export default function SchedulePage() {
         )}
       </div>
       <ReservationDetailModal
-        isOpen={modalOpen}
+        isOpen={modalOpen && !isPackageDetail}
         onClose={() => setModalOpen(false)}
         onEdit={selectedItem ? moveToReservationEdit : undefined}
         item={selectedItem}
+        items={selectedItems}
+      />
+      <PackageReservationDetailModal
+        isOpen={modalOpen && isPackageDetail}
+        onClose={() => setModalOpen(false)}
+        userName={selectedItem?.customerName || ''}
         items={selectedItems}
       />
     </div>
