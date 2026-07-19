@@ -469,9 +469,10 @@ export default function ReservationsPage() {
       const ticketIds = serviceRows.filter(s => s.re_type === 'ticket').map(s => s.re_id);
       const rentcarIds = serviceRows.filter(s => s.re_type === 'rentcar').map(s => s.re_id);
       const shtIds = serviceRows.filter(s => ['sht', 'car_sht'].includes(s.re_type)).map(s => s.re_id);
+      const packageIds = serviceRows.filter(s => s.re_type === 'package').map(s => s.re_id);
 
       // 서비스 상세 데이터만 조회 (가격 테이블은 모달 내부 enrich에서 처리)
-      const [cruiseRes, cruiseCarRes, airportRes, hotelRes, tourRes, ticketRes, rentcarRes, shtRes] = await Promise.all([
+      const [cruiseRes, cruiseCarRes, airportRes, hotelRes, tourRes, ticketRes, rentcarRes, shtRes, packageRes] = await Promise.all([
         cruiseIds.length > 0 ? supabase.from('reservation_cruise').select('*').in('reservation_id', cruiseIds) : { data: [] },
         carIds.length > 0 ? supabase.from('reservation_cruise_car').select('*').in('reservation_id', carIds) : { data: [] },
         airportIds.length > 0 ? supabase.from('reservation_airport').select('*').in('reservation_id', airportIds) : { data: [] },
@@ -480,7 +481,16 @@ export default function ReservationsPage() {
         ticketIds.length > 0 ? supabase.from('reservation_ticket').select('*').in('reservation_id', ticketIds) : { data: [] },
         rentcarIds.length > 0 ? supabase.from('reservation_rentcar').select('*').in('reservation_id', rentcarIds) : { data: [] },
         shtIds.length > 0 ? supabase.from('reservation_car_sht').select('*').in('reservation_id', shtIds) : { data: [] },
+        packageIds.length > 0 ? supabase.from('reservation_package').select('*').in('reservation_id', packageIds) : { data: [] },
       ]);
+
+      const packageMasterIds = Array.from(new Set(
+        (packageRes.data || []).map((row: any) => String(row.package_id || '').trim()).filter(Boolean),
+      ));
+      const { data: packageMasters } = packageMasterIds.length > 0
+        ? await supabase.from('package_master').select('id, name, package_code').in('id', packageMasterIds)
+        : { data: [] };
+      const packageMasterMap = new Map((packageMasters || []).map((row: any) => [String(row.id), row]));
 
       const statusMap = new Map(serviceRows.map(s => [s.re_id, s.re_status]));
       const typeMap = new Map(serviceRows.map(s => [s.re_id, s.re_type]));
@@ -584,6 +594,23 @@ export default function ReservationsPage() {
           reservation_id: r.reservation_id, reservationId: r.reservation_id, re_id: r.reservation_id,
           status: statusMap.get(r.reservation_id) || 'pending',
           note: r.request_note || '',
+        });
+      });
+
+      (packageRes.data || []).forEach((r: any) => {
+        const packageInfo: any = packageMasterMap.get(String(r.package_id || ''));
+        modalItems.push({
+          ...baseHeader, ...r,
+          serviceType: 'package', re_type: 'package',
+          reservation_id: r.reservation_id, reservationId: r.reservation_id, re_id: r.reservation_id,
+          status: statusMap.get(r.reservation_id) || 'pending',
+          package_name: packageInfo?.name || '',
+          package_code: packageInfo?.package_code || '',
+          re_adult_count: Number(r.adult_count || 0),
+          re_child_count: Number(r.child_extra_bed || 0) + Number(r.child_no_extra_bed || 0),
+          re_infant_count: Number(r.infant_free || 0) + Number(r.infant_tour || 0) + Number(r.infant_extra_bed || 0) + Number(r.infant_seat || 0),
+          totalPrice: Number(r.total_price || 0),
+          note: r.additional_requests || '',
         });
       });
 
