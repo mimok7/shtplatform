@@ -112,6 +112,7 @@ function getTourDisplayName(service: any): string {
     const noteTour = note.match(/투어\s*[:：]\s*([^\n]+)/)?.[1]
         || note.match(/\[(닌빈|하노이)[^\]]*투어[^\]]*\]/)?.[0];
     if (noteTour) return humanizeText(noteTour.replace(/[\[\]]/g, ''), '투어 프로그램');
+    if (note) return humanizeText(note, '투어 프로그램');
 
     const joined = `${service.route || ''} ${service.category || ''} ${service.pickupLocation || service.pickup_location || ''} ${service.dropoffLocation || service.dropoff_location || service.destination || ''} ${note}`;
     if (/닌빈|ninh/i.test(joined)) return '닌빈 투어';
@@ -535,29 +536,56 @@ export default function PackageReservationDetailModal({
             return;
         }
 
+        const tourServices = (Array.isArray(allUserServices) ? allUserServices : [])
+            .filter((service: any) => service?.serviceType === 'tour' || service?.re_type === 'tour');
         const tourPriceCodes = Array.from(new Set(
-            (Array.isArray(allUserServices) ? allUserServices : [])
-                .filter((service: any) => service?.serviceType === 'tour' || service?.re_type === 'tour')
+            tourServices
                 .map((service: any) => String(service?.tour_price_code || '').trim())
                 .filter(Boolean)
         ));
-        if (tourPriceCodes.length === 0) {
+        const directTourIds = Array.from(new Set(
+            tourServices
+                .map((service: any) => String(service?.tour_id || '').trim())
+                .filter(Boolean)
+        ));
+        if (tourPriceCodes.length === 0 && directTourIds.length === 0) {
             setTourNameMap({});
             return;
         }
 
         let cancelled = false;
         const loadTourNames = async () => {
-            const { data, error } = await supabase
-                .from('tour_pricing')
-                .select('pricing_id, tour:tour_id(tour_name)')
-                .in('pricing_id', tourPriceCodes);
+            const { data: priceRows, error: priceError } = tourPriceCodes.length > 0
+                ? await supabase
+                    .from('tour_pricing')
+                    .select('pricing_id, tour_id')
+                    .in('pricing_id', tourPriceCodes)
+                : { data: [] as any[], error: null };
+            if (cancelled || priceError) return;
 
-            if (cancelled || error) return;
+            const tourIds = Array.from(new Set([
+                ...directTourIds,
+                ...(priceRows || []).map((price: any) => String(price?.tour_id || '').trim()).filter(Boolean),
+            ]));
+            const { data: tourRows, error: tourError } = tourIds.length > 0
+                ? await supabase
+                    .from('tour')
+                    .select('tour_id, tour_name')
+                    .in('tour_id', tourIds)
+                : { data: [] as any[], error: null };
+
+            if (cancelled || tourError) return;
+            const namesByTourId = new Map<string, string>(
+                (tourRows || []).map((tour: any) => [String(tour?.tour_id), String(tour?.tour_name || '').trim()])
+            );
             const nextMap: Record<string, string> = {};
-            (data || []).forEach((price: any) => {
-                const name = String(price?.tour?.tour_name || '').trim();
+            (priceRows || []).forEach((price: any) => {
+                const name = namesByTourId.get(String(price?.tour_id)) || '';
                 if (price?.pricing_id && name) nextMap[String(price.pricing_id)] = name;
+            });
+            directTourIds.forEach((tourId) => {
+                const name = namesByTourId.get(tourId) || '';
+                if (name) nextMap[`tour:${tourId}`] = name;
             });
             setTourNameMap(nextMap);
         };
@@ -587,6 +615,7 @@ export default function PackageReservationDetailModal({
             ...service,
             tourDbName: service?.serviceType === 'tour'
                 ? tourNameMap[String(service?.tour_price_code || '')]
+                    || tourNameMap[`tour:${String(service?.tour_id || '')}`]
                 : undefined,
         }));
     }, [allUserServices, tourNameMap]);

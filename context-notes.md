@@ -10,6 +10,12 @@
 - 모달이 열리면 표시 대상의 `tour_price_code`를 기준으로 `tour_pricing`과 `tour`를 조인 조회하고, 반환된 `tour.tour_name`을 최우선 표시한다.
 - `pnpm --filter @sht/manager typecheck`, `pnpm --filter @sht/manager1 typecheck`, `git diff --check`를 통과했다.
 
+패키지 투어명 DB 조회 재점검.
+
+- 현재 표시 실패 사례는 `reservation_tour`에 `tour_name`이 없고 `tour_price_code`만 저장되는 구조에서 발생한다.
+- 이전 구현의 중첩 관계 조회 결과는 관계 응답 형태에 의존한다. 가격 행의 `tour_id`를 먼저 읽고 `tour.tour_name`을 별도 조회해 응답 형태와 무관하게 실제 DB명을 확보한다.
+- 2026-07-17 실제 `reservation_tour` 행을 읽기 전용으로 확인한 결과 `tour_price_code`와 `tour_name`은 비어 있고, 저장된 투어 식별 텍스트는 `request_note`의 `야경투어 추가`뿐이다. 가격 코드·직접 투어 ID가 없는 이 경우에는 해당 원본 메모를 투어명으로 표시해야 `투어 프로그램` 대체 문구가 남지 않는다.
+
 SHT 단가 오표시 이슈 조사 시작.
 
 - 사용자 제보 케이스는 예약 `28083a11-5adb-4327-ab8f-333625f11e71` 기준이며, 좌석은 `A1,A2`이고 기대 단가는 `850,000동`이다.
