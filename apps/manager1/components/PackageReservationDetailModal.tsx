@@ -728,7 +728,7 @@ export default function PackageReservationDetailModal({
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-            <div className="bg-white rounded-xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
                 <div className="bg-white border-b border-gray-100 px-6 py-4 shrink-0 flex justify-between items-start">
                     <div className="flex-1">
                         <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
@@ -819,7 +819,7 @@ export default function PackageReservationDetailModal({
                                                 </div>
                                                 {getStatusBadge(pkg.re_status || pkg.service?.re_status)}
                                             </div>
-                                            <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-gray-700">
+                                            <div className="mt-2 grid grid-cols-1 gap-2 text-sm text-gray-700">
                                                 <div>예약일: {formatKst(pkg.re_created_at || pkg.service?.re_created_at)}</div>
                                                 {(pkg.adultCount > 0 || pkg.childCount > 0 || pkg.infantCount > 0) && (
                                                     <div>
@@ -915,7 +915,7 @@ export default function PackageReservationDetailModal({
                                                 {getStatusBadge(service.re_status || service.service?.re_status)}
                                             </div>
 
-                                            <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-gray-700">
+                                            <div className="mt-2 grid grid-cols-1 gap-2 text-sm text-gray-700">
                                                 {(service.checkin || service.checkinDate || service.tourDate || service.usageDate || service.ra_datetime || service.pickupDatetime || service.pickupDate || service.pickupTime) && (
                                                     <div>
                                                         <Calendar className="inline w-4 h-4 mr-1 text-gray-500" />
