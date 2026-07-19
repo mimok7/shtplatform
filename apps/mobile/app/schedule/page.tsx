@@ -20,32 +20,13 @@ type SourceFilter = 'all' | 'old' | 'new';
 const SCHEDULE_VISIBLE_STATUSES = ['approved', 'confirmed', 'completed'] as const;
 
 /* ── 날짜 유틸 ──────────────────────────────── */
-const parseDate = (dateStr: string | null | undefined): Date | null => {
-  if (!dateStr) return null;
-  const s = String(dateStr).trim();
-  // YYYY-MM-DD
-  const iso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-  if (iso) return new Date(+iso[1], +iso[2] - 1, +iso[3]);
-  // YYYY. MM. DD
-  const dot = s.match(/^(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})/);
-  if (dot) return new Date(+dot[1], +dot[2] - 1, +dot[3]);
-  // MM/DD/YYYY
-  const slash = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-  if (slash) return new Date(+slash[3], +slash[1] - 1, +slash[2]);
-  const d = new Date(s);
-  return isNaN(d.getTime()) ? null : d;
+const createCalendarDate = (dateKey: string): Date => {
+  const [year, month, day] = dateKey.split('-').map(Number);
+  return new Date(year, month - 1, day, 12, 0, 0, 0);
 };
 
-const isSameLocalDate = (d1: Date, d2: Date) =>
-  d1.getFullYear() === d2.getFullYear() &&
-  d1.getMonth() === d2.getMonth() &&
-  d1.getDate() === d2.getDate();
-
-const isDateInRange = (date: Date, start: Date, end: Date) => {
-  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  const s = new Date(start.getFullYear(), start.getMonth(), start.getDate());
-  const e = new Date(end.getFullYear(), end.getMonth(), end.getDate());
-  return d >= s && d <= e;
+const getKstTodayCalendarDate = (): Date => {
+  return createCalendarDate(toKstDateKey(new Date()));
 };
 
 const getRange = (base: Date, mode: ViewMode) => {
@@ -74,7 +55,7 @@ const getRange = (base: Date, mode: ViewMode) => {
 const isPastDate = (dateStr: string) => {
   const dateKey = toKstDateKey(dateStr);
   if (!dateKey) return false;
-  return dateKey < toLocalDateKey(new Date());
+  return dateKey < toKstDateKey(new Date());
 };
 
 const normalizeWayType = (value: string | null | undefined) => {
@@ -235,26 +216,6 @@ const getDateField = (item: any): string | null => {
   return null;
 };
 
-// timezone 없는 plain date(예: reservation_cruise_car.pickup_datetime)는
-// DB에 UTC 기준으로 저장될 수 있어 KST 오늘의 UTC 날짜 범위로 비교해야 함.
-// 매니저와 동일한 로직: start.toISOString().slice(0,10) ~ end.toISOString().slice(0,10)
-const HAS_TZ_RE = /[zZ]$|[+-]\d{2}:?\d{2}$/;
-const matchesKstDate = (dateStr: string | null | undefined, refDate: Date): boolean => {
-  if (!dateStr) return false;
-  const todayKey = toLocalDateKey(refDate);
-  const itemKey = toKstDateKey(dateStr);
-  if (!itemKey) return false;
-  if (itemKey === todayKey) return true;
-  // plain date (no TZ info): KST 오늘의 UTC 범위에 포함되면 매칭
-  // 예) KST 2026-05-20 새벽 픽업 → UTC 2026-05-19 → 누락 방지
-  if (!HAS_TZ_RE.test(String(dateStr))) {
-    const kstMidnight = new Date(refDate.getFullYear(), refDate.getMonth(), refDate.getDate(), 0, 0, 0, 0);
-    const utcStartKey = kstMidnight.toISOString().slice(0, 10);
-    return itemKey >= utcStartKey && itemKey <= todayKey;
-  }
-  return false;
-};
-
 const serviceConfig: Record<string, { icon: any; name: string; color: string }> = {
   cruise:  { icon: Ship,     name: '크루즈',      color: 'blue' },
   car:     { icon: Car,      name: '크루즈차량',  color: 'cyan' },
@@ -309,7 +270,7 @@ export default function SchedulePage() {
   const router = useRouter();
   const [allData, setAllData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(getKstTodayCalendarDate);
   // 고정값: 일간, 전체 필터
   const viewMode = 'day' as ViewMode;
   const sourceFilter = 'all' as SourceFilter;
@@ -846,21 +807,31 @@ export default function SchedulePage() {
       const shtByRid = groupByReservationId(shtData || []);
       const packageByRid = new Map((packageData || []).map((row: any) => [String(row.reservation_id || ''), row]));
       const packageMasterById = new Map((packageMasters || []).map((row: any) => [String(row.id || ''), row]));
-      const packageDateByRid = new Map<string, string>();
+      const packageDatesByRid = new Map<string, Set<string>>();
       const packageDateCandidates = [
         ...(cruiseData || []).map((row: any) => [row.reservation_id, row.checkin]),
+        ...(carData || []).flatMap((row: any) => [
+          [row.reservation_id, row.pickup_datetime],
+          [row.reservation_id, row.return_datetime],
+        ]),
         ...(airportData || []).map((row: any) => [row.reservation_id, row.ra_datetime]),
         ...(hotelData || []).map((row: any) => [row.reservation_id, row.checkin_date]),
         ...(tourData || []).map((row: any) => [row.reservation_id, row.usage_date]),
-        ...(rentcarData || []).map((row: any) => [row.reservation_id, row.pickup_datetime]),
-        ...(shtData || []).map((row: any) => [row.reservation_id, row.usage_date || row.pickup_datetime]),
+        ...(rentcarData || []).flatMap((row: any) => [
+          [row.reservation_id, row.pickup_datetime],
+          [row.reservation_id, row.return_datetime],
+        ]),
+        ...(shtData || []).flatMap((row: any) => [
+          [row.reservation_id, row.usage_date],
+          [row.reservation_id, row.pickup_datetime],
+        ]),
       ] as Array<[string, string]>;
       packageDateCandidates.forEach(([reservationId, date]) => {
         const id = String(reservationId || '').trim();
-        const value = String(date || '').trim();
-        if (!id || !toKstDateKey(value)) return;
-        const previous = packageDateByRid.get(id);
-        if (!previous || value < previous) packageDateByRid.set(id, value);
+        const dateKey = toKstDateKey(date);
+        if (!id || !dateKey) return;
+        if (!packageDatesByRid.has(id)) packageDatesByRid.set(id, new Set());
+        packageDatesByRid.get(id)!.add(dateKey);
       });
 
       const newMapped = reservations.flatMap((r: any) => {
@@ -1088,17 +1059,22 @@ export default function SchedulePage() {
         if (r.re_type === 'package') {
           const packageDetail = packageByRid.get(String(r.re_id)) || {};
           const packageMaster = packageMasterById.get(String(packageDetail.package_id || r.package_id || '')) || {};
-          return [{
+          const packageDates = Array.from(packageDatesByRid.get(String(r.re_id)) || []).sort();
+          const scheduleDates = packageDates.length > 0
+            ? packageDates
+            : [toKstDateKey(r.re_created_at)].filter(Boolean);
+
+          return scheduleDates.map((packageDate) => ({
             ...base,
             re_type: 'package',
             packageName: packageMaster.name || packageMaster.package_code || '패키지',
-            packageDate: packageDateByRid.get(String(r.re_id)) || r.re_created_at || '',
+            packageDate,
             adult: Number(r.re_adult_count || 0),
             child: Number(r.re_child_count || 0),
             toddler: Number(r.re_infant_count || 0),
             totalPrice: Number(r.total_amount || packageDetail.total_price || 0),
             requestNote: packageDetail.additional_requests || r.notes || '',
-          }];
+          }));
         }
 
         if (r.re_type === 'rentcar') {
@@ -1212,10 +1188,6 @@ export default function SchedulePage() {
         const debugTodayKey = toLocalDateKey(selectedDate);
         const debugItems = combined.filter(item => {
           const ds = getDateField(item);
-          // 크루즈차량(car 타입, 신규 데이터)만 UTC 날짜 오프셋 보정 적용
-          if (getServiceType(item) === 'car' && item.source !== 'sh') {
-            return matchesKstDate(ds, selectedDate);
-          }
           return toKstDateKey(ds) === debugTodayKey;
         }).map(i => ({ id: i.reservationId || i.orderId || i.re_id || null, source: i.source, type: getServiceType(i), date: getDateField(i) }));
       } catch (e) {
@@ -1261,18 +1233,11 @@ export default function SchedulePage() {
       if (!itemDateKey) return false;
 
       if (viewMode === 'day') {
-        // 크루즈차량(car 타입, 신규 데이터)만 UTC 날짜 오프셋 보정 적용
-        // 공항·렌트카·크루즈·호텔 등 나머지는 날짜만 엄격 비교
-        if (getServiceType(item) === 'car' && item.source !== 'sh') {
-          return matchesKstDate(dateStr, selectedDate);
-        }
         return itemDateKey === toLocalDateKey(selectedDate);
       }
 
-      const d = parseDate(dateStr);
-      if (!d) return false;
       const { start, end } = getRange(selectedDate, viewMode);
-      return isDateInRange(d, start, end);
+      return itemDateKey >= toLocalDateKey(start) && itemDateKey <= toLocalDateKey(end);
     });
   }
 
@@ -1564,7 +1529,7 @@ export default function SchedulePage() {
               className="w-32 px-2 py-1.5 text-sm border border-blue-300 rounded-lg bg-white text-center font-semibold"
             />
             <button
-              onClick={() => setSelectedDate(new Date())}
+              onClick={() => setSelectedDate(getKstTodayCalendarDate())}
               className="text-xs text-blue-500 hover:underline mt-0.5 block w-full"
             >
               오늘
