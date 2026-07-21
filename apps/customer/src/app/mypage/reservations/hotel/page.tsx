@@ -78,6 +78,7 @@ function HotelReservationContent() {
                     setForm(prev => ({
                         ...prev,
                         serviceData: {
+                            ...prev.serviceData,
                             checkin_date: hotelData.checkin_date ? new Date(hotelData.checkin_date).toISOString().split('T')[0] : '',
                             checkout_date: hotelData.checkout_date ? new Date(hotelData.checkout_date).toISOString().split('T')[0] : '',
                             room_count: hotelData.room_count ?? '',
@@ -133,6 +134,7 @@ function HotelReservationContent() {
                     setForm(prev => ({
                         ...prev,
                         serviceData: {
+                            ...prev.serviceData,
                             checkin_date: hotelData.checkin_date ? new Date(hotelData.checkin_date).toISOString().split('T')[0] : '',
                             checkout_date: hotelData.checkout_date ? new Date(hotelData.checkout_date).toISOString().split('T')[0] : '',
                             room_count: hotelData.room_count ?? '',

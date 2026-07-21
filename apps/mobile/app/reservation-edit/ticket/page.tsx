@@ -542,6 +542,7 @@ function TicketReservationEditContent() {
                 if (createError || !createdReservation) throw createError || new Error('티켓 예약 생성 실패');
                 targetReservationId = createdReservation.re_id;
             }
+            if (!targetReservationId) throw new Error('티켓 예약 ID를 확인할 수 없습니다.');
 
             const { data: updatedData, error: updateError } = await supabase
                 .from('reservation_ticket')

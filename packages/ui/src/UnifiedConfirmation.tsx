@@ -162,8 +162,8 @@ function getTicketInfo(reservation: UnifiedReservationDetail): { info: string; d
       shuttleCount > 0 ? { label: '셔틀요금', quantity: shuttleCount } : null,
     ].filter(Boolean) as Array<{ label: string; quantity: number }>;
     priceLines.push(`티켓명: ${ticketName || programSelection || '-'}`);
-    if (buckets.length === 1 && total > 0) {
-      const bucket = buckets[0];
+    const [bucket] = buckets;
+    if (bucket && total > 0) {
       const unitPrice = bucket.quantity > 0 ? Math.round(total / bucket.quantity) : 0;
       priceLines.push(`${bucket.label}: ${formatDong(unitPrice)} × ${bucket.quantity}명 = ${formatDong(total)}`);
     } else if (quantity > 0 && total > 0) {
