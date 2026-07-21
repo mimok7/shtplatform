@@ -1135,6 +1135,27 @@ function CruiseVehicleContent() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedCarCategory, selectedRoute, cruiseName, vehicleServiceType, isFullPromoOrLegacyC, isParadiseLegacyB]);
 
+    // ── 크루즈사 셔틀은 조회된 차량 타입을 자동 선택 ──
+    useEffect(() => {
+        if (vehicleServiceType !== 'cruise_shuttle' || !selectedCarCategory || !selectedRoute || carTypeOptions.length === 0) {
+            return;
+        }
+
+        const shuttleType = carTypeOptions[0];
+        const applyCruiseShuttle = async () => {
+            const carCode = await getCarCode(shuttleType, selectedCarCategory, selectedRoute);
+            setVehicleForm((prev) => [{
+                car_type: shuttleType,
+                car_category: selectedCarCategory,
+                route: selectedRoute,
+                car_code: carCode,
+                count: prev[0]?.count || 1,
+            }]);
+        };
+
+        applyCruiseShuttle();
+    }, [vehicleServiceType, selectedCarCategory, selectedRoute, carTypeOptions, getCarCode]);
+
     // ── 단독 자동 처리 ──
     useEffect(() => {
         if (!isShtExclusiveCruise) return;
@@ -2056,49 +2077,51 @@ function CruiseVehicleContent() {
                                             </div>
                                         )}
 
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-600 mb-1">차량타입</label>
-                                            <select
-                                                value={isShtVehicleType(vehicle.car_type) ? '스테이하롱 셔틀 리무진' : vehicle.car_type}
-                                                onChange={async (e) => {
-                                                    const rawCarType = e.target.value;
-                                                    const selectedWayType = vehicle.car_category || selectedCarCategory;
-                                                    // SHT가 옵션 값에 단독/A/B/C 변형으로 들어와도 일반 SHT로 1차 정규화
-                                                    const baseCarType = isShtVehicleType(rawCarType)
-                                                        ? '스테이하롱 셔틀 리무진'
-                                                        : rawCarType;
-                                                    // 편도+SHT만 자동 단독 변형
-                                                    const normalizedCarType = shouldAutoSoloSht(baseCarType, selectedWayType)
-                                                        ? '스테이하롱 셔틀 리무진 단독'
-                                                        : baseCarType;
-                                                    handleVehicleChange(vehicleIndex, 'car_type', normalizedCarType);
-                                                    if (normalizedCarType && selectedWayType) {
-                                                        const code = await getCarCode(normalizedCarType, selectedWayType, vehicle.route || selectedRoute);
-                                                        handleVehicleChange(vehicleIndex, 'car_code', code);
-                                                    }
-                                                    // 당일왕복/다른날왕복 + 일반 SHT → 좌석 선택 모달 자동 오픈 (필수)
-                                                    const isShtRoundTrip = isShtVehicleType(normalizedCarType)
-                                                        && !normalizedCarType.includes('단독')
-                                                        && (selectedWayType === '당일왕복' || selectedWayType === '다른날왕복' || selectedWayType === '일정왕복')
-                                                        && !isShtExclusiveCruise;
-                                                    if (isShtRoundTrip) {
-                                                        setIsModalReadOnly(false);
-                                                        setSelectedShtSeat(null);
-                                                        // 비동기 setState 후 안정적으로 모달이 열리도록 다음 tick에 호출
-                                                        setTimeout(() => setIsShtCarModalOpen(true), 0);
-                                                    }
-                                                }}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-green-500"
-                                                disabled={!vehicleServiceType || !vehicle.car_category || !vehicle.route}
-                                            >
-                                                <option value="">
-                                                    {!vehicleServiceType ? '차량 유형을 먼저 선택하세요' : (!vehicle.car_category ? '이용방식을 먼저 선택하세요' : (!vehicle.route ? '경로를 먼저 선택하세요' : '차량타입 선택'))}
-                                                </option>
-                                                {carTypeOptions.map(carType => (
-                                                    <option key={carType} value={carType}>{toVehicleDisplayType(carType)}</option>
-                                                ))}
-                                            </select>
-                                        </div>
+                                        {vehicleServiceType !== 'cruise_shuttle' && (
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-600 mb-1">차량타입</label>
+                                                <select
+                                                    value={isShtVehicleType(vehicle.car_type) ? '스테이하롱 셔틀 리무진' : vehicle.car_type}
+                                                    onChange={async (e) => {
+                                                        const rawCarType = e.target.value;
+                                                        const selectedWayType = vehicle.car_category || selectedCarCategory;
+                                                        // SHT가 옵션 값에 단독/A/B/C 변형으로 들어와도 일반 SHT로 1차 정규화
+                                                        const baseCarType = isShtVehicleType(rawCarType)
+                                                            ? '스테이하롱 셔틀 리무진'
+                                                            : rawCarType;
+                                                        // 편도+SHT만 자동 단독 변형
+                                                        const normalizedCarType = shouldAutoSoloSht(baseCarType, selectedWayType)
+                                                            ? '스테이하롱 셔틀 리무진 단독'
+                                                            : baseCarType;
+                                                        handleVehicleChange(vehicleIndex, 'car_type', normalizedCarType);
+                                                        if (normalizedCarType && selectedWayType) {
+                                                            const code = await getCarCode(normalizedCarType, selectedWayType, vehicle.route || selectedRoute);
+                                                            handleVehicleChange(vehicleIndex, 'car_code', code);
+                                                        }
+                                                        // 당일왕복/다른날왕복 + 일반 SHT → 좌석 선택 모달 자동 오픈 (필수)
+                                                        const isShtRoundTrip = isShtVehicleType(normalizedCarType)
+                                                            && !normalizedCarType.includes('단독')
+                                                            && (selectedWayType === '당일왕복' || selectedWayType === '다른날왕복' || selectedWayType === '일정왕복')
+                                                            && !isShtExclusiveCruise;
+                                                        if (isShtRoundTrip) {
+                                                            setIsModalReadOnly(false);
+                                                            setSelectedShtSeat(null);
+                                                            // 비동기 setState 후 안정적으로 모달이 열리도록 다음 tick에 호출
+                                                            setTimeout(() => setIsShtCarModalOpen(true), 0);
+                                                        }
+                                                    }}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-green-500"
+                                                    disabled={!vehicleServiceType || !vehicle.car_category || !vehicle.route}
+                                                >
+                                                    <option value="">
+                                                        {!vehicleServiceType ? '차량 유형을 먼저 선택하세요' : (!vehicle.car_category ? '이용방식을 먼저 선택하세요' : (!vehicle.route ? '경로를 먼저 선택하세요' : '차량타입 선택'))}
+                                                    </option>
+                                                    {carTypeOptions.map(carType => (
+                                                        <option key={carType} value={carType}>{toVehicleDisplayType(carType)}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        )}
 
                                         <div>
                                             <label className="block text-sm font-medium text-gray-600 mb-1">
@@ -2124,7 +2147,7 @@ function CruiseVehicleContent() {
                                 </div>
                             ))}
 
-                            {vehicleForm.length < 6 && (
+                            {vehicleServiceType !== 'cruise_shuttle' && vehicleForm.length < 6 && (
                                 <button
                                     type="button"
                                     onClick={handleAddVehicle}
