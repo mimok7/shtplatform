@@ -18,6 +18,8 @@ type VehicleRow = {
     custom_price?: number;
 };
 
+type VehicleServiceType = 'cruise_shuttle' | 'private_rental';
+
 type CruiseReservationOption = {
     reservationId: string;
     quoteId: string | null;
@@ -405,6 +407,8 @@ function CruiseVehicleContent() {
 
     const [carTypeOptions, setCarTypeOptions] = useState<string[]>([]);
     const [routeOptions, setRouteOptions] = useState<string[]>([]);
+    const [vehicleServiceType, setVehicleServiceType] = useState<VehicleServiceType | null>(null);
+    const [hasCruiseShuttle, setHasCruiseShuttle] = useState(false);
     const [selectedCarCategory, setSelectedCarCategory] = useState('');
     const [selectedRoute, setSelectedRoute] = useState('');
 
@@ -605,6 +609,18 @@ function CruiseVehicleContent() {
         return query.in('cruise', ['공통', name]);
     }, [cruiseName]);
 
+    const applyVehicleServiceFilter = useCallback((query: any) => {
+        if (vehicleServiceType === 'cruise_shuttle') {
+            return query
+                .ilike('vehicle_type', '%셔틀%')
+                .eq('cruise', cruiseName);
+        }
+        if (vehicleServiceType === 'private_rental') {
+            return query.eq('rental_type', '단독대여');
+        }
+        return query;
+    }, [cruiseName, vehicleServiceType]);
+
     const loadRouteOptions = useCallback(async (wayType: string) => {
         if (!wayType) return;
         try {
@@ -613,6 +629,7 @@ function CruiseVehicleContent() {
                 .select('route')
                 .eq('way_type', getLookupWayType(wayType))
                 .like('route', '%하롱베이%');
+            query = applyVehicleServiceFilter(query);
             query = applyCruiseFilterToRentcarQuery(query);
             const { data, error } = await query.order('route');
             if (error) throw error;
@@ -622,7 +639,7 @@ function CruiseVehicleContent() {
             console.error('차량 경로 옵션 조회 실패:', error);
             setRouteOptions([]);
         }
-    }, [applyCruiseFilterToRentcarQuery]);
+    }, [applyCruiseFilterToRentcarQuery, applyVehicleServiceFilter]);
 
     const loadCarTypeOptions = useCallback(async (wayType?: string, route?: string) => {
         const wt = wayType || selectedCarCategory;
@@ -634,6 +651,7 @@ function CruiseVehicleContent() {
                 .eq('way_type', getLookupWayType(wt));
             if (rt) query = query.eq('route', rt);
             else query = query.like('route', '%하롱베이%');
+            query = applyVehicleServiceFilter(query);
             query = applyCruiseFilterToRentcarQuery(query);
             const { data, error } = await query.order('vehicle_type');
             if (error) throw error;
@@ -655,7 +673,7 @@ function CruiseVehicleContent() {
         } catch (error) {
             console.error('차량타입 옵션 조회 실패:', error);
         }
-    }, [selectedCarCategory, selectedRoute, applyCruiseFilterToRentcarQuery, cruiseName, isFullPromoOrLegacyC, isParadiseLegacyB, schedule]);
+    }, [selectedCarCategory, selectedRoute, applyCruiseFilterToRentcarQuery, applyVehicleServiceFilter, cruiseName, isFullPromoOrLegacyC, isParadiseLegacyB, schedule]);
 
     const getCarCode = useCallback(async (carType: string, carCategory: string, route?: string): Promise<string> => {
         try {
@@ -672,6 +690,7 @@ function CruiseVehicleContent() {
                 query = query.eq('vehicle_type', carType);
             }
             if (effectiveRoute) query = query.eq('route', effectiveRoute);
+            query = applyVehicleServiceFilter(query);
             query = applyCruiseFilterToRentcarQuery(query);
             const { data, error } = await query.limit(1);
             if (error) throw error;
@@ -680,7 +699,7 @@ function CruiseVehicleContent() {
             console.error('rent_code 조회 실패:', error);
             return '';
         }
-    }, [selectedRoute, applyCruiseFilterToRentcarQuery]);
+    }, [selectedRoute, applyCruiseFilterToRentcarQuery, applyVehicleServiceFilter]);
 
     const handleAddVehicle = () => {
         if (vehicleForm.length < 6) {
@@ -714,6 +733,21 @@ function CruiseVehicleContent() {
         }
         setVehicleForm(newVehicleForm);
     }, [vehicleForm]);
+
+    const selectVehicleServiceType = (nextType: VehicleServiceType) => {
+        setVehicleServiceType(nextType);
+        setSelectedRoute('');
+        setRouteOptions([]);
+        setCarTypeOptions([]);
+        setSelectedShtSeat(null);
+        setVehicleForm([{
+            car_type: '',
+            car_category: selectedCarCategory,
+            car_code: '',
+            route: '',
+            count: 1
+        }]);
+    };
 
     const handleShtSeatSelect = useCallback((seatInfo: { vehicle: string; seat: string; category: string }) => {
         setSelectedShtSeat(seatInfo);
@@ -1055,23 +1089,51 @@ function CruiseVehicleContent() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [reservationId, loadCruiseReservationOptions]);
 
+    // ── 크루즈사 운영 셔틀 존재 여부 ──
+    useEffect(() => {
+        let cancelled = false;
+        const loadCruiseShuttleAvailability = async () => {
+            if (!cruiseName) {
+                setHasCruiseShuttle(false);
+                return;
+            }
+            const { data, error } = await supabase
+                .from('rentcar_price')
+                .select('rent_code')
+                .eq('cruise', cruiseName)
+                .ilike('vehicle_type', '%셔틀%')
+                .limit(1);
+            if (cancelled) return;
+            if (error) {
+                console.error('크루즈 셔틀 조회 실패:', error);
+                setHasCruiseShuttle(false);
+                return;
+            }
+            setHasCruiseShuttle((data || []).length > 0);
+        };
+        loadCruiseShuttleAvailability();
+        return () => { cancelled = true; };
+    }, [cruiseName]);
+
     // ── 이용방식 변경 시 경로 옵션 자동 로드 (페이지 복귀 포함) ──
     useEffect(() => {
-        if (selectedCarCategory) {
+        if (selectedCarCategory && vehicleServiceType) {
             loadRouteOptions(selectedCarCategory);
+        } else if (!vehicleServiceType) {
+            setRouteOptions([]);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedCarCategory, cruiseName]);
+    }, [selectedCarCategory, cruiseName, vehicleServiceType]);
 
     // ── 차량 타입 로드 ──
     useEffect(() => {
-        if (selectedCarCategory && selectedRoute) {
+        if (selectedCarCategory && selectedRoute && vehicleServiceType) {
             loadCarTypeOptions();
         } else {
             setCarTypeOptions([]);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedCarCategory, selectedRoute, cruiseName, isFullPromoOrLegacyC, isParadiseLegacyB]);
+    }, [selectedCarCategory, selectedRoute, cruiseName, vehicleServiceType, isFullPromoOrLegacyC, isParadiseLegacyB]);
 
     // ── 단독 자동 처리 ──
     useEffect(() => {
@@ -1111,6 +1173,10 @@ function CruiseVehicleContent() {
     const persistVehicle = async (): Promise<boolean> => {
         if (!user || !reservationId) {
             alert('로그인 또는 예약 정보가 없습니다.');
+            return false;
+        }
+        if (!vehicleServiceType && !isFullPromoOrLegacyC && !isParadiseLegacyB) {
+            alert('차량 유형을 선택해주세요.');
             return false;
         }
         const validVehicles = vehicleForm.filter(v => v.car_type && v.count > 0);
@@ -1665,6 +1731,56 @@ function CruiseVehicleContent() {
                                 </div>
                             )}
 
+                            <fieldset>
+                                <legend className="block text-sm font-medium text-gray-700 mb-2">차량 유형</legend>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    <label
+                                        htmlFor="cruise-shuttle"
+                                        className={`flex min-h-11 items-center gap-3 border px-3 py-3 cursor-pointer transition-colors ${vehicleServiceType === 'cruise_shuttle'
+                                            ? 'border-blue-500 bg-blue-50 text-blue-800'
+                                            : hasCruiseShuttle
+                                                ? 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                                                : 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed'
+                                            }`}
+                                    >
+                                        <input
+                                            id="cruise-shuttle"
+                                            type="checkbox"
+                                            checked={vehicleServiceType === 'cruise_shuttle'}
+                                            onChange={() => selectVehicleServiceType('cruise_shuttle')}
+                                            disabled={!hasCruiseShuttle}
+                                            className="h-4 w-4"
+                                        />
+                                        <span>
+                                            <span className="block font-semibold">크루즈사 운영 셔틀 리무진</span>
+                                            <span className="block text-xs mt-0.5">선택한 크루즈사의 셔틀 요금으로 예약합니다.</span>
+                                        </span>
+                                    </label>
+                                    <label
+                                        htmlFor="private-rental"
+                                        className={`flex min-h-11 items-center gap-3 border px-3 py-3 cursor-pointer transition-colors ${vehicleServiceType === 'private_rental'
+                                            ? 'border-blue-500 bg-blue-50 text-blue-800'
+                                            : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                                            }`}
+                                    >
+                                        <input
+                                            id="private-rental"
+                                            type="checkbox"
+                                            checked={vehicleServiceType === 'private_rental'}
+                                            onChange={() => selectVehicleServiceType('private_rental')}
+                                            className="h-4 w-4"
+                                        />
+                                        <span>
+                                            <span className="block font-semibold">기사 포함 단독 렌트카</span>
+                                            <span className="block text-xs mt-0.5">단독대여 차량만 목록에 표시합니다.</span>
+                                        </span>
+                                    </label>
+                                </div>
+                                {!hasCruiseShuttle && cruiseName && (
+                                    <p className="mt-2 text-xs text-gray-500">{cruiseName}은 현재 등록된 크루즈사 운영 셔틀 요금이 없습니다.</p>
+                                )}
+                            </fieldset>
+
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">이용방식</label>
                                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -1673,6 +1789,7 @@ function CruiseVehicleContent() {
                                             key={category}
                                             type="button"
                                             onClick={async () => {
+                                                if (!vehicleServiceType) return;
                                                 setSelectedCarCategory(category);
                                                 setSelectedRoute('');
                                                 setCarTypeOptions([]);
@@ -1689,9 +1806,9 @@ function CruiseVehicleContent() {
                                                     car_code: ''
                                                 }));
                                                 setVehicleForm(updatedVehicleForm);
-                                                await loadRouteOptions(category);
                                             }}
-                                            className={`px-4 py-2 border rounded-lg transition-colors ${selectedCarCategory === category
+                                            disabled={!vehicleServiceType}
+                                            className={`px-4 py-2 border rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${selectedCarCategory === category
                                                 ? 'bg-blue-500 text-white border-blue-500'
                                                 : 'bg-gray-50 border-gray-300 hover:bg-gray-100 text-gray-700'
                                                 }`}
@@ -1972,10 +2089,10 @@ function CruiseVehicleContent() {
                                                     }
                                                 }}
                                                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-green-500"
-                                                disabled={!vehicle.car_category || !vehicle.route}
+                                                disabled={!vehicleServiceType || !vehicle.car_category || !vehicle.route}
                                             >
                                                 <option value="">
-                                                    {!vehicle.car_category ? '이용방식을 먼저 선택하세요' : (!vehicle.route ? '경로를 먼저 선택하세요' : '차량타입 선택')}
+                                                    {!vehicleServiceType ? '차량 유형을 먼저 선택하세요' : (!vehicle.car_category ? '이용방식을 먼저 선택하세요' : (!vehicle.route ? '경로를 먼저 선택하세요' : '차량타입 선택'))}
                                                 </option>
                                                 {carTypeOptions.map(carType => (
                                                     <option key={carType} value={carType}>{toVehicleDisplayType(carType)}</option>
