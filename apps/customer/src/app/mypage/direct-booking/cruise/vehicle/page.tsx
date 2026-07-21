@@ -1774,7 +1774,6 @@ function CruiseVehicleContent() {
                                         />
                                         <span>
                                             <span className="block font-semibold">크루즈사 운영 셔틀 리무진</span>
-                                            <span className="block text-xs mt-0.5">선택한 크루즈사의 셔틀 요금으로 예약합니다.</span>
                                         </span>
                                     </label>
                                     <label
@@ -1793,7 +1792,6 @@ function CruiseVehicleContent() {
                                         />
                                         <span>
                                             <span className="block font-semibold">기사 포함 단독 렌트카</span>
-                                            <span className="block text-xs mt-0.5">단독대여 차량만 목록에 표시합니다.</span>
                                         </span>
                                     </label>
                                 </div>
