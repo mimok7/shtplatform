@@ -135,7 +135,7 @@ export const ServiceDetailTable = ({ reservations, totalPrice }: ServiceDetailTa
                                 {reservation.service_type === 'tour' && reservation.service_details && (
                                     <div className="space-y-1 text-xs">
                                         <div><span className="text-gray-500">투어일:</span> <span>{(reservation.service_details as any).tour_date || '-'}</span></div>
-                                        <div><span className="text-gray-500">참가인원:</span> <span>{(reservation.service_details as any).participant_count || 0}명</span></div>
+                                        <div><span className="text-gray-500">참가인원:</span> <span>{(reservation.service_details as any).tour_capacity || (reservation.service_details as any).participant_count || 0}명</span></div>
                                         <div><span className="text-gray-500">투어명:</span> <span>{(reservation.service_details as any).tour_name || '-'}</span></div>
                                         <div><span className="text-gray-500">픽업장소:</span> <span>{(reservation.service_details as any).pickup_location || '-'}</span></div>
                                     </div>
@@ -384,7 +384,7 @@ export const ServiceDetailTable = ({ reservations, totalPrice }: ServiceDetailTa
                                     const vType = p?.vehicle_type || '';
                                     if (vType) descLines.push(`🗺️ 차량: ${vType}`);
                                     const tourUnitPrice = p?.price_per_person || 0;
-                                    const cap = d?.participant_count || d?.tour_capacity || 1;
+                                    const cap = d?.tour_capacity || d?.participant_count || 1;
                                     calcLines.push(`${cap}명 × ${tourUnitPrice.toLocaleString()}동`);
                                     break;
                                 }

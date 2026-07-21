@@ -1379,12 +1379,7 @@ export default function ConfirmationGenerateModal({ isOpen, onClose, quoteId, au
                                                                             <div><span className="text-gray-500">투어일:</span> <span className="font-bold text-gray-900">{formatDate((reservation.service_details as any).tour_date || (reservation.service_details as any).usage_date)}</span></div>
                                                                             <div><span className="text-gray-500">참가인원:</span> <span className="font-bold text-gray-900">{(() => {
                                                                                 const d = reservation.service_details as any;
-                                                                                const parts = [];
-                                                                                if ((d?.adult_count || 0) > 0) parts.push(`성인 ${d.adult_count}명`);
-                                                                                if ((d?.child_count || 0) > 0) parts.push(`아동 ${d.child_count}명`);
-                                                                                if ((d?.infant_count || 0) > 0) parts.push(`유아 ${d.infant_count}명`);
-                                                                                if (parts.length === 0) return `${d?.tour_capacity || d?.participant_count || 0}명`;
-                                                                                return parts.join(', ');
+                                                                                return `${d?.tour_capacity || d?.participant_count || 0}명`;
                                                                             })()}</span></div>
                                                                             <div><span className="text-gray-500">픽업장소:</span> <span className="font-bold text-gray-900">{(reservation.service_details as any).pickup_location || '-'}</span></div>
                                                                             <div><span className="text-gray-500">드랍장소:</span> <span className="font-bold text-gray-900">{(reservation.service_details as any).dropoff_location || '-'}</span></div>
