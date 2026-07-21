@@ -157,7 +157,6 @@ function RentcarReservationContent() {
           setRentcarCount(1);
           setUnitPrice(firstService.price || 0);
 
-          console.log('💰 계산된 총 금액:', (firstService.price || 0), '동');
         }
       }
     } catch (error) {
@@ -244,7 +243,7 @@ function RentcarReservationContent() {
       const mainService = selectedServices[0];
       const additionalServicesNote = selectedServices
         .slice(1)
-        .map(service => `추가 차량: ${service.car_model} - ${service.vehicle_type} (${service.price?.toLocaleString()}동)`)
+        .map(service => `추가 차량: ${service.car_model} - ${service.vehicle_type}`)
         .join('\n');
 
       const fullRequestNote = [
@@ -312,7 +311,7 @@ function RentcarReservationContent() {
           <div className="flex items-center justify-between mb-6">
             <div>
               <h1 className="text-lg font-bold text-gray-800">🚗 렌터카 서비스 예약</h1>
-              <p className="text-sm text-gray-600 mt-1">가격: {quote.title}</p>
+              <p className="text-sm text-gray-600 mt-1">{quote.title}</p>
             </div>
             <button
               onClick={() => router.push('/mypage/direct-booking')}
@@ -356,7 +355,6 @@ function RentcarReservationContent() {
                         >
                           <div className="flex justify-between items-start mb-2">
                             <span className="font-medium text-blue-900">{service.car_model}</span>
-                            <span className="text-blue-600 font-bold">{service.price?.toLocaleString()}동</span>
                           </div>
                           <div className="text-sm text-blue-700">
                             <div>좌석: {service.seats}인승</div>
@@ -366,12 +364,6 @@ function RentcarReservationContent() {
                           </div>
                         </div>
                       ))}
-                      <div className="border-t border-blue-300 pt-3 mt-3">
-                        <div className="flex justify-between font-bold text-blue-800">
-                          <span>총 예상 금액:</span>
-                          <span>{totalPrice.toLocaleString()}동</span>
-                        </div>
-                      </div>
                     </div>
                   </div>
                 )}

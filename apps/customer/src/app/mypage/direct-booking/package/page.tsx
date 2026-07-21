@@ -353,7 +353,7 @@ function PackageBookingContent() {
 
             if (result.success) {
                 console.log('저장된 총액:', result.totalAmount);
-                alert(`패키지 예약 신청이 완료되었습니다!\n총액: ${(result.totalAmount || 0).toLocaleString()}동\n\n※ 신청서 제출 후 24시간 이내에 카카오톡 채널로 연락주지 않으시면, 신청서는 삭제됩니다.\n\n카카오채널 - http://pf.kakao.com/_zvsxaG/chat`);
+                alert(`패키지 예약 신청이 완료되었습니다!\n\n※ 신청서 제출 후 24시간 이내에 카카오톡 채널로 연락주지 않으시면, 신청서는 삭제됩니다.\n\n카카오채널 - http://pf.kakao.com/_zvsxaG/chat`);
                 router.push('/mypage/direct-booking?completed=package');
             } else {
                 console.error('예약 실패:', result.error, result.details);
@@ -491,7 +491,7 @@ function PackageBookingContent() {
                                                                         className="w-3.5 h-3.5 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
                                                                     />
                                                                     <label htmlFor="child-extra-bed" className="text-[11px] font-bold text-gray-600 cursor-pointer">
-                                                                        엑스트라 베드 사용 <span className="text-blue-500 text-[10px] font-black">(6,900,000동)</span>
+                                                                        엑스트라 베드 사용
                                                                     </label>
                                                                 </div>
                                                                 {childOptions.extraBed && (
@@ -527,7 +527,7 @@ function PackageBookingContent() {
                                                                         className="w-3.5 h-3.5 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
                                                                     />
                                                                     <label htmlFor="child-no-extra-bed" className="text-[11px] font-bold text-gray-600 cursor-pointer">
-                                                                        엑스트라 베드 미사용 <span className="text-blue-500 text-[10px] font-black">(5,850,000동)</span>
+                                                                        엑스트라 베드 미사용
                                                                     </label>
                                                                 </div>
                                                                 {childOptions.noExtraBed && (
@@ -642,7 +642,7 @@ function PackageBookingContent() {
                                                                         className="w-3.5 h-3.5 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
                                                                     />
                                                                     <label htmlFor="infant-tour" className="text-[11px] font-bold text-gray-600 cursor-pointer">
-                                                                        신장 1.1m 이상 아동 <span className="text-blue-500 text-[10px] font-black">(900,000동)</span>
+                                                                        신장 1.1m 이상 아동
                                                                     </label>
                                                                 </div>
                                                                 {infantOptions.tour && (
@@ -681,7 +681,7 @@ function PackageBookingContent() {
                                                                             className="w-3.5 h-3.5 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
                                                                         />
                                                                         <label htmlFor="infant-extra-bed" className="text-[11px] font-bold text-gray-600 cursor-pointer">
-                                                                            엑스트라 베드 사용 <span className="text-blue-500 text-[10px] font-black">(4,200,000동)</span>
+                                                                            엑스트라 베드 사용
                                                                         </label>
                                                                     </div>
                                                                     {infantOptions.extraBed && (
@@ -716,7 +716,7 @@ function PackageBookingContent() {
                                                                             className="w-3.5 h-3.5 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
                                                                         />
                                                                         <label htmlFor="infant-seat" className="text-[11px] font-bold text-gray-600 cursor-pointer">
-                                                                            리무진 좌석 <span className="text-blue-500 text-[10px] font-black">(800,000동)</span>
+                                                                            리무진 좌석
                                                                         </label>
                                                                     </div>
                                                                     {infantOptions.seat && (
@@ -801,9 +801,6 @@ function PackageBookingContent() {
                                                     <div className="text-left sm:text-right">
                                                         <div className="text-sm text-gray-500 font-medium mb-1">
                                                             {applicantData.adults}인 기준 성인 단가
-                                                        </div>
-                                                        <div className="text-2xl font-black text-blue-600">
-                                                            {getAdultPrice(pkg, applicantData.adults).toLocaleString()}동
                                                         </div>
                                                     </div>
                                                 </div>
@@ -1219,58 +1216,7 @@ function PackageBookingContent() {
                                     <div className="p-4 bg-blue-50 rounded-2xl border border-blue-100 space-y-3">
                                         <div className="text-sm font-bold text-blue-800">{selectedPackage.name}</div>
 
-                                        {/* Detailed Breakdown */}
-                                        <div className="space-y-1.5 text-xs">
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-gray-500 font-medium">성인 ({getAdultPrice(selectedPackage, applicantData.adults).toLocaleString()}동) x {applicantData.adults}</span>
-                                                <span className="text-blue-600 font-bold">{(applicantData.adults * getAdultPrice(selectedPackage, applicantData.adults)).toLocaleString()}동</span>
-                                            </div>
-                                            {applicantData.childExtraBed > 0 && (
-                                                <div className="flex justify-between items-center">
-                                                    <span className="text-gray-500 font-medium">아동 (엑스트라 베드 사용) ({(selectedPackage.price_child_extra_bed || 6900000).toLocaleString()}동) x {applicantData.childExtraBed}</span>
-                                                    <span className="text-blue-600 font-bold">{(applicantData.childExtraBed * (selectedPackage.price_child_extra_bed || 6900000)).toLocaleString()}동</span>
-                                                </div>
-                                            )}
-                                            {applicantData.childNoExtraBed > 0 && (
-                                                <div className="flex justify-between items-center">
-                                                    <span className="text-gray-500 font-medium">아동 (엑스트라 베드 미사용) ({(selectedPackage.price_child_no_extra_bed || 5850000).toLocaleString()}동) x {applicantData.childNoExtraBed}</span>
-                                                    <span className="text-blue-600 font-bold">{(applicantData.childNoExtraBed * (selectedPackage.price_child_no_extra_bed || 5850000)).toLocaleString()}동</span>
-                                                </div>
-                                            )}
-                                            {applicantData.infantTour > 0 && (
-                                                <div className="flex justify-between items-center">
-                                                    <span className="text-gray-500 font-medium">유아 (투어 포함) ({(selectedPackage.price_infant_tour || 900000).toLocaleString()}동) x {applicantData.infantTour}</span>
-                                                    <span className="text-blue-600 font-bold">{(applicantData.infantTour * (selectedPackage.price_infant_tour || 900000)).toLocaleString()}동</span>
-                                                </div>
-                                            )}
-                                            {applicantData.infantExtraBed > 0 && (
-                                                <div className="flex justify-between items-center">
-                                                    <span className="text-gray-500 font-medium">유아 (엑스트라 베드 사용) ({(selectedPackage.price_infant_extra_bed || 4200000).toLocaleString()}동) x {applicantData.infantExtraBed}</span>
-                                                    <span className="text-blue-600 font-bold">{(applicantData.infantExtraBed * (selectedPackage.price_infant_extra_bed || 4200000)).toLocaleString()}동</span>
-                                                </div>
-                                            )}
-                                            {applicantData.infantSeat > 0 && (
-                                                <div className="flex justify-between items-center">
-                                                    <span className="text-gray-500 font-medium">유아 (리무진 좌석) ({(selectedPackage.price_infant_seat || 800000).toLocaleString()}동) x {applicantData.infantSeat}</span>
-                                                    <span className="text-blue-600 font-bold">{(applicantData.infantSeat * (selectedPackage.price_infant_seat || 800000)).toLocaleString()}동</span>
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        <div className="pt-3 border-t border-blue-200 flex justify-between items-end">
-                                            <span className="text-sm font-bold text-gray-600">총 결제 예정</span>
-                                            <div className="text-right">
-                                                <div className="text-xl font-black text-blue-600">
-                                                    {((applicantData.adults * getAdultPrice(selectedPackage, applicantData.adults)) +
-                                                        (applicantData.childExtraBed * (selectedPackage.price_child_extra_bed || 6900000)) +
-                                                        (applicantData.childNoExtraBed * (selectedPackage.price_child_no_extra_bed || 5850000)) +
-                                                        (applicantData.infantTour * (selectedPackage.price_infant_tour || 900000)) +
-                                                        (applicantData.infantExtraBed * (selectedPackage.price_infant_extra_bed || 4200000)) +
-                                                        (applicantData.infantSeat * (selectedPackage.price_infant_seat || 800000))
-                                                    ).toLocaleString()}동
-                                                </div>
-                                            </div>
-                                        </div>
+                                        <p className="text-xs text-gray-500">예약 세부 금액은 신청 후 안내드립니다.</p>
                                     </div>
                                 </div>
                             ) : (

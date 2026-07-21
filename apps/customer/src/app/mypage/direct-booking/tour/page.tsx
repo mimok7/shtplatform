@@ -483,7 +483,6 @@ function TourDirectBookingContent() {
                                             className={`text-xs p-3 rounded transition-all cursor-pointer hover:shadow-md ${guestCount >= p.min_guests && guestCount <= p.max_guests ? 'bg-blue-500 border-2 border-blue-600 font-bold text-white shadow-md' : 'bg-white border border-gray-300 text-gray-700 hover:border-blue-300'}`}
                                         >
                                             <div className="font-semibold">{p.min_guests === p.max_guests ? `${p.min_guests}명` : `${p.min_guests}-${p.max_guests}명`}</div>
-                                            <div className={guestCount >= p.min_guests && guestCount <= p.max_guests ? 'text-blue-100' : 'text-blue-600'}>{Number(p.price_per_person).toLocaleString()}동/인</div>
                                             {p.vehicle_type && <div className={`text-xs mt-1 ${guestCount >= p.min_guests && guestCount <= p.max_guests ? 'text-blue-100' : 'text-gray-400'}`}>{p.vehicle_type}</div>}
                                         </button>
                                     ))}
@@ -500,8 +499,6 @@ function TourDirectBookingContent() {
                                         <button key={pp.payment_method} type="button" onClick={() => setSelectedPaymentMethod(pp.payment_method)}
                                             className={`px-4 py-3 rounded-lg font-medium transition-all text-sm ${selectedPaymentMethod === pp.payment_method ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border'}`}>
                                             <div>{paymentMethodLabel(pp.payment_method)}</div>
-                                            <div className="text-xs mt-1">{Number(pp.price).toLocaleString()}동</div>
-                                            {pp.price_adjustment && <div className={`text-xs ${selectedPaymentMethod === pp.payment_method ? 'text-green-200' : 'text-green-600'}`}>({pp.price_adjustment > 0 ? '+' : ''}{Number(pp.price_adjustment).toLocaleString()}동)</div>}
                                         </button>
                                     ))}
                                 </div>
@@ -591,7 +588,7 @@ function TourDirectBookingContent() {
                                                     className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                                 >
                                                     <option value="선택안함">선택안함</option>
-                                                    <option value="선택 (추가비용 50만동)">선택 (추가비용 50만동)</option>
+                                                    <option value="선택 (추가비용)">선택 (추가비용)</option>
                                                 </select>
                                             </div>
                                         </div>
@@ -632,7 +629,6 @@ function TourDirectBookingContent() {
                                     <div><strong>참가 인원:</strong> {guestCount}명</div>
                                     {matchedPricing?.vehicle_type && <div><strong>차량:</strong> {matchedPricing.vehicle_type}</div>}
                                     {selectedPaymentMethod && <div><strong>결제방식:</strong> {paymentMethodLabel(selectedPaymentMethod)}</div>}
-                                    <div><strong>1인당 가격:</strong> {finalPrice.toLocaleString()}동</div>
                                     <div><strong>투어 날짜:</strong> {new Date(formData.tour_date).toLocaleDateString('ko-KR')}</div>
                                     {formData.pickup_location && <div><strong>픽업:</strong> {formData.pickup_location}</div>}
                                     {formData.dropoff_location && <div><strong>하차:</strong> {formData.dropoff_location}</div>}

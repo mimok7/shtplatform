@@ -402,7 +402,6 @@ function HotelReservationContent() {
                                     >
                                         <div className="flex justify-between items-start mb-2">
                                             <span className="font-medium text-gray-800">{service.hotel_name}</span>
-                                            <span className="text-orange-600 font-bold">{service.price?.toLocaleString()}동</span>
                                         </div>
                                         <div className="text-sm text-gray-600 space-y-1">
                                             <div>객실: {service.room_name}</div>

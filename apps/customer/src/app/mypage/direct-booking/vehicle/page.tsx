@@ -252,7 +252,7 @@ function DirectBookingVehicleContent() {
             // 추가 서비스 정보를 request_note에 포함
             const additionalServicesNote = selectedServices
                 .filter(service => service.car_code !== vehicleData.priceInfo.car_code)
-                .map(service => `추가 차량: ${service.car_type} - ${service.route} (${service.price?.toLocaleString()}동)`)
+                .map(service => `추가 차량: ${service.car_type} - ${service.route}`)
                 .join('\n');
 
             const fullRequestNote = [
@@ -484,7 +484,6 @@ function DirectBookingVehicleContent() {
                                                     >
                                                         <div className="flex justify-between items-start mb-2">
                                                             <span className="font-medium">{service.car_type}</span>
-                                                            <span className="text-red-600 font-bold">{service.price?.toLocaleString()}동</span>
                                                         </div>
                                                         <div className="text-sm text-gray-600">
                                                             <div>노선: {service.route}</div>
@@ -503,17 +502,8 @@ function DirectBookingVehicleContent() {
                                         <h4 className="text-md font-medium text-yellow-800 mb-2">✅ 선택된 차량</h4>
                                         <div className="space-y-2">
                                             {selectedServices.map((service, index) => (
-                                                <div key={index} className="flex justify-between text-sm">
-                                                    <span>{service.car_type} - {service.route}</span>
-                                                    <span className="font-medium">{(service.price * quoteForm.passenger_count)?.toLocaleString()}동</span>
-                                                </div>
+                                                <div key={index} className="text-sm">{service.car_type} - {service.route}</div>
                                             ))}
-                                            <div className="border-t border-yellow-300 pt-2 mt-2">
-                                                <div className="flex justify-between font-bold text-red-600">
-                                                    <span>총 예상 금액 ({quoteForm.passenger_count}명):</span>
-                                                    <span>{totalPrice.toLocaleString()}동</span>
-                                                </div>
-                                            </div>
                                         </div>
                                     </div>
                                 )}
@@ -575,16 +565,9 @@ function DirectBookingVehicleContent() {
                                                 <span className="text-gray-600">차량: <span className="font-medium text-gray-800">{service.car_type}</span></span>
                                                 <span className="text-gray-600">노선: <span className="font-medium text-gray-800">{service.route}</span></span>
                                                 <span className="text-gray-600">좌석: <span className="font-medium text-gray-800">{service.seats}인승</span></span>
-                                                <span className="text-gray-600">가격: <span className="font-medium text-red-600">{service.price?.toLocaleString()}동</span></span>
                                             </div>
                                         </div>
                                     ))}
-                                    <div className="bg-yellow-100 p-3 rounded border border-yellow-300">
-                                        <div className="flex justify-between font-bold text-red-600">
-                                            <span>총 예상 금액 ({quoteForm.passenger_count}명):</span>
-                                            <span>{totalPrice.toLocaleString()}동</span>
-                                        </div>
-                                    </div>
                                 </div>
                             </div>
 

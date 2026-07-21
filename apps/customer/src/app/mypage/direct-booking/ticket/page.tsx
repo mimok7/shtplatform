@@ -885,7 +885,6 @@ function TicketBookingContent() {
                                     <div className="flex flex-col gap-3">
                                         <h4 className="text-sm font-medium text-gray-800">🚐 셔틀 차량 추가</h4>
                                         <p className="text-xs text-gray-600">하롱 국제 선착장에서 승/하차</p>
-                                        <p className="text-sm font-semibold text-blue-600">*1인당 25만동</p>
                                         <div className="flex gap-2 justify-center">
                                             <button
                                                 type="button"
@@ -1027,7 +1026,7 @@ function TicketBookingContent() {
                                         </>
                                     )}
                                     <div><strong>이용 날짜:</strong> {new Date(formData.ticket_date).toLocaleDateString('ko-KR')}</div>
-                                    {ticketType === 'dragon' && <div><strong>셔틀 차량:</strong> {formData.shuttle_required ? '신청함 (1인당 25만동)' : '신청 안함'}</div>}
+                                    {ticketType === 'dragon' && <div><strong>셔틀 차량:</strong> {formData.shuttle_required ? '신청함' : '신청 안함'}</div>}
                                     {ticketType === 'dragon' && formData.pickup_location && <div><strong>픽업:</strong> {formData.pickup_location}</div>}
                                     {ticketType === 'dragon' && formData.dropoff_location && <div><strong>하차:</strong> {formData.dropoff_location}</div>}
                                     {ticketType === 'other' && formData.ticket_details && <div><strong>상세 내용:</strong> {formData.ticket_details}</div>}

@@ -793,7 +793,7 @@ function DirectBookingContent() {
                                         </li>
                                         <li className="flex gap-2">
                                             <span>∙</span>
-                                            <span>이용하시는 일자, 승차 인원이 4인인 경우 1인당 20만동의 추가 요금이 발생합니다.</span>
+                                            <span>이용하시는 일자와 승차 인원에 따라 추가 요금이 발생할 수 있습니다.</span>
                                         </li>
                                         <li className="flex gap-2">
                                             <span>∙</span>
@@ -1043,7 +1043,7 @@ function DirectBookingContent() {
                                 <div>
                                     <h4 className="font-bold text-gray-800 mb-1">2. 차량 픽업의 위치</h4>
                                     <p>렌트카는 도시에서 도시간의 이동금액으로 계산 되므로 셔틀차량처럼 서호, 미딩 등의 추가요금 등이 발생하지 않습니다.<br />
-                                        다만 리무진차량의 경우 공항에서 픽업이나 드랍인 경우 공항세 등으로 인해 50만동의 추가금액이 발생합니다.<br />
+                                        다만 리무진차량의 경우 공항에서 픽업이나 드랍인 경우 공항세 등으로 인해 추가금액이 발생할 수 있습니다.<br />
                                         만약 차량 승차위치가 주말 차 없는 거리에 속하는 경우, 차량이 최대한 가까운 위치에 도착하여 대기하며,<br />
                                         스테이하롱이 차량이 대기중인 위치를 구글지도로 고객님께 전달 드립니다.<br />
                                         픽업위치의 변경은 승차 하루 전, 베트남 시간 기준 12:00 정오까지만 가능하며, 이후에는 변경이 불가합니다.</p>
@@ -1068,9 +1068,9 @@ function DirectBookingContent() {
                                         - 크루즈 승선을 위한 픽업차량 지연 : 스테이하롱이 크루즈 승선을 100% 보장하여 드립니다.<br />
                                         - 하선 후 드랍차량의 픽업지연 : 통상적인 픽업시간인 11시 ~ 11시 30분을 기준으로 하며<br />
                                         &nbsp;&nbsp;&nbsp;11시 30분 이후 도착을 지연도착의 기준으로 합니다.<br />
-                                        &nbsp;&nbsp;&nbsp;11시 30분을 기준으로 차량도착 지연 10분마다 10만동의 보상금을 적용합니다.<br />
+                                        &nbsp;&nbsp;&nbsp;11시 30분을 기준으로 차량도착 지연 시 보상금을 적용합니다.<br />
                                         - 기타 지역에서의 픽업지연 : 차량승차 예정시간에서 15분까지는 별도의 보상금이 적용되지 않습니다.<br />
-                                        &nbsp;&nbsp;&nbsp;최대 15분 이상 부터 지연 10분마다 5만동의 보상금을 적용합니다.</p>
+                                        &nbsp;&nbsp;&nbsp;최대 15분 이상 지연 시 보상금을 적용합니다.</p>
                                 </div>
                                 <div>
                                     <h4 className="font-bold text-gray-800 mb-1">6. 차량 이용 중 상해발생에 따른 보상</h4>
@@ -1097,7 +1097,7 @@ function DirectBookingContent() {
                                         차량이 고객님이 계신곳으로 이동하기 어려운 경우, 분실물이 차량에서 확인되면 그랩,택시 등을 이용하여<br />
                                         고객님이 계신 곳으로 보내드리고 이때 발생하는 비용은 고객님께서 부담 해 주셔야 합니다.<br />
                                         렌트카 차량이 고객님이 계신곳으로 이동이 가능한 경우에도<br />
-                                        이동비용 등을 고려하여 10만동 ~ 30만동 정도의 금액이 청구될 수 있으므로<br />
+                                        이동비용 등을 고려한 추가 금액이 청구될 수 있으므로<br />
                                         차량 하차전에 반드시 앉으셨던 자리에 빠진 것이 없는지 확인하시는 것이 좋습니다.</p>
                                 </div>
                                 <div>
@@ -1183,7 +1183,7 @@ function DirectBookingContent() {
                                     </h3>
                                     <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg">
                                         <ul className="space-y-1.5 ml-4 text-gray-700 mb-4">
-                                            <li>· 이용일자 15일 전 까지 : 15만동 위약금 발생</li>
+                                            <li>· 이용일자 15일 전 까지 : 위약금 발생</li>
                                             <li>· 이용일자 14일전 부터 : 취소 및 환불, 날짜변경 불가</li>
                                         </ul>
                                         <p className="text-gray-700 leading-relaxed">
@@ -1281,7 +1281,7 @@ function DirectBookingContent() {
                                     </div>
                                     <div className="flex gap-2">
                                         <span className="text-blue-600 font-bold shrink-0">✓</span>
-                                        <span>본 상품의 예약금은 1인당 50만동 입니다.</span>
+                                        <span>본 상품의 예약금은 예약 후 안내드립니다.</span>
                                     </div>
                                     <div className="flex gap-2">
                                         <span className="text-blue-600 font-bold shrink-0">✓</span>
@@ -1314,7 +1314,7 @@ function DirectBookingContent() {
                                         <span className="text-blue-600">✓</span> 취소규정
                                     </p>
                                     <ul className="space-y-1.5 ml-4 text-gray-700">
-                                        <li>· 투어일자 15일 전 취소 시 : 위약금 100만동</li>
+                                        <li>· 투어일자 15일 전 취소 시 : 위약금 발생</li>
                                         <li>· 투어일자 6일 - 14일 전 사이 취소 시 : 예약금의 50% 위약금</li>
                                         <li>· 투어일자 5일 전 부터는 취소,환불 불가입니다.</li>
                                     </ul>
@@ -1427,8 +1427,8 @@ function DirectBookingContent() {
                                         <span className="text-teal-600">✓</span> 취소 규정
                                     </p>
                                     <ul className="space-y-1.5 ml-2 text-gray-700">
-                                        <li>· 부킹 바우쳐, 코드 발급 전 까지 : 1인당 5만동의 취소 수수료 발생</li>
-                                        <li>· 바우쳐 발급 후 이용일자 31일 전 까지 : 1인당 10만동의 취소 수수료 발생</li>
+                                        <li>· 부킹 바우쳐, 코드 발급 전 까지 : 취소 수수료 발생</li>
+                                        <li>· 바우쳐 발급 후 이용일자 31일 전 까지 : 취소 수수료 발생</li>
                                         <li>· 이용일자 21일전 부터 30일 전 까지 : 15% 위약금 발생</li>
                                         <li>· 이용일자 11일 전 부터 20일 전 까지 : 25% 위약금 발생</li>
                                         <li>· 이용일자 10일 전 부터 : 취소 및 환불, 날짜변경 불가</li>

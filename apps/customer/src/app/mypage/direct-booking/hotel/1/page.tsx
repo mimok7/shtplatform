@@ -563,7 +563,6 @@ function NewHotelQuoteContent() {
                                         <div><strong>체크아웃:</strong> {new Date(formData.checkout_date).toLocaleDateString('ko-KR')}</div>
                                         <div><strong>호텔:</strong> {selectedHotelName}</div>
                                         <div><strong>객실:</strong> {selectedRoomName} - {selectedRoomType}</div>
-                                        <div><strong>1박 요금:</strong> {parseInt(selectedHotel?.price || '0').toLocaleString()}동</div>
                                         {selectedHotelCode && (
                                             <div className="pt-2 border-t border-green-200">
                                                 <strong>🔍 선택된 호텔 코드:</strong> <span className="bg-yellow-100 px-2 py-1 rounded font-mono text-sm">{selectedHotelCode}</span>

@@ -683,13 +683,6 @@ function DirectBookingAirportContent() {
                             </select>
                         </div>
                     </div>
-                    {price1 !== null && (
-                        <div className="mt-4 p-3 bg-green-50 rounded-lg">
-                            <p className="text-sm text-green-700">
-                                💰 예상 가격: <strong>{price1.toLocaleString()}동</strong>
-                            </p>
-                        </div>
-                    )}
                   </div>
                 </div>
 
@@ -741,13 +734,6 @@ function DirectBookingAirportContent() {
                             </div>
                         </div>
 
-                        {price2 !== null && (
-                            <div className="mt-4 p-3 bg-green-50 rounded-lg">
-                                <p className="text-sm text-green-700">
-                                    💰 예상 가격: <strong>{price2.toLocaleString()}동</strong>
-                                </p>
-                            </div>
-                        )}
                       </div>
                     </div>
                 )}

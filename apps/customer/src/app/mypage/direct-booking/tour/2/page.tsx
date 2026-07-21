@@ -158,7 +158,6 @@ function TourReservationContent() {
                     setTourCount(1);
                     setUnitPrice(firstService.price || 0);
 
-                    console.log('💰 계산된 총 금액:', (firstService.price || 0), '동');
 
                     // 투어 날짜를 폼에 설정 (1단계에서 설정한 날짜 사용)
                     if (quoteItems[0]?.usage_date) {
@@ -174,7 +173,7 @@ function TourReservationContent() {
         }
     };
 
-    // 총 금액 계산
+    // 선택 서비스 합계 계산
     const totalPrice = selectedServices.reduce((sum, service) => sum + (service.price || 0), 0);
 
     // 예약 처리
@@ -322,7 +321,6 @@ function TourReservationContent() {
                                         >
                                             <div className="flex justify-between items-start mb-2">
                                                 <span className="font-medium text-purple-900">{service.tour_name}</span>
-                                                <span className="text-purple-600 font-bold">{service.price?.toLocaleString()}동</span>
                                             </div>
                                             <div className="text-sm text-purple-700">
                                                 <div>정원: {service.tour_capacity}명</div>
@@ -332,12 +330,6 @@ function TourReservationContent() {
                                             </div>
                                         </div>
                                     ))}
-                                    <div className="border-t border-purple-300 pt-3 mt-3">
-                                        <div className="flex justify-between font-bold text-purple-800">
-                                            <span>총 예상 금액:</span>
-                                            <span>{totalPrice.toLocaleString()}동</span>
-                                        </div>
-                                    </div>
                                 </div>
                             </div>
                         )}

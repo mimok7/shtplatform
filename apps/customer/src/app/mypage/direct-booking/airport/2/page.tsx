@@ -392,7 +392,6 @@ function AirportServiceContent() {
                                     >
                                         <div className="flex justify-between items-start mb-2">
                                             <span className="font-medium text-gray-800">{service.airport_category}</span>
-                                            <span className="text-blue-600 font-bold">{service.price?.toLocaleString()}동</span>
                                         </div>
                                         <div className="text-sm text-gray-600 space-y-1">
                                             <div>경로: {service.airport_route}</div>
@@ -417,7 +416,6 @@ function AirportServiceContent() {
                                     >
                                         <div className="flex justify-between items-start mb-2">
                                             <span className="font-medium text-gray-800">{service.airport_category}</span>
-                                            <span className="text-green-600 font-bold">{service.price?.toLocaleString()}동</span>
                                         </div>
                                         <div className="text-sm text-gray-600 space-y-1">
                                             <div>경로: {service.airport_route}</div>
