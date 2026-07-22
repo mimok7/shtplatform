@@ -73,7 +73,6 @@ import React, { useState, useEffect } from 'react';
 import ManagerLayout from '../../../components/ManagerLayout';
 import supabase from '../../../lib/supabase';
 import { fetchTableInBatches, fetchServiceByReservationIds } from '../../../lib/fetchInBatches';
-import { buildServiceMap } from '../../../lib/serviceMaps';
 import {
     openCentralReservationDetailModal,
     setCentralReservationDetailModalLoading,
@@ -118,6 +117,7 @@ export default function ManagerServiceTablesPage() {
     const [serviceData, setServiceData] = useState<ServiceData[]>([]);
     const [loading, setLoading] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
+    const [searchColumn, setSearchColumn] = useState('all');
     const [loadError, setLoadError] = useState<string | null>(null);
     const [selectedItem, setSelectedItem] = useState<ServiceData | null>(null);
     const [currentUserEmail, setCurrentUserEmail] = useState('');
@@ -379,6 +379,11 @@ export default function ManagerServiceTablesPage() {
         loadServiceData(activeTab);
     }, [activeTab, period]);
 
+    useEffect(() => {
+        setSearchColumn('all');
+        setSearchTerm('');
+    }, [activeTab]);
+
     // 객실 가격 테이블(cruise_rate_card)에서 객실명, 크루즈, 객실타입 맵 로드
     // 모든 가격 맵을 한 번에 병렬로 로드 (성능 최적화)
     useEffect(() => {
@@ -460,6 +465,30 @@ export default function ManagerServiceTablesPage() {
         fetchAllPriceMaps();
     }, []);
 
+    const getSearchText = (row: ServiceData, columnKey: string) => {
+        const roomCode = row.room_price_code;
+        const airportCode = row.airport_price_code;
+        const tourCode = row.tour_price_code;
+        const carCode = row.car_price_code;
+        const valueByColumn: Record<string, any> = {
+            cruise_name: roomPriceMap[roomCode]?.cruise || '미지정',
+            room_type_name: roomPriceMap[roomCode]?.room_type || '미지정',
+            room_name: roomPriceMap[roomCode]?.name || '미지정',
+            car_type_name: carPriceMap[carCode]?.car_type || '미지정',
+            service_type: airportPriceMap[airportCode]?.category || '미지정',
+            route: airportPriceMap[airportCode]?.route || '미지정',
+            vehicle_type: airportPriceMap[airportCode]?.car_type || '미지정',
+            tour_name: tourPriceStateMap[tourCode]?.tour_name || tourPriceStateMap[tourCode]?.tour_type || '미지정',
+            package_name: packageMasterMap[row.package_id]?.name || '미지정',
+            'reservation.users.name': row.reservation?.users?.name,
+            'reservation.users.email': row.reservation?.users?.email,
+            'reservation.re_status': row.reservation?.re_status,
+            'reservation.re_id': row.reservation?.re_id,
+        };
+        if (columnKey in valueByColumn) return String(valueByColumn[columnKey] || '');
+        return String(row[columnKey] ?? '');
+    };
+
     // 검색 필터링
     const filteredData = serviceData.filter(item => {
         if (activeTab === 'sht_car') {
@@ -474,13 +503,14 @@ export default function ManagerServiceTablesPage() {
         if (!searchTerm) return true;
 
         const searchLower = searchTerm.toLowerCase();
-        const userName = item.reservation?.users?.name?.toLowerCase() || '';
-        const userEmail = item.reservation?.users?.email?.toLowerCase() || '';
-        const reservationId = item.reservation?.re_id?.toLowerCase() || '';
+        const columns = getTableColumns(activeTab);
+        const searchableColumns = searchColumn === 'all'
+            ? columns
+            : columns.filter(column => column.key === searchColumn);
 
-        return userName.includes(searchLower) ||
-            userEmail.includes(searchLower) ||
-            reservationId.includes(searchLower);
+        return searchableColumns.some(column =>
+            getSearchText(item, column.key).toLowerCase().includes(searchLower)
+        );
     });
 
     // 크루즈 체크인별 그룹화 함수 (오늘 이후만)
@@ -512,7 +542,7 @@ export default function ManagerServiceTablesPage() {
 
     // 크루즈 탭일 때만 그룹화 데이터 사용
     const isCruiseTab = activeTab === 'cruise';
-    const groupedCruise = isCruiseTab ? groupCruiseByCheckin(serviceData) : [];
+    const groupedCruise = isCruiseTab ? groupCruiseByCheckin(filteredData) : [];
 
     // 서비스별 테이블 컬럼 정의
     const getTableColumns = (serviceType: string) => {
@@ -522,7 +552,6 @@ export default function ManagerServiceTablesPage() {
                     { key: 'reservation.users.name', label: '고객명', width: 'w-32' },
                     { key: 'reservation.users.email', label: '이메일', width: 'w-48' },
                     { key: 'checkin', label: '체크인', width: 'w-32', type: 'date' },
-                    { key: 'room_price_code', label: '객실코드', width: 'w-32' },
                     { key: 'cruise_name', label: '크루즈', width: 'w-40' }, // 크루즈명
                     { key: 'room_type_name', label: '객실타입', width: 'w-40' }, // 객실타입명
                     { key: 'room_name', label: '구분', width: 'w-40' }, // 객실명 추가
@@ -534,7 +563,6 @@ export default function ManagerServiceTablesPage() {
                 return [
                     { key: 'reservation.users.name', label: '고객명', width: 'w-32' },
                     { key: 'reservation.users.email', label: '이메일', width: 'w-48' },
-                    { key: 'car_price_code', label: '차량코드', width: 'w-32' },
                     { key: 'car_type_name', label: '차량명', width: 'w-32' }, // 차량명(차량타입) 추가
                     { key: 'pickup_location', label: '픽업장소', width: 'w-40' },
                     { key: 'dropoff_location', label: '드롭장소', width: 'w-40' },
@@ -557,7 +585,6 @@ export default function ManagerServiceTablesPage() {
                 return [
                     { key: 'reservation.users.name', label: '고객명', width: 'w-32' },
                     { key: 'reservation.users.email', label: '이메일', width: 'w-48' },
-                    { key: 'airport_price_code', label: '코드', width: 'w-32' }, // 공항 가격 코드 추가
                     { key: 'service_type', label: '구분', width: 'w-24' }, // 서비스타입
                     { key: 'route', label: '경로', width: 'w-40' },   // 경로
                     { key: 'vehicle_type', label: '차량', width: 'w-32' }, // 차량타입
@@ -583,7 +610,7 @@ export default function ManagerServiceTablesPage() {
                 return [
                     { key: 'reservation.users.name', label: '고객명', width: 'w-32' },
                     { key: 'reservation.users.email', label: '이메일', width: 'w-48' },
-                    { key: 'tour_price_code', label: '투어코드', width: 'w-32' },
+                    { key: 'tour_name', label: '투어명', width: 'w-40' },
                     { key: 'tour_capacity', label: '참가인원', width: 'w-24' },
                     { key: 'pickup_location', label: '픽업장소', width: 'w-40' },
                     { key: 'usage_date', label: '사용일자', width: 'w-32', type: 'date' },
@@ -648,7 +675,7 @@ export default function ManagerServiceTablesPage() {
         // 패키지 서비스 매핑
         if (columnKey === 'package_name') {
             const pkgId = row?.package_id;
-            return pkgId && packageMasterMap[pkgId] ? packageMasterMap[pkgId].name : (row?.package_code || '-');
+            return pkgId && packageMasterMap[pkgId] ? packageMasterMap[pkgId].name : '미지정';
         }
 
         // 공항 서비스 매핑 - airport_price_code로 airport_price 테이블 검색
@@ -663,6 +690,12 @@ export default function ManagerServiceTablesPage() {
         if (columnKey === 'vehicle_type') {
             const code = row?.airport_price_code;
             return code && airportPriceMap[code] ? airportPriceMap[code].car_type : '-';
+        }
+        if (columnKey === 'tour_name') {
+            const code = row?.tour_price_code;
+            return code && tourPriceStateMap[code]
+                ? tourPriceStateMap[code].tour_name || tourPriceStateMap[code].tour_type || '미지정'
+                : '미지정';
         }
         if (columnKey === 'way_type') {
             const way = String(value || '').toLowerCase();
@@ -705,9 +738,9 @@ export default function ManagerServiceTablesPage() {
             const code = row?.room_price_code;
             if (!code) return '미지정';
             if (roomPriceMap[code]) {
-                if (columnKey === 'cruise_name') return roomPriceMap[code].cruise || code;
-                if (columnKey === 'room_type_name') return roomPriceMap[code].room_type || code;
-                if (columnKey === 'room_name') return roomPriceMap[code].name || code;
+                if (columnKey === 'cruise_name') return roomPriceMap[code].cruise || '미지정';
+                if (columnKey === 'room_type_name') return roomPriceMap[code].room_type || '미지정';
+                if (columnKey === 'room_name') return roomPriceMap[code].name || '미지정';
             }
             // 동적으로 fallback fetch (비동기)
             // SSR/CSR 환경에 따라 Promise 반환 허용 (UI에서 await 처리 필요)
@@ -719,7 +752,7 @@ export default function ManagerServiceTablesPage() {
                     setRoomPriceMap(prev => ({ ...prev, [code]: fallback }));
                 });
             }
-            return code;
+            return '미지정';
         }
 
         if (!value && value !== 0) return '-';
@@ -791,14 +824,14 @@ export default function ManagerServiceTablesPage() {
             const code = item.room_price_code;
             const cruiseName = code && roomPriceMap[code]?.cruise;
             const roomType = code && roomPriceMap[code]?.room_type;
-            title = [cruiseName, roomType].filter(Boolean).join(' / ') || (code || '크루즈');
+            title = [cruiseName, roomType].filter(Boolean).join(' / ') || '크루즈';
             sub = (code && roomPriceMap[code]?.name) || '';
             whenStr = item.checkin ? new Date(item.checkin).toLocaleDateString('ko-KR') : '';
             extra = item.room_total_price ? `${item.room_total_price.toLocaleString()}동` : null;
         } else if (serviceType === 'cruise_car') {
             const code = item.car_price_code;
             const carType = code && carPriceMap[code]?.car_type;
-            title = carType || (code || '차량');
+            title = carType || '차량';
             sub = [item.pickup_location, item.dropoff_location].filter(Boolean).join(' → ');
             whenStr = item.pickup_datetime ? new Date(item.pickup_datetime).toLocaleString('ko-KR') : '';
             extra = item.unit_price ? `${item.unit_price.toLocaleString()}동` : null;
@@ -850,7 +883,7 @@ export default function ManagerServiceTablesPage() {
             extra = [item.passenger_count ? `${item.passenger_count}명` : null, item.total_price ? `${item.total_price.toLocaleString()}동` : null].filter(Boolean).join(' · ') || null;
         } else if (serviceType === 'package') {
             const pkgId = item.package_id;
-            title = (pkgId && packageMasterMap[pkgId]?.name) || item.package_code || '패키지';
+            title = (pkgId && packageMasterMap[pkgId]?.name) || '패키지';
             sub = `인원: ${[item.re_adult_count ? `성인 ${item.re_adult_count}` : null, item.re_child_count ? `아동 ${item.re_child_count}` : null].filter(Boolean).join(' ')}`;
             whenStr = item.re_created_at ? new Date(item.re_created_at).toLocaleDateString('ko-KR') : '';
             extra = item.total_amount ? `${item.total_amount.toLocaleString()}동` : null;
@@ -1428,7 +1461,7 @@ export default function ManagerServiceTablesPage() {
                 reservation.service_details = {
                     package_id: item.package_id,
                     package_code: item.package_code,
-                    package_name: (item.package_id && packageMasterMap[item.package_id]?.name) || item.package_code || '패키지',
+                    package_name: (item.package_id && packageMasterMap[item.package_id]?.name) || '미지정',
                     re_adult_count: item.re_adult_count,
                     re_child_count: item.re_child_count,
                     re_infant_count: item.re_infant_count,
@@ -1591,6 +1624,32 @@ export default function ManagerServiceTablesPage() {
                                 <span className="ml-2">{tab.label}</span>
                             </button>
                         ))}
+                    </div>
+                </div>
+
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <label htmlFor="service-search-column" className="text-sm font-medium text-gray-700">조회 컬럼</label>
+                    <select
+                        id="service-search-column"
+                        value={searchColumn}
+                        onChange={(event) => setSearchColumn(event.target.value)}
+                        className="min-h-10 border border-gray-300 bg-white px-3 text-sm text-gray-800"
+                    >
+                        <option value="all">전체 컬럼</option>
+                        {getTableColumns(activeTab).map((column) => (
+                            <option key={column.key} value={column.key}>{column.label}</option>
+                        ))}
+                    </select>
+                    <label htmlFor="service-search" className="sr-only">서비스 조회어</label>
+                    <div className="relative flex-1">
+                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                        <input
+                            id="service-search"
+                            value={searchTerm}
+                            onChange={(event) => setSearchTerm(event.target.value)}
+                            placeholder={`${searchColumn === 'all' ? '전체 컬럼' : getTableColumns(activeTab).find(column => column.key === searchColumn)?.label || '선택 컬럼'}으로 조회`}
+                            className="min-h-10 w-full border border-gray-300 bg-white py-2 pl-9 pr-3 text-sm text-gray-800 outline-none focus:border-teal-700 focus:ring-2 focus:ring-[#d9ff72]"
+                        />
                     </div>
                 </div>
 

@@ -63,6 +63,7 @@ export default function ManagerSidebar({ activeTab, userEmail, onLogout, userRol
     if (pathname.startsWith('/manager/promotions')) return 'promotions';
     if (pathname.startsWith('/manager/quote-bulk-delete')) return 'quote-bulk-delete';
     if (pathname.startsWith('/manager/settings')) return 'settings';
+    if (pathname.startsWith('/manager/service-tables')) return 'service-tables';
     return null;
   })();
 
@@ -276,6 +277,13 @@ export default function ManagerSidebar({ activeTab, userEmail, onLogout, userRol
                 path="/manager/quote-bulk-delete"
                 isActive={isActiveTab('quote-bulk-delete')}
                 onClick={() => handleNavigation('/manager/quote-bulk-delete')}
+              />
+              <NavItem
+                icon="🔍"
+                label="서비스별 조회"
+                path="/manager/service-tables"
+                isActive={isActiveTab('service-tables')}
+                onClick={() => handleNavigation('/manager/service-tables')}
               />
               <NavItem
                 icon="🛠️"
