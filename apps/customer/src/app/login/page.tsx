@@ -50,10 +50,6 @@ export default function LoginPage() {
 
   // 비밀번호 찾기
   const [showForgot, setShowForgot] = useState(false);
-  const [forgotName, setForgotName] = useState('');
-  const [forgotEmail, setForgotEmail] = useState('');
-  const [forgotLoading, setForgotLoading] = useState(false);
-  const [forgotMessage, setForgotMessage] = useState<string | null>(null);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -119,32 +115,6 @@ export default function LoginPage() {
     }
   };
 
-  const handleForgotPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!forgotName.trim() || !forgotEmail.trim()) {
-      setForgotMessage('이름과 이메일을 모두 입력해 주세요.');
-      return;
-    }
-    setForgotLoading(true);
-    setForgotMessage(null);
-    try {
-      const res = await fetch('/api/reset-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: forgotName.trim(), email: forgotEmail.trim() }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json?.error || '요청 실패');
-      setForgotMessage('입력하신 정보로 이메일이 발송되었습니다. 받은 편지함을 확인해 주세요.\n(스팸 폴더도 확인 부탁드립니다.)');
-      setForgotName('');
-      setForgotEmail('');
-    } catch (err: any) {
-      setForgotMessage(err?.message || '오류가 발생했습니다.');
-    } finally {
-      setForgotLoading(false);
-    }
-  };
-
   return (
     <div className="max-w-md mx-auto mt-8 px-3 py-6">
       {/* 로고 */}
@@ -202,52 +172,17 @@ export default function LoginPage() {
           신규 가입
         </button>
         <button
-          onClick={() => setShowForgot(!showForgot)}
+          onClick={() => setShowForgot(true)}
           className="text-slate-500 hover:text-slate-700"
         >
           비밀번호를 잊으셨나요?
         </button>
       </div>
 
-      {/* 비밀번호 찾기 폼 */}
+      {/* 비밀번호 찾기 안내 */}
       {showForgot && (
         <div className="mt-6 bg-slate-50 border border-slate-200 rounded-lg p-4">
-          <h3 className="text-sm font-semibold text-slate-900 mb-3">임시 비밀번호 발송</h3>
-          <form onSubmit={handleForgotPassword} className="space-y-2.5">
-            <div>
-              <input
-                type="text"
-                placeholder="이름 (예약 시 입력한 이름)"
-                className="w-full border border-slate-200 px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={forgotName}
-                onChange={(e) => setForgotName(e.target.value)}
-                required
-              />
-            </div>
-            <div>
-              <input
-                type="email"
-                placeholder="이메일 (예약 시 입력한 이메일)"
-                className="w-full border border-slate-200 px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={forgotEmail}
-                onChange={(e) => setForgotEmail(e.target.value)}
-                required
-              />
-            </div>
-            <button
-              type="submit"
-              className="w-full bg-blue-600 text-white py-2 rounded-lg font-medium text-sm hover:bg-blue-700 transition disabled:opacity-50"
-              disabled={forgotLoading}
-            >
-              {forgotLoading ? '발송 중...' : '임시 비밀번호 발송'}
-            </button>
-          </form>
-
-          {forgotMessage && (
-            <div className={`mt-3 text-xs p-2.5 rounded ${forgotMessage.includes('발송') ? 'bg-blue-50 text-blue-800' : 'bg-red-50 text-red-800'}`}>
-              {forgotMessage}
-            </div>
-          )}
+          <p className="text-sm text-slate-700 text-center">관리자에게 카톡 채널로 문의 하세요</p>
         </div>
       )}
     </div>
