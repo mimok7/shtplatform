@@ -318,6 +318,7 @@ function AirportQuoteContent() {
         .eq('service_type', category)
         .eq('route', route)
         .eq('vehicle_type', carType)
+        .eq('is_active', true)
         .single();
 
       if (error) throw error;

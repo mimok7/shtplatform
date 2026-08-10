@@ -136,6 +136,7 @@ export default function AirportFormLite({ quoteId, onSuccess }: Props) {
                     .eq('service_type', selectedCategory)
                     .eq('route', selectedRoute)
                     .eq('vehicle_type', selectedCarType)
+                    .eq('is_active', true)
                     .single();
                 if (error) throw error;
                 setSelectedAirportCode(data?.airport_code || '');
@@ -154,6 +155,7 @@ export default function AirportFormLite({ quoteId, onSuccess }: Props) {
                     .eq('service_type', selectedCategory2)
                     .eq('route', selectedRoute2)
                     .eq('vehicle_type', selectedCarType2)
+                    .eq('is_active', true)
                     .single();
                 if (error) throw error;
                 setSelectedAirportCode2(data?.airport_code || '');
@@ -179,6 +181,7 @@ export default function AirportFormLite({ quoteId, onSuccess }: Props) {
                     .eq('service_type', category)
                     .eq('route', route)
                     .eq('vehicle_type', carType)
+                    .eq('is_active', true)
                     .single();
                 if (codeErr || !codeRow?.airport_code) throw codeErr || new Error('공항 코드 조회 실패');
                 const { data: airportServiceData, error: airportError } = await supabase

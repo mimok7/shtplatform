@@ -498,3 +498,18 @@ PostgreSQL 17 백업 클라이언트 보정.
 - 서비스 선택 카드, 인원·옵션 요약, 예상 합계, 호텔 요금, 공항 예상가, 패키지 완료 알림을 제거했다. 선택한 서비스명·인원·일정과 예약 저장 로직은 유지한다.
 - 예약 안내의 고정 금액은 금액 없는 일반 안내 문구로 바꿨고, 저장되는 추가 차량·당일투어 선택 메모에서도 금액을 제외했다.
 - `pnpm --dir apps/customer typecheck`는 이번 변경과 무관한 `src/app/mypage/reservations/hotel/page.tsx`의 기존 상태 타입 오류 2건으로 실패했다. 대상 예약 화면에서 통화 기호·정액 금액·가격/합계 표시를 정적 검색해 남은 고객 노출 항목이 없음을 확인했으며, `git diff --check`는 통과했다. ESLint는 ESLint 9가 legacy `.eslintrc.json`을 읽지 못해 실행할 수 없었다.
+
+고객앱 공항 서비스 예약 완료 버튼 비활성화 수정.
+
+- 대상 화면은 `apps/customer1/app/order/new/airport/page.tsx`이다. 버튼은 `airportCode1`이 비어 있으면 비활성화된다.
+- 2026년 8월 6일 공항 요금 SQL은 기존 요금을 비활성 이력으로 남기고 같은 경로·차종의 신규 활성 요금을 추가한다.
+- 기존 화면은 `is_active` 조건 없이 요금 목록과 단건 코드 조회를 수행했다. 이에 따라 과거·신규 행이 함께 조회되면 `.single()`이 실패해 `airportCode1`을 빈 값으로 되돌리고 예약 완료 버튼이 비활성화된다.
+
+운영 고객앱 및 운영 도구 공항 예약 점검 시작.
+
+- 앞선 `customer1` 수정은 운영 대상이 아니었다. 이번 대상은 `apps/customer`, `apps/manager`, `apps/manager1`, `apps/mobile`의 공항 신규 예약과 예약 수정 흐름이다.
+
+운영 고객앱 및 운영 도구 공항 예약 점검 결과.
+
+- `apps/customer`의 직접 예약과 공항 견적 생성·수정, `apps/manager`·`apps/manager1`·`apps/mobile`의 예약 추가 및 공항 견적 추가 폼에서 단건 공항 코드 조회에 `is_active = true`를 적용했다.
+- 세 앱의 기존 공항 예약 수정 화면은 이미 활성 요금 행을 로드해 차종과 코드를 결정하므로 변경하지 않았다.

@@ -357,6 +357,7 @@ function DirectBookingAirportContent() {
                 .eq('service_type', category)
                 .eq('route', route)
                 .eq('vehicle_type', vehicleType)
+                .eq('is_active', true)
                 .single();
 
             if (error) throw error;
