@@ -130,6 +130,7 @@ WITH source_rows AS (
   WHERE ap.year = 2026::integer
     AND ap.is_active = true
     AND ap.vehicle_type IN ('승용차', 'SUV', '대형 SUV', '9인승 리무진', '11인승 리무진')
+    AND ap.source_reference IS DISTINCT FROM '네이버 카페 공항 픽업·샌딩 서비스 게시글 8609, 2026-08-06 확인'
     AND EXISTS (
       SELECT 1
       FROM source_rows s

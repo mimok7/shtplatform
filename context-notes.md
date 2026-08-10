@@ -513,3 +513,8 @@ PostgreSQL 17 백업 클라이언트 보정.
 
 - `apps/customer`의 직접 예약과 공항 견적 생성·수정, `apps/manager`·`apps/manager1`·`apps/mobile`의 예약 추가 및 공항 견적 추가 폼에서 단건 공항 코드 조회에 `is_active = true`를 적용했다.
 - 세 앱의 기존 공항 예약 수정 화면은 이미 활성 요금 행을 로드해 차종과 코드를 결정하므로 변경하지 않았다.
+
+매니저 배포 청크 404 복구.
+
+- `apps/manager/public/sw.js`가 `/manager` 페이지 HTML을 캐시 우선으로 저장한다. 배포가 새 해시 청크로 바뀐 뒤에도 오래된 HTML이 삭제된 청크를 참조해 `ChunkLoadError`가 발생한다.
+- Next.js 청크 경로는 서비스 워커가 이미 우회하지만, 페이지 HTML도 캐시 대상에서 제외해야 한다.

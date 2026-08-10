@@ -1,5 +1,5 @@
 // Service Worker for PWA offline support
-const CACHE_NAME = 'sht-manager-cache-v2';
+const CACHE_NAME = 'sht-manager-cache-v3';
 const ASSETS_TO_CACHE = [
   '/',
   '/icon-192.png',
@@ -40,7 +40,8 @@ self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
   const path = url.pathname || '/';
   if (event.request.method !== 'GET' || 
-      !event.request.url.startsWith(self.location.origin)) {
+      !event.request.url.startsWith(self.location.origin) ||
+      event.request.mode === 'navigate') {
     return;
   }
 
