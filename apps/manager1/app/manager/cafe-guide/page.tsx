@@ -87,8 +87,7 @@ function formatAmount(amount: number): string {
 
 function formatManDong(amount: number): string {
     if (!Number.isFinite(amount)) return '-';
-    const manValue = Math.round(amount / 10000);
-    return `${manValue.toLocaleString('ko-KR')}만동`;
+    return `${Math.round(amount / 10000).toLocaleString('ko-KR')}만동`;
 }
 
 function maskName(name?: string | null): string {
@@ -174,26 +173,7 @@ function normalizeText(value?: string | null): string {
     return text || '-';
 }
 
-function normalizeCruiseVehicleLabel(vehicleType: string, wayType?: string | null): string {
-    const base = normalizeText(vehicleType);
-    if (base === '-') return '-';
-
-    const compact = base.replace(/\s+/g, '');
-    let normalized = base;
-    if (compact.includes('크루즈셔틀리무진') || compact.includes('셔틀리무진')) {
-        normalized = '스하 셔틀리무진';
-    }
-
-    const wayRaw = String(wayType || '').trim();
-    const wayText =
-        wayRaw === '당일왕복' || wayRaw === '왕복' ? '왕복' :
-        wayRaw === '편도' ? '편도' :
-        '';
-
-    return `${normalized}${wayText ? ` ${wayText}` : ''}`;
-}
-
-function uniqueVehicleLabels(labels: Array<string | null | undefined>): string {
+function joinUniqueLabels(labels: Array<string | null | undefined>): string {
     const seen = new Set<string>();
     const normalized = labels
         .map((label) => normalizeText(label))
@@ -204,7 +184,7 @@ function uniqueVehicleLabels(labels: Array<string | null | undefined>): string {
             return true;
         });
 
-    return normalized.length > 0 ? normalized.join(', ') : '-';
+    return normalized.length > 0 ? normalized.join(' + ') : '-';
 }
 
 async function resolveCruiseVehicleType(reservationIds: string[]): Promise<string> {
@@ -224,9 +204,6 @@ async function resolveCruiseVehicleType(reservationIds: string[]): Promise<strin
     const cruiseCarRows = cruiseCarRes.data || [];
     const shtCarRows = shtCarRes.data || [];
 
-    const directCruiseVehicleType = normalizeText(
-        (cruiseCarRows as any[]).find((row) => row?.vehicle_type)?.vehicle_type
-    );
     const hasShtVehicle = (shtCarRows as any[]).length > 0;
 
     const rentCodes = Array.from(
@@ -244,14 +221,15 @@ async function resolveCruiseVehicleType(reservationIds: string[]): Promise<strin
         ? await supabase.from('rentcar_price').select('rent_code, vehicle_type').in('rent_code', allRentCodes)
         : { data: [] as any[] };
 
-    const rentVehicleType = normalizeText((rentcarPriceRes.data || [])[0]?.vehicle_type);
+    const directCruiseVehicleTypes = (cruiseCarRows as any[]).map((row) => row?.vehicle_type);
+    const rentVehicleTypes = (rentcarPriceRes.data || []).map((row: any) => row?.vehicle_type);
     const vehicleLabels = [
-        directCruiseVehicleType,
-        rentVehicleType,
+        ...directCruiseVehicleTypes,
+        ...rentVehicleTypes,
         hasShtVehicle ? '스하차량 셔틀 리무진' : null,
     ];
 
-    return uniqueVehicleLabels(vehicleLabels);
+    return joinUniqueLabels(vehicleLabels);
 }
 
 export default function CafeGuidePage() {
@@ -426,7 +404,7 @@ export default function CafeGuidePage() {
         setCopiedBody(false);
     };
 
-    const generateCruiseText = async () => {
+    const generateCruiseText = async (isSimple = false) => {
         if (!selectedGroup) return;
         const cruiseReservationIds = selectedGroup.reservations
             .filter((r) => r.re_type === 'cruise')
@@ -460,7 +438,7 @@ export default function CafeGuidePage() {
 
             const firstRoom = (roomPriceRows || [])[0] as any;
             cruiseName = normalizeText(firstRoom?.cruise_name);
-            roomType = normalizeText(firstRoom?.room_type);
+            roomType = joinUniqueLabels((roomPriceRows || []).map((row: any) => row?.room_type));
             scheduleType = String(firstRoom?.schedule_type || '');
         }
 
@@ -468,7 +446,6 @@ export default function CafeGuidePage() {
         const programText = getCruiseProgramText(program);
         const header = getCruiseHeader(program);
         const checkinDate = formatKstDateDot(firstCruise?.checkin || selectedGroup.createdAt);
-        const extraOption = normalizeText(firstCruise?.request_note);
 
         let guestCount = Number(firstCruise?.guest_count || 0);
         if (!guestCount) {
@@ -483,78 +460,33 @@ export default function CafeGuidePage() {
 
         const adultCount = (cruiseRows || []).reduce((sum: number, row: any) => sum + Number(row?.adult_count || 0), 0);
         const passengerBaseCount = adultCount > 0 ? adultCount : guestCount;
-
-        const { data: cruiseCarRows } = await supabase
-            .from('reservation_cruise_car')
-            .select('reservation_id, rentcar_price_code, car_price_code, car_total_price, unit_price, car_count')
-            .in('reservation_id', cruiseGuideReservationIds);
-
-        const { data: shtCarRows } = await supabase
-            .from('reservation_car_sht')
-            .select('reservation_id, car_total_price, unit_price, car_count')
-            .in('reservation_id', cruiseGuideReservationIds);
-
-        const cruiseTotalAmount = (cruiseRows || []).reduce((sum: number, row: any) => {
-            const rowTotal = Number(row?.room_total_price || 0);
-            return sum + (Number.isFinite(rowTotal) ? rowTotal : 0);
-        }, 0);
-
-        const shuttleCruiseCarAmount = (cruiseCarRows || []).reduce((sum: number, row: any) => {
+        const [cruiseCarRes, shtCarRes] = await Promise.all([
+            supabase.from('reservation_cruise_car').select('reservation_id, car_total_price, unit_price, car_count').in('reservation_id', cruiseGuideReservationIds),
+            supabase.from('reservation_car_sht').select('reservation_id, car_total_price, unit_price, car_count').in('reservation_id', cruiseGuideReservationIds),
+        ]);
+        const cruiseTotalAmount = (cruiseRows || []).reduce((sum: number, row: any) => sum + Number(row?.room_total_price || 0), 0);
+        const shuttleTotalAmount = [...(cruiseCarRes.data || []), ...(shtCarRes.data || [])].reduce((sum: number, row: any) => {
             const rowTotal = Number(row?.car_total_price || 0);
-            if (Number.isFinite(rowTotal) && rowTotal > 0) return sum + rowTotal;
-            const unitPrice = Number(row?.unit_price || 0);
-            const count = Number(row?.car_count || 0);
-            if (Number.isFinite(unitPrice) && unitPrice > 0 && Number.isFinite(count) && count > 0) {
-                return sum + unitPrice * count;
-            }
-            return sum;
+            return sum + (rowTotal > 0 ? rowTotal : Number(row?.unit_price || 0) * Number(row?.car_count || 0));
         }, 0);
-
-        const shuttleShtCarAmount = (shtCarRows || []).reduce((sum: number, row: any) => {
-            const rowTotal = Number(row?.car_total_price || 0);
-            if (Number.isFinite(rowTotal) && rowTotal > 0) return sum + rowTotal;
-            const unitPrice = Number(row?.unit_price || 0);
-            const count = Number(row?.car_count || 0);
-            if (Number.isFinite(unitPrice) && unitPrice > 0 && Number.isFinite(count) && count > 0) {
-                return sum + unitPrice * count;
-            }
-            return sum;
-        }, 0);
-
-        const shuttleTotalAmount = shuttleCruiseCarAmount + shuttleShtCarAmount;
-        const totalAmount = cruiseTotalAmount + shuttleTotalAmount;
-
-        const rentCodes = Array.from(new Set((cruiseCarRows || []).map((row: any) => row.rentcar_price_code).filter(Boolean)));
-        let shuttleWayType = '';
-        if (rentCodes.length > 0) {
-            const { data: rentcarPriceRows } = await supabase
-                .from('rentcar_price')
-                .select('rent_code, way_type')
-                .in('rent_code', rentCodes)
-                .limit(1);
-            shuttleWayType = String((rentcarPriceRows || [])[0]?.way_type || '').trim();
-        }
 
         const vehicleType = await resolveCruiseVehicleType(cruiseGuideReservationIds);
-        const vehicleLabel = normalizeCruiseVehicleLabel(vehicleType, shuttleWayType);
 
-        const cruiseUnitAmount = passengerBaseCount > 0 ? Math.round(cruiseTotalAmount / passengerBaseCount) : 0;
-        const shuttleUnitAmount = passengerBaseCount > 0 ? Math.round(shuttleTotalAmount / passengerBaseCount) : 0;
-
+        const totalAmount = cruiseTotalAmount + shuttleTotalAmount;
         const totalPriceLines = [
-            cruiseTotalAmount > 0 && passengerBaseCount > 0
-                ? `성인 1인 ${formatManDong(cruiseUnitAmount)} * ${passengerBaseCount} = ${formatManDong(cruiseTotalAmount)}`
-                : null,
-            shuttleTotalAmount > 0 && passengerBaseCount > 0
-                ? `${vehicleLabel} 1인 ${formatManDong(shuttleUnitAmount)} * ${passengerBaseCount} = ${formatManDong(shuttleTotalAmount)}`
-                : null,
-            totalAmount > 0
-                ? `총 ${formatManDong(totalAmount)}`
-                : null,
+            cruiseTotalAmount > 0 && passengerBaseCount > 0 ? `성인 1인 ${formatManDong(Math.round(cruiseTotalAmount / passengerBaseCount))} * ${passengerBaseCount} = ${formatManDong(cruiseTotalAmount)}` : null,
+            shuttleTotalAmount > 0 && passengerBaseCount > 0 ? `${vehicleType} 1인 ${formatManDong(Math.round(shuttleTotalAmount / passengerBaseCount))} * ${passengerBaseCount} = ${formatManDong(shuttleTotalAmount)}` : null,
+            totalAmount > 0 ? `총 ${formatManDong(totalAmount)}` : null,
         ].filter(Boolean) as string[];
 
         const title = `${maskName(selectedGroup.userName)} 님, ${checkinDate}. ${cruiseName} 예약입니다.`;
-        const bodyLines = [
+        const bodyLines = isSimple ? [
+            `🔹 예약 프로그램 (당일, 1박2일 등) : ${programText}`,
+            `🔹 승선 총 인원 : ${guestCount || '-'}인`,
+            '',
+            `🔹 예약하신 객실타입 : ${roomType}`,
+            ...(normalizeText(vehicleType) !== '-' ? [`🔹 예약하신 차량타입 : ${vehicleType}`] : []),
+        ] : [
             '🔹 결제 방식 (요금제) : 신용카드',
             `🔹 크루즈 체크인 일자 : ${checkinDate}`,
             `🔹 예약 프로그램 (당일, 1박2일 등) : ${programText}`,
@@ -932,7 +864,8 @@ ${totalAmount > 0 ? `${formatAmount(totalAmount)}동` : '-'}
                             <div>
                                 <p className="text-sm font-medium text-gray-700 mb-2">서비스별 생성</p>
                                 <div className="flex flex-wrap gap-2">
-                                    <button onClick={generateCruiseText} disabled={!selectedGroup || !serviceAvailability.cruise} className={getServiceButtonClass('bg-blue-600', !!selectedGroup && serviceAvailability.cruise)}>크루즈</button>
+                                    <button onClick={() => generateCruiseText(false)} disabled={!selectedGroup || !serviceAvailability.cruise} className={getServiceButtonClass('bg-blue-600', !!selectedGroup && serviceAvailability.cruise)}>크루즈 상세</button>
+                                    <button onClick={() => generateCruiseText(true)} disabled={!selectedGroup || !serviceAvailability.cruise} className={getServiceButtonClass('bg-sky-600', !!selectedGroup && serviceAvailability.cruise)}>크루즈 간단</button>
                                     <button onClick={generateAirportText} disabled={!selectedGroup || !serviceAvailability.airport} className={getServiceButtonClass('bg-indigo-600', !!selectedGroup && serviceAvailability.airport)}>공항픽업샌딩</button>
                                     <button onClick={generateTourText} disabled={!selectedGroup || !serviceAvailability.tour} className={getServiceButtonClass('bg-emerald-600', !!selectedGroup && serviceAvailability.tour)}>가이드투어</button>
                                     <button onClick={generateHotelText} disabled={!selectedGroup || !serviceAvailability.hotel} className={getServiceButtonClass('bg-amber-600', !!selectedGroup && serviceAvailability.hotel)}>호텔</button>
