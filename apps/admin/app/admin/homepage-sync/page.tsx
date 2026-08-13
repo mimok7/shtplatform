@@ -89,7 +89,7 @@ export default function HomepageSyncPage() {
 
         <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
           <h3 className="font-semibold text-gray-900">자동 전송 일정</h3>
-          <p className="mt-2 text-sm text-gray-600">매주 월요일 오전 3시(KST)에 자동 전송됩니다. Vercel Cron과 `CRON_SECRET` 설정이 필요합니다.</p>
+          <p className="mt-2 text-sm text-gray-600">매일 오전 3시(KST)에 전체 상품을 대조 전송합니다. 플랫폼 관리자에서 저장할 때는 즉시 전송되며, Vercel Cron과 `CRON_SECRET` 설정이 필요합니다.</p>
         </section>
 
         {result && (

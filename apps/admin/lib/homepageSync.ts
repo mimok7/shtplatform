@@ -50,11 +50,23 @@ const CATALOGS = [
     table: 'rentcar_price',
     select: 'id,rent_code,category,car_category_code,vehicle_type,route,route_from,route_to,way_type,price,capacity,duration_hours,rental_type,year,description,is_active,created_at,updated_at,cruise,memo',
   },
+  { table: 'homepage_cruise_content', select: 'cruise_name,name_ko,name_en,description,category,star_rating,hero_image,is_active,created_at,updated_at' },
+  { table: 'homepage_cruise_itineraries', select: 'id,cruise_name,schedule_type,description,is_active,created_at,updated_at' },
+  { table: 'homepage_cruise_tags', select: 'id,cruise_name,tag,evidence,is_active,created_at,updated_at' },
+  { table: 'homepage_cruise_cabin_overrides', select: 'cruise_name,room_name,values,created_at,updated_at' },
+  { table: 'homepage_cruise_images', select: 'id,collection,cruise_name,room_name,source_url,source_image_url,image_name,image_url,storage_bucket,storage_path,sort_order,is_primary,created_at,updated_at' },
+  { table: 'homepage_catalog_product_overrides', select: 'service_type,source_key,values,created_at,updated_at' },
+  { table: 'homepage_catalog_price_overrides', select: 'source_table,source_id,values,created_at,updated_at' },
 ] as const;
 
 function sourceRecordId(table: string, row: CatalogRow, index: number) {
   const values = row as Record<string, string | number | null | undefined>;
   if (table === 'cruise_info_by_category') return `${values.category || ''}:${values.cruise_name || index}`;
+  if (table === 'homepage_cruise_content') return values.cruise_name;
+  if (table === 'homepage_cruise_tags') return `${values.cruise_name || ''}:${values.tag || index}`;
+  if (table === 'homepage_cruise_cabin_overrides') return `${values.cruise_name || ''}:${values.room_name || index}`;
+  if (table === 'homepage_catalog_product_overrides') return `${values.service_type || ''}:${values.source_key || index}`;
+  if (table === 'homepage_catalog_price_overrides') return `${values.source_table || ''}:${values.source_id || index}`;
   return values.id || values.option_id || values.pricing_id || values.schedule_id || values.inclusion_id
     || values.exclusion_id || values.info_id || values.payment_pricing_id || values.policy_id
     || values.cruise_integration_id || values.hotel_price_code || values.hotel_code || values.airport_id

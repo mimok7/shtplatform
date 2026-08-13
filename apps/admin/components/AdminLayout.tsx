@@ -206,6 +206,11 @@ export default function AdminLayout({ children, title, activeTab }: AdminLayoutP
       ]
     },
     {
+      id: 'group-products', label: '서비스 상품', icon: '📦', items: [
+        { id: 'service-products', label: '서비스 상품 관리', path: '/admin/service-products', icon: '🧾' },
+      ]
+    },
+    {
       id: 'group-data', label: '데이터/동기화', icon: '🔗', items: [
         { id: 'data-management', label: '데이터 연결', path: '/admin/data-management', icon: '🔗' },
         { id: 'homepage-sync', label: '홈페이지 전송', path: '/admin/homepage-sync', icon: '🏠' },

@@ -27,7 +27,7 @@
     },
     {
       "path": "/api/cron/homepage-sync",
-      "schedule": "0 18 * * 0"
+      "schedule": "0 18 * * *"
     }
   ]
 }
