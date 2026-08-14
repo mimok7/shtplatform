@@ -568,13 +568,74 @@ const getFilteredNoteText = (note: any): string => {
     .replace(/\[옵션\s*\d+\][\s\S]*?(?=\n|$)/g, (m) => (m.includes('\n') ? '\n' : ''))
     .trim();
   const hiddenLinePattern = /^(?:비고\s*:\s*)?(?:\[(?:객실|구성|옵션)\s*\d+\]|(?:객실|구성)\s*\d+\b)/;
+  const hasOtherDayRoundTripNote = sanitized.includes(OTHER_DAY_ROUNDTRIP_NOTE_PREFIX);
   return sanitized
     .split('\n')
     .map((line) => line.replace(/\u00A0/g, ' ').trim())
     .filter(Boolean)
     .filter((line) => !hiddenLinePattern.test(line))
+    .filter((line) => !hasOtherDayRoundTripNote || !isOtherDayRoundTripNoteLine(line))
     .join('\n')
     .trim();
+};
+
+const OTHER_DAY_ROUNDTRIP_NOTE_PREFIX = '[OTHER_DAY_ROUNDTRIP]';
+const OTHER_DAY_ROUNDTRIP_NOTE_KEYS = new Set([
+  'usageOption',
+  'rideDate',
+  'rideTime',
+  'ridePickupLocation',
+  'rideDropoffLocation',
+  'postCruiseDropoffLocation',
+  'embarkPickupHotel',
+]);
+
+type OtherDayRoundTripInfo = {
+  usageOption: 'before_boarding' | 'after_disembark';
+  rideDate: string;
+  rideTime: string;
+  ridePickupLocation: string;
+  rideDropoffLocation: string;
+  postCruiseDropoffLocation: string;
+  embarkPickupHotel: string;
+};
+
+const isOtherDayRoundTripNoteLine = (line: string): boolean => {
+  const trimmed = line.trim();
+  if (trimmed === OTHER_DAY_ROUNDTRIP_NOTE_PREFIX) return true;
+  const key = trimmed.split('=', 1)[0];
+  return OTHER_DAY_ROUNDTRIP_NOTE_KEYS.has(key);
+};
+
+const getOtherDayRoundTripInfo = (note: any): OtherDayRoundTripInfo | null => {
+  const rawNote = String(note || '');
+  if (!rawNote.includes(OTHER_DAY_ROUNDTRIP_NOTE_PREFIX)) return null;
+
+  const values: Record<string, string> = {};
+  for (const line of rawNote.split('\n')) {
+    const [rawKey, ...rawValue] = line.split('=');
+    const key = rawKey.trim();
+    if (OTHER_DAY_ROUNDTRIP_NOTE_KEYS.has(key)) {
+      values[key] = rawValue.join('=').trim();
+    }
+  }
+
+  if (values.usageOption !== 'before_boarding' && values.usageOption !== 'after_disembark') return null;
+
+  return {
+    usageOption: values.usageOption,
+    rideDate: values.rideDate || '',
+    rideTime: values.rideTime || '',
+    ridePickupLocation: values.ridePickupLocation || '-',
+    rideDropoffLocation: values.rideDropoffLocation || '-',
+    postCruiseDropoffLocation: values.postCruiseDropoffLocation || '-',
+    embarkPickupHotel: values.embarkPickupHotel || '-',
+  };
+};
+
+const formatOtherDayRideDatetime = (date: string, time: string, fallback?: any): string => {
+  if (date) return formatDatetimeOffset(time ? `${date}T${time}` : date);
+  return fallback ? formatDatetimeOffset(fallback) : '-';
 };
 
 const getServiceType = (item: any) => {
@@ -1141,16 +1202,47 @@ function ServiceCard({
 
       {(type === 'vehicle' || type === 'car') && (
         <div className="space-y-0.5">
-          <DetailLine label="픽업일시" value={formatDatetimeOffset(service.pickupDatetime || service.pickup_datetime, service.pickupDate || service.pickup_date, service.pickupTime || service.pickup_time)} />
-          {(service.returnDatetime || service.return_datetime || service.returnDate || service.return_date) && (
-            <DetailLine label="드랍일시" value={<span className="font-medium text-orange-700">{formatDatetimeOffset(service.returnDatetime || service.return_datetime, service.returnDate || service.return_date, service.returnTime || service.return_time)}</span>} />
-          )}
-          <DetailLine label="구분" value={service.carCategory || service.way_type || service.category || '-'} />
-          <DetailLine label="차량타입" value={service.carType || '-'} />
-          <DetailLine label="총인원수" value={formatNonZeroCount(service.passengerCount, '명')} />
-          <DetailLine label="차량수" value={formatNonZeroCount(service.car_count || service.carCount, '대')} />
-          <DetailLine label="픽업위치" value={service.pickupLocation || '-'} />
-          <DetailLine label="드랍위치" value={service.dropoffLocation || service.destination || '-'} />
+          {(() => {
+            const otherDayInfo = getOtherDayRoundTripInfo(service.note || service.request_note || service.requestNote);
+            const rideDatetime = otherDayInfo
+              ? formatOtherDayRideDatetime(otherDayInfo.rideDate, otherDayInfo.rideTime, otherDayInfo.usageOption === 'before_boarding' ? service.pickupDatetime || service.pickup_datetime : service.returnDatetime || service.return_datetime)
+              : null;
+            const returnDatetime = formatDatetimeOffset(service.returnDatetime || service.return_datetime, service.returnDate || service.return_date, service.returnTime || service.return_time);
+
+            return (
+              <>
+                <DetailLine label="구분" value={service.carCategory || service.way_type || service.category || '-'} />
+                <DetailLine label="차량타입" value={service.carType || '-'} />
+                <DetailLine label="총인원수" value={formatNonZeroCount(service.passengerCount, '명')} />
+                <DetailLine label="차량수" value={formatNonZeroCount(service.car_count || service.carCount, '대')} />
+                {otherDayInfo ? (
+                  <>
+                    <DetailLine label="이용유형" value={otherDayInfo.usageOption === 'before_boarding' ? '승선 전 차량 이용' : '하선 후 차량 이용'} />
+                    {otherDayInfo.usageOption === 'before_boarding' ? (
+                      <>
+                        <DetailLine label="승선 전 이동" value={`${rideDatetime} · ${otherDayInfo.ridePickupLocation} → ${otherDayInfo.rideDropoffLocation}`} />
+                        <DetailLine label="하선 후 이동" value={<span className="font-medium text-orange-700">{returnDatetime} · 크루즈 선착장 → {otherDayInfo.postCruiseDropoffLocation}</span>} />
+                      </>
+                    ) : (
+                      <>
+                        <DetailLine label="승선 전 이동" value={`${otherDayInfo.embarkPickupHotel} → 크루즈 선착장`} />
+                        <DetailLine label="하선 후 이동" value={<span className="font-medium text-orange-700">{rideDatetime} · {otherDayInfo.ridePickupLocation} → {otherDayInfo.rideDropoffLocation}</span>} />
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <DetailLine label="픽업일시" value={formatDatetimeOffset(service.pickupDatetime || service.pickup_datetime, service.pickupDate || service.pickup_date, service.pickupTime || service.pickup_time)} />
+                    {(service.returnDatetime || service.return_datetime || service.returnDate || service.return_date) && (
+                      <DetailLine label="드랍일시" value={<span className="font-medium text-orange-700">{returnDatetime}</span>} />
+                    )}
+                    <DetailLine label="픽업위치" value={service.pickupLocation || '-'} />
+                    <DetailLine label="드랍위치" value={service.dropoffLocation || service.destination || '-'} />
+                  </>
+                )}
+              </>
+            );
+          })()}
           <DetailLine label="총 금액" value={<span className="font-bold text-blue-700">{formatMoney(Number(service.totalPrice || service.car_total_price || 0))}</span>} />
         </div>
       )}
