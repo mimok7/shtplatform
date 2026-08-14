@@ -49,6 +49,59 @@ const safeDate = (dateStr: any): string => {
     }
 };
 
+const OTHER_DAY_ROUNDTRIP_NOTE_PREFIX = '[OTHER_DAY_ROUNDTRIP]';
+const OTHER_DAY_ROUNDTRIP_NOTE_KEYS = new Set([
+    'usageOption',
+    'rideDate',
+    'rideTime',
+    'ridePickupLocation',
+    'rideDropoffLocation',
+    'postCruiseDropoffLocation',
+    'embarkPickupHotel',
+]);
+
+type OtherDayRoundTripInfo = {
+    usageOption: 'before_boarding' | 'after_disembark';
+    rideDate: string;
+    rideTime: string;
+    ridePickupLocation: string;
+    rideDropoffLocation: string;
+    postCruiseDropoffLocation: string;
+    embarkPickupHotel: string;
+};
+
+const isOtherDayRoundTripNoteLine = (line: string): boolean => {
+    const trimmed = line.trim();
+    if (trimmed === OTHER_DAY_ROUNDTRIP_NOTE_PREFIX) return true;
+    return OTHER_DAY_ROUNDTRIP_NOTE_KEYS.has(trimmed.split('=', 1)[0]);
+};
+
+const getOtherDayRoundTripInfo = (note: any): OtherDayRoundTripInfo | null => {
+    const rawNote = String(note || '');
+    if (!rawNote.includes(OTHER_DAY_ROUNDTRIP_NOTE_PREFIX)) return null;
+
+    const values: Record<string, string> = {};
+    for (const line of rawNote.split('\n')) {
+        const [rawKey, ...rawValue] = line.split('=');
+        const key = rawKey.trim();
+        if (OTHER_DAY_ROUNDTRIP_NOTE_KEYS.has(key)) {
+            values[key] = rawValue.join('=').trim();
+        }
+    }
+
+    if (values.usageOption !== 'before_boarding' && values.usageOption !== 'after_disembark') return null;
+
+    return {
+        usageOption: values.usageOption,
+        rideDate: values.rideDate || '',
+        rideTime: values.rideTime || '',
+        ridePickupLocation: values.ridePickupLocation || '-',
+        rideDropoffLocation: values.rideDropoffLocation || '-',
+        postCruiseDropoffLocation: values.postCruiseDropoffLocation || '-',
+        embarkPickupHotel: values.embarkPickupHotel || '-',
+    };
+};
+
 // request_note에서 [객실 n], [구성 n] 등의 자동생성 패턴 제거
 const getFilteredNoteText = (note: any): string => {
     if (!note) return '';
@@ -58,11 +111,13 @@ const getFilteredNoteText = (note: any): string => {
         .trim();
 
     const hiddenLinePattern = /^(?:비고\s*:\s*)?(?:\[(?:옵션|객실|구성)\s*\d+\]|(?:옵션|객실|구성)\s*\d+\b)/;
+    const hasOtherDayRoundTripNote = sanitizedNote.includes(OTHER_DAY_ROUNDTRIP_NOTE_PREFIX);
     const lines = sanitizedNote
         .split('\n')
         .map((line) => line.replace(/\u00A0/g, ' ').trim())
         .filter(Boolean)
-        .filter((line) => !hiddenLinePattern.test(line));
+        .filter((line) => !hiddenLinePattern.test(line))
+        .filter((line) => !hasOtherDayRoundTripNote || !isOtherDayRoundTripNoteLine(line));
     return lines.join('\n').trim();
 };
 
@@ -115,6 +170,11 @@ const normalizeWayType = (value: any): string => {
     if (raw.includes('pickup') || raw.includes('픽업')) return '픽업';
     if (raw.includes('sending') || raw.includes('sanding') || raw.includes('샌딩')) return '샌딩';
     return cleanText(value);
+};
+
+const formatOtherDayRideDateTime = (date: string, time: string): string => {
+    if (!date) return '-';
+    return safeDateTime(time ? `${date}T${time}` : date);
 };
 
 const inferCruiseCarDirection = (row: any): 'pickup' | 'dropoff' => {
@@ -609,6 +669,7 @@ export default function ServiceCardBody({
         const cruiseCarDirection = inferCruiseCarDirection(row);
         const showPickupBlock = cruiseCarDirection === 'pickup';
         const showDropBlock = cruiseCarDirection === 'dropoff';
+        const otherDayInfo = getOtherDayRoundTripInfo(requestNote);
 
         return (
             <div className="flex flex-col gap-1 text-sm text-gray-700 mt-1">
@@ -631,17 +692,67 @@ export default function ServiceCardBody({
                     <Calendar className="w-4 h-4 text-gray-400" />
                     <span className="text-sm font-medium">{getDateDisplay()}</span>
                 </div>
-                {showPickupBlock && (
-                    <div className="flex items-start gap-2">
-                        <span className="font-semibold text-green-700 text-xs mt-0.5">승차</span>
-                        <span className="text-sm break-words">{row?.pickup_location || '-'}</span>
-                    </div>
-                )}
-                {showDropBlock && (
-                    <div className="flex items-start gap-2">
-                        <span className="font-semibold text-green-700 text-xs mt-0.5">하차</span>
-                        <span className="text-sm break-words">{row?.dropoff_location || '-'}</span>
-                    </div>
+                {otherDayInfo ? (
+                    <>
+                        <div className="flex items-start gap-2">
+                            <span className="font-semibold text-green-700 text-xs mt-0.5">이용유형</span>
+                            <span className="text-sm break-words">{otherDayInfo.usageOption === 'before_boarding' ? '승선 전 차량 이용' : '하선 후 차량 이용'}</span>
+                        </div>
+                        {otherDayInfo.usageOption === 'before_boarding' ? (
+                            <>
+                                <div className="flex items-start gap-2">
+                                    <span className="font-semibold text-green-700 text-xs mt-0.5">승선 전 이동</span>
+                                    <span className="text-sm break-words">{formatOtherDayRideDateTime(otherDayInfo.rideDate, otherDayInfo.rideTime)}</span>
+                                </div>
+                                <div className="flex items-start gap-2">
+                                    <span className="font-semibold text-green-700 text-xs mt-0.5">승차</span>
+                                    <span className="text-sm break-words">{otherDayInfo.ridePickupLocation}</span>
+                                </div>
+                                <div className="flex items-start gap-2">
+                                    <span className="font-semibold text-green-700 text-xs mt-0.5">하차</span>
+                                    <span className="text-sm break-words">{otherDayInfo.rideDropoffLocation}</span>
+                                </div>
+                                <div className="flex items-start gap-2">
+                                    <span className="font-semibold text-green-700 text-xs mt-0.5">하선 후 드랍</span>
+                                    <span className="text-sm break-words">{otherDayInfo.postCruiseDropoffLocation}</span>
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <div className="flex items-start gap-2">
+                                    <span className="font-semibold text-green-700 text-xs mt-0.5">승선 시 픽업</span>
+                                    <span className="text-sm break-words">{otherDayInfo.embarkPickupHotel}</span>
+                                </div>
+                                <div className="flex items-start gap-2">
+                                    <span className="font-semibold text-green-700 text-xs mt-0.5">하선 후 이동</span>
+                                    <span className="text-sm break-words">{formatOtherDayRideDateTime(otherDayInfo.rideDate, otherDayInfo.rideTime)}</span>
+                                </div>
+                                <div className="flex items-start gap-2">
+                                    <span className="font-semibold text-green-700 text-xs mt-0.5">승차</span>
+                                    <span className="text-sm break-words">{otherDayInfo.ridePickupLocation}</span>
+                                </div>
+                                <div className="flex items-start gap-2">
+                                    <span className="font-semibold text-green-700 text-xs mt-0.5">하차</span>
+                                    <span className="text-sm break-words">{otherDayInfo.rideDropoffLocation}</span>
+                                </div>
+                            </>
+                        )}
+                    </>
+                ) : (
+                    <>
+                        {showPickupBlock && (
+                            <div className="flex items-start gap-2">
+                                <span className="font-semibold text-green-700 text-xs mt-0.5">승차</span>
+                                <span className="text-sm break-words">{row?.pickup_location || '-'}</span>
+                            </div>
+                        )}
+                        {showDropBlock && (
+                            <div className="flex items-start gap-2">
+                                <span className="font-semibold text-green-700 text-xs mt-0.5">하차</span>
+                                <span className="text-sm break-words">{row?.dropoff_location || '-'}</span>
+                            </div>
+                        )}
+                    </>
                 )}
                 <div className="flex items-center gap-2">
                     <span className="font-semibold text-green-700 text-xs">인원/차량</span>
