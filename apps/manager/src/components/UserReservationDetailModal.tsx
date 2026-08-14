@@ -217,6 +217,7 @@ const getFilteredNoteText = (note: any): string => {
         .trim();
 
     const hiddenLinePattern = /^(?:비고\s*:\s*)?(?:\[(?:객실|구성|옵션)\s*\d+\]|(?:객실|구성)\s*\d+\b)/
+    const linkedCruiseReservationPattern = /^\[LINKED_CRUISE_RESERVATION_ID\s*:[^\]]+\]$/i;
     const hasOtherDayRoundTripNote = sanitizedNote.includes(OTHER_DAY_ROUNDTRIP_NOTE_PREFIX);
 
     const lines = sanitizedNote
@@ -224,6 +225,7 @@ const getFilteredNoteText = (note: any): string => {
         .map((line) => line.replace(/\u00A0/g, ' ').trim())
         .filter(Boolean)
         .filter((line) => !hiddenLinePattern.test(line))
+        .filter((line) => !linkedCruiseReservationPattern.test(line))
         .filter((line) => !hasOtherDayRoundTripNote || !isOtherDayRoundTripNoteLine(line));
     return lines.join('\n').trim();
 };

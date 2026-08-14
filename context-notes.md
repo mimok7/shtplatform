@@ -559,6 +559,14 @@ PostgreSQL 17 백업 클라이언트 보정.
 - `before_boarding` 카드에는 승선 전 이동 일시와 승차·하차 장소, 하선 후 드랍 장소를 표시한다. `after_disembark` 카드에는 승선 시 픽업 장소를 먼저, 하선 후 이동 일시와 승차·하차 장소를 다음으로 표시한다.
 - `pnpm --dir apps/manager1 typecheck`와 `git diff --check`가 통과했다.
 
+모바일·매니저·매니저1 크루즈 차량 카드 표시 통일 시작.
+
+- 매니저1만 변경된 상태였으므로, 매니저의 `ServiceCardBody.tsx`에도 다른날 왕복 파서·한글 표시를 같은 형태로 적용한다.
+- 모바일은 별도 `app/schedule/page.tsx` 카드 구현을 사용한다. 크루즈 차량 카드의 라벨을 `차량명`, `구분`, `승차` 또는 `하차`, `인원/차량`으로 통일하고, 다른날 왕복은 세 앱과 같은 이용유형·이동 순서로 표시한다.
+- 세 앱의 통합상세는 `[LINKED_CRUISE_RESERVATION_ID:…]`를 예약 연결을 위한 내부 메타데이터로 간주해 비고에서 숨긴다. 실제 사용자가 남긴 비고는 그대로 유지한다.
+- 세 앱 모두 일반 크루즈 차량 카드에 `크루즈`, `차량명`, `구분`, 일정일, `승차` 또는 `하차`, `인원/차량`을 사용한다. 크루즈명이 없는 공통 차량의 표기는 `공통`으로 통일했다.
+- `pnpm --dir apps/mobile typecheck`, `pnpm --dir apps/manager typecheck`, `pnpm --dir apps/manager1 typecheck`, `git diff --check`가 통과했다.
+
 매니저1 일정 크루즈 차량 카드 표시 통일 보정 시작.
 
 - 당일 왕복 크루즈 차량의 `request_note`는 `[LINKED_CRUISE_RESERVATION_ID:<UUID>]`를 연결용 식별자로 저장한다. 실제 고객·운행 정보가 아니므로 카드의 메모에 표시하지 않는다.

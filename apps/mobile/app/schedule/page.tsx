@@ -248,12 +248,73 @@ const getServiceTypeOrderIndex = (type: string): number => {
   return idx === -1 ? serviceTypeOrder.length : idx;
 };
 
+const OTHER_DAY_ROUNDTRIP_NOTE_PREFIX = '[OTHER_DAY_ROUNDTRIP]';
+const OTHER_DAY_ROUNDTRIP_NOTE_KEYS = new Set([
+  'usageOption',
+  'rideDate',
+  'rideTime',
+  'ridePickupLocation',
+  'rideDropoffLocation',
+  'postCruiseDropoffLocation',
+  'embarkPickupHotel',
+]);
+
+type OtherDayRoundTripInfo = {
+  usageOption: 'before_boarding' | 'after_disembark';
+  rideDate: string;
+  rideTime: string;
+  ridePickupLocation: string;
+  rideDropoffLocation: string;
+  postCruiseDropoffLocation: string;
+  embarkPickupHotel: string;
+};
+
+const isOtherDayRoundTripNoteLine = (line: string): boolean => {
+  const trimmed = line.trim();
+  if (trimmed === OTHER_DAY_ROUNDTRIP_NOTE_PREFIX) return true;
+  return OTHER_DAY_ROUNDTRIP_NOTE_KEYS.has(trimmed.split('=', 1)[0]);
+};
+
+const getOtherDayRoundTripInfo = (note: any): OtherDayRoundTripInfo | null => {
+  const rawNote = String(note || '');
+  if (!rawNote.includes(OTHER_DAY_ROUNDTRIP_NOTE_PREFIX)) return null;
+
+  const values: Record<string, string> = {};
+  for (const line of rawNote.split('\n')) {
+    const [rawKey, ...rawValue] = line.split('=');
+    const key = rawKey.trim();
+    if (OTHER_DAY_ROUNDTRIP_NOTE_KEYS.has(key)) {
+      values[key] = rawValue.join('=').trim();
+    }
+  }
+
+  if (values.usageOption !== 'before_boarding' && values.usageOption !== 'after_disembark') return null;
+
+  return {
+    usageOption: values.usageOption,
+    rideDate: values.rideDate || '',
+    rideTime: values.rideTime || '',
+    ridePickupLocation: values.ridePickupLocation || '-',
+    rideDropoffLocation: values.rideDropoffLocation || '-',
+    postCruiseDropoffLocation: values.postCruiseDropoffLocation || '-',
+    embarkPickupHotel: values.embarkPickupHotel || '-',
+  };
+};
+
+const formatOtherDayRideDateTime = (date: string, time: string): string => {
+  if (!date) return '-';
+  const [year, month, day] = date.split('-');
+  const dateLabel = year && month && day ? `${year}. ${Number(month)}. ${Number(day)}.` : date;
+  return time ? `${dateLabel} ${time}` : dateLabel;
+};
+
 const formatScheduleRequestNote = (value: any) => {
   const text = String(value || '').trim();
   if (!text) return '';
 
   const autoRoomSegmentPattern = /(?:비고\s*:\s*)?(?:\[(?:객실|구성)\s*\d+\]|(?:객실|구성)\s*\d+\b)\s*[^|\n]*\|\s*성인\s*\d+\s*,\s*아동(?:\([^)]+\))?\s*\d+\s*,\s*아동엑베\s*\d+\s*,\s*유아\s*\d+\s*,\s*성인엑베\s*\d+\s*,\s*싱글\s*\d+/gi;
   const hiddenLinePattern = /^(?:비고\s*:\s*)?(?:\[(?:옵션|객실|구성)\s*\d+\]|(?:옵션|객실|구성)\s*\d+\b)/;
+  const linkedCruiseReservationPattern = /^\[LINKED_CRUISE_RESERVATION_ID\s*:[^\]]+\]$/i;
 
   const sanitized = text
     .replace(/\[CHILD_OLDER_COUNTS:[^\]]*\]\s*/gi, '')
@@ -266,6 +327,8 @@ const formatScheduleRequestNote = (value: any) => {
     .filter(Boolean)
     .filter((line) => {
       if (hiddenLinePattern.test(line)) return false;
+      if (linkedCruiseReservationPattern.test(line)) return false;
+      if (sanitized.includes(OTHER_DAY_ROUNDTRIP_NOTE_PREFIX) && isOtherDayRoundTripNoteLine(line)) return false;
       if (/\|\s*성인\s*\d+/.test(line) && /(아동\s*\d+|유아\s*\d+|싱글\s*\d+|엑베)/.test(line)) return false;
       return true;
     });
@@ -1502,14 +1565,41 @@ export default function SchedulePage() {
             </>
           )}
           {type === 'car' && (
-            <>
-              <Row label="차종" value={item.carType} bold />
-              <Row label="구분" value={item.carCategory || item.way_type || item.category || '-'} />
-              <DateRow dateLabel={dateLabel} />
-              {item.pickupLocation && <Row label="픽업장소" value={item.pickupLocation} />}
-              {item.dropoffLocation && <Row label="드롭장소" value={item.dropoffLocation} />}
-              <Row label="인원" value={`${item.passengerCount}명`} />
-            </>
+            (() => {
+              const otherDayInfo = getOtherDayRoundTripInfo(item.requestNote);
+              const isDropoff = item.segmentType === 'return' || String(item.one_way_direction || '').toLowerCase() === 'dropoff';
+              return (
+                <>
+                  <Row label="크루즈" value={item.cruiseName || item.cruise || item.cruise_name || item.accommodation_info || '공통'} />
+                  <Row label="차량명" value={item.carType} bold />
+                  <Row label="구분" value={item.carCategory || item.way_type || item.category || '-'} />
+                  <DateRow dateLabel={dateLabel} />
+                  {otherDayInfo ? (
+                    <>
+                      <Row label="이용유형" value={otherDayInfo.usageOption === 'before_boarding' ? '승선 전 차량 이용' : '하선 후 차량 이용'} />
+                      {otherDayInfo.usageOption === 'before_boarding' ? (
+                        <>
+                          <Row label="승선 전 이동" value={formatOtherDayRideDateTime(otherDayInfo.rideDate, otherDayInfo.rideTime)} />
+                          <Row label="승차" value={otherDayInfo.ridePickupLocation} />
+                          <Row label="하차" value={otherDayInfo.rideDropoffLocation} />
+                          <Row label="하선 후 드랍" value={otherDayInfo.postCruiseDropoffLocation} />
+                        </>
+                      ) : (
+                        <>
+                          <Row label="승선 시 픽업" value={otherDayInfo.embarkPickupHotel} />
+                          <Row label="하선 후 이동" value={formatOtherDayRideDateTime(otherDayInfo.rideDate, otherDayInfo.rideTime)} />
+                          <Row label="승차" value={otherDayInfo.ridePickupLocation} />
+                          <Row label="하차" value={otherDayInfo.rideDropoffLocation} />
+                        </>
+                      )}
+                    </>
+                  ) : (
+                    <Row label={isDropoff ? '하차' : '승차'} value={isDropoff ? item.dropoffLocation : item.pickupLocation} />
+                  )}
+                  <Row label="인원/차량" value={`👥 ${item.passengerCount}명 / 🚗 ${item.carCount}대`} />
+                </>
+              );
+            })()
           )}
           {(type === 'vehicle' || type === 'sht') && (
             <>

@@ -665,7 +665,7 @@ export default function ServiceCardBody({
 
     // ========== CRUISE_CAR ==========
     if (type === 'cruise_car') {
-        const cruiseName = row?._rentcar_info?.cruise || row?.cruise_name || row?.cruise || row?.accommodation_info || '-';
+        const cruiseName = row?._rentcar_info?.cruise || row?.cruise_name || row?.cruise || row?.accommodation_info || '공통';
         const vehicleName = row?.carType || row?._rentcar_info?.vehicle_type || row?.vehicle_type || '-';
         const wayType = row?.way_type || row?._rentcar_info?.way_type || row?.category || '';
         const cruiseCarDirection = inferCruiseCarDirection(row);
