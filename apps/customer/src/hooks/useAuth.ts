@@ -122,6 +122,13 @@ export function useAuth(redirectOnFail: string = '/login') {
                 // ✅ getSession() → getUser(): 서버에서 JWT 유효성 검증 + 만료 시 자동 refresh
                 const { data, error } = await supabase.auth.getUser();
                 if (cancelled) return;
+                if (error && isInvalidRefreshTokenError(error)) {
+                    await clearInvalidSession();
+                    writeSessionCache(null);
+                    setAuthState({ user: null, loading: false, error });
+                    router.replace(redirectOnFail);
+                    return;
+                }
                 if (data?.user) {
                     if (!isActiveTabOwner(data.user.id)) {
                         await supabase.auth.signOut({ scope: 'local' });
@@ -201,7 +208,14 @@ export function useAuth(redirectOnFail: string = '/login') {
 
     const refetch = async () => {
         try {
-            const { data } = await supabase.auth.getUser();
+            const { data, error } = await supabase.auth.getUser();
+            if (error && isInvalidRefreshTokenError(error)) {
+                await clearInvalidSession();
+                writeSessionCache(null);
+                setAuthState({ user: null, loading: false, error });
+                router.replace(redirectOnFail);
+                return;
+            }
             if (data?.user) {
                 writeSessionCache(data.user);
                 setAuthState({ user: data.user, loading: false, error: null });

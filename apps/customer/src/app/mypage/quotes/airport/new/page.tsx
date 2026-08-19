@@ -7,7 +7,7 @@ import supabase from '@/lib/supabase';
 function AirportQuoteContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const quoteId = searchParams.get('quoteId');
+  const quoteId = searchParams.get('quoteId') || searchParams.get('quote_id');
 
   const [loading, setLoading] = useState(false);
   const [quote, setQuote] = useState<any>(null);
@@ -74,6 +74,7 @@ function AirportQuoteContent() {
       const { data, error } = await supabase
         .from('airport_price')
         .select('service_type')
+        .eq('is_active', true)
         .order('service_type');
 
       if (error) throw error;
@@ -92,6 +93,7 @@ function AirportQuoteContent() {
         .from('airport_price')
         .select('route')
         .eq('service_type', category)
+        .eq('is_active', true)
         .order('route');
 
       if (error) throw error;
@@ -111,6 +113,7 @@ function AirportQuoteContent() {
         .select('vehicle_type')
         .eq('service_type', category)
         .eq('route', route)
+        .eq('is_active', true)
         .order('vehicle_type');
 
       if (error) throw error;
@@ -145,15 +148,21 @@ function AirportQuoteContent() {
   // 3가지 조건으로 airport_code 조회
   const getAirportCodeFromConditions = async (category: string, route: string, carType: string) => {
     try {
+      const effectiveDate = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul' }).format(new Date());
       const { data, error } = await supabase
         .from('airport_price')
         .select('airport_code')
         .eq('service_type', category)
         .eq('route', route)
         .eq('vehicle_type', carType)
-        .single();
+        .eq('is_active', true)
+        .or(`valid_from.is.null,valid_from.lte.${effectiveDate}`)
+        .or(`valid_to.is.null,valid_to.gte.${effectiveDate}`)
+        .order('valid_from', { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
-      if (error) throw error;
+      if (error || !data?.airport_code) throw error || new Error('적용 가능한 공항 요금을 찾을 수 없습니다.');
       return data.airport_code;
     } catch (error) {
       console.error('airport_code 조회 실패:', error);
