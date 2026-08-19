@@ -15,6 +15,11 @@ import { useReservationDetailModal } from '@/hooks/useReservationDetailModal';
 const TAB_SESSION_KEY = 'sht:tab:id';
 const ACTIVE_TAB_PREFIX = 'sht:active:tab:user:manager1:';
 
+function isInvalidRefreshTokenError(error: unknown): boolean {
+  const message = (error as { message?: string } | null)?.message || (typeof error === 'string' ? error : '');
+  return /Invalid Refresh Token|Refresh Token Not Found|refresh token/i.test(message);
+}
+
 function getOrCreateTabId() {
   if (typeof window === 'undefined') return '';
   try {
@@ -111,6 +116,13 @@ function ManagerLayoutContent({ children, title, activeTab }: ManagerLayoutProps
         // ✅ getSession() → getUser() 로 변경: 서버에서 JWT 유효성 검증 + 만료 시 자동 갱신
         const { data, error } = await supabase.auth.getUser();
         if (cancelled) return;
+        if (error && isInvalidRefreshTokenError(error)) {
+          await supabase.auth.signOut({ scope: 'local' });
+          clearCachedRole();
+          setUserRole('guest');
+          router.replace('/login');
+          return;
+        }
         const sessionUser = data?.user ?? null;
         if (error || !sessionUser) {
           if (cachedRole) {

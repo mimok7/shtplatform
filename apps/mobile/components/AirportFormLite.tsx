@@ -3,6 +3,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import supabase from '@/lib/supabase';
 
+const getEffectiveDate = () => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul' }).format(new Date());
+
 type ApplyType = 'pickup' | 'sending' | 'both';
 
 type Props = {
@@ -35,7 +37,7 @@ export default function AirportFormLite({ quoteId, onSuccess }: Props) {
     useEffect(() => {
         const loadCategoryOptions = async () => {
             try {
-                const { data, error } = await supabase.from('airport_price').select('service_type').order('service_type');
+                const { data, error } = await supabase.from('airport_price').select('service_type').eq('is_active', true).order('service_type');
                 if (error) throw error;
                 const unique = [...new Set((data || []).map((d: any) => d.service_type).filter(Boolean))] as string[];
                 setCategoryOptions(unique);
@@ -64,7 +66,7 @@ export default function AirportFormLite({ quoteId, onSuccess }: Props) {
                 setRouteOptions([]); setSelectedRoute(''); return;
             }
             try {
-                const { data, error } = await supabase.from('airport_price').select('route').eq('service_type', selectedCategory).order('route');
+                const { data, error } = await supabase.from('airport_price').select('route').eq('service_type', selectedCategory).eq('is_active', true).order('route');
                 if (error) throw error;
                 const unique = [...new Set((data || []).map((d: any) => d.route).filter(Boolean))] as string[];
                 setRouteOptions(unique);
@@ -84,6 +86,7 @@ export default function AirportFormLite({ quoteId, onSuccess }: Props) {
                     .select('vehicle_type')
                     .eq('service_type', selectedCategory)
                     .eq('route', selectedRoute)
+                    .eq('is_active', true)
                     .order('vehicle_type');
                 if (error) throw error;
                 const unique = [...new Set((data || []).map((d: any) => d.vehicle_type).filter(Boolean))] as string[];
@@ -98,7 +101,7 @@ export default function AirportFormLite({ quoteId, onSuccess }: Props) {
         const run = async () => {
             if (!selectedCategory2) { setRouteOptions2([]); setSelectedRoute2(''); return; }
             try {
-                const { data, error } = await supabase.from('airport_price').select('route').eq('service_type', selectedCategory2).order('route');
+                const { data, error } = await supabase.from('airport_price').select('route').eq('service_type', selectedCategory2).eq('is_active', true).order('route');
                 if (error) throw error;
                 const unique = [...new Set((data || []).map((d: any) => d.route).filter(Boolean))] as string[];
                 setRouteOptions2(unique);
@@ -116,6 +119,7 @@ export default function AirportFormLite({ quoteId, onSuccess }: Props) {
                     .select('vehicle_type')
                     .eq('service_type', selectedCategory2)
                     .eq('route', selectedRoute2)
+                    .eq('is_active', true)
                     .order('vehicle_type');
                 if (error) throw error;
                 const unique = [...new Set((data || []).map((d: any) => d.vehicle_type).filter(Boolean))] as string[];
@@ -130,6 +134,7 @@ export default function AirportFormLite({ quoteId, onSuccess }: Props) {
         const run = async () => {
             if (!(selectedCategory && selectedRoute && selectedCarType)) { setSelectedAirportCode(''); return; }
             try {
+                const effectiveDate = getEffectiveDate();
                 const { data, error } = await supabase
                     .from('airport_price')
                     .select('airport_code')
@@ -137,8 +142,12 @@ export default function AirportFormLite({ quoteId, onSuccess }: Props) {
                     .eq('route', selectedRoute)
                     .eq('vehicle_type', selectedCarType)
                     .eq('is_active', true)
-                    .single();
-                if (error) throw error;
+                    .or(`valid_from.is.null,valid_from.lte.${effectiveDate}`)
+                    .or(`valid_to.is.null,valid_to.gte.${effectiveDate}`)
+                    .order('valid_from', { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+                if (error || !data?.airport_code) throw error || new Error('적용 가능한 공항 요금을 찾을 수 없습니다.');
                 setSelectedAirportCode(data?.airport_code || '');
             } catch { setSelectedAirportCode(''); }
         };
@@ -149,6 +158,7 @@ export default function AirportFormLite({ quoteId, onSuccess }: Props) {
         const run = async () => {
             if (!(selectedCategory2 && selectedRoute2 && selectedCarType2)) { setSelectedAirportCode2(''); return; }
             try {
+                const effectiveDate = getEffectiveDate();
                 const { data, error } = await supabase
                     .from('airport_price')
                     .select('airport_code')
@@ -156,8 +166,12 @@ export default function AirportFormLite({ quoteId, onSuccess }: Props) {
                     .eq('route', selectedRoute2)
                     .eq('vehicle_type', selectedCarType2)
                     .eq('is_active', true)
-                    .single();
-                if (error) throw error;
+                    .or(`valid_from.is.null,valid_from.lte.${effectiveDate}`)
+                    .or(`valid_to.is.null,valid_to.gte.${effectiveDate}`)
+                    .order('valid_from', { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+                if (error || !data?.airport_code) throw error || new Error('적용 가능한 공항 요금을 찾을 수 없습니다.');
                 setSelectedAirportCode2(data?.airport_code || '');
             } catch { setSelectedAirportCode2(''); }
         };
@@ -175,6 +189,7 @@ export default function AirportFormLite({ quoteId, onSuccess }: Props) {
         setLoading(true);
         try {
             const insertOne = async (category: string, route: string, carType: string, withNote: boolean) => {
+                const effectiveDate = getEffectiveDate();
                 const { data: codeRow, error: codeErr } = await supabase
                     .from('airport_price')
                     .select('airport_code')
@@ -182,7 +197,11 @@ export default function AirportFormLite({ quoteId, onSuccess }: Props) {
                     .eq('route', route)
                     .eq('vehicle_type', carType)
                     .eq('is_active', true)
-                    .single();
+                    .or(`valid_from.is.null,valid_from.lte.${effectiveDate}`)
+                    .or(`valid_to.is.null,valid_to.gte.${effectiveDate}`)
+                    .order('valid_from', { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
                 if (codeErr || !codeRow?.airport_code) throw codeErr || new Error('공항 코드 조회 실패');
                 const { data: airportServiceData, error: airportError } = await supabase
                     .from('airport')

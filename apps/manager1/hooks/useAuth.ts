@@ -15,6 +15,11 @@ const TAB_SESSION_KEY = 'sht:tab:id';
 const ACTIVE_TAB_PREFIX = 'sht:active:tab:user:manager:';
 let authCache: { user: any | null; role: string | null; timestamp: number } | null = null;
 
+function isInvalidRefreshTokenError(error: unknown): boolean {
+    const message = (error as { message?: string } | null)?.message || (typeof error === 'string' ? error : '');
+    return /Invalid Refresh Token|Refresh Token Not Found|refresh token/i.test(message);
+}
+
 function getOrCreateTabId() {
     if (typeof window === 'undefined') return '';
     try {
@@ -162,7 +167,14 @@ export function useAuth(requiredRoles?: string[], redirectOnFail: string = '/log
 
         const checkOnce = async () => {
             try {
-                const { data: { user } } = await supabase.auth.getUser();
+                const { data: { user }, error } = await supabase.auth.getUser();
+                if (error && isInvalidRefreshTokenError(error)) {
+                    await supabase.auth.signOut({ scope: 'local' });
+                    writeSessionCache(null);
+                    setAuthState({ user: null, role: null, loading: false, error });
+                    router.replace(redirectOnFail);
+                    return;
+                }
                 await applyAuth(user ?? null);
             } catch (err) {
                 if (cancelled) return;
@@ -214,7 +226,14 @@ export function useAuth(requiredRoles?: string[], redirectOnFail: string = '/log
 
     const refetch = async () => {
         try {
-            const { data: { user } } = await supabase.auth.getUser();
+            const { data: { user }, error } = await supabase.auth.getUser();
+            if (error && isInvalidRefreshTokenError(error)) {
+                await supabase.auth.signOut({ scope: 'local' });
+                writeSessionCache(null);
+                setAuthState({ user: null, role: null, loading: false, error });
+                router.replace(redirectOnFail);
+                return;
+            }
             if (user) {
                 const { data } = await supabase
                     .from('users')

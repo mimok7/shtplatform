@@ -9,6 +9,10 @@ type AuthGateProps = {
   children: React.ReactNode;
 };
 
+const isInvalidRefreshTokenError = (error: unknown) => /Invalid Refresh Token|Refresh Token Not Found|refresh token/i.test(
+  (error as { message?: string } | null)?.message || (typeof error === 'string' ? error : '')
+);
+
 export default function AuthGate({ children }: AuthGateProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -34,8 +38,14 @@ export default function AuthGate({ children }: AuthGateProps) {
 
     const validateSession = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const { data: { session }, error } = await supabase.auth.getSession();
         if (cancelled) return;
+
+        if (error && isInvalidRefreshTokenError(error)) {
+          await supabase.auth.signOut({ scope: 'local' });
+          router.replace('/login');
+          return;
+        }
 
         if (!session) {
           router.replace('/login');

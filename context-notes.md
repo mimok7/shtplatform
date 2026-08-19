@@ -626,3 +626,10 @@ PostgreSQL 17 백업 클라이언트 보정.
 - `useAuth`는 갱신 토큰 오류가 응답의 `error`로 반환될 때 이를 정리하지 않아, 새로고침마다 같은 400 요청이 반복될 수 있다. 이 분기도 로컬 세션을 정리하고 로그인으로 이동시킨다.
 - 신규 공항 견적 화면은 `quoteId`와 `quote_id`를 모두 읽도록 보정했다. 공항 코드 조회에는 활성 상태·유효 기간 필터, 최신 시작일 정렬, `limit(1).maybeSingle()`을 적용해 406을 방지한다.
 - `pnpm --dir apps/customer typecheck`와 `git diff --check`가 통과했다.
+
+모바일·매니저 공항 견적 동기화 시작.
+
+- `apps/mobile`, `apps/manager`, `apps/manager1`은 각각 동일한 `AirportFormLite` 공항 입력 컴포넌트를 보유한다. 세 컴포넌트 모두 중복 활성 요금에서 `.single()`로 406이 발생할 수 있어 고객앱과 같은 유효 기간 기반 최신 1건 선택을 적용한다.
+- 모바일은 전역 `AuthGate`, 매니저와 매니저1은 `ManagerLayout` 및 `useAuth`가 인증 진입점이다. 갱신 토큰 오류 응답은 로컬 세션을 비우고 로그인으로 이동하도록 동일하게 처리한다.
+- 세 공통 폼은 활성 요금만 선택지에 표시하고, 코드 조회·저장 직전 조회 모두 유효 기간 안의 최신 시작일 요금 한 건을 사용한다.
+- `pnpm --dir apps/mobile typecheck`, `pnpm --dir apps/manager typecheck`, `pnpm --dir apps/manager1 typecheck`, `git diff --check`가 통과했다.
