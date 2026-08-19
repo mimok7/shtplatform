@@ -231,7 +231,7 @@ function DirectBookingAirportContent() {
         } else {
             setForm(prev => ({ ...prev, airportCode1: '' }));
         }
-    }, [form.category1, form.route1, form.vehicleType1]);
+    }, [form.category1, form.route1, form.vehicleType1, form.serviceType, form.pickupDatetime, form.sendingDatetime]);
 
     // 카테고리2 변경 시 루트 옵션 로드
     useEffect(() => {
@@ -260,7 +260,7 @@ function DirectBookingAirportContent() {
         } else {
             setForm(prev => ({ ...prev, airportCode2: '' }));
         }
-    }, [form.category2, form.route2, form.vehicleType2]);
+    }, [form.category2, form.route2, form.vehicleType2, form.sendingDatetime]);
 
     // 옵션 로드 함수들
     const loadCategoryOptions = useCallback(async () => {
@@ -268,6 +268,7 @@ function DirectBookingAirportContent() {
             const { data, error } = await supabase
                 .from('airport_price')
                 .select('service_type')
+                .eq('is_active', true)
                 .order('service_type');
 
             if (error) throw error;
@@ -309,6 +310,7 @@ function DirectBookingAirportContent() {
                 .from('airport_price')
                 .select('route')
                 .eq('service_type', category)
+                .eq('is_active', true)
                 .order('route');
 
             if (error) throw error;
@@ -333,6 +335,7 @@ function DirectBookingAirportContent() {
                 .select('vehicle_type')
                 .eq('service_type', category)
                 .eq('route', route)
+                .eq('is_active', true)
                 .order('vehicle_type');
 
             if (error) throw error;
@@ -351,6 +354,12 @@ function DirectBookingAirportContent() {
 
     const getAirportCode = async (category: string, route: string, vehicleType: string, serviceNum: number) => {
         try {
+            const selectedDateTime = serviceNum === 2 || form.serviceType === 'sending'
+                ? form.sendingDatetime
+                : form.pickupDatetime;
+            const effectiveDate = selectedDateTime
+                ? selectedDateTime.slice(0, 10)
+                : new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul' }).format(new Date());
             const { data, error } = await supabase
                 .from('airport_price')
                 .select('airport_code, price')
@@ -358,9 +367,13 @@ function DirectBookingAirportContent() {
                 .eq('route', route)
                 .eq('vehicle_type', vehicleType)
                 .eq('is_active', true)
-                .single();
+                .or(`valid_from.is.null,valid_from.lte.${effectiveDate}`)
+                .or(`valid_to.is.null,valid_to.gte.${effectiveDate}`)
+                .order('valid_from', { ascending: false })
+                .limit(1)
+                .maybeSingle();
 
-            if (error) throw error;
+            if (error || !data?.airport_code) throw error || new Error('적용 가능한 공항 요금을 찾을 수 없습니다.');
 
             const code = data?.airport_code || '';
             const price = data?.price || null;
