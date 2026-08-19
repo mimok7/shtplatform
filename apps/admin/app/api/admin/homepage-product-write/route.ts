@@ -217,8 +217,8 @@ async function refreshCoreImages(cruiseName: string, roomName?: string | null) {
   if (roomName) update = update.eq('room_name', roomName);
   const { error: updateError } = await update;
   if (updateError) throw updateError;
-  if (!roomName && urls[0]) {
-    const { error: contentError } = await serviceSupabase.from('homepage_cruise_content').update({ hero_image: urls[0], updated_at: new Date().toISOString() }).eq('cruise_name', cruiseName);
+  if (!roomName) {
+    const { error: contentError } = await serviceSupabase.from('homepage_cruise_content').update({ hero_image: urls[0] || null, updated_at: new Date().toISOString() }).eq('cruise_name', cruiseName);
     if (contentError) throw contentError;
   }
 }
@@ -274,8 +274,10 @@ async function upsertImages(source: Source, values: Values) {
 async function setPrimaryImage(source: Source) {
   if (!serviceSupabase || !source.imageId) throw new Error('이미지 원본을 확인해 주세요.');
   const { data: image, error: readError } = await serviceSupabase.from('homepage_cruise_images').select('id,cruise_name,room_name').eq('id', source.imageId).maybeSingle();
-  if (readError || !image?.room_name) throw readError || new Error('객실 이미지 원본을 찾을 수 없습니다.');
-  const { error: clearError } = await serviceSupabase.from('homepage_cruise_images').update({ is_primary: false, updated_at: new Date().toISOString() }).eq('cruise_name', image.cruise_name).eq('room_name', image.room_name);
+  if (readError || !image) throw readError || new Error('이미지 원본을 찾을 수 없습니다.');
+  let clear = serviceSupabase.from('homepage_cruise_images').update({ is_primary: false, updated_at: new Date().toISOString() }).eq('cruise_name', image.cruise_name);
+  clear = image.room_name ? clear.eq('room_name', image.room_name) : clear.is('room_name', null);
+  const { error: clearError } = await clear;
   if (clearError) throw clearError;
   const { error } = await serviceSupabase.from('homepage_cruise_images').update({ is_primary: true, updated_at: new Date().toISOString() }).eq('id', image.id);
   if (error) throw error;
@@ -288,8 +290,10 @@ async function removeImage(source: Source) {
   if (readError || !image) throw readError || new Error('이미지 원본을 찾을 수 없습니다.');
   const { error } = await serviceSupabase.from('homepage_cruise_images').delete().eq('id', image.id);
   if (error) throw error;
-  if (image.is_primary && image.room_name) {
-    const { data: replacement, error: replacementError } = await serviceSupabase.from('homepage_cruise_images').select('id').eq('cruise_name', image.cruise_name).eq('room_name', image.room_name).order('sort_order').limit(1).maybeSingle();
+  if (image.is_primary) {
+    let replacementQuery = serviceSupabase.from('homepage_cruise_images').select('id').eq('cruise_name', image.cruise_name).order('sort_order').limit(1);
+    replacementQuery = image.room_name ? replacementQuery.eq('room_name', image.room_name) : replacementQuery.is('room_name', null);
+    const { data: replacement, error: replacementError } = await replacementQuery.maybeSingle();
     if (replacementError) throw replacementError;
     if (replacement) {
       const { error: primaryError } = await serviceSupabase.from('homepage_cruise_images').update({ is_primary: true, updated_at: new Date().toISOString() }).eq('id', replacement.id);
