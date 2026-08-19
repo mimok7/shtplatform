@@ -104,37 +104,56 @@ function AirportForm({ userId, quoteId, onComplete }: { userId: string; quoteId?
 
     useEffect(() => { if (form.category1) loadRouteOptions(form.category1, 1); else setRouteOptions1([]); }, [form.category1]);
     useEffect(() => { if (form.category1 && form.route1) loadVehicleTypeOptions(form.category1, form.route1, 1); else setVehicleTypeOptions1([]); }, [form.category1, form.route1]);
-    useEffect(() => { if (form.category1 && form.route1 && form.vehicleType1) getAirportCode(form.category1, form.route1, form.vehicleType1, 1); }, [form.category1, form.route1, form.vehicleType1]);
+    useEffect(() => { if (form.category1 && form.route1 && form.vehicleType1) getAirportCode(form.category1, form.route1, form.vehicleType1, 1); }, [form.category1, form.route1, form.vehicleType1, form.serviceType, form.pickupDatetime, form.sendingDatetime]);
     useEffect(() => { if (form.category2) loadRouteOptions(form.category2, 2); else setRouteOptions2([]); }, [form.category2]);
     useEffect(() => { if (form.category2 && form.route2) loadVehicleTypeOptions(form.category2, form.route2, 2); else setVehicleTypeOptions2([]); }, [form.category2, form.route2]);
-    useEffect(() => { if (form.category2 && form.route2 && form.vehicleType2) getAirportCode(form.category2, form.route2, form.vehicleType2, 2); }, [form.category2, form.route2, form.vehicleType2]);
+    useEffect(() => { if (form.category2 && form.route2 && form.vehicleType2) getAirportCode(form.category2, form.route2, form.vehicleType2, 2); }, [form.category2, form.route2, form.vehicleType2, form.sendingDatetime]);
 
     const loadCategoryOptions = async () => {
-        const { data } = await supabase.from('airport_price').select('service_type').order('service_type');
+        const { data } = await supabase.from('airport_price').select('service_type').eq('is_active', true).order('service_type');
         setCategoryOptions(uniqueStrings(data || [], 'service_type'));
     };
 
     const loadRouteOptions = async (category: string, num: number) => {
-        const { data } = await supabase.from('airport_price').select('route').eq('service_type', category).order('route');
+        const { data } = await supabase.from('airport_price').select('route').eq('service_type', category).eq('is_active', true).order('route');
         const routes = uniqueStrings(data || [], 'route');
         num === 1 ? setRouteOptions1(routes) : setRouteOptions2(routes);
     };
 
     const loadVehicleTypeOptions = async (category: string, route: string, num: number) => {
-        const { data } = await supabase.from('airport_price').select('vehicle_type').eq('service_type', category).eq('route', route).order('vehicle_type');
+        const { data } = await supabase.from('airport_price').select('vehicle_type').eq('service_type', category).eq('route', route).eq('is_active', true).order('vehicle_type');
         const types = uniqueStrings(data || [], 'vehicle_type');
         num === 1 ? setVehicleTypeOptions1(types) : setVehicleTypeOptions2(types);
     };
 
     const getAirportCode = async (category: string, route: string, vehicleType: string, num: number) => {
-        const { data } = await supabase
+        const selectedDateTime = num === 2 || form.serviceType === 'sending' ? form.sendingDatetime : form.pickupDatetime;
+        const effectiveDate = selectedDateTime
+            ? selectedDateTime.slice(0, 10)
+            : new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul' }).format(new Date());
+        const { data, error } = await supabase
             .from('airport_price')
             .select('airport_code, price, route_from, route_to')
             .eq('service_type', category)
             .eq('route', route)
             .eq('vehicle_type', vehicleType)
             .eq('is_active', true)
-            .single();
+            .or(`valid_from.is.null,valid_from.lte.${effectiveDate}`)
+            .or(`valid_to.is.null,valid_to.gte.${effectiveDate}`)
+            .order('valid_from', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+        if (error || !data?.airport_code) {
+            if (num === 1) {
+                setForm(p => ({ ...p, airportCode1: '', airportLocation1: '' }));
+                setPrice1(null);
+            } else {
+                setForm(p => ({ ...p, airportCode2: '', airportLocation2: '' }));
+                setPrice2(null);
+            }
+            return;
+        }
 
         const airportLocation = String(
             category === '샌딩' ? (data?.route_to || '') : (data?.route_from || '')

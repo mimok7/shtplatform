@@ -567,6 +567,13 @@ PostgreSQL 17 백업 클라이언트 보정.
 - 세 앱 모두 일반 크루즈 차량 카드에 `크루즈`, `차량명`, `구분`, 일정일, `승차` 또는 `하차`, `인원/차량`을 사용한다. 크루즈명이 없는 공통 차량의 표기는 `공통`으로 통일했다.
 - `pnpm --dir apps/mobile typecheck`, `pnpm --dir apps/manager typecheck`, `pnpm --dir apps/manager1 typecheck`, `git diff --check`가 통과했다.
 
+실제 공항 예약 생성 화면 406 재점검 시작.
+
+- 콘솔 요청의 선택 열 `airport_code, price, route_from, route_to`를 코드 전체에서 대조했다. 이는 공통 `AirportFormLite`가 아니라 `apps/mobile/app/reservation-edit/new`, `apps/manager/src/app/manager/reservation-edit/new`, `apps/manager1/app/manager/reservation-edit/new`에 남아 있는 단건 조회다.
+- 고객앱 프로덕션 배포는 2026-08-19 10:52 KST에 Ready 상태였고, 원격 `origin/main`에는 기존 커밋이 반영되어 있었다. 따라서 미반영 원인은 배포가 아니라 실제 오류 경로를 앞서 놓친 것이다.
+- 세 예약 생성 화면의 코드 조회를 활성 상태·선택 이용일 유효 기간·최신 시작일 순서의 단일 선택으로 변경했다. 날짜 변경 시에도 공항 코드를 재조회하며, 적용 요금이 없으면 이전 코드와 금액을 비운다.
+- `pnpm --dir apps/mobile typecheck`, `pnpm --dir apps/manager typecheck`, `pnpm --dir apps/manager1 typecheck`가 통과했다.
+
 매니저1 일정 크루즈 차량 카드 표시 통일 보정 시작.
 
 - 당일 왕복 크루즈 차량의 `request_note`는 `[LINKED_CRUISE_RESERVATION_ID:<UUID>]`를 연결용 식별자로 저장한다. 실제 고객·운행 정보가 아니므로 카드의 메모에 표시하지 않는다.
