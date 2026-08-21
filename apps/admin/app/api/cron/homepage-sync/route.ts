@@ -2,6 +2,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { pushHomepageCatalog } from '@/lib/homepageSync';
 
+export const runtime = 'nodejs';
+export const maxDuration = 300;
+
 function isCronRequest(request: NextRequest) {
   const secret = process.env.CRON_SECRET;
   return Boolean(secret && request.headers.get('authorization') === `Bearer ${secret}`);

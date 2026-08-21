@@ -4,6 +4,9 @@ import { createSupabaseServerClient } from '@/lib/supabaseServer';
 import serviceSupabase from '@/lib/serviceSupabase';
 import { getHomepageCatalogStatus, pushHomepageCatalog, refreshHomepageCatalog } from '@/lib/homepageSync';
 
+export const runtime = 'nodejs';
+export const maxDuration = 300;
+
 async function isAdmin(request: NextRequest) {
   if (!serviceSupabase) return false;
   const header = request.headers.get('authorization') || '';
