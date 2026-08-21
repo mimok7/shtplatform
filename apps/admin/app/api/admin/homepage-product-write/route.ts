@@ -271,6 +271,36 @@ async function upsertImages(source: Source, values: Values) {
   if (rows.some((row) => !row.room_name && row.is_primary)) await refreshCoreImages(source.cruiseName, null);
 }
 
+async function upsertHotelImages(source: Source, values: Values) {
+  if (!serviceSupabase || source.serviceType !== 'hotel' || !source.sourceKey || !Array.isArray(values.images)) throw new Error('호텔 이미지 원본을 확인해 주세요.');
+  const allowedCollections = new Set(['hotel_import', 'hotel_gallery', 'room_gallery']);
+  const rows = values.images.map((item) => item as Values).map((item) => ({
+    id: text(item.id) || randomUUID(), collection: text(item.collection) || 'hotel_import', hotel_code: source.sourceKey,
+    hotel_price_code: text(item.hotelPriceCode), source_url: text(item.sourceUrl), source_image_url: text(item.sourceImageUrl),
+    image_name: text(item.imageName), image_url: text(item.imageUrl), storage_bucket: text(item.storageBucket),
+    storage_path: text(item.storagePath), sort_order: number(item.sortOrder) || 0, is_primary: Boolean(item.isPrimary),
+    updated_at: new Date().toISOString(),
+  })).filter((row) => row.image_url && allowedCollections.has(row.collection));
+  if (!rows.length) return;
+  if (rows.some((row) => (row.collection === 'room_gallery') !== Boolean(row.hotel_price_code))) throw new Error('호텔 객실 이미지 저장 대상이 올바르지 않습니다.');
+  const roomCodes = [...new Set(rows.filter((row) => row.collection === 'room_gallery').map((row) => row.hotel_price_code as string))];
+  if (roomCodes.length) {
+    const { data: rooms, error: roomsError } = await serviceSupabase.from('hotel_price').select('hotel_price_code,hotel_code').in('hotel_price_code', roomCodes);
+    if (roomsError) throw roomsError;
+    if ((rooms || []).length !== roomCodes.length || (rooms || []).some((room) => room.hotel_code !== source.sourceKey)) throw new Error('선택한 호텔에 속한 객실만 이미지 저장 대상으로 지정할 수 있습니다.');
+  }
+  for (const row of rows.filter((item) => item.is_primary)) {
+    let clear = serviceSupabase.from('homepage_hotel_images').update({ is_primary: false, updated_at: row.updated_at }).eq('hotel_code', source.sourceKey).eq('collection', row.collection);
+    clear = row.collection === 'room_gallery' ? clear.eq('hotel_price_code', row.hotel_price_code) : clear.is('hotel_price_code', null);
+    const { error } = await clear;
+    if (error) throw error;
+  }
+  const { error } = await serviceSupabase.from('homepage_hotel_images').upsert(rows, { onConflict: 'collection,image_url' });
+  if (error) throw error;
+  const hero = rows.find((row) => row.collection === 'hotel_import' && row.is_primary);
+  if (hero) await mergeOverride('homepage_catalog_product_overrides', { service_type: 'hotel', source_key: source.sourceKey }, { image_url: hero.image_url });
+}
+
 async function setPrimaryImage(source: Source) {
   if (!serviceSupabase || !source.imageId) throw new Error('이미지 원본을 확인해 주세요.');
   const { data: image, error: readError } = await serviceSupabase.from('homepage_cruise_images').select('id,cruise_name,room_name').eq('id', source.imageId).maybeSingle();
@@ -316,6 +346,7 @@ async function mutate(action: string, source: Source, values: Values) {
   if (action === 'createRateOnlyCruise') return createRateOnlyCruise(source, values);
   if (action === 'upsertImage') return upsertImage(source, values);
   if (action === 'upsertImages') return upsertImages(source, values);
+  if (action === 'upsertHotelImages') return upsertHotelImages(source, values);
   if (action === 'setPrimaryImage') return setPrimaryImage(source);
   if (action === 'removeImage') return removeImage(source);
   throw new Error('지원하지 않는 홈페이지 상품 작업입니다.');

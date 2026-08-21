@@ -55,6 +55,7 @@ const CATALOGS = [
   { table: 'homepage_cruise_tags', select: 'id,cruise_name,tag,evidence,is_active,created_at,updated_at' },
   { table: 'homepage_cruise_cabin_overrides', select: 'cruise_name,room_name,values,created_at,updated_at' },
   { table: 'homepage_cruise_images', select: 'id,collection,cruise_name,room_name,source_url,source_image_url,image_name,image_url,storage_bucket,storage_path,sort_order,is_primary,created_at,updated_at' },
+  { table: 'homepage_hotel_images', select: 'id,collection,hotel_code,hotel_price_code,source_url,source_image_url,image_name,image_url,storage_bucket,storage_path,sort_order,is_primary,created_at,updated_at' },
   { table: 'homepage_catalog_product_overrides', select: 'service_type,source_key,values,created_at,updated_at' },
   { table: 'homepage_catalog_price_overrides', select: 'source_table,source_id,values,created_at,updated_at' },
 ] as const;
@@ -65,6 +66,7 @@ function sourceRecordId(table: string, row: CatalogRow, index: number) {
   if (table === 'homepage_cruise_content') return values.cruise_name;
   if (table === 'homepage_cruise_tags') return `${values.cruise_name || ''}:${values.tag || index}`;
   if (table === 'homepage_cruise_cabin_overrides') return `${values.cruise_name || ''}:${values.room_name || index}`;
+  if (table === 'homepage_hotel_images') return values.id;
   if (table === 'homepage_catalog_product_overrides') return `${values.service_type || ''}:${values.source_key || index}`;
   if (table === 'homepage_catalog_price_overrides') return `${values.source_table || ''}:${values.source_id || index}`;
   return values.id || values.option_id || values.pricing_id || values.schedule_id || values.inclusion_id
