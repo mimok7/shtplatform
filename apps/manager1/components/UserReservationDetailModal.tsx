@@ -2119,34 +2119,32 @@ export default function UserReservationDetailModal({
                                     예상 총 금액
                                 </h4>
                                 {(() => {
-                                    // 총 금액 집계
+                                    // 화면에 표시되는 각 유료 서비스 행과 예약 추가/차감을 모두 합산한다.
                                     const additionalFeeByReservation = new Map<string, number>();
-                                    const reservationTotalByReservation = new Map<string, number>();
-                                    let rowFallbackTotal = 0;
+                                    let serviceTotal = 0;
                                     (enrichedServices || []).forEach((s: any) => {
                                         const t = s.serviceType;
                                         // SHT Drop-off 행은 집계 제외 (왕복요금은 픽업에만 포함)
                                         if (t === 'sht' && isShtDropoffCategory(s.category || s.sht_category)) return;
 
                                         const reservationId = String(s.reservation_id || s.reservationId || '').trim();
-                                        if (reservationId && !additionalFeeByReservation.has(reservationId)) {
-                                            additionalFeeByReservation.set(reservationId, getManualAdditionalFee(s));
-                                        }
-                                        // 이미 집계된 예약 ID는 건너맜
-                                        if (reservationId && reservationTotalByReservation.has(reservationId)) return;
-
-                                        // UI에 표시되는 개별 서비스의 총액을 가져온다
                                         const rowTotal = getServiceDisplayTotal(s);
+                                        if (Number.isFinite(rowTotal)) {
+                                            serviceTotal += rowTotal;
+                                        }
 
+                                        // 서비스 행은 같은 reservation_id여도 각각 합산한다.
+                                        // 단, 예약 단위의 추가/차감은 중복으로 붙지 않도록 한 번만 반영한다.
                                         if (reservationId) {
-                                            reservationTotalByReservation.set(reservationId, rowTotal);
-                                        } else if (Number.isFinite(rowTotal)) {
-                                            rowFallbackTotal += rowTotal;
+                                            const additionalFee = getManualAdditionalFee(s);
+                                            const savedAdditionalFee = additionalFeeByReservation.get(reservationId);
+                                            if (savedAdditionalFee === undefined || (savedAdditionalFee === 0 && additionalFee !== 0)) {
+                                                additionalFeeByReservation.set(reservationId, additionalFee);
+                                            }
                                         }
                                     });
                                     const additionalFeeTotal = Array.from(additionalFeeByReservation.values()).reduce((sum, fee) => sum + Number(fee || 0), 0);
-                                    const reservationGrandTotal = Array.from(reservationTotalByReservation.values()).reduce((sum, total) => sum + Number(total || 0), 0);
-                                    const displayGrandTotal = reservationGrandTotal + rowFallbackTotal;
+                                    const displayGrandTotal = serviceTotal + additionalFeeTotal;
 
                                     return (
                                         <div className="space-y-1">
