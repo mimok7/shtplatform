@@ -505,7 +505,19 @@ PostgreSQL 17 백업 클라이언트 보정.
 - 화면은 가격 테이블 조회 결과만 이용방식 `<option>`으로 렌더링한다. 이 조회가 권한·일시 오류로 누락되면 저장된 select 값이 빈 값처럼 보일 수 있으므로, 현재 차량 행의 저장값도 옵션 목록에 합친다.
 - `apps/manager`와 `apps/manager1`은 예약 수정 기능 미러 규칙이 있으므로 동일 변경을 적용한다.
 - `pnpm --filter @sht/manager typecheck`와 `pnpm --filter @sht/manager1 typecheck`가 모두 통과했고, `git diff --check`도 통과했다.
-- `pnpm check:manager1-mirror`도 통과했으며, 변경은 `8167df4` 커밋으로 기록했다.
+- `pnpm check:manager1-mirror`도 통과했으며, 변경은 `43925fc` 커밋으로 기록했다.
+
+## 크루즈 차량 일정왕복·크루즈별 셔틀 선택 보정
+
+- 지정 차량 예약은 `request_note`에 `[LINKED_CRUISE_RESERVATION_ID:46588aff-a5d7-416c-9e01-48bdd78159d7]`를 보존한다. 연결된 크루즈 예약의 `cruise_rate_card.cruise_name`은 `빅토리어스 크루즈`, 일정은 `1N2D`, 체크인은 `2026-10-03`이다.
+- `reservation_cruise_car` 스키마에는 `room_price_code`가 없다. 기존 manager 코드는 존재하지 않는 차량 행의 `room_price_code`로 크루즈명을 찾고 manager1은 크루즈명 조회 자체가 없어, 셔틀 요금 조회가 크루즈별 `category` 필터 없이 실행된다.
+- 크루즈 필터가 없으면 `크루즈 셔틀 리무진`과 이용방식·경로만 일치하는 첫 요금이 선택될 수 있어 바야 소울 등 고객 예약과 무관한 크루즈 코드가 잡힌다.
+- 고객 예약 화면은 `일정왕복`을 저장하되 가격 조회 시 `다른날왕복`으로 변환한다. 예약 수정 화면에도 같은 조회 매핑이 필요하며, 가격 행의 `way_type='다른날왕복'`을 폼에 다시 덮어쓰면 안 된다.
+- 지정 데이터는 현재 `way_type='다른날왕복'`이지만 일정왕복 생성 데이터의 특징인 연결 크루즈 메모가 있고 `[OTHER_DAY_ROUNDTRIP]` 메타데이터가 없다. 연결 크루즈 체크인·종료일과 차량 날짜가 일치하면 수정 화면에서 `일정왕복`으로 복원한다.
+- 수정 화면은 연결 ID를 최우선으로 크루즈 예약을 찾고, 객실 요금 카드에서 `빅토리어스 크루즈`와 `1N2D` 일정을 복원한다. 이용방식 변경은 이 크루즈 컨텍스트를 수정하지 않는다.
+- 차량 타입 목록은 일반 차량을 유지하되 크루즈 셔틀은 연결된 크루즈의 요금 행이 있을 때만 노출한다. 셔틀 코드 조회는 크루즈명·사용 연도·활성 상태까지 일치시킨다.
+- 지정 예약 조건으로 읽기 전용 검증한 결과 빅토리어스 2026년 셔틀 코드 `CRUISE_SHUTTLE_HN_HB_2WAY_DIFF` 한 건만 반환됐다.
+- `pnpm --filter @sht/manager typecheck`, `pnpm --filter @sht/manager1 typecheck`, `git diff --check`가 통과했다.
 
 고객앱 공항 서비스 예약 완료 버튼 비활성화 수정.
 
