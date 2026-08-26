@@ -499,6 +499,14 @@ PostgreSQL 17 백업 클라이언트 보정.
 - 예약 안내의 고정 금액은 금액 없는 일반 안내 문구로 바꿨고, 저장되는 추가 차량·당일투어 선택 메모에서도 금액을 제외했다.
 - `pnpm --dir apps/customer typecheck`는 이번 변경과 무관한 `src/app/mypage/reservations/hotel/page.tsx`의 기존 상태 타입 오류 2건으로 실패했다. 대상 예약 화면에서 통화 기호·정액 금액·가격/합계 표시를 정적 검색해 남은 고객 노출 항목이 없음을 확인했으며, `git diff --check`는 통과했다. ESLint는 ESLint 9가 legacy `.eslintrc.json`을 읽지 못해 실행할 수 없었다.
 
+## 크루즈 차량 이용방식 표시 보정
+
+- 지정 예약 `ec62cf5a-621a-47be-ab26-2cc405703a91`의 `reservation_cruise_car` 행은 `way_type='다른날왕복'`, 가격 코드 `LIMO11_HN_HL_2WAY_DIFF`로 저장돼 있다. 같은 `rentcar_price` 행도 `way_type='다른날왕복'`이다.
+- 화면은 가격 테이블 조회 결과만 이용방식 `<option>`으로 렌더링한다. 이 조회가 권한·일시 오류로 누락되면 저장된 select 값이 빈 값처럼 보일 수 있으므로, 현재 차량 행의 저장값도 옵션 목록에 합친다.
+- `apps/manager`와 `apps/manager1`은 예약 수정 기능 미러 규칙이 있으므로 동일 변경을 적용한다.
+- `pnpm --filter @sht/manager typecheck`와 `pnpm --filter @sht/manager1 typecheck`가 모두 통과했고, `git diff --check`도 통과했다.
+- `pnpm check:manager1-mirror`도 통과했으며, 변경은 `8167df4` 커밋으로 기록했다.
+
 고객앱 공항 서비스 예약 완료 버튼 비활성화 수정.
 
 - 대상 화면은 `apps/customer1/app/order/new/airport/page.tsx`이다. 버튼은 `airportCode1`이 비어 있으면 비활성화된다.

@@ -159,6 +159,14 @@ function CruiseCarReservationEditContent() {
 
     const finalTotalPrice = Math.max(0, baseTotalPrice + additionalFee);
 
+    const displayedWayTypeOptions = useMemo(
+        () => Array.from(new Set([
+            ...wayTypeOptions,
+            ...vehicleForms.map((item) => item.way_type).filter(Boolean),
+        ])),
+        [vehicleForms, wayTypeOptions]
+    );
+
     const applyAdditionalFeeValue = (nextValue: number) => {
         setAdditionalFee(nextValue);
         setAdditionalFeeInput(nextValue === 0 ? '' : String(nextValue));
@@ -893,7 +901,7 @@ function CruiseCarReservationEditContent() {
                                                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                                     >
                                                         <option value="">이용방식 선택</option>
-                                                        {wayTypeOptions.map((wayType) => (
+                                                        {displayedWayTypeOptions.map((wayType) => (
                                                             <option key={wayType} value={wayType}>{wayType}</option>
                                                         ))}
                                                     </select>
