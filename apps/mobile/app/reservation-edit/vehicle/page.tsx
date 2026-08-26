@@ -26,6 +26,8 @@ interface RentcarPriceOption {
     route: string | null;
     vehicle_type: string | null;
     price: number | null;
+    category?: string | null;
+    cruise?: string | null;
 }
 
 interface CruiseCarReservation {
@@ -46,6 +48,7 @@ interface CruiseCarReservation {
     request_note: string;
     dispatch_code: string;
     dispatch_memo: string;
+    cruise_name?: string;
     reservation: {
         re_id: string;
         re_status: string;
@@ -79,6 +82,37 @@ interface VehicleFormData {
     dispatch_code: string;
     dispatch_memo: string;
 }
+
+const SCHEDULE_ROUND_TRIP = '일정왕복';
+const PRICE_ROUND_TRIP = '다른날왕복';
+const CRUISE_SHUTTLE = '크루즈 셔틀 리무진';
+const OTHER_DAY_NOTE_PREFIX = '[OTHER_DAY_ROUNDTRIP]';
+const LINKED_CRUISE_RESERVATION_PATTERN = /\[LINKED_CRUISE_RESERVATION_ID\s*:\s*([0-9a-f-]{36})\]/i;
+const DEFAULT_WAY_TYPE_OPTIONS = ['편도', '당일왕복', SCHEDULE_ROUND_TRIP, PRICE_ROUND_TRIP, '시내당일렌트'];
+
+const getLookupWayType = (wayType: string) =>
+    wayType === SCHEDULE_ROUND_TRIP ? PRICE_ROUND_TRIP : wayType;
+
+const getLinkedCruiseReservationId = (requestNote?: string | null) =>
+    String(requestNote || '').match(LINKED_CRUISE_RESERVATION_PATTERN)?.[1] || '';
+
+const getDisplayedWayType = (
+    row: { way_type?: string | null },
+    fallbackWayType = '',
+    isLinkedSchedule = false
+) => {
+    const savedWayType = row.way_type || fallbackWayType;
+    return savedWayType === PRICE_ROUND_TRIP && isLinkedSchedule
+        ? SCHEDULE_ROUND_TRIP
+        : savedWayType;
+};
+
+const getScheduleReturnOffsetDays = (scheduleType: string) => {
+    const normalized = String(scheduleType || '').trim().toUpperCase();
+    if (normalized === '2N3D' || normalized === '2박3일') return 2;
+    if (normalized === 'DAY' || normalized === '당일') return 0;
+    return 1;
+};
 
 const createEmptyVehicleForm = (): VehicleFormData => ({
     rentcar_price_code: '',
@@ -129,6 +163,14 @@ function CruiseCarReservationEditContent() {
     );
 
     const finalTotalPrice = Math.max(0, baseTotalPrice + additionalFee);
+
+    const displayedWayTypeOptions = useMemo(
+        () => Array.from(new Set([
+            ...wayTypeOptions,
+            ...vehicleForms.map((item) => item.way_type).filter(Boolean),
+        ])),
+        [vehicleForms, wayTypeOptions]
+    );
 
     const applyAdditionalFeeValue = (nextValue: number) => {
         setAdditionalFee(nextValue);
@@ -249,13 +291,14 @@ function CruiseCarReservationEditContent() {
 
             if (error) throw error;
 
-            const uniqueWayTypes = Array.from(
-                new Set((data || []).map((item: any) => item.way_type).filter(Boolean))
-            ) as string[];
+            const uniqueWayTypes = Array.from(new Set([
+                ...DEFAULT_WAY_TYPE_OPTIONS,
+                ...(data || []).map((item: any) => item.way_type).filter(Boolean),
+            ])) as string[];
             setWayTypeOptions(uniqueWayTypes);
         } catch (error) {
             console.error('❌ 이용방식 옵션 조회 실패:', error);
-            setWayTypeOptions([]);
+            setWayTypeOptions(DEFAULT_WAY_TYPE_OPTIONS);
         }
     };
 
@@ -263,11 +306,13 @@ function CruiseCarReservationEditContent() {
         if (!wayType) return;
         if (routeOptionsByWay[wayType]) return;
 
+        const lookupWayType = getLookupWayType(wayType);
+
         try {
             const { data, error } = await supabase
                 .from('rentcar_price')
                 .select('route')
-                .eq('way_type', wayType)
+                .eq('way_type', lookupWayType)
                 .not('route', 'is', null)
                 .order('route');
 
@@ -284,24 +329,30 @@ function CruiseCarReservationEditContent() {
         }
     };
 
-    const ensureVehicleTypeOptions = async (wayType: string, route: string) => {
+    const ensureVehicleTypeOptions = async (wayType: string, route: string, cruiseName?: string) => {
         if (!wayType || !route) return;
         const key = `${wayType}__${route}`;
         if (vehicleTypeOptionsByKey[key]) return;
 
         try {
+            const lookupWayType = getLookupWayType(wayType);
             const { data, error } = await supabase
                 .from('rentcar_price')
-                .select('vehicle_type')
-                .eq('way_type', wayType)
+                .select('vehicle_type, category, cruise')
+                .eq('way_type', lookupWayType)
                 .eq('route', route)
                 .not('vehicle_type', 'is', null)
+                .eq('is_active', true)
                 .order('vehicle_type');
 
             if (error) throw error;
 
             const uniqueTypes = Array.from(
-                new Set((data || []).map((item: any) => item.vehicle_type).filter(Boolean))
+                new Set((data || [])
+                    .filter((item: any) => item.vehicle_type !== CRUISE_SHUTTLE
+                        || (!!cruiseName && (item.category === cruiseName || item.cruise === cruiseName)))
+                    .map((item: any) => item.vehicle_type)
+                    .filter(Boolean))
             ) as string[];
 
             setVehicleTypeOptionsByKey(prev => ({ ...prev, [key]: uniqueTypes }));
@@ -325,17 +376,36 @@ function CruiseCarReservationEditContent() {
         return data as RentcarPriceOption | null;
     };
 
-    const findRentcarPrice = async (wayType: string, route: string, vehicleType: string) => {
+    const findRentcarPrice = async (
+        wayType: string,
+        route: string,
+        vehicleType: string,
+        cruiseName?: string,
+        usageDate?: string
+    ) => {
         if (!wayType || !route || !vehicleType) return null;
+        if (vehicleType === CRUISE_SHUTTLE && !cruiseName) {
+            console.warn('⚠️ 연결된 크루즈명 없이 크루즈 셔틀 요금을 선택할 수 없습니다.');
+            return null;
+        }
 
-        const { data, error } = await supabase
+        let query = supabase
             .from('rentcar_price')
-            .select('rent_code, way_type, route, vehicle_type, price')
-            .eq('way_type', wayType)
+            .select('rent_code, way_type, route, vehicle_type, price, category, cruise')
+            .eq('way_type', getLookupWayType(wayType))
             .eq('route', route)
             .eq('vehicle_type', vehicleType)
-            .limit(1)
-            .maybeSingle();
+            .eq('is_active', true);
+
+        if (vehicleType === CRUISE_SHUTTLE && cruiseName) {
+            query = query.eq('category', cruiseName);
+            const usageYear = Number(String(usageDate || '').slice(0, 4));
+            if (Number.isInteger(usageYear) && usageYear > 0) {
+                query = query.eq('year', usageYear);
+            }
+        }
+
+        const { data, error } = await query.limit(1).maybeSingle();
 
         if (error) {
             console.error('❌ rentcar_price 선택값 조회 실패:', error);
@@ -361,17 +431,24 @@ function CruiseCarReservationEditContent() {
 
             if (resErr || !resRow) throw resErr || new Error('예약 기본 정보 접근 실패');
 
-            let resolvedCheckin = '';
-            const { data: directCruiseRow } = await supabase
-                .from('reservation_cruise')
-                .select('checkin')
-                .eq('reservation_id', resRow.re_id)
-                .limit(1)
-                .maybeSingle();
+            const { data: carRows, error: carErr } = await supabase
+                .from('reservation_cruise_car')
+                .select('*')
+                .eq('reservation_id', reservationId)
+                .order('created_at', { ascending: true });
 
-            if (directCruiseRow?.checkin) resolvedCheckin = directCruiseRow.checkin;
+            if (carErr) {
+                console.warn('⚠️ 크루즈 차량 예약 상세 조회 실패:', carErr);
+            }
 
-            if (!resolvedCheckin && resRow.re_quote_id) {
+            const linkedCruiseReservationId = (carRows || [])
+                .map((row: any) => getLinkedCruiseReservationId(row.request_note))
+                .find(Boolean) || '';
+            const cruiseReservationIds = new Set<string>();
+            if (linkedCruiseReservationId) cruiseReservationIds.add(linkedCruiseReservationId);
+            if (resRow.re_type === 'cruise') cruiseReservationIds.add(resRow.re_id);
+
+            if (resRow.re_quote_id) {
                 const { data: cruiseReservationRows } = await supabase
                     .from('reservation')
                     .select('re_id')
@@ -380,16 +457,36 @@ function CruiseCarReservationEditContent() {
                     .order('re_created_at', { ascending: false })
                     .limit(10);
 
-                const cruiseReservationIds = (cruiseReservationRows || []).map((row: any) => row.re_id).filter(Boolean);
-                if (cruiseReservationIds.length > 0) {
-                    const { data: cruiseRows } = await supabase
-                        .from('reservation_cruise')
-                        .select('reservation_id, checkin, created_at')
-                        .in('reservation_id', cruiseReservationIds)
-                        .order('created_at', { ascending: false });
+                (cruiseReservationRows || []).forEach((row: any) => {
+                    if (row.re_id) cruiseReservationIds.add(row.re_id);
+                });
+            }
 
-                    const latestCheckinRow = (cruiseRows || []).find((row: any) => !!row.checkin);
-                    if (latestCheckinRow?.checkin) resolvedCheckin = latestCheckinRow.checkin;
+            let resolvedCheckin = '';
+            let cruiseName = '';
+            let cruiseScheduleType = '';
+            if (cruiseReservationIds.size > 0) {
+                const { data: cruiseRows } = await supabase
+                    .from('reservation_cruise')
+                    .select('reservation_id, room_price_code, checkin, created_at')
+                    .in('reservation_id', Array.from(cruiseReservationIds))
+                    .order('created_at', { ascending: false });
+
+                const prioritizedCruiseRows = [
+                    ...(cruiseRows || []).filter((row: any) => row.reservation_id === linkedCruiseReservationId),
+                    ...(cruiseRows || []).filter((row: any) => row.reservation_id !== linkedCruiseReservationId),
+                ];
+                const linkedCruiseRow = prioritizedCruiseRows.find((row: any) => row.room_price_code || row.checkin);
+                resolvedCheckin = linkedCruiseRow?.checkin || '';
+
+                if (linkedCruiseRow?.room_price_code) {
+                    const { data: cruiseData } = await supabase
+                        .from('cruise_rate_card')
+                        .select('cruise_name, schedule_type')
+                        .eq('id', linkedCruiseRow.room_price_code)
+                        .maybeSingle();
+                    cruiseName = cruiseData?.cruise_name || '';
+                    cruiseScheduleType = cruiseData?.schedule_type || '';
                 }
             }
 
@@ -405,15 +502,6 @@ function CruiseCarReservationEditContent() {
                 if (userRow) {
                     customerInfo = { ...customerInfo, ...userRow, phone: userRow.phone_number };
                 }
-            }
-
-            const { data: carRows, error: carErr } = await supabase
-                .from('reservation_cruise_car')
-                .select('*')
-                .eq('reservation_id', reservationId)
-                .order('created_at', { ascending: true });
-
-            if (carErr) {
             }
 
             let quoteInfo = null as { title: string } | null;
@@ -444,6 +532,7 @@ function CruiseCarReservationEditContent() {
 
             const fullReservation: CruiseCarReservation = {
                 ...(firstRow || defaultCarInfo),
+                cruise_name: cruiseName,
                 reservation: {
                     re_id: resRow.re_id,
                     re_status: resRow.re_status,
@@ -464,11 +553,18 @@ function CruiseCarReservationEditContent() {
                 const existingCode = row.rentcar_price_code || row.car_price_code || '';
                 const rentcarPriceInfo = existingCode ? await loadRentcarPriceByCode(existingCode) : null;
 
-                const wayType = row.way_type || rentcarPriceInfo?.way_type || '';
+                const requestNote = String(row.request_note || '');
+                const expectedReturnDate = shiftDate(resolvedCheckin, getScheduleReturnOffsetDays(cruiseScheduleType));
+                const isLinkedSchedule = !!getLinkedCruiseReservationId(requestNote)
+                    && !requestNote.includes(OTHER_DAY_NOTE_PREFIX)
+                    && !!resolvedCheckin
+                    && row.pickup_datetime === resolvedCheckin
+                    && row.return_datetime === expectedReturnDate;
+                const wayType = getDisplayedWayType(row, rentcarPriceInfo?.way_type || '', isLinkedSchedule);
                 const route = row.route || rentcarPriceInfo?.route || '';
 
                 if (wayType) await ensureRouteOptions(wayType);
-                if (wayType && route) await ensureVehicleTypeOptions(wayType, route);
+                if (wayType && route) await ensureVehicleTypeOptions(wayType, route, cruiseName);
 
                 const form: VehicleFormData = {
                     rentcar_price_code: existingCode,
@@ -703,10 +799,19 @@ function CruiseCarReservationEditContent() {
                     <div className="lg:col-span-2 space-y-6">
                         <div className="bg-white rounded-lg shadow-sm p-4">
                             <div className="flex items-center justify-between mb-4">
-                                <h3 className="text-lg font-medium text-gray-900 flex items-center gap-2">
-                                    <Car className="w-5 h-5" />
-                                    크루즈 차량 세부사항 수정
-                                </h3>
+                                <div>
+                                    <h3 className="text-lg font-medium text-gray-900 flex items-center gap-2">
+                                        <Car className="w-5 h-5" />
+                                        크루즈 차량 세부사항 수정
+                                    </h3>
+                                    {reservation.cruise_name && (
+                                        <p className="text-sm text-gray-600 mt-2 flex items-center gap-2">
+                                            <span className="inline-block px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">
+                                                ⛴️ {reservation.cruise_name}
+                                            </span>
+                                        </p>
+                                    )}
+                                </div>
                                 <button
                                     type="button"
                                     onClick={addVehicleForm}
@@ -760,7 +865,7 @@ function CruiseCarReservationEditContent() {
                                                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                                     >
                                                         <option value="">이용방식 선택</option>
-                                                        {wayTypeOptions.map((wayType) => (
+                                                        {displayedWayTypeOptions.map((wayType) => (
                                                             <option key={wayType} value={wayType}>{wayType}</option>
                                                         ))}
                                                     </select>
@@ -780,7 +885,7 @@ function CruiseCarReservationEditContent() {
                                                                 manual_total: false,
                                                             });
                                                             if (item.way_type && nextRoute) {
-                                                                await ensureVehicleTypeOptions(item.way_type, nextRoute);
+                                                                await ensureVehicleTypeOptions(item.way_type, nextRoute, reservation.cruise_name);
                                                             }
                                                         }}
                                                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -807,11 +912,17 @@ function CruiseCarReservationEditContent() {
                                                                 manual_total: false,
                                                             });
 
-                                                            const priceInfo = await findRentcarPrice(item.way_type, item.route, nextType);
+                                                            const priceInfo = await findRentcarPrice(
+                                                                item.way_type,
+                                                                item.route,
+                                                                nextType,
+                                                                reservation.cruise_name,
+                                                                item.pickup_datetime || cruiseCheckin
+                                                            );
                                                             if (priceInfo) {
                                                                 updateVehicleFormWithAutoTotal(index, {
                                                                     rentcar_price_code: priceInfo.rent_code || '',
-                                                                    way_type: priceInfo.way_type || item.way_type,
+                                                                    way_type: item.way_type,
                                                                     route: priceInfo.route || item.route,
                                                                     vehicle_type: priceInfo.vehicle_type || nextType,
                                                                     unit_price: priceInfo.price || 0,
@@ -901,7 +1012,7 @@ function CruiseCarReservationEditContent() {
                                                     </div>
                                                 </div>
 
-                                                {(item.way_type === '당일왕복' || item.way_type === '다른날왕복') && (
+                                                {(item.way_type === '당일왕복' || item.way_type === SCHEDULE_ROUND_TRIP || item.way_type === PRICE_ROUND_TRIP) && (
                                                     <div>
                                                         <label className="block text-sm font-medium text-gray-700 mb-1">
                                                             <Calendar className="inline w-4 h-4 mr-1" />

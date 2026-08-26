@@ -519,6 +519,15 @@ PostgreSQL 17 백업 클라이언트 보정.
 - 지정 예약 조건으로 읽기 전용 검증한 결과 빅토리어스 2026년 셔틀 코드 `CRUISE_SHUTTLE_HN_HB_2WAY_DIFF` 한 건만 반환됐다.
 - `pnpm --filter @sht/manager typecheck`, `pnpm --filter @sht/manager1 typecheck`, `git diff --check`가 통과했다.
 
+## 크루즈 차량 수정 3개 앱 동기화
+
+- `apps/mobile/app/reservation-edit/vehicle/page.tsx`는 manager1의 이전 차량 수정 흐름을 유지해 일정왕복 옵션·가격 매핑·연결된 크루즈명 조회·셔틀 카테고리 필터가 모두 없다.
+- 모바일은 경량 UI 원칙을 지키되, 이용방식·연결 크루즈·셔틀 요금 선택의 Supabase 조회와 저장 규칙은 manager1과 동일해야 한다.
+- 모바일도 연결 ID를 최우선으로 크루즈 예약과 객실 요금 카드를 찾아 일정·체크인·크루즈명을 복원한다. 기존 `다른날왕복` 차량 행은 연결된 일정의 체크인·귀환일과 일치할 때만 화면에서 `일정왕복`으로 표시한다.
+- 모바일의 `일정왕복`은 경로·차량·요금 조회에만 `다른날왕복` 가격표를 사용하고, 차량 타입 선택 후에도 화면 이용방식을 가격 행 값으로 덮어쓰지 않는다.
+- 모바일 크루즈 셔틀은 연결된 크루즈명과 일치하는 `category` 또는 `cruise`가 있을 때만 목록에 표시한다. 코드 선택은 활성 상태·사용 연도·크루즈명까지 일치하는 요금만 사용한다.
+- `pnpm --filter @sht/mobile typecheck`, `pnpm --filter @sht/manager typecheck`, `pnpm --filter @sht/manager1 typecheck`, `pnpm check:manager1-mirror`, `git diff --check`가 통과했다.
+
 고객앱 공항 서비스 예약 완료 버튼 비활성화 수정.
 
 - 대상 화면은 `apps/customer1/app/order/new/airport/page.tsx`이다. 버튼은 `airportCode1`이 비어 있으면 비활성화된다.
