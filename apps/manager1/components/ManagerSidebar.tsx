@@ -47,6 +47,7 @@ export default function ManagerSidebar({ activeTab, userEmail, onLogout, userRol
     if (pathname.startsWith('/manager/schedule/sheet-edit')) return 'schedule-sheet-edit';
     if (pathname.startsWith('/manager/reservations/requests')) return 'reservation-requests';
     if (pathname.startsWith('/manager/reservations/bulk')) return 'reservations-bulk';
+    if (pathname.startsWith('/manager/reservations/cruise')) return 'reservations-cruise';
     if (pathname.startsWith('/manager/reservation-edit/approval')) return 'reservation-edit-approval';
     if (pathname.startsWith('/manager/reservation-edit')) return 'reservation-edit';
     if (pathname.startsWith('/manager/program-updates')) return 'program-updates';
@@ -118,6 +119,13 @@ export default function ManagerSidebar({ activeTab, userEmail, onLogout, userRol
               path="/manager/reservations/bulk"
               isActive={isActiveTab('reservations-bulk')}
               onClick={() => handleNavigation('/manager/reservations/bulk')}
+            />
+            <NavItem
+              icon="🚢"
+              label="크루즈 조회"
+              path="/manager/reservations/cruise"
+              isActive={isActiveTab('reservations-cruise')}
+              onClick={() => handleNavigation('/manager/reservations/cruise')}
             />
             <NavItem
               icon="🗂️"

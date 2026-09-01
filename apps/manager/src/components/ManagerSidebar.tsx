@@ -47,6 +47,7 @@ export default function ManagerSidebar({ activeTab, userEmail, onLogout, userRol
         if (pathname.startsWith('/manager/reservations/bulk')) return 'reservations-bulk';
         if (pathname.startsWith('/manager/cafe-guide')) return 'cafe-guide';
         if (pathname.startsWith('/manager/reservation-edit/approval')) return 'reservation-edit-approval';
+        if (pathname.startsWith('/manager/reservations/cruise')) return 'reservations-cruise';
         if (pathname.startsWith('/manager/reservations/package')) return 'reservations-package';
         if (pathname === '/manager/reservations') return 'reservations';
         if (pathname === '/manager/payment-processing') return 'payment-processing';
@@ -275,6 +276,13 @@ export default function ManagerSidebar({ activeTab, userEmail, onLogout, userRol
                                     path="/manager/reservations/package"
                                     isActive={isActiveTab('reservations-package')}
                                     onClick={() => handleNavigation('/manager/reservations/package')}
+                                />
+                                <NavItem
+                                    icon="🚢"
+                                    label="크루즈 조회"
+                                    path="/manager/reservations/cruise"
+                                    isActive={isActiveTab('reservations-cruise')}
+                                    onClick={() => handleNavigation('/manager/reservations/cruise')}
                                 />
                                 <NavItem
                                     icon="🤝"

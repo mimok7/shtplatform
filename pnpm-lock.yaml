@@ -393,6 +393,9 @@ importers:
       react-hook-form:
         specifier: ^7.53.2
         version: 7.73.1(react@19.2.5)
+      xlsx:
+        specifier: ^0.18.5
+        version: 0.18.5
       zod:
         specifier: ^3.23.8
         version: 3.25.76
@@ -463,6 +466,9 @@ importers:
       web-push:
         specifier: ^3.6.7
         version: 3.6.7
+      xlsx:
+        specifier: ^0.18.5
+        version: 0.18.5
     devDependencies:
       '@types/react':
         specifier: 19.1.8
