@@ -2,13 +2,13 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
-import { Download, Filter, RefreshCw, Ship } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, Download, Filter, RefreshCw, Ship } from 'lucide-react';
 import ManagerLayout from '@/components/ManagerLayout';
 import supabase from '@/lib/supabase';
 import { fetchTableInBatches } from '@/lib/fetchInBatches';
 
 type DataScope = 'upcoming' | 'all';
-type SortKey = 'reservationDate' | 'usageDate' | 'cruiseName' | 'roomType' | 'createdAt';
+type SortKey = 'reservationDate' | 'usageDate' | 'cruiseName' | 'roomName' | 'customerName' | 'status' | 'guestCount' | 'roomTotalPrice' | 'boardingCode';
 type SortDirection = 'asc' | 'desc';
 
 interface CruiseReservationRow {
@@ -18,7 +18,7 @@ interface CruiseReservationRow {
   createdAt: string;
   usageDate: string;
   cruiseName: string;
-  roomType: string;
+  roomName: string;
   scheduleType: string;
   customerName: string;
   customerEmail: string;
@@ -53,6 +53,19 @@ const statusLabel = (status?: string | null) => ({
   pending: '대기', approved: '승인', confirmed: '확정', completed: '완료', cancelled: '취소',
 }[String(status || '').toLowerCase()] || status || '-');
 
+function SortHeader({ label, column, activeColumn, direction, onSort, align = 'left' }: {
+  label: string;
+  column: SortKey;
+  activeColumn: SortKey;
+  direction: SortDirection;
+  onSort: (column: SortKey) => void;
+  align?: 'left' | 'center' | 'right';
+}) {
+  const Icon = activeColumn !== column ? ArrowUpDown : direction === 'asc' ? ArrowUp : ArrowDown;
+  const alignClass = align === 'right' ? 'justify-end' : align === 'center' ? 'justify-center' : 'justify-start';
+  return <th className={`whitespace-nowrap border-b px-4 py-3 text-${align} font-semibold`}><button type="button" onClick={() => onSort(column)} className={`inline-flex w-full items-center gap-1 hover:text-sky-800 ${alignClass}`} aria-label={`${label} ${activeColumn === column && direction === 'asc' ? '오름차순' : activeColumn === column ? '내림차순' : '정렬'}으로 정렬`}><span>{label}</span><Icon className={`h-3.5 w-3.5 ${activeColumn === column ? 'text-sky-700' : 'text-gray-400'}`} /></button></th>;
+}
+
 async function fetchCruiseReservations({ scope, usageStartDate, usageEndDate }: { scope: DataScope; usageStartDate: string; usageEndDate: string }) {
   const rows: any[] = [];
   for (let from = 0; ; from += PAGE_SIZE) {
@@ -81,7 +94,7 @@ export default function CruiseReservationsPage() {
   const [reservationDate, setReservationDate] = useState('');
   const [usageDate, setUsageDate] = useState('');
   const [cruiseName, setCruiseName] = useState('');
-  const [roomType, setRoomType] = useState('');
+  const [roomName, setRoomName] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('reservationDate');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
@@ -115,8 +128,8 @@ export default function CruiseReservationsPage() {
           reservationDate: reservation?.re_created_at || row.created_at || '',
           createdAt: row.created_at || '',
           usageDate: row.checkin || '',
-          cruiseName: rateCard?.cruise_name || '미지정',
-          roomType: rateCard?.room_type || row.room_price_code || '미지정',
+          cruiseName: rateCard?.cruise_name || '미등록 크루즈',
+          roomName: rateCard?.room_type || '미등록 객실',
           scheduleType: rateCard?.schedule_type || '',
           customerName: user?.name || '-',
           customerEmail: user?.email || '-',
@@ -143,36 +156,54 @@ export default function CruiseReservationsPage() {
   useEffect(() => { void loadReservations(); }, []);
 
   const cruiseOptions = useMemo(() => Array.from(new Set(rows.map((row) => row.cruiseName))).sort((a, b) => a.localeCompare(b, 'ko')), [rows]);
-  const roomOptions = useMemo(() => Array.from(new Set(rows.map((row) => row.roomType))).sort((a, b) => a.localeCompare(b, 'ko')), [rows]);
+  const roomOptions = useMemo(() => Array.from(new Set(rows.map((row) => row.roomName))).sort((a, b) => a.localeCompare(b, 'ko')), [rows]);
 
   const filteredRows = useMemo(() => {
     const matched = rows.filter((row) => (
       (!reservationDate || dateKeyInKorea(row.reservationDate) === reservationDate)
       && (!usageDate || row.usageDate === usageDate)
       && (!cruiseName || row.cruiseName === cruiseName)
-      && (!roomType || row.roomType === roomType)
+      && (!roomName || row.roomName === roomName)
     ));
     return [...matched].sort((left, right) => {
       const leftValue = sortKey === 'reservationDate' ? left.reservationDate
         : sortKey === 'usageDate' ? left.usageDate
           : sortKey === 'cruiseName' ? left.cruiseName
-            : sortKey === 'roomType' ? left.roomType : left.createdAt;
+          : sortKey === 'roomName' ? left.roomName
+            : sortKey === 'customerName' ? left.customerName
+              : sortKey === 'status' ? left.status
+                : sortKey === 'guestCount' ? left.guestCount
+                  : sortKey === 'roomTotalPrice' ? left.roomTotalPrice : left.boardingCode;
       const rightValue = sortKey === 'reservationDate' ? right.reservationDate
         : sortKey === 'usageDate' ? right.usageDate
           : sortKey === 'cruiseName' ? right.cruiseName
-            : sortKey === 'roomType' ? right.roomType : right.createdAt;
-      const compared = String(leftValue || '').localeCompare(String(rightValue || ''), 'ko', { numeric: true });
+            : sortKey === 'roomName' ? right.roomName
+              : sortKey === 'customerName' ? right.customerName
+                : sortKey === 'status' ? right.status
+                  : sortKey === 'guestCount' ? right.guestCount
+                    : sortKey === 'roomTotalPrice' ? right.roomTotalPrice : right.boardingCode;
+      const compared = typeof leftValue === 'number' && typeof rightValue === 'number'
+        ? leftValue - rightValue
+        : String(leftValue || '').localeCompare(String(rightValue || ''), 'ko', { numeric: true });
       return sortDirection === 'asc' ? compared : -compared;
     });
-  }, [rows, reservationDate, usageDate, cruiseName, roomType, sortKey, sortDirection]);
+  }, [rows, reservationDate, usageDate, cruiseName, roomName, sortKey, sortDirection]);
 
   const resetFilters = () => {
     setReservationDate('');
     setUsageDate('');
     setCruiseName('');
-    setRoomType('');
+    setRoomName('');
     setSortKey('reservationDate');
     setSortDirection('desc');
+  };
+
+  const handleColumnSort = (column: SortKey) => {
+    if (sortKey === column) setSortDirection((current) => current === 'asc' ? 'desc' : 'asc');
+    else {
+      setSortKey(column);
+      setSortDirection(column === 'reservationDate' || column === 'usageDate' ? 'desc' : 'asc');
+    }
   };
 
   const handleScopeChange = (scope: DataScope) => {
@@ -191,7 +222,7 @@ export default function CruiseReservationsPage() {
       '예약일': dateLabel(dateKeyInKorea(row.reservationDate)),
       '사용일(체크인)': dateLabel(row.usageDate),
       '크루즈': row.cruiseName,
-      '객실': row.roomType,
+      '객실명': row.roomName,
       '일정': row.scheduleType || '-',
       '고객명': row.customerName,
       '이메일': row.customerEmail,
@@ -233,9 +264,8 @@ export default function CruiseReservationsPage() {
             <label className="text-sm font-medium text-gray-700">예약일<input type="date" value={reservationDate} onChange={(event) => setReservationDate(event.target.value)} className="mt-1 min-h-10 w-full border border-gray-300 bg-white px-3 text-sm" /></label>
             <label className="text-sm font-medium text-gray-700">사용일<input type="date" value={usageDate} onChange={(event) => setUsageDate(event.target.value)} className="mt-1 min-h-10 w-full border border-gray-300 bg-white px-3 text-sm" /></label>
             <label className="text-sm font-medium text-gray-700">크루즈<select value={cruiseName} onChange={(event) => setCruiseName(event.target.value)} className="mt-1 min-h-10 w-full border border-gray-300 bg-white px-3 text-sm"><option value="">전체 크루즈</option>{cruiseOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>
-            <label className="text-sm font-medium text-gray-700">객실<select value={roomType} onChange={(event) => setRoomType(event.target.value)} className="mt-1 min-h-10 w-full border border-gray-300 bg-white px-3 text-sm"><option value="">전체 객실</option>{roomOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>
-            <label className="text-sm font-medium text-gray-700">정렬 기준<select value={sortKey} onChange={(event) => setSortKey(event.target.value as SortKey)} className="mt-1 min-h-10 w-full border border-gray-300 bg-white px-3 text-sm"><option value="reservationDate">예약일</option><option value="usageDate">사용일</option><option value="cruiseName">크루즈</option><option value="roomType">객실</option><option value="createdAt">입력일시</option></select></label>
-            <div className="flex items-end gap-2"><label className="min-w-0 flex-1 text-sm font-medium text-gray-700">정렬<select value={sortDirection} onChange={(event) => setSortDirection(event.target.value as SortDirection)} className="mt-1 min-h-10 w-full border border-gray-300 bg-white px-3 text-sm"><option value="desc">내림차순</option><option value="asc">오름차순</option></select></label><button type="button" onClick={resetFilters} className="inline-flex min-h-10 items-center gap-1 border border-gray-300 bg-white px-3 text-sm text-gray-700 hover:bg-gray-50"><Filter className="h-4 w-4" />초기화</button></div>
+            <label className="text-sm font-medium text-gray-700">객실명<select value={roomName} onChange={(event) => setRoomName(event.target.value)} className="mt-1 min-h-10 w-full border border-gray-300 bg-white px-3 text-sm"><option value="">전체 객실</option>{roomOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>
+            <div className="flex items-end"><button type="button" onClick={resetFilters} className="inline-flex min-h-10 items-center gap-1 border border-gray-300 bg-white px-3 text-sm text-gray-700 hover:bg-gray-50"><Filter className="h-4 w-4" />필터 초기화</button></div>
           </div>
         </section>
 
@@ -243,8 +273,8 @@ export default function CruiseReservationsPage() {
         <section className="overflow-hidden border border-gray-200 bg-white shadow-sm">
           <div className="overflow-x-auto">
             <table className="min-w-[1180px] w-full text-sm">
-              <thead className="bg-gray-50 text-left text-xs text-gray-600"><tr><th className="whitespace-nowrap border-b px-4 py-3 font-semibold">예약일</th><th className="whitespace-nowrap border-b px-4 py-3 font-semibold">사용일</th><th className="whitespace-nowrap border-b px-4 py-3 font-semibold">크루즈</th><th className="whitespace-nowrap border-b px-4 py-3 font-semibold">객실</th><th className="whitespace-nowrap border-b px-4 py-3 font-semibold">고객</th><th className="whitespace-nowrap border-b px-4 py-3 font-semibold">상태</th><th className="whitespace-nowrap border-b px-4 py-3 text-center font-semibold">인원</th><th className="whitespace-nowrap border-b px-4 py-3 text-right font-semibold">객실 총액</th><th className="whitespace-nowrap border-b px-4 py-3 font-semibold">승선 코드</th></tr></thead>
-              <tbody>{loading ? <tr><td colSpan={9} className="px-4 py-14 text-center text-gray-500">크루즈 예약을 불러오는 중입니다.</td></tr> : filteredRows.length === 0 ? <tr><td colSpan={9} className="px-4 py-14 text-center text-gray-500">조건에 맞는 크루즈 예약이 없습니다.</td></tr> : filteredRows.map((row) => <tr key={row.id} className="border-b border-gray-100 hover:bg-sky-50/40"><td className="whitespace-nowrap px-4 py-3 text-gray-700">{dateLabel(dateKeyInKorea(row.reservationDate))}</td><td className="whitespace-nowrap px-4 py-3 text-gray-700">{dateLabel(row.usageDate)}</td><td className="max-w-64 px-4 py-3 font-medium text-gray-900">{row.cruiseName}<span className="ml-1 text-xs font-normal text-gray-500">{row.scheduleType}</span></td><td className="max-w-72 px-4 py-3 text-gray-800">{row.roomType}</td><td className="px-4 py-3"><p className="font-medium text-gray-900">{row.customerName}</p><p className="text-xs text-gray-500">{row.customerEmail}</p></td><td className="whitespace-nowrap px-4 py-3 text-gray-700">{statusLabel(row.status)}</td><td className="whitespace-nowrap px-4 py-3 text-center text-gray-700">{row.guestCount}명</td><td className="whitespace-nowrap px-4 py-3 text-right font-semibold text-gray-900">{row.roomTotalPrice.toLocaleString('ko-KR')} VND</td><td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-gray-700">{row.boardingCode || '-'}</td></tr>)}</tbody>
+              <thead className="bg-gray-50 text-left text-xs text-gray-600"><tr><SortHeader label="예약일" column="reservationDate" activeColumn={sortKey} direction={sortDirection} onSort={handleColumnSort} /><SortHeader label="사용일" column="usageDate" activeColumn={sortKey} direction={sortDirection} onSort={handleColumnSort} /><SortHeader label="크루즈명" column="cruiseName" activeColumn={sortKey} direction={sortDirection} onSort={handleColumnSort} /><SortHeader label="객실명" column="roomName" activeColumn={sortKey} direction={sortDirection} onSort={handleColumnSort} /><SortHeader label="고객" column="customerName" activeColumn={sortKey} direction={sortDirection} onSort={handleColumnSort} /><SortHeader label="상태" column="status" activeColumn={sortKey} direction={sortDirection} onSort={handleColumnSort} /><SortHeader label="인원" column="guestCount" activeColumn={sortKey} direction={sortDirection} onSort={handleColumnSort} align="center" /><SortHeader label="객실 총액" column="roomTotalPrice" activeColumn={sortKey} direction={sortDirection} onSort={handleColumnSort} align="right" /><SortHeader label="승선 코드" column="boardingCode" activeColumn={sortKey} direction={sortDirection} onSort={handleColumnSort} /></tr></thead>
+              <tbody>{loading ? <tr><td colSpan={9} className="px-4 py-14 text-center text-gray-500">크루즈 예약을 불러오는 중입니다.</td></tr> : filteredRows.length === 0 ? <tr><td colSpan={9} className="px-4 py-14 text-center text-gray-500">조건에 맞는 크루즈 예약이 없습니다.</td></tr> : filteredRows.map((row) => <tr key={row.id} className="border-b border-gray-100 hover:bg-sky-50/40"><td className="whitespace-nowrap px-4 py-3 text-gray-700">{dateLabel(dateKeyInKorea(row.reservationDate))}</td><td className="whitespace-nowrap px-4 py-3 text-gray-700">{dateLabel(row.usageDate)}</td><td className="max-w-64 px-4 py-3 font-medium text-gray-900">{row.cruiseName}<span className="ml-1 text-xs font-normal text-gray-500">{row.scheduleType}</span></td><td className="max-w-72 px-4 py-3 text-gray-800">{row.roomName}</td><td className="px-4 py-3"><p className="font-medium text-gray-900">{row.customerName}</p><p className="text-xs text-gray-500">{row.customerEmail}</p></td><td className="whitespace-nowrap px-4 py-3 text-gray-700">{statusLabel(row.status)}</td><td className="whitespace-nowrap px-4 py-3 text-center text-gray-700">{row.guestCount}명</td><td className="whitespace-nowrap px-4 py-3 text-right font-semibold text-gray-900">{row.roomTotalPrice.toLocaleString('ko-KR')} VND</td><td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-gray-700">{row.boardingCode || '-'}</td></tr>)}</tbody>
             </table>
           </div>
         </section>
