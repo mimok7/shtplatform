@@ -109,12 +109,17 @@ export default function CruiseReservationsPage() {
       const cruiseRows = await fetchCruiseReservations({ scope: dataScope, usageStartDate, usageEndDate });
       const reservationIds = Array.from(new Set(cruiseRows.map((row) => row.reservation_id).filter(Boolean)));
       const reservations = await fetchTableInBatches<any>(
-        'reservation', 're_id', reservationIds, 're_id, re_created_at, re_user_id, re_status', 100,
+        'reservation', 're_id', reservationIds, 're_id, re_created_at, re_user_id, re_status, re_type, package_id', 100,
       );
       const reservationById = new Map(reservations.map((row) => [row.re_id, row]));
       const userIds = Array.from(new Set(reservations.map((row) => row.re_user_id).filter(Boolean)));
       const users = await fetchTableInBatches<any>('users', 'id', userIds, 'id, name, email', 100);
       const userById = new Map(users.map((row) => [row.id, row]));
+      const packageIds = Array.from(new Set(
+        reservations.filter((row) => row.re_type === 'package').map((row) => row.package_id).filter(Boolean),
+      ));
+      const packages = await fetchTableInBatches<any>('package_master', 'id', packageIds, 'id, name', 100);
+      const packageById = new Map(packages.map((row) => [row.id, row]));
       // db.csv 관계: reservation_cruise.room_price_code(text) → cruise_rate_card.id(uuid).
       // 레거시 비 UUID 코드를 UUID IN 조회에 포함하면 해당 배치 전체가 Postgres 형식 오류로 실패한다.
       const roomPriceCodes = Array.from(new Set(cruiseRows.map((row) => row.room_price_code).filter(isUuid)));
@@ -127,14 +132,15 @@ export default function CruiseReservationsPage() {
         const reservation = reservationById.get(row.reservation_id);
         const user = reservation ? userById.get(reservation.re_user_id) : null;
         const rateCard = rateCardById.get(row.room_price_code);
+        const packageInfo = reservation?.re_type === 'package' ? packageById.get(reservation.package_id) : null;
         return {
           id: row.id,
           reservationId: row.reservation_id,
           reservationDate: reservation?.re_created_at || row.created_at || '',
           createdAt: row.created_at || '',
           usageDate: row.checkin || '',
-          cruiseName: rateCard?.cruise_name || '미등록 크루즈',
-          roomName: rateCard?.room_type || '미등록 객실',
+          cruiseName: rateCard?.cruise_name || (packageInfo ? '패키지 예약' : '미등록 크루즈'),
+          roomName: rateCard?.room_type || packageInfo?.name || '미등록 객실',
           scheduleType: rateCard?.schedule_type || '',
           customerName: user?.name || '-',
           customerEmail: user?.email || '-',
