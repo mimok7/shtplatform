@@ -169,7 +169,9 @@ export default function CruiseReservationsPage() {
   useEffect(() => { void loadReservations(); }, []);
 
   const cruiseOptions = useMemo(() => Array.from(new Set(rows.map((row) => row.cruiseName))).sort((a, b) => a.localeCompare(b, 'ko')), [rows]);
-  const roomOptions = useMemo(() => Array.from(new Set(rows.map((row) => row.roomName))).sort((a, b) => a.localeCompare(b, 'ko')), [rows]);
+  const roomOptions = useMemo(() => Array.from(new Set(
+    rows.filter((row) => !cruiseName || row.cruiseName === cruiseName).map((row) => row.roomName),
+  )).sort((a, b) => a.localeCompare(b, 'ko')), [rows, cruiseName]);
 
   const filteredRows = useMemo(() => {
     const normalizedSearchQuery = searchQuery.trim().toLocaleLowerCase('ko');
@@ -316,7 +318,7 @@ export default function CruiseReservationsPage() {
           <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
             <label className="text-sm font-medium text-gray-700">예약일<input type="date" value={reservationDate} onChange={(event) => setReservationDate(event.target.value)} className="mt-1 min-h-10 w-full border border-gray-300 bg-white px-3 text-sm" /></label>
             <label className="text-sm font-medium text-gray-700">사용일<input type="date" value={usageDate} onChange={(event) => setUsageDate(event.target.value)} className="mt-1 min-h-10 w-full border border-gray-300 bg-white px-3 text-sm" /></label>
-            <label className="text-sm font-medium text-gray-700">크루즈<select value={cruiseName} onChange={(event) => setCruiseName(event.target.value)} className="mt-1 min-h-10 w-full border border-gray-300 bg-white px-3 text-sm"><option value="">전체 크루즈</option>{cruiseOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>
+            <label className="text-sm font-medium text-gray-700">크루즈<select value={cruiseName} onChange={(event) => { setCruiseName(event.target.value); setRoomName(''); }} className="mt-1 min-h-10 w-full border border-gray-300 bg-white px-3 text-sm"><option value="">전체 크루즈</option>{cruiseOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>
             <label className="text-sm font-medium text-gray-700">객실명<select value={roomName} onChange={(event) => setRoomName(event.target.value)} className="mt-1 min-h-10 w-full border border-gray-300 bg-white px-3 text-sm"><option value="">전체 객실</option>{roomOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>
             <div className="flex items-end"><button type="button" onClick={resetFilters} className="inline-flex min-h-10 items-center gap-1 border border-gray-300 bg-white px-3 text-sm text-gray-700 hover:bg-gray-50"><Filter className="h-4 w-4" />필터 초기화</button></div>
           </div>
