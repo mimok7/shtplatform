@@ -34,6 +34,9 @@ interface CruiseReservationRow {
 }
 
 const PAGE_SIZE = 500;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const isUuid = (value: unknown): value is string => typeof value === 'string' && UUID_PATTERN.test(value);
 
 const dateKeyInKorea = (value?: string | null) => {
   if (!value) return '';
@@ -112,7 +115,9 @@ export default function CruiseReservationsPage() {
       const userIds = Array.from(new Set(reservations.map((row) => row.re_user_id).filter(Boolean)));
       const users = await fetchTableInBatches<any>('users', 'id', userIds, 'id, name, email', 100);
       const userById = new Map(users.map((row) => [row.id, row]));
-      const roomPriceCodes = Array.from(new Set(cruiseRows.map((row) => row.room_price_code).filter(Boolean)));
+      // db.csv 관계: reservation_cruise.room_price_code(text) → cruise_rate_card.id(uuid).
+      // 레거시 비 UUID 코드를 UUID IN 조회에 포함하면 해당 배치 전체가 Postgres 형식 오류로 실패한다.
+      const roomPriceCodes = Array.from(new Set(cruiseRows.map((row) => row.room_price_code).filter(isUuid)));
       const rateCards = await fetchTableInBatches<any>(
         'cruise_rate_card', 'id', roomPriceCodes, 'id, cruise_name, room_type, schedule_type', 100,
       );
