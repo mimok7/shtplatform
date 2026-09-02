@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
-import { ArrowDown, ArrowUp, ArrowUpDown, Download, Filter, RefreshCw, Ship } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, Download, Filter, RefreshCw, Search, Ship } from 'lucide-react';
 import ManagerLayout from '@/components/ManagerLayout';
 import supabase from '@/lib/supabase';
 import { fetchTableInBatches } from '@/lib/fetchInBatches';
@@ -98,8 +98,10 @@ export default function CruiseReservationsPage() {
   const [usageDate, setUsageDate] = useState('');
   const [cruiseName, setCruiseName] = useState('');
   const [roomName, setRoomName] = useState('');
-  const [sortKey, setSortKey] = useState<SortKey>('reservationDate');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [searchInput, setSearchInput] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortKey, setSortKey] = useState<SortKey>('roomName');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
 
   const loadReservations = async () => {
     setLoading(true);
@@ -167,14 +169,40 @@ export default function CruiseReservationsPage() {
   useEffect(() => { void loadReservations(); }, []);
 
   const cruiseOptions = useMemo(() => Array.from(new Set(rows.map((row) => row.cruiseName))).sort((a, b) => a.localeCompare(b, 'ko')), [rows]);
-  const roomOptions = useMemo(() => Array.from(new Set(rows.map((row) => row.roomName))).sort((a, b) => a.localeCompare(b, 'ko')), [rows]);
+  const roomOptions = useMemo(() => Array.from(new Set(
+    rows.filter((row) => !cruiseName || row.cruiseName === cruiseName).map((row) => row.roomName),
+  )).sort((a, b) => a.localeCompare(b, 'ko')), [rows, cruiseName]);
 
   const filteredRows = useMemo(() => {
+    const normalizedSearchQuery = searchQuery.trim().toLocaleLowerCase('ko');
     const matched = rows.filter((row) => (
       (!reservationDate || dateKeyInKorea(row.reservationDate) === reservationDate)
       && (!usageDate || row.usageDate === usageDate)
       && (!cruiseName || row.cruiseName === cruiseName)
       && (!roomName || row.roomName === roomName)
+      && (!normalizedSearchQuery || [
+        row.reservationId,
+        row.reservationDate,
+        row.usageDate,
+        dateLabel(dateKeyInKorea(row.reservationDate)),
+        dateLabel(row.usageDate),
+        row.cruiseName,
+        row.roomName,
+        row.scheduleType,
+        row.customerName,
+        row.customerEmail,
+        row.status,
+        statusLabel(row.status),
+        row.guestCount,
+        row.adultCount,
+        row.childCount,
+        row.infantCount,
+        row.roomCount,
+        row.roomTotalPrice,
+        row.roomTotalPrice.toLocaleString('ko-KR'),
+        row.boardingCode,
+        row.requestNote,
+      ].join(' ').toLocaleLowerCase('ko').includes(normalizedSearchQuery))
     ));
     return [...matched].sort((left, right) => {
       const leftValue = sortKey === 'reservationDate' ? left.reservationDate
@@ -198,15 +226,30 @@ export default function CruiseReservationsPage() {
         : String(leftValue || '').localeCompare(String(rightValue || ''), 'ko', { numeric: true });
       return sortDirection === 'asc' ? compared : -compared;
     });
-  }, [rows, reservationDate, usageDate, cruiseName, roomName, sortKey, sortDirection]);
+  }, [rows, reservationDate, usageDate, cruiseName, roomName, searchQuery, sortKey, sortDirection]);
+
+  const groupedRows = useMemo(() => {
+    const byCruise = new Map<string, CruiseReservationRow[]>();
+    filteredRows.forEach((row) => {
+      const group = byCruise.get(row.cruiseName) || [];
+      group.push(row);
+      byCruise.set(row.cruiseName, group);
+    });
+    const groupDirection = sortKey === 'cruiseName' && sortDirection === 'desc' ? -1 : 1;
+    return Array.from(byCruise.entries())
+      .sort(([left], [right]) => groupDirection * left.localeCompare(right, 'ko', { numeric: true }))
+      .map(([name, reservations]) => ({ name, reservations }));
+  }, [filteredRows, sortKey, sortDirection]);
 
   const resetFilters = () => {
     setReservationDate('');
     setUsageDate('');
     setCruiseName('');
     setRoomName('');
-    setSortKey('reservationDate');
-    setSortDirection('desc');
+    setSearchInput('');
+    setSearchQuery('');
+    setSortKey('roomName');
+    setSortDirection('asc');
   };
 
   const handleColumnSort = (column: SortKey) => {
@@ -266,15 +309,16 @@ export default function CruiseReservationsPage() {
             <div className="flex items-center gap-2"><Ship className="h-5 w-5 text-sky-700" /><div><h2 className="font-semibold text-gray-900">크루즈 예약 조회</h2><p className="text-sm text-gray-600">{dataScope === 'upcoming' ? '오늘 이후' : '전체'} 사용일 기준 {rows.length.toLocaleString()}건 중 조건에 맞는 {filteredRows.length.toLocaleString()}건</p></div></div>
             <div className="flex gap-2"><button type="button" onClick={() => void loadReservations()} disabled={loading} className="inline-flex min-h-10 items-center justify-center gap-2 border border-gray-300 bg-white px-3 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />조회</button><button type="button" onClick={downloadExcel} disabled={filteredRows.length === 0} className="inline-flex min-h-10 items-center justify-center gap-2 bg-emerald-700 px-3 text-sm font-semibold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-gray-300"><Download className="h-4 w-4" />엑셀 다운로드</button></div>
           </div>
-          <div className="grid gap-3 border-b border-gray-100 bg-white p-4 sm:grid-cols-2 lg:grid-cols-[220px_1fr_1fr]">
+          <div className="grid gap-3 border-b border-gray-100 bg-white p-4 sm:grid-cols-2 lg:grid-cols-[220px_170px_170px_minmax(280px,1fr)]">
             <label className="text-sm font-medium text-gray-700">조회 범위<select value={dataScope} onChange={(event) => handleScopeChange(event.target.value as DataScope)} className="mt-1 min-h-10 w-full border border-gray-300 bg-white px-3 text-sm"><option value="upcoming">오늘 이후 데이터</option><option value="all">전체 데이터</option></select></label>
             <label className="text-sm font-medium text-gray-700">사용일 시작<input type="date" value={usageStartDate} onChange={(event) => setUsageStartDate(event.target.value)} className="mt-1 min-h-10 w-full border border-gray-300 bg-white px-3 text-sm" /></label>
             <label className="text-sm font-medium text-gray-700">사용일 종료<input type="date" value={usageEndDate} onChange={(event) => setUsageEndDate(event.target.value)} className="mt-1 min-h-10 w-full border border-gray-300 bg-white px-3 text-sm" /></label>
+            <form className="text-sm font-medium text-gray-700" onSubmit={(event) => { event.preventDefault(); setSearchQuery(searchInput); }}><label htmlFor="cruise-reservation-search">통합 검색</label><div className="mt-1 flex min-h-10"><input id="cruise-reservation-search" type="search" value={searchInput} onChange={(event) => setSearchInput(event.target.value)} placeholder="모든 항목 검색" className="min-w-0 flex-1 border border-gray-300 px-3 text-sm" /><button type="submit" className="inline-flex shrink-0 items-center gap-1 bg-sky-700 px-3 text-sm font-semibold text-white hover:bg-sky-800"><Search className="h-4 w-4" />검색</button></div></form>
           </div>
           <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
             <label className="text-sm font-medium text-gray-700">예약일<input type="date" value={reservationDate} onChange={(event) => setReservationDate(event.target.value)} className="mt-1 min-h-10 w-full border border-gray-300 bg-white px-3 text-sm" /></label>
             <label className="text-sm font-medium text-gray-700">사용일<input type="date" value={usageDate} onChange={(event) => setUsageDate(event.target.value)} className="mt-1 min-h-10 w-full border border-gray-300 bg-white px-3 text-sm" /></label>
-            <label className="text-sm font-medium text-gray-700">크루즈<select value={cruiseName} onChange={(event) => setCruiseName(event.target.value)} className="mt-1 min-h-10 w-full border border-gray-300 bg-white px-3 text-sm"><option value="">전체 크루즈</option>{cruiseOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>
+            <label className="text-sm font-medium text-gray-700">크루즈<select value={cruiseName} onChange={(event) => { setCruiseName(event.target.value); setRoomName(''); }} className="mt-1 min-h-10 w-full border border-gray-300 bg-white px-3 text-sm"><option value="">전체 크루즈</option>{cruiseOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>
             <label className="text-sm font-medium text-gray-700">객실명<select value={roomName} onChange={(event) => setRoomName(event.target.value)} className="mt-1 min-h-10 w-full border border-gray-300 bg-white px-3 text-sm"><option value="">전체 객실</option>{roomOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>
             <div className="flex items-end"><button type="button" onClick={resetFilters} className="inline-flex min-h-10 items-center gap-1 border border-gray-300 bg-white px-3 text-sm text-gray-700 hover:bg-gray-50"><Filter className="h-4 w-4" />필터 초기화</button></div>
           </div>
@@ -285,7 +329,7 @@ export default function CruiseReservationsPage() {
           <div className="overflow-x-auto">
             <table className="min-w-[1180px] w-full text-sm">
               <thead className="bg-gray-50 text-left text-xs text-gray-600"><tr><SortHeader label="예약일" column="reservationDate" activeColumn={sortKey} direction={sortDirection} onSort={handleColumnSort} /><SortHeader label="사용일" column="usageDate" activeColumn={sortKey} direction={sortDirection} onSort={handleColumnSort} /><SortHeader label="크루즈명" column="cruiseName" activeColumn={sortKey} direction={sortDirection} onSort={handleColumnSort} /><SortHeader label="객실명" column="roomName" activeColumn={sortKey} direction={sortDirection} onSort={handleColumnSort} /><SortHeader label="고객" column="customerName" activeColumn={sortKey} direction={sortDirection} onSort={handleColumnSort} /><SortHeader label="상태" column="status" activeColumn={sortKey} direction={sortDirection} onSort={handleColumnSort} /><SortHeader label="인원" column="guestCount" activeColumn={sortKey} direction={sortDirection} onSort={handleColumnSort} align="center" /><SortHeader label="객실 총액" column="roomTotalPrice" activeColumn={sortKey} direction={sortDirection} onSort={handleColumnSort} align="right" /><SortHeader label="승선 코드" column="boardingCode" activeColumn={sortKey} direction={sortDirection} onSort={handleColumnSort} /></tr></thead>
-              <tbody>{loading ? <tr><td colSpan={9} className="px-4 py-14 text-center text-gray-500">크루즈 예약을 불러오는 중입니다.</td></tr> : filteredRows.length === 0 ? <tr><td colSpan={9} className="px-4 py-14 text-center text-gray-500">조건에 맞는 크루즈 예약이 없습니다.</td></tr> : filteredRows.map((row) => <tr key={row.id} className="border-b border-gray-100 hover:bg-sky-50/40"><td className="whitespace-nowrap px-4 py-3 text-gray-700">{dateLabel(dateKeyInKorea(row.reservationDate))}</td><td className="whitespace-nowrap px-4 py-3 text-gray-700">{dateLabel(row.usageDate)}</td><td className="max-w-64 px-4 py-3 font-medium text-gray-900">{row.cruiseName}<span className="ml-1 text-xs font-normal text-gray-500">{row.scheduleType}</span></td><td className="max-w-72 px-4 py-3 text-gray-800">{row.roomName}</td><td className="px-4 py-3"><p className="font-medium text-gray-900">{row.customerName}</p><p className="text-xs text-gray-500">{row.customerEmail}</p></td><td className="whitespace-nowrap px-4 py-3 text-gray-700">{statusLabel(row.status)}</td><td className="whitespace-nowrap px-4 py-3 text-center text-gray-700">{row.guestCount}명</td><td className="whitespace-nowrap px-4 py-3 text-right font-semibold text-gray-900">{row.roomTotalPrice.toLocaleString('ko-KR')} VND</td><td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-gray-700">{row.boardingCode || '-'}</td></tr>)}</tbody>
+              <tbody>{loading ? <tr><td colSpan={9} className="px-4 py-14 text-center text-gray-500">크루즈 예약을 불러오는 중입니다.</td></tr> : filteredRows.length === 0 ? <tr><td colSpan={9} className="px-4 py-14 text-center text-gray-500">조건에 맞는 크루즈 예약이 없습니다.</td></tr> : groupedRows.map((group) => <React.Fragment key={group.name}><tr className="border-y border-sky-200 bg-sky-50"><th colSpan={9} scope="rowgroup" className="px-4 py-2 text-left text-sm font-semibold text-sky-950">{group.name}<span className="ml-2 text-xs font-normal text-sky-700">{group.reservations.length.toLocaleString()}건</span></th></tr>{group.reservations.map((row) => <tr key={row.id} className="border-b border-gray-100 hover:bg-sky-50/40"><td className="whitespace-nowrap px-4 py-3 text-gray-700">{dateLabel(dateKeyInKorea(row.reservationDate))}</td><td className="whitespace-nowrap px-4 py-3 text-gray-700">{dateLabel(row.usageDate)}</td><td className="max-w-64 px-4 py-3 font-medium text-gray-900">{row.cruiseName}<span className="ml-1 text-xs font-normal text-gray-500">{row.scheduleType}</span></td><td className="max-w-72 px-4 py-3 text-gray-800">{row.roomName}</td><td className="px-4 py-3"><p className="font-medium text-gray-900">{row.customerName}</p><p className="text-xs text-gray-500">{row.customerEmail}</p></td><td className="whitespace-nowrap px-4 py-3 text-gray-700">{statusLabel(row.status)}</td><td className="whitespace-nowrap px-4 py-3 text-center text-gray-700">{row.guestCount}명</td><td className="whitespace-nowrap px-4 py-3 text-right font-semibold text-gray-900">{row.roomTotalPrice.toLocaleString('ko-KR')} VND</td><td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-gray-700">{row.boardingCode || '-'}</td></tr>)}</React.Fragment>)}</tbody>
             </table>
           </div>
         </section>
