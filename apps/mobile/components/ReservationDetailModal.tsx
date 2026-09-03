@@ -231,40 +231,7 @@ const getCruiseRoomPriceBreakdown = (service: any) => {
 };
 
 const getCruiseDisplayTotal = (service: any): number => {
-  const rawPb = getServicePriceBreakdown(service);
-
-  // 1. price_breakdown.grand_total 우선 (예약수정 저장 시 옵션 포함 최신값)
-  const pbGrandTotal = Number(rawPb?.grand_total);
-  if (Number.isFinite(pbGrandTotal) && pbGrandTotal > 0) return pbGrandTotal;
-
-  // 2. roomTotal + options_total + surcharge + additionalFee - discount 직접 계산
-  const roomPb = getCruiseRoomPriceBreakdown(service);
-  const roomPbTotal = Number(roomPb?.total);
-  const roomTotal = roomPbTotal > 0 ? roomPbTotal : Number(service?.room_total_price || 0);
-
-  if (roomTotal > 0) {
-    const optionTotal = Number(rawPb?.options_total ?? rawPb?.option_total ?? 0);
-    const surchargeTotal = Number(rawPb?.surcharge_total || 0);
-    const additionalFee = Number((rawPb?.additional_fee_manual ?? rawPb?.adjustment_total ?? rawPb?.additional_fee) || 0);
-    const discountAmount = Number(rawPb?.discount_amount || 0);
-
-    const computedTotal = roomTotal + optionTotal + surchargeTotal + additionalFee - discountAmount;
-    if (computedTotal > 0) return computedTotal;
-    return roomTotal;
-  }
-
-  // 3. reservation.total_amount 폴백
-  const reservationAmount = getReservationStoredAmount({
-    total_amount: service?.reservation_total_amount
-      ?? service?.reservationTotalAmount
-      ?? service?.reservation?.total_amount,
-    price_breakdown: service?.reservation_price_breakdown
-      ?? service?.reservation?.price_breakdown
-      ?? null,
-  });
-  if (reservationAmount > 0) return reservationAmount;
-
-  return Number(service?.totalPrice || service?.total_amount || 0);
+  return getReservationTotalAmount(service) ?? 0;
 };
 
 const getAmountSummaryLines = (service: any, type: string): string[] => {
@@ -1620,22 +1587,20 @@ export default function ReservationDetailModal({
           const promoSeqFromMap = reservationId ? promotionSequenceMap.get(reservationId) : undefined;
           const reservationInfo: any = reservationId ? reservationMap.get(reservationId) : null;
           const latestChange = reservationId ? latestChangeMap.get(reservationId) : null;
-          const snapshot = latestChange?.snapshot_data || null;
-
           const serviceWithReservation = reservationInfo
             ? {
               ...service,
-              reservation_total_amount: snapshot?.total_amount ?? reservationInfo.total_amount,
-              reservation_manual_additional_fee: snapshot?.manual_additional_fee ?? reservationInfo.manual_additional_fee,
-              reservation_manual_additional_fee_detail: snapshot?.manual_additional_fee_detail ?? reservationInfo.manual_additional_fee_detail,
-              reservation_price_breakdown: snapshot?.price_breakdown ?? reservationInfo.price_breakdown,
+              reservation_total_amount: reservationInfo.total_amount,
+              reservation_manual_additional_fee: reservationInfo.manual_additional_fee,
+              reservation_manual_additional_fee_detail: reservationInfo.manual_additional_fee_detail,
+              reservation_price_breakdown: reservationInfo.price_breakdown,
               reservation: {
                 ...(service?.reservation || {}),
                 ...reservationInfo,
-                total_amount: snapshot?.total_amount ?? reservationInfo.total_amount,
-                manual_additional_fee: snapshot?.manual_additional_fee ?? reservationInfo.manual_additional_fee,
-                manual_additional_fee_detail: snapshot?.manual_additional_fee_detail ?? reservationInfo.manual_additional_fee_detail,
-                price_breakdown: snapshot?.price_breakdown ?? reservationInfo.price_breakdown,
+                total_amount: reservationInfo.total_amount,
+                manual_additional_fee: reservationInfo.manual_additional_fee,
+                manual_additional_fee_detail: reservationInfo.manual_additional_fee_detail,
+                price_breakdown: reservationInfo.price_breakdown,
               },
               _pricingSource: normalizePricingSource(reservationInfo?.pricing_source),
               _hasChange: !!latestChange,
@@ -1648,23 +1613,9 @@ export default function ReservationDetailModal({
               _changeStatus: latestChange?.status || null,
             };
 
-          const changeType = SERVICE_TO_CHANGE_TYPE[String(serviceWithReservation.serviceType || '').toLowerCase()];
-          const applicableChildren = CHANGE_CHILDREN_BY_RETYPE[String(latestChange?.re_type || '').toLowerCase()] || [];
-          const canOverlay = !!latestChange && !!changeType && applicableChildren.includes(changeType);
-          const changeRows = canOverlay ? (changeDetailByRequestId.get(String(latestChange?.id || '')) || []) : [];
-          const matchedChange = pickChangeDetailRow(serviceWithReservation, changeRows);
-          const mergedWithChange = matchedChange
-            ? {
-              ...serviceWithReservation,
-              ...matchedChange,
-              _hasChange: true,
-              _changeStatus: latestChange?.status || null,
-            }
-            : serviceWithReservation;
-
           const baseService = {
-            ...mergedWithChange,
-            note: mergedWithChange.note || mergedWithChange.request_note || mergedWithChange.requestNote || '',
+            ...serviceWithReservation,
+            note: serviceWithReservation.note || serviceWithReservation.request_note || serviceWithReservation.requestNote || '',
           };
 
           if (promoSeqFromMap) {
@@ -1936,44 +1887,16 @@ export default function ReservationDetailModal({
 
   const totalAmount = (() => {
     const reservationTotals = new Map<string, number>();
-    let rowFallbackTotal = 0;
 
     for (const current of visibleServices) {
       const reservationId = String(current?.reservation_id || current?.reservationId || '').trim();
-      const serviceType = String(current?.serviceType || '').toLowerCase();
+      if (!reservationId || reservationTotals.has(reservationId)) continue;
 
-      // 크루즈는 price_breakdown 기반 계산 우선 사용 (DB total_amount는 옵션이 누락된 경우가 있음)
-      if (serviceType === 'cruise') {
-        const cruiseTotal = getCruiseDisplayTotal(current);
-        if (cruiseTotal > 0) {
-          if (reservationId && !reservationTotals.has(reservationId)) {
-            reservationTotals.set(reservationId, cruiseTotal);
-          } else if (!reservationId) {
-            rowFallbackTotal += cruiseTotal;
-          }
-          continue;
-        }
-      }
-
-      const reservationTotal = getReservationTotalAmount(current);
-
-      if (reservationId && reservationTotal !== null && reservationTotal > 0) {
-        if (!reservationTotals.has(reservationId)) {
-          reservationTotals.set(reservationId, reservationTotal);
-        }
-        continue;
-      }
-
-      const rowTotal = serviceType === 'cruise'
-        ? getCruiseDisplayTotal(current)
-        : Number(current?.totalAmount ?? current?.total_amount ?? current?.amount ?? current?.totalPrice ?? current?.total_price ?? current?.room_total_price ?? current?.car_total_price ?? 0);
-      if (Number.isFinite(rowTotal)) {
-        rowFallbackTotal += rowTotal;
-      }
+      reservationTotals.set(reservationId, getReservationTotalAmount(current) ?? 0);
     }
 
     const reservationTotalSum = Array.from(reservationTotals.values()).reduce((sum, value) => sum + value, 0);
-    return reservationTotalSum + rowFallbackTotal;
+    return reservationTotalSum;
   })();
 
   const handleDeleteService = async (service: any) => {

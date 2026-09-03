@@ -602,6 +602,15 @@ PostgreSQL 17 백업 클라이언트 보정.
 - 세 앱 모두 일반 크루즈 차량 카드에 `크루즈`, `차량명`, `구분`, 일정일, `승차` 또는 `하차`, `인원/차량`을 사용한다. 크루즈명이 없는 공통 차량의 표기는 `공통`으로 통일했다.
 - `pnpm --dir apps/mobile typecheck`, `pnpm --dir apps/manager typecheck`, `pnpm --dir apps/manager1 typecheck`, `git diff --check`가 통과했다.
 
+세 앱 예약 통합 상세 DB 원본 표시 통일 시작.
+
+- 전달된 크루즈 예약의 `reservation.total_amount`와 `price_breakdown.grand_total`은 모두 13,200,000동이며, `adjustment_total` 800,000동은 이미 최종 금액에 포함된다.
+- 매니저·매니저1·모바일 통합 상세는 예약 마스터를 조회한 뒤에도 가격을 재계산하고, 최신 변경요청의 `snapshot_data`로 예약 마스터 값을 덮을 수 있다.
+- 세 앱의 서비스 수정 화면은 `reservation.total_amount`, `price_breakdown`, `manual_additional_fee`를 함께 갱신한다. 통합 상세는 이 예약 마스터 저장값만 현재 값으로 표시하고, 변경요청은 상태 이력으로만 남긴다.
+- 세 앱의 크루즈 표시와 통합 상세 합계는 `getReservationTotalAmount()`를 통해 `reservation.total_amount`를 예약 ID별로 한 번만 합산하도록 통일했다.
+- 변경요청의 상태 배지는 유지하되, `snapshot_data`와 변경 상세 행은 현재 예약 표시값에 합치지 않는다. 따라서 어느 앱의 수정 화면에서든 예약 마스터 저장이 완료되면 통합 상세가 같은 값을 읽는다.
+- 기존 독립 조회는 `Promise.all` 병렬 구조를 유지했고, 상태·훅·컴포넌트 구조를 추가하지 않았다. `pnpm --dir apps/manager typecheck`, `pnpm --dir apps/manager1 typecheck`, `pnpm --dir apps/mobile typecheck`, `git diff --check`가 통과했다.
+
 예약 통합 상세 추가·차감 중복 합산 보정 시작.
 
 - 전달된 예약 `6b0e3676-5b68-4eb0-8ef1-b64b896b9475`의 크루즈 카드에는 성인 요금 12,400,000동과 생일이벤트 추가 800,000동을 포함한 총 금액 13,200,000동이 표시된다.
