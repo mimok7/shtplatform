@@ -2119,7 +2119,7 @@ export default function UserReservationDetailModal({
                                     예상 총 금액
                                 </h4>
                                 {(() => {
-                                    // 화면에 표시되는 각 유료 서비스 행과 예약 추가/차감을 모두 합산한다.
+                                    // 화면에 표시되는 각 유료 서비스 행의 최종 금액을 합산한다.
                                     const additionalFeeByReservation = new Map<string, number>();
                                     let serviceTotal = 0;
                                     (enrichedServices || []).forEach((s: any) => {
@@ -2144,7 +2144,8 @@ export default function UserReservationDetailModal({
                                         }
                                     });
                                     const additionalFeeTotal = Array.from(additionalFeeByReservation.values()).reduce((sum, fee) => sum + Number(fee || 0), 0);
-                                    const displayGrandTotal = serviceTotal + additionalFeeTotal;
+                                    // 서비스별 최종 금액에는 예약 추가/차감이 이미 반영되어 있다.
+                                    const displayGrandTotal = serviceTotal;
 
                                     return (
                                         <div className="space-y-1">

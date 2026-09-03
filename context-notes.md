@@ -602,6 +602,16 @@ PostgreSQL 17 백업 클라이언트 보정.
 - 세 앱 모두 일반 크루즈 차량 카드에 `크루즈`, `차량명`, `구분`, 일정일, `승차` 또는 `하차`, `인원/차량`을 사용한다. 크루즈명이 없는 공통 차량의 표기는 `공통`으로 통일했다.
 - `pnpm --dir apps/mobile typecheck`, `pnpm --dir apps/manager typecheck`, `pnpm --dir apps/manager1 typecheck`, `git diff --check`가 통과했다.
 
+예약 통합 상세 추가·차감 중복 합산 보정 시작.
+
+- 전달된 예약 `6b0e3676-5b68-4eb0-8ef1-b64b896b9475`의 크루즈 카드에는 성인 요금 12,400,000동과 생일이벤트 추가 800,000동을 포함한 총 금액 13,200,000동이 표시된다.
+- 같은 예약의 푸터 예상 총 금액은 14,000,000동으로 표시되어, 카드 총 금액에 이미 포함된 800,000동을 예약 추가·차감 합계로 다시 더하는지 확인한다.
+- 수정 범위는 통합 상세의 표시 집계이며, 예약 데이터와 승인·결제 처리 로직은 변경하지 않는다.
+- 매니저1 푸터는 `getServiceDisplayTotal()`의 최종 금액에 `additionalFeeTotal`을 더하고 있었다. 크루즈 최종 금액은 `price_breakdown.grand_total` 또는 객실·옵션·추가·할인을 반영한 값이므로 추가 합산을 제거했다.
+- 매니저와 모바일은 이미 최종 금액을 한 번만 합산하는 구조여서 코드 변경 없이 정합성을 확인했다.
+- `pnpm --dir apps/manager1 typecheck`, `pnpm --dir apps/manager typecheck`, `pnpm --dir apps/mobile typecheck`, `git diff --check`가 통과했다.
+- 커밋 `2fe3fd0`으로 변경사항을 저장했다.
+
 고객앱 크루즈 차량 픽업·드롭오프 안내 문구 수정 결과.
 
 - `pnpm --dir apps/customer typecheck`와 `git diff --check`가 통과했다.
