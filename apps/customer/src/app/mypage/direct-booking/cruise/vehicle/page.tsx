@@ -2159,7 +2159,10 @@ function CruiseVehicleContent() {
                             {/* 픽업/드롭오프 */}
                             {!isCustomOtherDayRoundTripCategory(selectedCarCategory) && (
                             <div className="space-y-4">
-                                <h3 className="text-lg font-semibold text-gray-800">📍 픽업/드롭오프 장소(숙소 정해지지 않으셨으면 공란으로 두시고, 추후에 추가하시면 됩니다.)</h3>
+                                <h3 className="text-lg font-semibold text-gray-800">
+                                    📍 픽업/드롭오프 장소
+                                    <span className="text-sm font-normal">(숙소 정해지지 않으셨으면 공란으로 두시고, 추후에 추가하시면 됩니다.)</span>
+                                </h3>
                                 {selectedCarCategory === '편도' && !pyongdoDirection && (
                                     <p className="text-sm text-orange-600">* 위에서 편도 방향(픽업/드롭)을 먼저 선택해주세요.</p>
                                 )}
