@@ -588,6 +588,12 @@ PostgreSQL 17 백업 클라이언트 보정.
 - `before_boarding` 카드에는 승선 전 이동 일시와 승차·하차 장소, 하선 후 드랍 장소를 표시한다. `after_disembark` 카드에는 승선 시 픽업 장소를 먼저, 하선 후 이동 일시와 승차·하차 장소를 다음으로 표시한다.
 - `pnpm --dir apps/manager1 typecheck`와 `git diff --check`가 통과했다.
 
+고객앱 크루즈 차량 픽업·드롭오프 안내 문구 수정 시작.
+
+- 대상은 `/mypage/direct-booking/cruise/vehicle` 화면의 픽업·드롭오프 장소 입력 섹션이다.
+- 사용자가 요청한 문구 `📍 픽업/드롭오프 장소(숙소 정해지지 않으셨으면 공란으로 두시고, 추후에 추가하시면 됩니다.)`를 기존 제목에 그대로 반영한다.
+- 입력 조건, 저장 데이터 흐름, 예약 완료 동작은 변경하지 않는다.
+
 모바일·매니저·매니저1 크루즈 차량 카드 표시 통일 시작.
 
 - 매니저1만 변경된 상태였으므로, 매니저의 `ServiceCardBody.tsx`에도 다른날 왕복 파서·한글 표시를 같은 형태로 적용한다.
@@ -595,6 +601,12 @@ PostgreSQL 17 백업 클라이언트 보정.
 - 세 앱의 통합상세는 `[LINKED_CRUISE_RESERVATION_ID:…]`를 예약 연결을 위한 내부 메타데이터로 간주해 비고에서 숨긴다. 실제 사용자가 남긴 비고는 그대로 유지한다.
 - 세 앱 모두 일반 크루즈 차량 카드에 `크루즈`, `차량명`, `구분`, 일정일, `승차` 또는 `하차`, `인원/차량`을 사용한다. 크루즈명이 없는 공통 차량의 표기는 `공통`으로 통일했다.
 - `pnpm --dir apps/mobile typecheck`, `pnpm --dir apps/manager typecheck`, `pnpm --dir apps/manager1 typecheck`, `git diff --check`가 통과했다.
+
+고객앱 크루즈 차량 픽업·드롭오프 안내 문구 수정 결과.
+
+- `pnpm --dir apps/customer typecheck`와 `git diff --check`가 통과했다.
+- 변경 범위는 화면 제목 문구와 작업 기록뿐이며, 입력·저장 로직은 변경하지 않았다.
+- 커밋 `73d3cdf`로 변경사항을 저장했다.
 
 실제 공항 예약 생성 화면 406 재점검 시작.
 
