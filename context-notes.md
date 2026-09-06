@@ -613,6 +613,15 @@ PostgreSQL 17 백업 클라이언트 보정.
 - `pnpm --dir apps/customer typecheck`와 `git diff --check`가 통과했다. 커밋은 `67563a1` (`fix(customer): 크루즈 차량 예약 선택 보완`)이다.
 - Vercel 프로덕션 배포 `dpl_83fHyse25J4R1Nyca2HZYGSbGx21`이 Ready 상태가 됐고, 운영 URL에서도 동일한 크루즈 예약 카드 표시를 확인했다.
 
+빅토리어스 크루즈 객실 중복 정리 시작.
+
+- 사용자 요청은 화면에 중복되는 빅토리어스 크루즈 객실을 DB에서 확인하고 한 번만 표시되도록 정리하는 것이다.
+- 요금 데이터는 삭제하지 않고, 중복 표시 원인이 되는 객실 원본 행을 정확히 식별한 후 최소 범위로 처리한다.
+- `cruise_info`에는 객실 8종이 각각 한 행씩만 존재해 중복 원인이 아니었다.
+- `cruise_rate_card`의 `[legacy-reservation-only]` 과거 예약 전용 4행이 `is_active = true`로 남아, 주니어 오션·시니어 발코니 객실과 트리플 객실이 신규 선택 목록에 함께 노출되고 있었다.
+- 4행은 과거 `reservation_cruise` 39건에서 참조하므로 삭제하지 않고 `is_active = false`로 변경했다. 대상 ID는 `9792f760-db35-4801-ae47-5564127001cc`, `7010fee7-8a09-4503-b5d5-7fc320357279`, `95d378be-c6e5-44aa-a8a4-1ff577bcb975`, `91eb5fd7-9e50-45ce-9e87-07ba5370c03b`다.
+- 2026-09-06 기준 활성 1N2D 객실은 6종이며, 각 객실별 활성 카드 수가 정확히 1건인 것을 재조회로 확인했다.
+
 세 앱 예약 통합 상세 DB 원본 표시 통일 시작.
 
 - 전달된 크루즈 예약의 `reservation.total_amount`와 `price_breakdown.grand_total`은 모두 13,200,000동이며, `adjustment_total` 800,000동은 이미 최종 금액에 포함된다.
