@@ -419,18 +419,25 @@ function CruiseVehicleContent() {
     useLoadingTimeout(loading, setLoading);
 
     const loadCruiseReservationOptions = useCallback(async (userId: string) => {
-        let reservationQuery = supabase
-            .from('reservation')
-            .select('re_id, re_quote_id')
-            .eq('re_user_id', userId)
-            .eq('re_type', 'cruise')
-            .order('re_created_at', { ascending: false });
+        const getReservations = (filterByQuote: boolean) => {
+            let query = supabase
+                .from('reservation')
+                .select('re_id, re_quote_id')
+                .eq('re_user_id', userId)
+                .eq('re_type', 'cruise')
+                .order('re_created_at', { ascending: false });
 
-        if (quoteId) {
-            reservationQuery = reservationQuery.eq('re_quote_id', quoteId);
+            if (filterByQuote && quoteId) {
+                query = query.eq('re_quote_id', quoteId);
+            }
+
+            return query;
+        };
+
+        let { data: reservations, error: reservationError } = await getReservations(true);
+        if (!reservationError && quoteId && (!reservations || reservations.length === 0)) {
+            ({ data: reservations, error: reservationError } = await getReservations(false));
         }
-
-        const { data: reservations, error: reservationError } = await reservationQuery;
         if (reservationError) throw reservationError;
 
         const reservationIds = (reservations || []).map((row: any) => row.re_id).filter(Boolean);

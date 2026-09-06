@@ -602,6 +602,14 @@ PostgreSQL 17 백업 클라이언트 보정.
 - 세 앱 모두 일반 크루즈 차량 카드에 `크루즈`, `차량명`, `구분`, 일정일, `승차` 또는 `하차`, `인원/차량`을 사용한다. 크루즈명이 없는 공통 차량의 표기는 `공통`으로 통일했다.
 - `pnpm --dir apps/mobile typecheck`, `pnpm --dir apps/manager typecheck`, `pnpm --dir apps/manager1 typecheck`, `git diff --check`가 통과했다.
 
+고객앱 크루즈 차량 예약 표시 복구 시작.
+
+- 대상 URL은 `/mypage/direct-booking/cruise/vehicle?quoteId=12e348c8-ed7f-4dd5-9826-e4dca5ed52a2`이다.
+- 목표는 기존 예약 데이터를 변경하지 않고, 해당 견적의 크루즈 예약이 차량 예약 화면에서 표시되지 않는 조회·연결 조건만 보정하는 것이다.
+- 운영 DB 읽기 전용 조회에서 대상 견적 `12e348c8-ed7f-4dd5-9826-e4dca5ed52a2`에는 연결된 `reservation` 행이 0건이었다.
+- 같은 사용자의 실제 크루즈 예약 `257e03dd-833a-4c59-9349-1120f991d174`은 다른 견적 `6f8e714d-f154-4f26-a92e-1f1ef0b61dea`에 연결돼 있었다.
+- URL 견적과 일치하는 크루즈 예약이 없을 때에만 같은 사용자의 크루즈 예약 목록으로 대체한다. 일치하는 예약이 있으면 기존의 엄격한 견적 필터를 유지한다.
+
 세 앱 예약 통합 상세 DB 원본 표시 통일 시작.
 
 - 전달된 크루즈 예약의 `reservation.total_amount`와 `price_breakdown.grand_total`은 모두 13,200,000동이며, `adjustment_total` 800,000동은 이미 최종 금액에 포함된다.
