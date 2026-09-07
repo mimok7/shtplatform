@@ -740,3 +740,6 @@ PostgreSQL 17 백업 클라이언트 보정.
 - `manager`, `admin`, `super_admin`, `superadmin`, `master`, `owner`는 고객 비밀번호 초기화를 허용한다. 조회 오류는 403으로 숨기지 않고 500과 서버 로그로 분리해 배포 환경 설정 문제를 확인할 수 있다.
 - 모바일 인증 저장소 키를 `sht-mobile-auth`로 분리해, 이전 공유 저장소의 폐기된 갱신 토큰이 고객관리 요청에 섞이지 않게 한다. 이 변경 뒤에는 모바일 앱에서 한 번 다시 로그인해야 한다.
 - `pnpm --dir apps/mobile typecheck`와 `git diff --check`가 통과했다.
+- Vercel production 로그의 실제 오류는 `[reset-pw] 요청자 권한 조회 실패: Invalid API key`였다. 코드 역할 판정 문제가 아니라 `newmobile`의 `SUPABASE_SERVICE_ROLE_KEY`가 유효하지 않은 상태였다.
+- 로컬 모바일 환경의 서버 키가 같은 Supabase 프로젝트 URL과 일치함을 비밀값을 노출하지 않고 확인한 뒤, Vercel mobile production의 `SUPABASE_SERVICE_ROLE_KEY`를 해당 값으로 덮어썼다.
+- 새 production 배포 `dpl_5mcTnZdqEHKsRkxLmdut7qYHuSg4`가 Ready 상태이며 `newmobile.stayhalong.com` 별칭이 연결됐다. 고객 비밀번호를 임의 변경하지 않기 위해 실제 초기화 요청은 운영 매니저가 재시도해 확인한다.
