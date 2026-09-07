@@ -25,6 +25,7 @@ function initSupabase(): SupabaseClient {
             persistSession: true,
             autoRefreshToken: true,
             detectSessionInUrl: true,
+            storageKey: 'sht-mobile-auth',
           }
         : {
             persistSession: false,

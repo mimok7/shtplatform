@@ -732,3 +732,11 @@ PostgreSQL 17 백업 클라이언트 보정.
 - 모바일은 전역 `AuthGate`, 매니저와 매니저1은 `ManagerLayout` 및 `useAuth`가 인증 진입점이다. 갱신 토큰 오류 응답은 로컬 세션을 비우고 로그인으로 이동하도록 동일하게 처리한다.
 - 세 공통 폼은 활성 요금만 선택지에 표시하고, 코드 조회·저장 직전 조회 모두 유효 기간 안의 최신 시작일 요금 한 건을 사용한다.
 - `pnpm --dir apps/mobile typecheck`, `pnpm --dir apps/manager typecheck`, `pnpm --dir apps/manager1 typecheck`, `git diff --check`가 통과했다.
+모바일 고객관리 비밀번호 초기화 403 점검 시작.
+
+- 콘솔에는 만료 또는 이미 교체된 갱신 토큰의 400과 고객 비밀번호 초기화 API의 403이 함께 기록됐다. 갱신 토큰 오류는 별도 세션 정리 문제이며, 403은 서버가 요청자의 역할을 인정하지 않은 경우다.
+- 모바일 API는 JWT 클레임과 `users` 테이블의 id·이메일·전화·카카오 ID로 역할을 합쳐 `manager` 이상만 허용하려 한다. 실제 역할 저장 위치와 모바일 인증 세션의 역할 표기를 확인한 뒤 최소 권한 보정만 적용한다.
+- 권한 판정은 서버가 요청 토큰의 사용자 ID로 조회한 `public.users.role`만 사용하도록 변경했다. 고객이 수정 가능한 `user_metadata`와 이메일·전화·카카오 ID 일치 폴백은 권한 근거로 사용하지 않는다.
+- `manager`, `admin`, `super_admin`, `superadmin`, `master`, `owner`는 고객 비밀번호 초기화를 허용한다. 조회 오류는 403으로 숨기지 않고 500과 서버 로그로 분리해 배포 환경 설정 문제를 확인할 수 있다.
+- 모바일 인증 저장소 키를 `sht-mobile-auth`로 분리해, 이전 공유 저장소의 폐기된 갱신 토큰이 고객관리 요청에 섞이지 않게 한다. 이 변경 뒤에는 모바일 앱에서 한 번 다시 로그인해야 한다.
+- `pnpm --dir apps/mobile typecheck`와 `git diff --check`가 통과했다.

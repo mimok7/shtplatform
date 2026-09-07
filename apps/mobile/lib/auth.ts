@@ -1,7 +1,7 @@
 import type { User } from '@supabase/supabase-js';
 import supabase from '@/lib/supabase';
 
-const MANAGER_ROLE_CANDIDATES = ['manager'];
+const MANAGER_ROLE_CANDIDATES = ['manager', 'admin', 'super_admin', 'superadmin', 'master', 'owner'];
 const ACCESS_CACHE_PREFIX = 'sht:mobile:manager-access:';
 
 const normalizeRole = (value: unknown): string => {
