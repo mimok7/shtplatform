@@ -743,3 +743,10 @@ PostgreSQL 17 백업 클라이언트 보정.
 - Vercel production 로그의 실제 오류는 `[reset-pw] 요청자 권한 조회 실패: Invalid API key`였다. 코드 역할 판정 문제가 아니라 `newmobile`의 `SUPABASE_SERVICE_ROLE_KEY`가 유효하지 않은 상태였다.
 - 로컬 모바일 환경의 서버 키가 같은 Supabase 프로젝트 URL과 일치함을 비밀값을 노출하지 않고 확인한 뒤, Vercel mobile production의 `SUPABASE_SERVICE_ROLE_KEY`를 해당 값으로 덮어썼다.
 - 새 production 배포 `dpl_5mcTnZdqEHKsRkxLmdut7qYHuSg4`가 Ready 상태이며 `newmobile.stayhalong.com` 별칭이 연결됐다. 고객 비밀번호를 임의 변경하지 않기 위해 실제 초기화 요청은 운영 매니저가 재시도해 확인한다.
+
+모바일 카페 안내 대량 예약 조회 400 보정 시작.
+
+- 첨부 콘솔의 `reservation_airport?select=reservation_id,ra_datetime&reservation_id=in.(...)` 요청은 수백 개 이상의 UUID를 한 REST URL에 담아 400을 반환했다.
+- `apps/mobile/app/cafe-guide/page.tsx`는 전체 진행 중 예약 ID를 다섯 서비스 테이블의 `.in('reservation_id', reservationIds)`에 직접 전달한다. URL 길이 제한을 피하도록 이미 제공되는 `fetchServiceByReservationIds`를 사용한다.
+- 서비스별 데이터를 80개 ID 단위로 나눠 병렬 조회한다. 화면의 날짜 산출과 필터링 동작은 그대로 유지한다.
+- 사용자·견적 목록도 같은 예약 집합에서 파생하므로 동일한 80개 단위 조회로 전환했다. `pnpm --dir apps/mobile typecheck`와 `git diff --check`를 통과시켰다.

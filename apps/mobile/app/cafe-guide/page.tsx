@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Home } from 'lucide-react';
 import supabase from '@/lib/supabase';
+import { fetchServiceByReservationIds, fetchTableInBatches } from '@/lib/fetchInBatches';
 import { fetchPromotionSequenceMap } from '@/lib/promotionSequence';
 
 interface PendingReservationRow {
@@ -290,27 +291,12 @@ export default function CafeGuidePage() {
 
                 const reservationIds = reservationRows.map((r) => r.re_id);
 
-                const [cruiseRes, airportRes, tourRes, hotelRes, rentcarRes] = await Promise.all([
-                    supabase
-                        .from('reservation_cruise')
-                        .select('reservation_id, checkin')
-                        .in('reservation_id', reservationIds),
-                    supabase
-                        .from('reservation_airport')
-                        .select('reservation_id, ra_datetime')
-                        .in('reservation_id', reservationIds),
-                    supabase
-                        .from('reservation_tour')
-                        .select('reservation_id, usage_date')
-                        .in('reservation_id', reservationIds),
-                    supabase
-                        .from('reservation_hotel')
-                        .select('reservation_id, checkin_date')
-                        .in('reservation_id', reservationIds),
-                    supabase
-                        .from('reservation_rentcar')
-                        .select('reservation_id, pickup_datetime')
-                        .in('reservation_id', reservationIds),
+                const [cruiseRows, airportRows, tourRows, hotelRows, rentcarRows] = await Promise.all([
+                    fetchServiceByReservationIds('reservation_cruise', reservationIds, 'reservation_id, checkin'),
+                    fetchServiceByReservationIds('reservation_airport', reservationIds, 'reservation_id, ra_datetime'),
+                    fetchServiceByReservationIds('reservation_tour', reservationIds, 'reservation_id, usage_date'),
+                    fetchServiceByReservationIds('reservation_hotel', reservationIds, 'reservation_id, checkin_date'),
+                    fetchServiceByReservationIds('reservation_rentcar', reservationIds, 'reservation_id, pickup_datetime'),
                 ]);
 
                 const reservationDateMap = new Map<string, string>();
@@ -323,26 +309,26 @@ export default function CafeGuidePage() {
                     }
                 };
 
-                (cruiseRes.data || []).forEach((row: any) => saveEarlierDate(row?.reservation_id, row?.checkin));
-                (airportRes.data || []).forEach((row: any) => saveEarlierDate(row?.reservation_id, row?.ra_datetime));
-                (tourRes.data || []).forEach((row: any) => saveEarlierDate(row?.reservation_id, row?.usage_date));
-                (hotelRes.data || []).forEach((row: any) => saveEarlierDate(row?.reservation_id, row?.checkin_date));
-                (rentcarRes.data || []).forEach((row: any) => saveEarlierDate(row?.reservation_id, row?.pickup_datetime));
+                cruiseRows.forEach((row: any) => saveEarlierDate(row?.reservation_id, row?.checkin));
+                airportRows.forEach((row: any) => saveEarlierDate(row?.reservation_id, row?.ra_datetime));
+                tourRows.forEach((row: any) => saveEarlierDate(row?.reservation_id, row?.usage_date));
+                hotelRows.forEach((row: any) => saveEarlierDate(row?.reservation_id, row?.checkin_date));
+                rentcarRows.forEach((row: any) => saveEarlierDate(row?.reservation_id, row?.pickup_datetime));
 
                 const userIds = Array.from(new Set(reservationRows.map((r) => r.re_user_id).filter(Boolean)));
                 const quoteIds = Array.from(new Set(reservationRows.map((r) => r.re_quote_id).filter(Boolean))) as string[];
 
-                const [{ data: users }, { data: quotes }] = await Promise.all([
+                const [users, quotes] = await Promise.all([
                     userIds.length
-                        ? supabase.from('users').select('id, name, email').in('id', userIds)
-                        : Promise.resolve({ data: [] as UserInfo[] }),
+                        ? fetchTableInBatches<UserInfo>('users', 'id', userIds, 'id, name, email', 80)
+                        : Promise.resolve([] as UserInfo[]),
                     quoteIds.length
-                        ? supabase.from('quote').select('id, title').in('id', quoteIds)
-                        : Promise.resolve({ data: [] as QuoteInfo[] }),
+                        ? fetchTableInBatches<QuoteInfo>('quote', 'id', quoteIds, 'id, title', 80)
+                        : Promise.resolve([] as QuoteInfo[]),
                 ]);
 
-                const typedUsers = (users || []) as UserInfo[];
-                const typedQuotes = (quotes || []) as QuoteInfo[];
+                const typedUsers = users as UserInfo[];
+                const typedQuotes = quotes as QuoteInfo[];
                 const userMap = new Map<string, UserInfo>(typedUsers.map((u) => [u.id, u]));
                 const quoteMap = new Map<string, QuoteInfo>(typedQuotes.map((q) => [q.id, q]));
 
