@@ -215,14 +215,23 @@ async function buildRentcarShuttleSheet(): Promise<SheetMatrix> {
   };
 }
 
-async function buildTableSheet(table: string, search: string): Promise<SheetMatrix> {
-  const { columns, rows } = await fetchTableRowsForExport(table, search);
+async function buildTableSheet(table: string, options: { search?: string; filters?: Record<string, string>; sort?: string; direction?: 'asc' | 'desc' }): Promise<SheetMatrix> {
+  const { columns, rows } = await fetchTableRowsForExport(table, options);
   const headers = columns.map((column) => column.column_name);
   return {
     title: `DB_${table}`.slice(0, 90),
     headers,
     rows,
   };
+}
+
+function getTableFilters(value: unknown) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .filter(([key, item]) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(key) && typeof item === 'string')
+      .map(([key, item]) => [key, (item as string).slice(0, 200)]),
+  ) as Record<string, string>;
 }
 
 function createReservationSummary(reservations: any[], usersById: Map<string, any>, cruiseByReservationId: Map<string, any>) {
@@ -647,7 +656,12 @@ export async function POST(req: NextRequest) {
     const sheetMatrices = body?.mode === 'rentcar_shuttle'
       ? [await buildRentcarShuttleSheet()]
       : body?.mode === 'table'
-        ? [await buildTableSheet(typeof body.table === 'string' ? body.table.trim() : '', typeof body.search === 'string' ? body.search : '')]
+        ? [await buildTableSheet(typeof body.table === 'string' ? body.table.trim() : '', {
+          search: typeof body.search === 'string' ? body.search : '',
+          filters: getTableFilters(body.filters),
+          sort: typeof body.sort === 'string' ? body.sort : '',
+          direction: body.direction === 'desc' ? 'desc' : 'asc',
+        })]
         : await buildSheets();
     const sheets = getSheetsClient(overrides);
     await ensureSheets(sheets, spreadsheetId, sheetMatrices.map((sheet) => sheet.title));

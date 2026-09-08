@@ -1,17 +1,11 @@
 // 플랫폼 DB의 공개 테이블 메타데이터와 행 조회를 관리자 도구에서 공통으로 사용한다.
 import serviceSupabase from '@/lib/serviceSupabase';
 import { fetchAll } from '@/lib/exportAuth';
+import type { DbColumn } from '@/lib/dbBrowserTypes';
 
 const TABLE_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
-export type DbColumn = {
-  column_name: string;
-  data_type: string;
-  is_nullable: string;
-  column_default: string | null;
-  identity_generation: string | null;
-  ordinal_position: number;
-};
+export type { DbColumn } from '@/lib/dbBrowserTypes';
 
 type OpenApiProperty = {
   type?: string;
@@ -28,6 +22,15 @@ type OpenApiSpec = {
   definitions?: Record<string, OpenApiDefinition>;
 };
 
+export type DbTableQueryOptions = {
+  search?: string;
+  filters?: Record<string, string>;
+  sort?: string;
+  direction?: 'asc' | 'desc';
+  offset?: number;
+  limit?: number;
+};
+
 let metadataCache: { expiresAt: number; definitions: Record<string, OpenApiDefinition> } | null = null;
 
 function assertTableName(table: string) {
@@ -36,6 +39,41 @@ function assertTableName(table: string) {
 
 function escapeSearch(value: string) {
   return value.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_').replaceAll(',', '\\,');
+}
+
+function isTextColumn(column: DbColumn) {
+  return ['character varying', 'text', 'character'].includes(column.data_type);
+}
+
+function normalizeFilters(filters: Record<string, string> | undefined, columns: DbColumn[]) {
+  const allowed = new Map(columns.map((column) => [column.column_name, column]));
+  const normalized: Array<[DbColumn, string]> = [];
+  for (const [name, rawValue] of Object.entries(filters || {})) {
+    const column = allowed.get(name);
+    const value = typeof rawValue === 'string' ? rawValue.trim() : '';
+    if (column && value) normalized.push([column, value]);
+  }
+  return normalized;
+}
+
+function applyQueryConditions(query: any, columns: DbColumn[], options: DbTableQueryOptions) {
+  const search = String(options.search || '').trim();
+  if (search) {
+    const searchColumns = columns
+      .filter(isTextColumn)
+      .map((column) => `${column.column_name}.ilike.%${escapeSearch(search)}%`);
+    if (searchColumns.length === 0) return null;
+    query = query.or(searchColumns.join(','));
+  }
+
+  for (const [column, value] of normalizeFilters(options.filters, columns)) {
+    query = isTextColumn(column)
+      ? query.ilike(column.column_name, `%${escapeSearch(value)}%`)
+      : query.eq(column.column_name, value);
+  }
+
+  const sortable = columns.some((column) => column.column_name === options.sort) ? options.sort! : columns[0].column_name;
+  return query.order(sortable, { ascending: options.direction !== 'desc' });
 }
 
 function getColumnDataType(property: OpenApiProperty) {
@@ -102,7 +140,7 @@ export async function listPublicTables() {
     .sort((a, b) => a.table.localeCompare(b.table));
 }
 
-export async function fetchTablePage(table: string, options: { search?: string; offset?: number; limit?: number } = {}) {
+export async function fetchTablePage(table: string, options: DbTableQueryOptions = {}) {
   if (!serviceSupabase) throw new Error('SUPABASE_SERVICE_ROLE_KEY 미설정');
   assertTableName(table);
   const columns = await getPublicTableColumns(table);
@@ -110,20 +148,12 @@ export async function fetchTablePage(table: string, options: { search?: string; 
 
   const offset = Math.max(0, Number(options.offset) || 0);
   const limit = Math.min(500, Math.max(1, Number(options.limit) || 100));
-  const search = String(options.search || '').trim();
   let query: any = serviceSupabase
     .from(table)
     .select('*', { count: 'exact' })
-    .range(offset, offset + limit - 1)
-    .order(columns[0].column_name, { ascending: false });
-
-  if (search) {
-    const textColumns = columns
-      .filter((column) => ['character varying', 'text', 'character', 'uuid', 'date', 'timestamp without time zone', 'timestamp with time zone'].includes(column.data_type))
-      .map((column) => `${column.column_name}.ilike.%${escapeSearch(search)}%`);
-    if (textColumns.length === 0) return { columns, rows: [], count: 0, hasMore: false, offset, limit };
-    query = query.or(textColumns.join(','));
-  }
+    .range(offset, offset + limit - 1);
+  query = applyQueryConditions(query, columns, options);
+  if (!query) return { columns, rows: [], count: 0, hasMore: false, offset, limit };
 
   const { data, error, count } = await query;
   if (error) throw new Error(error.message || '테이블 행 조회에 실패했습니다.');
@@ -147,11 +177,12 @@ export async function insertTableRow(table: string, values: Record<string, unkno
   return data;
 }
 
-export async function fetchTableRowsForExport(table: string, search = '') {
-  const first = await fetchTablePage(table, { search, offset: 0, limit: 500 });
-  if (!search) {
+export async function fetchTableRowsForExport(table: string, options: DbTableQueryOptions = {}) {
+  const first = await fetchTablePage(table, { ...options, offset: 0, limit: 500 });
+  const hasFilters = Boolean(String(options.search || '').trim()) || normalizeFilters(options.filters, first.columns).length > 0;
+  if (!hasFilters) {
     if (first.hasMore) {
-      const all = await fetchAll(table, (query) => query.order(first.columns[0].column_name, { ascending: false }));
+      const all = await fetchAll(table, (query) => applyQueryConditions(query, first.columns, options));
       return { columns: first.columns, rows: all };
     }
     return { columns: first.columns, rows: first.rows };
@@ -160,7 +191,7 @@ export async function fetchTableRowsForExport(table: string, search = '') {
   const rows = [...first.rows];
   let offset = first.limit;
   while (first.hasMore && rows.length < first.count) {
-    const next = await fetchTablePage(table, { search, offset, limit: 500 });
+    const next = await fetchTablePage(table, { ...options, offset, limit: 500 });
     rows.push(...next.rows);
     if (!next.hasMore) break;
     offset += next.limit;

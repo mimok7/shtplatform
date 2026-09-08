@@ -6,6 +6,21 @@ import { fetchTablePage, insertTableRow, listPublicTables } from '@/lib/dbBrowse
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+function parseFilters(value: string | null) {
+  if (!value) return {};
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error();
+    return Object.fromEntries(
+      Object.entries(parsed as Record<string, unknown>)
+        .filter(([key, item]) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(key) && typeof item === 'string')
+        .map(([key, item]) => [key, (item as string).slice(0, 200)]),
+    ) as Record<string, string>;
+  } catch {
+    throw new Error('컬럼 필터 형식이 올바르지 않습니다.');
+  }
+}
+
 export async function GET(request: NextRequest) {
   const auth = await checkAdmin(request);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
@@ -21,7 +36,10 @@ export async function GET(request: NextRequest) {
       const search = request.nextUrl.searchParams.get('search') || '';
       const offset = Number(request.nextUrl.searchParams.get('offset') || 0);
       const limit = Number(request.nextUrl.searchParams.get('limit') || 100);
-      const result = await fetchTablePage(table, { search, offset, limit });
+      const sort = request.nextUrl.searchParams.get('sort') || '';
+      const direction = request.nextUrl.searchParams.get('direction') === 'desc' ? 'desc' : 'asc';
+      const filters = parseFilters(request.nextUrl.searchParams.get('filters'));
+      const result = await fetchTablePage(table, { search, filters, sort, direction, offset, limit });
       return NextResponse.json({ ok: true, table, ...result });
     }
     return NextResponse.json({ error: 'mode는 tables 또는 rows만 지원합니다.' }, { status: 400 });
