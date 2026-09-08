@@ -776,3 +776,4 @@ PostgreSQL 17 백업 클라이언트 보정.
 - `rentcar_price`의 `vehicle_type = 크루즈 셔틀 리무진` 원본은 82건이며 모두 활성 행으로 확인했다. 전용 시트 내보내기와 일반 테이블 내보내기를 함께 제공한다.
 - Supabase SDK의 `getSession()`이 브라우저 확장 환경에서 지연될 때 저장된 Supabase access token을 3초 제한으로 폴백해 관리자 API 요청이 무한 대기하지 않도록 했다.
 - 타입 검사와 production 빌드가 통과했으며, production 배포 `dpl_ECA5S9cp2oQLoEJ8y1K5dBDwQFNc`가 `admin.stayhalong.com`에 Ready 상태로 연결됐다. 기존 Chrome 세션은 동시 접속 차단 상태였으나 새 화면의 정적 UI가 정상 렌더링되는 것을 확인했고, 인증이 없는 새 탭은 관리자 권한 확인 화면으로 안전하게 제한됐다.
+- DB 도구 메뉴에서 기존 SQL 실행·스키마·컬럼 사용처 링크를 제거하고 통합 DB 관리 화면만 표시하도록 추가 배포했다. 최종 production 배포는 `dpl_FfQrvrPFjRUJoJhd3exY5hBzNSu9`이며 `admin.stayhalong.com` 별칭이 Ready 상태다.
