@@ -772,3 +772,7 @@ PostgreSQL 17 백업 클라이언트 보정.
 - `apps/mobile/app/cafe-guide/page.tsx`는 전체 진행 중 예약 ID를 다섯 서비스 테이블의 `.in('reservation_id', reservationIds)`에 직접 전달한다. URL 길이 제한을 피하도록 이미 제공되는 `fetchServiceByReservationIds`를 사용한다.
 - 서비스별 데이터를 80개 ID 단위로 나눠 병렬 조회한다. 화면의 날짜 산출과 필터링 동작은 그대로 유지한다.
 - 사용자·견적 목록도 같은 예약 집합에서 파생하므로 동일한 80개 단위 조회로 전환했다. `pnpm --dir apps/mobile typecheck`와 `git diff --check`를 통과시켰다.
+- 관리자 DB 도구를 기존 삭제/위험 작업 화면 대신 공개 스키마의 테이블 목록·행 조회·검색·페이지 이동·행 추가·현재 필터 Google Sheets 내보내기 화면으로 교체했다. 테이블명은 서버에서 검증하며 모든 쓰기·조회 API는 관리자 권한을 확인한다.
+- `rentcar_price`의 `vehicle_type = 크루즈 셔틀 리무진` 원본은 82건이며 모두 활성 행으로 확인했다. 전용 시트 내보내기와 일반 테이블 내보내기를 함께 제공한다.
+- Supabase SDK의 `getSession()`이 브라우저 확장 환경에서 지연될 때 저장된 Supabase access token을 3초 제한으로 폴백해 관리자 API 요청이 무한 대기하지 않도록 했다.
+- 타입 검사와 production 빌드가 통과했으며, production 배포 `dpl_ECA5S9cp2oQLoEJ8y1K5dBDwQFNc`가 `admin.stayhalong.com`에 Ready 상태로 연결됐다. 기존 Chrome 세션은 동시 접속 차단 상태였으나 새 화면의 정적 UI가 정상 렌더링되는 것을 확인했고, 인증이 없는 새 탭은 관리자 권한 확인 화면으로 안전하게 제한됐다.
