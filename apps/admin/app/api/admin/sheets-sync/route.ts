@@ -3,6 +3,7 @@ import { google, sheets_v4 } from 'googleapis';
 import serviceSupabase from '@/lib/serviceSupabase';
 import { checkAdmin, fetchAll } from '@/lib/exportAuth';
 import { getReservationStoredAmount } from '@sht/domain/reservation';
+import { fetchTableRowsForExport } from '@/lib/dbBrowser';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -211,6 +212,16 @@ async function buildRentcarShuttleSheet(): Promise<SheetMatrix> {
       생성일: row.created_at,
       수정일: row.updated_at,
     })),
+  };
+}
+
+async function buildTableSheet(table: string, search: string): Promise<SheetMatrix> {
+  const { columns, rows } = await fetchTableRowsForExport(table, search);
+  const headers = columns.map((column) => column.column_name);
+  return {
+    title: `DB_${table}`.slice(0, 90),
+    headers,
+    rows,
   };
 }
 
@@ -635,7 +646,9 @@ export async function POST(req: NextRequest) {
   try {
     const sheetMatrices = body?.mode === 'rentcar_shuttle'
       ? [await buildRentcarShuttleSheet()]
-      : await buildSheets();
+      : body?.mode === 'table'
+        ? [await buildTableSheet(typeof body.table === 'string' ? body.table.trim() : '', typeof body.search === 'string' ? body.search : '')]
+        : await buildSheets();
     const sheets = getSheetsClient(overrides);
     await ensureSheets(sheets, spreadsheetId, sheetMatrices.map((sheet) => sheet.title));
     for (const sheet of sheetMatrices) {
