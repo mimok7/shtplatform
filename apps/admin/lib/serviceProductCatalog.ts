@@ -260,7 +260,7 @@ export const SERVICE_PRODUCT_CATALOG: ProductService[] = [
     id: 'rentcar', label: '렌트카', datasets: [
       {
         id: 'rates', label: '렌트카 요금', table: 'rentcar_price', primaryKey: 'id', generatedPrimaryKey: true,
-        orderBy: 'route', columns: ['rent_code', 'category', 'vehicle_type', 'route', 'way_type', 'price', 'capacity', 'is_active'], touchesUpdatedAt: true,
+        orderBy: 'route', columns: ['rent_code', 'cruise', 'category', 'vehicle_type', 'route', 'route_from', 'route_to', 'way_type', 'price', 'rental_type', 'year', 'is_active'], touchesUpdatedAt: true,
         insertDefaults: { year: currentYear, is_active: true },
         fields: [
           { key: 'rent_code', label: '렌트 코드', type: 'text', required: true },

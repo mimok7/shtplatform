@@ -37,6 +37,10 @@ const CRUISE_INTEGRATED_HEADERS = [
 ];
 const CRUISE_RAW_HEADERS = ['원본테이블', '기준키', '데이터JSON'];
 const DEFAULT_SERVICE_ACCOUNT_EMAIL = 'sheets-importer@cruise-7683b.iam.gserviceaccount.com';
+const RENTCAR_SHUTTLE_HEADERS = [
+  '가격ID', '렌트코드', '크루즈', '카테고리', '차량분류', '차량유형', '노선', '출발지', '도착지', '운행방식',
+  '요금(VND)', '정원', '이용시간', '대여유형', '적용연도', '사용여부', '비고', '생성일', '수정일',
+];
 
 type SyncOverrides = {
   spreadsheetId?: string;
@@ -174,6 +178,40 @@ async function safeFetch(table: string, filterFn?: (q: any) => any) {
     console.warn(`Sheets sync skip ${table}:`, error);
     return [];
   }
+}
+
+async function buildRentcarShuttleSheet(): Promise<SheetMatrix> {
+  const rows = await fetchAll('rentcar_price', (query) => query
+    .eq('vehicle_type', '크루즈 셔틀 리무진')
+    .order('cruise', { ascending: true })
+    .order('route', { ascending: true })
+    .order('way_type', { ascending: true }));
+
+  return {
+    title: '렌트카_크루즈셔틀리무진',
+    headers: RENTCAR_SHUTTLE_HEADERS,
+    rows: rows.map((row) => ({
+      가격ID: row.id,
+      렌트코드: row.rent_code,
+      크루즈: row.cruise,
+      카테고리: row.category,
+      차량분류: row.car_category_code,
+      차량유형: row.vehicle_type,
+      노선: row.route,
+      출발지: row.route_from,
+      도착지: row.route_to,
+      운행방식: row.way_type,
+      '요금(VND)': row.price,
+      정원: row.capacity,
+      이용시간: row.duration_hours,
+      대여유형: row.rental_type,
+      적용연도: row.year,
+      사용여부: row.is_active,
+      비고: row.memo,
+      생성일: row.created_at,
+      수정일: row.updated_at,
+    })),
+  };
 }
 
 function createReservationSummary(reservations: any[], usersById: Map<string, any>, cruiseByReservationId: Map<string, any>) {
@@ -595,7 +633,9 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const sheetMatrices = await buildSheets();
+    const sheetMatrices = body?.mode === 'rentcar_shuttle'
+      ? [await buildRentcarShuttleSheet()]
+      : await buildSheets();
     const sheets = getSheetsClient(overrides);
     await ensureSheets(sheets, spreadsheetId, sheetMatrices.map((sheet) => sheet.title));
     for (const sheet of sheetMatrices) {

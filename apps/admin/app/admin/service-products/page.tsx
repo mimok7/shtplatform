@@ -39,6 +39,8 @@ export default function ServiceProductsPage() {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [rentcarShuttleOnly, setRentcarShuttleOnly] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Row | null>(null);
   const [form, setForm] = useState<Row>({});
@@ -80,11 +82,16 @@ export default function ServiceProductsPage() {
   useEffect(() => { void load(); }, [load]);
 
   const rows = useMemo(() => datasets[dataset.id] || [], [dataset.id, datasets]);
+  const isRentcarRates = service.id === 'rentcar' && dataset.id === 'rates';
   const filteredRows = useMemo(() => {
     const keyword = search.trim().toLowerCase();
-    if (!keyword) return rows;
-    return rows.filter((row) => dataset.columns.some((column) => String(row[column] ?? '').toLowerCase().includes(keyword)));
-  }, [dataset.columns, rows, search]);
+    return rows.filter((row) => {
+      const isShuttle = row.vehicle_type === '크루즈 셔틀 리무진';
+      if (isRentcarRates && rentcarShuttleOnly && !isShuttle) return false;
+      if (!keyword) return true;
+      return dataset.columns.some((column) => String(row[column] ?? '').toLowerCase().includes(keyword));
+    });
+  }, [dataset.columns, isRentcarRates, rentcarShuttleOnly, rows, search]);
 
   function selectService(nextServiceId: string) {
     const nextService = SERVICE_PRODUCT_CATALOG.find((item) => item.id === nextServiceId) || SERVICE_PRODUCT_CATALOG[0];
@@ -92,6 +99,32 @@ export default function ServiceProductsPage() {
     setDatasetId(nextService.datasets[0].id);
     setDatasets({});
     setSearch('');
+    setRentcarShuttleOnly(true);
+  }
+
+  async function exportRentcarShuttle() {
+    setExporting(true);
+    setNotice(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const response = await fetch('/api/admin/sheets-sync', {
+        method: 'POST',
+        headers: {
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ mode: 'rentcar_shuttle' }),
+      });
+      const result = await response.json().catch(() => ({})) as { error?: string; sheets?: Array<{ title: string; rows: number }> };
+      if (!response.ok) throw new Error(result.error || '구글시트 내보내기에 실패했습니다.');
+      const exportedRows = result.sheets?.[0]?.rows ?? 0;
+      setNotice({ type: 'success', text: `크루즈 셔틀 리무진 ${exportedRows.toLocaleString('ko-KR')}건을 구글시트 '${result.sheets?.[0]?.title || '렌트카_크루즈셔틀리무진'}'에 내보냈습니다.` });
+    } catch (error: unknown) {
+      const message = errorMessage(error, '구글시트 내보내기에 실패했습니다.');
+      setNotice({ type: 'error', text: message.includes('GOOGLE_') ? `${message} 구글시트 동기화 화면에서 연결 정보를 먼저 확인해 주세요.` : message });
+    } finally {
+      setExporting(false);
+    }
   }
 
   function openCreate() {
@@ -191,11 +224,21 @@ export default function ServiceProductsPage() {
             <div className="flex flex-wrap gap-1" role="tablist" aria-label={`${service.label} 데이터 선택`}>
               {service.datasets.map((item) => <button key={item.id} type="button" role="tab" aria-selected={dataset.id === item.id} onClick={() => { setDatasetId(item.id); setSearch(''); }} className={`h-11 border px-4 font-medium ${dataset.id === item.id ? 'border-[var(--sht-primary)] bg-[var(--sht-primary)] text-[var(--sht-primary-text)]' : 'border-[var(--sht-border)] bg-[var(--sht-surface)] text-[var(--sht-text)] hover:bg-[var(--sht-surface-muted)]'}`}>{item.label}</button>)}
             </div>
-            <label className="relative block min-w-0 md:w-80">
+            <div className="flex flex-col gap-2 md:items-end">
+              {isRentcarRates && <div className="flex flex-wrap items-center justify-end gap-2">
+                <button type="button" onClick={() => setRentcarShuttleOnly((current) => !current)} className={`h-11 border px-3 text-xs font-semibold ${rentcarShuttleOnly ? 'border-[var(--sht-primary)] bg-[var(--sht-primary)] text-[var(--sht-primary-text)]' : 'border-[var(--sht-border)] bg-[var(--sht-surface)] text-[var(--sht-text)] hover:bg-[var(--sht-surface-muted)]'}`}>
+                  {rentcarShuttleOnly ? '크루즈 셔틀 리무진만 표시 중' : '전체 렌트카 표시 중'}
+                </button>
+                <button type="button" onClick={() => void exportRentcarShuttle()} disabled={exporting || loading} className="inline-flex h-11 items-center gap-2 bg-green-600 px-3 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-50">
+                  {exporting ? '시트 내보내는 중...' : 'Google Sheets로 내보내기'}
+                </button>
+              </div>}
+              <label className="relative block min-w-0 md:w-80">
               <span className="sr-only">상품 검색</span>
               <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--sht-text-muted)]" />
               <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="이름, 코드, 노선 검색" className="h-11 w-full border border-[var(--sht-border)] bg-[var(--sht-surface)] pl-9 pr-3 text-sm text-[var(--sht-text)] focus:outline-none focus:ring-2 focus:ring-[var(--sht-focus)]" />
-            </label>
+              </label>
+            </div>
           </div>
         </section>
 
