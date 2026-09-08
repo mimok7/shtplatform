@@ -780,3 +780,4 @@ PostgreSQL 17 백업 클라이언트 보정.
 - 공개 OpenAPI 메타데이터에서 현재 129개 공개 테이블/뷰를 확인해 DB 도구의 목록·컬럼 조회에 사용하도록 바꿨다. 머릿글별 필터와 오름차순·내림차순 정렬은 서버에서 허용된 컬럼만 적용하며 Google Sheets 내보내기에도 동일 조건을 전달한다.
 - DB 화면은 서버 전용 모듈에서 타입을 직접 가져오지 않는 공용 타입 파일로 분리해 Supabase vendor chunk 경로 오류를 해소했다. 새 로컬 개발 서버에서 `/admin/database`가 200으로 컴파일됐고, 최종 production 배포 `dpl_EF8vjqGq2XGCKUnqro6rn4tAecsz`가 Ready 상태로 `admin.stayhalong.com`에 연결됐다.
 - DB 관리 화면의 테이블 선택 목록을 상단으로 이동하고, 테이블명에 한글 설명을 붙였다. 현재 행의 실제 값 목록을 머릿글 선택 필터에 제공하며, 컬럼 표시 설정·고정 하단 가로 스크롤·Google Sheets 내보내기 성공 시 시트 자동 열기를 추가했다. 데이터 행 표시 크기는 유지하고 제목·버튼만 한 단계 축소했다. production `dpl_HSLexC5N6GBtcN4xN5NpEhb63oAH`가 Ready 상태다.
+- 상단 테이블 선택을 카드 목록 대신 native 드롭다운으로 교체했다. 각 항목은 `테이블명 (한글 설명)` 형식이며, 기존 컬럼 숨김·화면 하단 고정 가로 스크롤·Google Sheets 자동 열기 동작을 유지한다. production `dpl_7xXqtZkDWpa3Jce4pFfhyNLYY3Pp`가 Ready 상태다.
