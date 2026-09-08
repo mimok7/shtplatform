@@ -777,3 +777,5 @@ PostgreSQL 17 백업 클라이언트 보정.
 - Supabase SDK의 `getSession()`이 브라우저 확장 환경에서 지연될 때 저장된 Supabase access token을 3초 제한으로 폴백해 관리자 API 요청이 무한 대기하지 않도록 했다.
 - 타입 검사와 production 빌드가 통과했으며, production 배포 `dpl_ECA5S9cp2oQLoEJ8y1K5dBDwQFNc`가 `admin.stayhalong.com`에 Ready 상태로 연결됐다. 기존 Chrome 세션은 동시 접속 차단 상태였으나 새 화면의 정적 UI가 정상 렌더링되는 것을 확인했고, 인증이 없는 새 탭은 관리자 권한 확인 화면으로 안전하게 제한됐다.
 - DB 도구 메뉴에서 기존 SQL 실행·스키마·컬럼 사용처 링크를 제거하고 통합 DB 관리 화면만 표시하도록 추가 배포했다. 최종 production 배포는 `dpl_FfQrvrPFjRUJoJhd3exY5hBzNSu9`이며 `admin.stayhalong.com` 별칭이 Ready 상태다.
+- 공개 OpenAPI 메타데이터에서 현재 129개 공개 테이블/뷰를 확인해 DB 도구의 목록·컬럼 조회에 사용하도록 바꿨다. 머릿글별 필터와 오름차순·내림차순 정렬은 서버에서 허용된 컬럼만 적용하며 Google Sheets 내보내기에도 동일 조건을 전달한다.
+- DB 화면은 서버 전용 모듈에서 타입을 직접 가져오지 않는 공용 타입 파일로 분리해 Supabase vendor chunk 경로 오류를 해소했다. 새 로컬 개발 서버에서 `/admin/database`가 200으로 컴파일됐고, 최종 production 배포 `dpl_EF8vjqGq2XGCKUnqro6rn4tAecsz`가 Ready 상태로 `admin.stayhalong.com`에 연결됐다.
