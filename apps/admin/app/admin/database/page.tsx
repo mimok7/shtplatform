@@ -4,8 +4,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Download, Plus, RefreshCw, Search, X } from 'lucide-react';
 import AdminLayout from '@/components/AdminLayout';
-import { DbColumn } from '@/lib/dbBrowser';
-import { getSupabase } from '@/lib/supabase';
+import { getAdminAuthHeaders } from '@/lib/adminAuth';
+import type { DbColumn } from '@/lib/dbBrowser';
 
 type TableSummary = { table: string; columnCount: number };
 type DbRow = Record<string, unknown>;
@@ -57,10 +57,7 @@ export default function DatabaseManagementPage() {
   const [form, setForm] = useState<Record<string, string>>({});
   const [notice, setNotice] = useState<Notice>(null);
 
-  const authHeaders = useCallback(async (): Promise<Record<string, string>> => {
-    const { data: { session } } = await getSupabase().auth.getSession();
-    return session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
-  }, []);
+  const authHeaders = useCallback(() => getAdminAuthHeaders(), []);
 
   const loadTables = useCallback(async () => {
     setLoadingTables(true);

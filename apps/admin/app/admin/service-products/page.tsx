@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Check, Edit3, Plus, RefreshCw, Search, Trash2, X } from 'lucide-react';
 import AdminLayout from '@/components/AdminLayout';
-import supabase from '@/lib/supabase';
+import { getAdminAuthHeaders } from '@/lib/adminAuth';
 import { ProductDataset, ProductField, SERVICE_PRODUCT_CATALOG } from '@/lib/serviceProductCatalog';
 
 type RowValue = string | number | boolean | null | undefined;
@@ -50,12 +50,11 @@ export default function ServiceProductsPage() {
   const dataset = useMemo(() => service.datasets.find((item) => item.id === datasetId) || service.datasets[0], [service, datasetId]);
 
   const request = useCallback(async (method: string, body?: Record<string, unknown>, selectedService = serviceId) => {
-    const { data } = await supabase.auth.getSession();
-    const token = data.session?.access_token;
+    const authHeaders = await getAdminAuthHeaders();
     const response = await fetch(`/api/admin/service-products${method === 'GET' ? `?service=${encodeURIComponent(selectedService)}` : ''}`, {
       method,
       headers: {
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...authHeaders,
         ...(body ? { 'Content-Type': 'application/json' } : {}),
       },
       ...(body ? { body: JSON.stringify(body) } : {}),
@@ -106,11 +105,11 @@ export default function ServiceProductsPage() {
     setExporting(true);
     setNotice(null);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const authHeaders = await getAdminAuthHeaders();
       const response = await fetch('/api/admin/sheets-sync', {
         method: 'POST',
         headers: {
-          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+          ...authHeaders,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ mode: 'rentcar_shuttle' }),

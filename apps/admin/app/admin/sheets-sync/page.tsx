@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CheckCircle, ExternalLink, RefreshCw, Table2, XCircle } from 'lucide-react';
 import AdminLayout from '@/components/AdminLayout';
-import { getSupabase } from '@/lib/supabase';
+import { getAdminAuthHeaders } from '@/lib/adminAuth';
 
 const DEFAULT_SPREADSHEET_ID = '1HfeG38WvmKlz-QQEKmcjojC7w61z3rUTvQsjba5AYzg';
 const CACHE_KEY = 'sht_admin_sheets_sync_cache_v1';
@@ -51,8 +51,7 @@ export default function SheetsSyncPage() {
   };
 
   const authHeaders = async (): Promise<Record<string, string>> => {
-    const { data: { session } } = await getSupabase().auth.getSession();
-    return session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
+    return getAdminAuthHeaders();
   };
 
   const loadStatus = async () => {
