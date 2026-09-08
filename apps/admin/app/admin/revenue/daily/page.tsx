@@ -1,8 +1,13 @@
 'use client';
 
-import React, { useEffect, useState, useMemo } from 'react';
-import supabase from '@/lib/supabase';
+import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import AdminLayout from '@/components/AdminLayout';
+import {
+  fetchRevenueRecords,
+  getKstDateKeyDaysAgo,
+  kstDateStartIso,
+  toKstDateKey,
+} from '@/lib/revenue';
 
 type DailyRevenueRow = {
   date: string;
@@ -18,38 +23,20 @@ export default function DailyRevenuePage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedMonth, setSelectedMonth] = useState<string>('');
 
-  useEffect(() => {
-    fetchDailyData();
-  }, []);
-
-  const fetchDailyData = async () => {
+  const fetchDailyData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const { data: reservations, error: resError } = await supabase
-        .from('reservation')
-        .select('re_created_at, total_amount')
-        .in('re_status', ['confirmed', 'approved', 'completed']);
-
-      if (resError) throw resError;
-
-      const { data: payments, error: payError } = await supabase
-        .from('reservation_payment')
-        .select('created_at, amount')
-        .eq('payment_status', 'completed');
-
-      if (payError) throw payError;
+      const startDate = getKstDateKeyDaysAgo(89);
+      const currentMonth = getKstDateKeyDaysAgo(0).slice(0, 7);
+      const { reservations, payments } = await fetchRevenueRecords(kstDateStartIso(startDate));
 
       const dateMap = new Map<string, DailyRevenueRow>();
-      const ninetyDaysAgoTime = new Date();
-      ninetyDaysAgoTime.setDate(ninetyDaysAgoTime.getDate() - 90);
 
-      (reservations || []).forEach((r: any) => {
-        const date = r.re_created_at?.slice(0, 10);
-        if (!date) return;
-        const rowDate = new Date(date);
-        if (rowDate < ninetyDaysAgoTime) return;
+      reservations.forEach((r) => {
+        const date = r.re_created_at ? toKstDateKey(r.re_created_at) : '';
+        if (!date || date < startDate) return;
 
         const row = dateMap.get(date) || {
           date,
@@ -63,11 +50,9 @@ export default function DailyRevenuePage() {
         dateMap.set(date, row);
       });
 
-      (payments || []).forEach((p: any) => {
-        const date = p.created_at?.slice(0, 10);
-        if (!date) return;
-        const rowDate = new Date(date);
-        if (rowDate < ninetyDaysAgoTime) return;
+      payments.forEach((p) => {
+        const date = p.created_at ? toKstDateKey(p.created_at) : '';
+        if (!date || date < startDate) return;
 
         const row = dateMap.get(date) || {
           date,
@@ -83,18 +68,18 @@ export default function DailyRevenuePage() {
 
       const sortedData = Array.from(dateMap.values()).sort((a, b) => a.date.localeCompare(b.date));
       setData(sortedData);
-
-      if (sortedData.length > 0) {
-        const lastDate = sortedData[sortedData.length - 1].date;
-        setSelectedMonth(lastDate.slice(0, 7));
-      }
+      setSelectedMonth((month) => month || currentMonth);
     } catch (err) {
       console.error('데이터 조회 실패:', err);
       setError(err instanceof Error ? err.message : '데이터 조회 실패');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    void fetchDailyData();
+  }, [fetchDailyData]);
 
   const filteredData = useMemo(() => {
     if (!selectedMonth) return data;
@@ -120,7 +105,10 @@ export default function DailyRevenuePage() {
   const maxRevenue = Math.max(...filteredData.map((r) => r.reservationTotal), 1);
   const maxCount = Math.max(...filteredData.map((r) => r.reservationCount), 1);
 
-  const uniqueMonths = useMemo(() => Array.from(new Set(data.map((d) => d.date.slice(0, 7)))).sort((a, b) => b.localeCompare(a)), [data]);
+  const uniqueMonths = useMemo(
+    () => Array.from(new Set([getKstDateKeyDaysAgo(0).slice(0, 7), ...data.map((d) => d.date.slice(0, 7))])).sort((a, b) => b.localeCompare(a)),
+    [data],
+  );
 
   const renderBar = (value: number, max: number, maxWidth = 40) => {
     if (value <= 0 || max <= 0) return '';
@@ -134,7 +122,7 @@ export default function DailyRevenuePage() {
     const labels = ['월', '화', '수', '목', '금', '토', '일'];
     const agg = labels.map(() => ({ reservationCount: 0, reservationTotal: 0 }));
     filteredData.forEach((row) => {
-      const d = new Date(row.date);
+      const d = new Date(`${row.date}T00:00:00+09:00`);
       if (isNaN(d.getTime())) return;
       const dow = (d.getDay() + 6) % 7; // shift Sunday->6, Monday->0
       agg[dow].reservationCount += row.reservationCount;
@@ -158,13 +146,19 @@ export default function DailyRevenuePage() {
         )}
 
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">오류: {error}</div>
+          <div className="flex items-center justify-between gap-4 rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
+            <span>오류: {error}</span>
+            <button type="button" onClick={() => void fetchDailyData()} className="shrink-0 rounded border border-red-300 bg-white px-3 py-2 text-sm font-semibold hover:bg-red-100">
+              다시 시도
+            </button>
+          </div>
         )}
 
         {!loading && !error && (
           <>
             {/* 월 선택 */}
             <div className="bg-white rounded-lg shadow-sm p-4">
+              <p className="mb-3 text-xs text-gray-500">예약 매출은 확정·승인·완료 예약의 등록일, 결제액은 완료 결제의 처리일 기준이며 한국시간으로 집계합니다.</p>
               <div className="flex items-center gap-3">
                 <label className="w-36 text-sm font-semibold text-gray-700 text-right flex-shrink-0">월 선택:</label>
                 <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="w-32 px-3 py-2 border border-gray-300 rounded-lg text-sm">

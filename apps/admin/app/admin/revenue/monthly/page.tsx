@@ -1,8 +1,13 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import supabase from '@/lib/supabase';
+import React, { useCallback, useEffect, useState } from 'react';
 import AdminLayout from '@/components/AdminLayout';
+import {
+  fetchRevenueRecords,
+  getKstMonthStartDateKey,
+  kstDateStartIso,
+  toKstDateKey,
+} from '@/lib/revenue';
 
 type MonthlyRevenueRow = {
   month: string;
@@ -17,39 +22,20 @@ export default function MonthlyRevenuePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchMonthlyData();
-  }, []);
-
-  const fetchMonthlyData = async () => {
+  const fetchMonthlyData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
-      // 예약 데이터 (확정/완료)
-      const { data: reservations, error: resError } = await supabase
-        .from('reservation')
-        .select('re_created_at, total_amount')
-        .in('re_status', ['confirmed', 'approved', 'completed']);
-
-      if (resError) throw resError;
-
-      // 결제 데이터
-      const { data: payments, error: payError } = await supabase
-        .from('reservation_payment')
-        .select('created_at, amount')
-        .eq('payment_status', 'completed');
-
-      if (payError) throw payError;
+      const startDate = getKstMonthStartDateKey(11);
+      const { reservations, payments } = await fetchRevenueRecords(kstDateStartIso(startDate));
 
       // 월별로 집계
       const monthMap = new Map<string, MonthlyRevenueRow>();
 
       // 현재 연도 12개월 초기화
-      const now = new Date();
       for (let i = 11; i >= 0; i--) {
-        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-        const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        const monthKey = getKstMonthStartDateKey(i).slice(0, 7);
         monthMap.set(monthKey, {
           month: monthKey,
           reservationCount: 0,
@@ -60,35 +46,21 @@ export default function MonthlyRevenuePage() {
       }
 
       // 예약 데이터 집계
-      (reservations || []).forEach((r: any) => {
-        const month = r.re_created_at?.slice(0, 7);
-        if (!month) return;
-        const row = monthMap.get(month) || {
-          month,
-          reservationCount: 0,
-          reservationTotal: 0,
-          paidCount: 0,
-          paidTotal: 0,
-        };
+      reservations.forEach((r) => {
+        const month = r.re_created_at ? toKstDateKey(r.re_created_at).slice(0, 7) : '';
+        const row = monthMap.get(month);
+        if (!row) return;
         row.reservationCount += 1;
         row.reservationTotal += Number(r.total_amount) || 0;
-        monthMap.set(month, row);
       });
 
       // 결제 데이터 집계
-      (payments || []).forEach((p: any) => {
-        const month = p.created_at?.slice(0, 7);
-        if (!month) return;
-        const row = monthMap.get(month) || {
-          month,
-          reservationCount: 0,
-          reservationTotal: 0,
-          paidCount: 0,
-          paidTotal: 0,
-        };
+      payments.forEach((p) => {
+        const month = p.created_at ? toKstDateKey(p.created_at).slice(0, 7) : '';
+        const row = monthMap.get(month);
+        if (!row) return;
         row.paidCount += 1;
         row.paidTotal += Number(p.amount) || 0;
-        monthMap.set(month, row);
       });
 
       const sortedData = Array.from(monthMap.values()).sort((a, b) =>
@@ -102,7 +74,11 @@ export default function MonthlyRevenuePage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    void fetchMonthlyData();
+  }, [fetchMonthlyData]);
 
   const maxRevenue = Math.max(...data.map((r) => r.reservationTotal), 1);
   const maxCount = Math.max(...data.map((r) => r.reservationCount), 1);
@@ -124,13 +100,17 @@ export default function MonthlyRevenuePage() {
         )}
 
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
-            오류: {error}
+          <div className="flex items-center justify-between gap-4 rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
+            <span>오류: {error}</span>
+            <button type="button" onClick={() => void fetchMonthlyData()} className="shrink-0 rounded border border-red-300 bg-white px-3 py-2 text-sm font-semibold hover:bg-red-100">
+              다시 시도
+            </button>
           </div>
         )}
 
         {!loading && !error && (
           <>
+            <div className="rounded-lg bg-gray-50 px-4 py-3 text-xs text-gray-500">예약 매출은 확정·승인·완료 예약의 등록일, 결제액은 완료 결제의 처리일 기준이며 한국시간으로 집계합니다.</div>
             <div className="bg-white rounded-lg shadow-sm p-6">
               <div className="flex items-center justify-between gap-4 mb-4">
                 <h3 className="text-lg font-semibold text-gray-900">월별 건수 · 매출액 통합 그래프</h3>
