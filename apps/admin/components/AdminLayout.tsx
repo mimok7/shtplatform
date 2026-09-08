@@ -372,9 +372,9 @@ export default function AdminLayout({ children, title, activeTab }: AdminLayoutP
       <div className="admin-root min-h-screen bg-gray-100">
         {/* Admin Header */}
         <header className="sticky top-0 z-50 bg-blue-100 text-blue-900 shadow-sm">
-          <div className="w-full px-0">
-            <div className="flex items-center justify-between h-16">
-              <div className="flex items-center space-x-4">
+          <div className="mx-auto w-full max-w-[1920px] px-2 sm:px-4 lg:px-6">
+            <div className="flex min-h-14 flex-wrap items-center justify-between gap-2 py-2 sm:min-h-16">
+              <div className="flex min-w-0 items-center space-x-3 sm:space-x-4">
                 <div className="w-10 h-10 bg-blue-200 rounded-full flex items-center justify-center text-blue-900 text-xl font-bold">
                   A
                 </div>
@@ -384,8 +384,8 @@ export default function AdminLayout({ children, title, activeTab }: AdminLayoutP
                 </div>
               </div>
 
-              <div className="flex items-center space-x-4">
-                <span className="text-blue-700 text-sm">{user?.email} (관리자)</span>
+              <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-4">
+                <span className="hidden text-sm text-blue-700 sm:inline">{user?.email} (관리자)</span>
                 <button
                   onClick={handleLogout}
                   className="px-3 py-2 rounded-md text-sm bg-blue-600 text-white hover:bg-blue-700 transition-colors"
@@ -404,10 +404,10 @@ export default function AdminLayout({ children, title, activeTab }: AdminLayoutP
         </header>
 
         {/* Navigation + Content: 항상 사이드바 표시 (소형 화면에서는 상단, 대형에서는 좌측) */}
-        <div className="w-full px-0 py-6">
-          <div className="flex">
+        <div className="w-full px-2 py-3 sm:px-4 sm:py-4 lg:px-6 lg:py-6">
+          <div className="mx-auto flex w-full max-w-[1920px] flex-col gap-4 lg:flex-row">
             {/* Sidebar */}
-            <aside className="w-60 mr-4 mb-0 flex-none order-1">
+            <aside className="order-1 w-full flex-none lg:mr-4 lg:w-60">
               <div className="bg-white rounded-lg shadow-sm p-4 md:sticky md:top-24 flex flex-col justify-between h-full">
                 <nav className="space-y-1">
                   {tabGroups.map((group) => {
@@ -448,8 +448,8 @@ export default function AdminLayout({ children, title, activeTab }: AdminLayoutP
             </aside>
 
             {/* Content */}
-            <div className="flex-1 order-2">
-              <main className="bg-gray-50 rounded-lg p-1">
+            <div className="order-2 w-full min-w-0 flex-1">
+              <main className="min-w-0 rounded-lg bg-gray-50 p-1">
                 <div className="bg-white rounded-lg shadow-sm p-3">
                   {title && (
                     <div className="mb-6">
