@@ -38,6 +38,7 @@ const CRUISE_INTEGRATED_HEADERS = [
 ];
 const CRUISE_RAW_HEADERS = ['원본테이블', '기준키', '데이터JSON'];
 const DEFAULT_SERVICE_ACCOUNT_EMAIL = 'sheets-importer@cruise-7683b.iam.gserviceaccount.com';
+const DATABASE_EXPORT_SPREADSHEET_ID = '1WLHv8GahQ6eEvNmH-A3PUblwSa1zqBAG0rKrt3tsl2E';
 const RENTCAR_SHUTTLE_HEADERS = [
   '가격ID', '렌트코드', '크루즈', '카테고리', '차량분류', '차량유형', '노선', '출발지', '도착지', '운행방식',
   '요금(VND)', '정원', '이용시간', '대여유형', '적용연도', '사용여부', '비고', '생성일', '수정일',
@@ -640,8 +641,12 @@ export async function POST(req: NextRequest) {
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
   const body = await req.json().catch(() => ({}));
+  const isDatabaseTableExport = body?.mode === 'table';
   const overrides: SyncOverrides = {
-    spreadsheetId: typeof body?.spreadsheetId === 'string' ? body.spreadsheetId.trim() : '',
+    // DB 관리 화면의 내보내기는 운영용 전용 문서에만 기록한다.
+    spreadsheetId: isDatabaseTableExport
+      ? DATABASE_EXPORT_SPREADSHEET_ID
+      : typeof body?.spreadsheetId === 'string' ? body.spreadsheetId.trim() : '',
     serviceAccountJson: typeof body?.serviceAccountJson === 'string' ? body.serviceAccountJson.trim() : '',
     serviceAccountEmail: typeof body?.serviceAccountEmail === 'string' ? body.serviceAccountEmail.trim() : '',
     serviceAccountPrivateKey: typeof body?.serviceAccountPrivateKey === 'string' ? body.serviceAccountPrivateKey : '',
@@ -655,7 +660,7 @@ export async function POST(req: NextRequest) {
   try {
     const sheetMatrices = body?.mode === 'rentcar_shuttle'
       ? [await buildRentcarShuttleSheet()]
-      : body?.mode === 'table'
+      : isDatabaseTableExport
         ? [await buildTableSheet(typeof body.table === 'string' ? body.table.trim() : '', {
           search: typeof body.search === 'string' ? body.search : '',
           filters: getTableFilters(body.filters),
