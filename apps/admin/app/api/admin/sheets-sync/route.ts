@@ -226,6 +226,15 @@ async function buildTableSheet(table: string, options: { search?: string; filter
   };
 }
 
+async function buildHomepageTableSheet(table: string, options: { search?: string; filters?: Record<string, string>; sort?: string; direction?: 'asc' | 'desc' }): Promise<SheetMatrix> {
+  const { columns, rows } = await fetchTableRowsForExport(table, options, 'homepage');
+  return {
+    title: `홈페이지DB_${table}`.slice(0, 90),
+    headers: columns.map((column) => column.column_name),
+    rows,
+  };
+}
+
 function getTableFilters(value: unknown) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
   return Object.fromEntries(
@@ -641,7 +650,7 @@ export async function POST(req: NextRequest) {
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
   const body = await req.json().catch(() => ({}));
-  const isDatabaseTableExport = body?.mode === 'table';
+  const isDatabaseTableExport = body?.mode === 'table' || body?.mode === 'homepage_table';
   const overrides: SyncOverrides = {
     // DB 관리 화면의 내보내기는 운영용 전용 문서에만 기록한다.
     spreadsheetId: isDatabaseTableExport
@@ -661,7 +670,7 @@ export async function POST(req: NextRequest) {
     const sheetMatrices = body?.mode === 'rentcar_shuttle'
       ? [await buildRentcarShuttleSheet()]
       : isDatabaseTableExport
-        ? [await buildTableSheet(typeof body.table === 'string' ? body.table.trim() : '', {
+        ? [await (body?.mode === 'homepage_table' ? buildHomepageTableSheet : buildTableSheet)(typeof body.table === 'string' ? body.table.trim() : '', {
           search: typeof body.search === 'string' ? body.search : '',
           filters: getTableFilters(body.filters),
           sort: typeof body.sort === 'string' ? body.sort : '',

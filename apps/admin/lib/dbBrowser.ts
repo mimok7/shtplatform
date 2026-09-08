@@ -1,6 +1,6 @@
 // 플랫폼 DB의 공개 테이블 메타데이터와 행 조회를 관리자 도구에서 공통으로 사용한다.
 import serviceSupabase from '@/lib/serviceSupabase';
-import { fetchAll } from '@/lib/exportAuth';
+import { createClient } from '@supabase/supabase-js';
 import type { DbColumn } from '@/lib/dbBrowserTypes';
 
 const TABLE_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
@@ -31,7 +31,30 @@ export type DbTableQueryOptions = {
   limit?: number;
 };
 
-let metadataCache: { expiresAt: number; definitions: Record<string, OpenApiDefinition> } | null = null;
+export type DbDataSource = 'platform' | 'homepage';
+
+const metadataCache: Partial<Record<DbDataSource, { expiresAt: number; definitions: Record<string, OpenApiDefinition> }>> = {};
+let homepageSupabase: ReturnType<typeof createClient> | null = null;
+
+function getDatabaseConfig(source: DbDataSource) {
+  const homepage = source === 'homepage';
+  const url = homepage ? process.env.HOMEPAGE_SUPABASE_URL : process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = homepage ? process.env.HOMEPAGE_SUPABASE_SERVICE_ROLE_KEY : process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !serviceKey) throw new Error(homepage ? 'HOMEPAGE_SUPABASE_SERVICE_ROLE_KEY 미설정' : 'SUPABASE_SERVICE_ROLE_KEY 미설정');
+  return { url, serviceKey };
+}
+
+function getServiceClient(source: DbDataSource) {
+  if (source === 'platform') {
+    if (!serviceSupabase) throw new Error('SUPABASE_SERVICE_ROLE_KEY 미설정');
+    return serviceSupabase;
+  }
+  if (!homepageSupabase) {
+    const { url, serviceKey } = getDatabaseConfig(source);
+    homepageSupabase = createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
+  }
+  return homepageSupabase;
+}
 
 function assertTableName(table: string) {
   if (!TABLE_NAME_PATTERN.test(table)) throw new Error('테이블 이름 형식이 올바르지 않습니다.');
@@ -88,11 +111,10 @@ function getColumnDataType(property: OpenApiProperty) {
   return property.format || 'text';
 }
 
-async function getOpenApiDefinitions(): Promise<Record<string, OpenApiDefinition>> {
-  if (metadataCache && metadataCache.expiresAt > Date.now()) return metadataCache.definitions;
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !serviceKey) throw new Error('SUPABASE_SERVICE_ROLE_KEY 미설정');
+async function getOpenApiDefinitions(source: DbDataSource): Promise<Record<string, OpenApiDefinition>> {
+  const cached = metadataCache[source];
+  if (cached && cached.expiresAt > Date.now()) return cached.definitions;
+  const { url: supabaseUrl, serviceKey } = getDatabaseConfig(source);
 
   const response = await fetch(`${supabaseUrl}/rest/v1/`, {
     headers: {
@@ -106,21 +128,21 @@ async function getOpenApiDefinitions(): Promise<Record<string, OpenApiDefinition
 
   const spec = await response.json() as OpenApiSpec;
   const definitions = spec.definitions || {};
-  metadataCache = { definitions, expiresAt: Date.now() + 5 * 60 * 1000 };
+  metadataCache[source] = { definitions, expiresAt: Date.now() + 5 * 60 * 1000 };
   return definitions;
 }
 
-async function getTableDefinition(table: string) {
+async function getTableDefinition(table: string, source: DbDataSource) {
   assertTableName(table);
-  const definitions = await getOpenApiDefinitions();
+  const definitions = await getOpenApiDefinitions(source);
   const definition = definitions[table];
   if (!definition?.properties) throw new Error('존재하지 않는 공개 테이블입니다.');
   return definition;
 }
 
-export async function getPublicTableColumns(table?: string): Promise<DbColumn[]> {
+export async function getPublicTableColumns(table?: string, source: DbDataSource = 'platform'): Promise<DbColumn[]> {
   if (!table) return [];
-  const definition = await getTableDefinition(table);
+  const definition = await getTableDefinition(table, source);
   const required = new Set(definition.required || []);
   return Object.entries(definition.properties || {}).map(([column_name, property], index) => ({
     column_name,
@@ -132,23 +154,22 @@ export async function getPublicTableColumns(table?: string): Promise<DbColumn[]>
   }));
 }
 
-export async function listPublicTables() {
-  const definitions = await getOpenApiDefinitions();
+export async function listPublicTables(source: DbDataSource = 'platform') {
+  const definitions = await getOpenApiDefinitions(source);
   return Object.entries(definitions)
     .filter(([table, definition]) => TABLE_NAME_PATTERN.test(table) && Boolean(definition.properties))
     .map(([table, definition]) => ({ table, columnCount: Object.keys(definition.properties || {}).length }))
     .sort((a, b) => a.table.localeCompare(b.table));
 }
 
-export async function fetchTablePage(table: string, options: DbTableQueryOptions = {}) {
-  if (!serviceSupabase) throw new Error('SUPABASE_SERVICE_ROLE_KEY 미설정');
+export async function fetchTablePage(table: string, options: DbTableQueryOptions = {}, source: DbDataSource = 'platform') {
   assertTableName(table);
-  const columns = await getPublicTableColumns(table);
+  const columns = await getPublicTableColumns(table, source);
   if (columns.length === 0) throw new Error('존재하지 않는 공개 테이블입니다.');
 
   const offset = Math.max(0, Number(options.offset) || 0);
   const limit = Math.min(500, Math.max(1, Number(options.limit) || 100));
-  let query: any = serviceSupabase
+  let query: any = getServiceClient(source)
     .from(table)
     .select('*', { count: 'exact' })
     .range(offset, offset + limit - 1);
@@ -160,10 +181,9 @@ export async function fetchTablePage(table: string, options: DbTableQueryOptions
   return { columns, rows: data || [], count: count || 0, hasMore: (count || 0) > offset + limit, offset, limit };
 }
 
-export async function insertTableRow(table: string, values: Record<string, unknown>) {
-  if (!serviceSupabase) throw new Error('SUPABASE_SERVICE_ROLE_KEY 미설정');
+export async function insertTableRow(table: string, values: Record<string, unknown>, source: DbDataSource = 'platform') {
   assertTableName(table);
-  const columns = await getPublicTableColumns(table);
+  const columns = await getPublicTableColumns(table, source);
   if (columns.length === 0) throw new Error('존재하지 않는 공개 테이블입니다.');
   const allowed = new Set(columns.map((column) => column.column_name));
   const payload: Record<string, unknown> = {};
@@ -172,26 +192,17 @@ export async function insertTableRow(table: string, values: Record<string, unkno
     if (value !== '' && value !== null && value !== undefined) payload[key] = value;
   }
   if (Object.keys(payload).length === 0) throw new Error('추가할 값을 하나 이상 입력해 주세요.');
-  const { data, error } = await serviceSupabase.from(table).insert(payload).select('*').single();
+  const { data, error } = await getServiceClient(source).from(table).insert(payload).select('*').single();
   if (error) throw new Error(error.message || '행 추가에 실패했습니다.');
   return data;
 }
 
-export async function fetchTableRowsForExport(table: string, options: DbTableQueryOptions = {}) {
-  const first = await fetchTablePage(table, { ...options, offset: 0, limit: 500 });
-  const hasFilters = Boolean(String(options.search || '').trim()) || normalizeFilters(options.filters, first.columns).length > 0;
-  if (!hasFilters) {
-    if (first.hasMore) {
-      const all = await fetchAll(table, (query) => applyQueryConditions(query, first.columns, options));
-      return { columns: first.columns, rows: all };
-    }
-    return { columns: first.columns, rows: first.rows };
-  }
-
+export async function fetchTableRowsForExport(table: string, options: DbTableQueryOptions = {}, source: DbDataSource = 'platform') {
+  const first = await fetchTablePage(table, { ...options, offset: 0, limit: 500 }, source);
   const rows = [...first.rows];
   let offset = first.limit;
   while (first.hasMore && rows.length < first.count) {
-    const next = await fetchTablePage(table, { ...options, offset, limit: 500 });
+    const next = await fetchTablePage(table, { ...options, offset, limit: 500 }, source);
     rows.push(...next.rows);
     if (!next.hasMore) break;
     offset += next.limit;
