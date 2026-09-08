@@ -3,6 +3,31 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 let _supabase: SupabaseClient | null = null;
 
+const SUPABASE_REQUEST_TIMEOUT_MS = 15_000;
+
+const fetchWithTimeout: typeof fetch = async (input, init) => {
+  const controller = new AbortController();
+  const callerSignal = init?.signal;
+  const abortFromCaller = () => controller.abort(callerSignal?.reason);
+  const timeoutId = setTimeout(
+    () => controller.abort(new DOMException('Supabase request timed out', 'TimeoutError')),
+    SUPABASE_REQUEST_TIMEOUT_MS,
+  );
+
+  if (callerSignal?.aborted) {
+    abortFromCaller();
+  } else {
+    callerSignal?.addEventListener('abort', abortFromCaller, { once: true });
+  }
+
+  try {
+    return await globalThis.fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+    callerSignal?.removeEventListener('abort', abortFromCaller);
+  }
+};
+
 function initSupabase(): SupabaseClient | null {
   // Reuse a global singleton to survive HMR in dev and avoid multiple GoTrue instances
   const g = globalThis as any;
@@ -22,6 +47,9 @@ function initSupabase(): SupabaseClient | null {
   const isBrowser = typeof window !== 'undefined';
 
   const client = createClient(url, key, {
+    global: {
+      fetch: fetchWithTimeout,
+    },
     auth: isBrowser
       ? {
         // 멀티탭 / 새로고침 / 일시적 네트워크 끊김에도 세션을 유지하도록 localStorage 사용

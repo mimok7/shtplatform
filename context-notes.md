@@ -602,6 +602,13 @@ PostgreSQL 17 백업 클라이언트 보정.
 - 세 앱 모두 일반 크루즈 차량 카드에 `크루즈`, `차량명`, `구분`, 일정일, `승차` 또는 `하차`, `인원/차량`을 사용한다. 크루즈명이 없는 공통 차량의 표기는 `공통`으로 통일했다.
 - `pnpm --dir apps/mobile typecheck`, `pnpm --dir apps/manager typecheck`, `pnpm --dir apps/manager1 typecheck`, `git diff --check`가 통과했다.
 
+관리자 운영 배포 후 인증 로딩 재점검.
+
+- 첫 운영 배포는 Ready 상태와 도메인 연결까지 정상 완료됐지만, 새 브라우저 탭에서 공통 `AdminLayout`의 세션 확인이 8초 이상 끝나지 않는 경우가 재현됐다.
+- 매출 조회에는 20초 상한이 적용되어 무한 로딩 대신 오류로 종료됐으나, 세션 초기화에는 별도 상한이 없어 공통 관리자 화면 전체가 계속 대기할 수 있었다.
+- 모든 Supabase HTTP 요청에 15초 중단 상한을 적용하고, 관리자 세션 확인은 8초 안에 끝나지 않으면 데이터와 권한을 임의로 판단하지 않은 채 재시도·로그인 선택 화면을 표시하도록 보강한다.
+- 관리자 앱 `typecheck`와 production `build`가 통과했다. 빌드에는 기존 다른 화면의 ESLint 경고만 남아 있다.
+
 고객앱 크루즈 차량 예약 표시 복구 시작.
 
 - 대상 URL은 `/mypage/direct-booking/cruise/vehicle?quoteId=12e348c8-ed7f-4dd5-9826-e4dca5ed52a2`이다.

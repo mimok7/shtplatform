@@ -12,10 +12,32 @@ interface AdminLayoutProps {
   activeTab?: string;
 }
 
+type AuthSessionResult = {
+  data: { session: { user: any } | null };
+  error: Error | null;
+};
+
+const AUTH_SESSION_TIMEOUT_MS = 8_000;
+
+async function withAuthTimeout<T>(promise: Promise<T>): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(
+      () => reject(new Error('auth_session_timeout')),
+      AUTH_SESSION_TIMEOUT_MS,
+    );
+  });
+
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timeoutId) clearTimeout(timeoutId);
+  });
+}
+
 export default function AdminLayout({ children, title, activeTab }: AdminLayoutProps) {
   const [user, setUser] = useState<any>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
   const router = useRouter();
   // usePathname is a hook; call it early so hook order doesn't change between renders
   const pathname = usePathname();
@@ -96,7 +118,7 @@ export default function AdminLayout({ children, title, activeTab }: AdminLayoutP
         const {
           data: { session },
           error: sessionError,
-        } = await supabase.auth.getSession();
+        } = await withAuthTimeout<AuthSessionResult>(supabase.auth.getSession());
         const sessionUser = session?.user || null;
 
         if (sessionError || !sessionUser) {
@@ -151,6 +173,11 @@ export default function AdminLayout({ children, title, activeTab }: AdminLayoutP
       } catch (err) {
         console.error('관리자 권한 확인 오류:', err);
         if (cancelled) return;
+        if (err instanceof Error && err.message === 'auth_session_timeout') {
+          setAuthError('관리자 로그인 정보를 확인하지 못했습니다. 네트워크 상태를 확인한 뒤 다시 시도해주세요.');
+          setIsLoading(false);
+          return;
+        }
         clearAdminCache();
         if (!cancelled) {
           router.push('/login');
@@ -297,7 +324,7 @@ export default function AdminLayout({ children, title, activeTab }: AdminLayoutP
         <div className="text-center max-w-sm">
           <div className="text-4xl mb-4 animate-pulse">⚙️</div>
           <p className="text-gray-700">관리자 권한 확인 중...</p>
-          <p className="text-xs text-gray-400 mt-2">최대 2초 후 자동 진행됩니다</p>
+          <p className="text-xs text-gray-400 mt-2">최대 8초 후 상태를 안내합니다</p>
           <button
             onClick={() => {
               clearAdminCache();
@@ -307,6 +334,37 @@ export default function AdminLayout({ children, title, activeTab }: AdminLayoutP
           >
             오래 걸리면 다시 로그인
           </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (authError) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center px-4">
+        <div className="w-full max-w-md rounded-xl bg-white p-6 text-center shadow-sm">
+          <div className="text-4xl mb-4">⚠️</div>
+          <h1 className="text-lg font-semibold text-gray-900">관리자 페이지를 불러오지 못했습니다</h1>
+          <p className="mt-2 text-sm text-gray-600">{authError}</p>
+          <div className="mt-5 flex justify-center gap-3">
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            >
+              다시 시도
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                clearAdminCache();
+                router.push('/login');
+              }}
+              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              로그인 화면
+            </button>
+          </div>
         </div>
       </div>
     );
