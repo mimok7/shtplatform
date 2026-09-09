@@ -795,3 +795,4 @@ PostgreSQL 17 백업 클라이언트 보정.
 - 플랫폼 production에 `homepage_booking_carts`를 생성했다. `auth.users` FK, 사용자별 초안 1건 고유 제약, 사용자·갱신시각 인덱스, RLS와 anon/authenticated 전체 권한 회수를 적용했다. API의 사용자 ID 기준 upsert와 호환되도록 부분 인덱스가 아닌 일반 고유 인덱스를 사용한다.
 - 홈페이지 DB의 활성 초안 4건은 원본 UUID 기준 `resolution=ignore-duplicates`로 플랫폼 테이블에 복사했다. 플랫폼 service role 조회는 4건을 반환했고, anon 키 조회는 401 `permission denied`로 차단됨을 확인했다.
 - 장바구니 전환 배포 후에도 `/cruises`, `/hotels`가 홈페이지 프로젝트의 `cruises_v2`, `catalog_*_v2` 공개 캐시를 직접 읽어 저장공간 제한 오류를 기록함을 확인했다. 이 캐시는 플랫폼 원본에서 다시 만들 수 있으므로, 플랫폼 DB 안에 같은 공개 읽기 모델을 별도 구성하고 홈페이지 공개 연결을 전환해야 한다.
+- 홈페이지 원본 전체 스냅샷의 HTTP 본문이 배포 환경 제한을 넘어 413으로 거부될 수 있어, `homepageSync.ts`는 테이블별 100행 단위 수신 후 마지막 요청에서만 삭제 대조·가공을 실행하도록 변경했다. 중간 요청은 원본 스테이징 행만 upsert하므로 공개 카탈로그에는 부분 데이터가 노출되지 않는다.

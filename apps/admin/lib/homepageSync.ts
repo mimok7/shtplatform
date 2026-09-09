@@ -60,6 +60,8 @@ const CATALOGS = [
   { table: 'homepage_catalog_price_overrides', select: 'source_table,source_id,values,created_at,updated_at' },
 ] as const;
 
+const SYNC_BATCH_SIZE = 100;
+
 function sourceRecordId(table: string, row: CatalogRow, index: number) {
   const values = row as Record<string, string | number | null | undefined>;
   if (table === 'cruise_info_by_category') return `${values.category || ''}:${values.cruise_name || index}`;
@@ -96,15 +98,26 @@ export async function pushHomepageCatalog(trigger: 'manual' | 'scheduled') {
     const rows = await fetchAllRows(catalog.table, catalog.select);
     return [catalog.table, rows.map((row, index) => ({ ...row, __source_id: String(sourceRecordId(catalog.table, row, index) || index) }))] as const;
   }));
-  const catalogs = Object.fromEntries(entries);
-  const response = await fetch(targetUrl, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${sharedSecret}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ source: 'sht-platform', trigger, sentAt: new Date().toISOString(), catalogs }),
-    cache: 'no-store',
-  });
-  const result = await response.json().catch(() => ({}));
-  if (!response.ok || !result.ok) throw new Error(result.error || `홈페이지 응답 오류 (${response.status})`);
+  const syncStartedAt = new Date().toISOString();
+  const send = async (catalogs: Record<string, CatalogRow[]>, finalize = false) => {
+    const response = await fetch(targetUrl, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${sharedSecret}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source: 'sht-platform', trigger, sentAt: new Date().toISOString(), syncStartedAt, partial: true, finalize, catalogs }),
+      cache: 'no-store',
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.ok) throw new Error(result.error || `홈페이지 응답 오류 (${response.status})`);
+    return result;
+  };
+
+  for (const [table, rows] of entries) {
+    for (let offset = 0; offset < rows.length; offset += SYNC_BATCH_SIZE) {
+      await send({ [table]: rows.slice(offset, offset + SYNC_BATCH_SIZE) });
+    }
+  }
+
+  const result = await send({}, true);
   return { ...result, catalogCounts: Object.fromEntries(entries.map(([table, rows]) => [table, rows.length])) };
 }
 
