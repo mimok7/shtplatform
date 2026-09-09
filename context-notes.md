@@ -794,3 +794,4 @@ PostgreSQL 17 백업 클라이언트 보정.
 - 통합 시에는 플랫폼의 기존 예약·결제 테이블을 수정하지 않고 `homepage_booking_carts`만 새 비공개 RLS 테이블로 추가한다. 이미지 파일은 아직 R2가 활성화되지 않았으므로 메타데이터와 별도 작업으로 유지한다.
 - 플랫폼 production에 `homepage_booking_carts`를 생성했다. `auth.users` FK, 사용자별 초안 1건 고유 제약, 사용자·갱신시각 인덱스, RLS와 anon/authenticated 전체 권한 회수를 적용했다. API의 사용자 ID 기준 upsert와 호환되도록 부분 인덱스가 아닌 일반 고유 인덱스를 사용한다.
 - 홈페이지 DB의 활성 초안 4건은 원본 UUID 기준 `resolution=ignore-duplicates`로 플랫폼 테이블에 복사했다. 플랫폼 service role 조회는 4건을 반환했고, anon 키 조회는 401 `permission denied`로 차단됨을 확인했다.
+- 장바구니 전환 배포 후에도 `/cruises`, `/hotels`가 홈페이지 프로젝트의 `cruises_v2`, `catalog_*_v2` 공개 캐시를 직접 읽어 저장공간 제한 오류를 기록함을 확인했다. 이 캐시는 플랫폼 원본에서 다시 만들 수 있으므로, 플랫폼 DB 안에 같은 공개 읽기 모델을 별도 구성하고 홈페이지 공개 연결을 전환해야 한다.
