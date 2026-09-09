@@ -784,3 +784,13 @@ PostgreSQL 17 백업 클라이언트 보정.
 - 관리자 공통 레이아웃은 넓은 화면에서 최대 1920px 안에 표시하고, `lg` 미만에서는 사이드바를 본문 위로 전환한다. 본문에 `min-w-0`을 적용해 넓은 DB 표가 페이지 전체 폭을 밀어내지 않으며, 표 영역과 고정 하단 가로 스크롤은 실제 화면폭 변경 때 위치·폭을 다시 계산한다. `pnpm --dir apps/admin typecheck`와 운영 DB 페이지 HTTP 200을 확인했으며, production `dpl_CjFPyGBjhnw1abJ5evmyjQ3eu8hN`가 Ready 상태로 `admin.stayhalong.com`에 연결됐다.
 - DB 관리의 `mode: table` Google Sheets 내보내기는 `1WLHv8GahQ6eEvNmH-A3PUblwSa1zqBAG0rKrt3tsl2E` 문서로 서버에서 고정했다. 기존 일반 시트 동기화와 렌트카 내보내기 대상은 변경하지 않았다. `pnpm --dir apps/admin typecheck`와 production 빌드가 통과했고 `dpl_D9DS4VKR8mgpWZ4d5d3r3YcLJjc4`가 Ready 상태다. 현재 해당 문서는 서비스 계정 `sheets-importer@cruise-7683b.iam.gserviceaccount.com`에 권한이 없어, 편집자 공유 뒤 실제 내보내기 검증이 필요하다.
 - 관리자 DB 도구에 `/admin/homepage-database`를 별도 추가했다. 플랫폼 DB와 메뉴·API 경로·서비스 키를 분리하면서도 테이블 선택, 값 필터, 정렬, 컬럼 숨김, 행 추가, 고정 가로 스크롤, 전용 Google Sheets 탭 내보내기를 같은 화면으로 제공한다. admin production에 `HOMEPAGE_SUPABASE_URL`과 `HOMEPAGE_SUPABASE_SERVICE_ROLE_KEY`를 서버 전용으로 등록했고 production `dpl_tFUfXWREtJrqjFaYBGcGb7N1yNsH`가 Ready 상태다. 홈페이지 Supabase 프로젝트는 `exceed_storage_size_quota`로 제한돼 실제 테이블 조회는 저장공간 한도 해제 뒤 검증해야 한다.
+
+홈페이지 DB 플랫폼 통합 시작.
+
+- 홈페이지 Supabase 프로젝트 `tthwqfhdojncqtwfssqe`는 저장공간 한도 초과로 Data API가 402 제한 상태이지만, 관리 연결을 통한 읽기 전용 점검은 가능했다.
+- 홈페이지의 `catalog_*_v2`, `cruises_v2`, 이미지 캐시, `platform_source_records`는 운영 플랫폼에서 홈페이지로 보내는 전체 스냅샷을 가공한 파생 자료다. 이를 플랫폼으로 역복사하면 플랫폼에서 삭제한 자료가 되살아날 수 있어 이관하지 않는다.
+- 플랫폼에는 이미 `homepage_cruise_content`, `homepage_cruise_itineraries`, `homepage_cruise_tags`, `homepage_cruise_cabin_overrides`, `homepage_cruise_images`, `homepage_hotel_images`, 홈페이지 상품 오버라이드 테이블이 있으며, 홈페이지로의 단방향 전송 목록에도 포함된다.
+- 실제 플랫폼에 없는 홈페이지 전용 영속 데이터는 `homepage_booking_carts` 선택 초안 4건뿐이다. 예약·견적·결제 원장은 이미 플랫폼이 권한 원본이며 이관 대상이 아니다.
+- 통합 시에는 플랫폼의 기존 예약·결제 테이블을 수정하지 않고 `homepage_booking_carts`만 새 비공개 RLS 테이블로 추가한다. 이미지 파일은 아직 R2가 활성화되지 않았으므로 메타데이터와 별도 작업으로 유지한다.
+- 플랫폼 production에 `homepage_booking_carts`를 생성했다. `auth.users` FK, 사용자별 초안 1건 고유 제약, 사용자·갱신시각 인덱스, RLS와 anon/authenticated 전체 권한 회수를 적용했다. API의 사용자 ID 기준 upsert와 호환되도록 부분 인덱스가 아닌 일반 고유 인덱스를 사용한다.
+- 홈페이지 DB의 활성 초안 4건은 원본 UUID 기준 `resolution=ignore-duplicates`로 플랫폼 테이블에 복사했다. 플랫폼 service role 조회는 4건을 반환했고, anon 키 조회는 401 `permission denied`로 차단됨을 확인했다.
