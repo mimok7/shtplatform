@@ -7,6 +7,7 @@ type QuoteIssueRow = { category: string; name: string; details: string; total: n
 
 function validId(value: unknown): value is string { return typeof value === 'string' && UUID_PATTERN.test(value); }
 function text(value: unknown, limit: number) { return typeof value === 'string' ? value.trim().slice(0, limit) : ''; }
+function recipientLabel(value: unknown) { const name = text(value, 160); return name ? (name.endsWith('고객님') ? name : `${name} 고객님`) : '고객님'; }
 function quoteNumber() { return `SHT-Q-${new Date().toISOString().slice(0, 10).replaceAll('-', '')}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`; }
 
 async function requireManager(request: NextRequest) {
@@ -34,12 +35,19 @@ function normalizeRows(value: unknown): QuoteIssueRow[] {
 }
 
 function homepageQuoteItemName(item: any) {
-  return item?.serviceType === 'airport' && item?.metadata?.airportRoute ? item.metadata.airportRoute : item?.name || '상품';
+  if (item?.serviceType !== 'airport') return item?.name || '상품';
+  const metadata = item?.metadata || {};
+  const summaryRoute = Array.isArray(metadata.summary) ? metadata.summary.find((row: any) => Array.isArray(row) && row[0] === '이동 경로')?.[1] : '';
+  const legs = Array.isArray(metadata.platform?.legs) ? metadata.platform.legs : [];
+  const routes = [...new Set([metadata.airportRoute, summaryRoute, ...legs.map((leg: any) => leg?.route)].filter(Boolean).map(String))];
+  if (routes.length === 1) return routes[0];
+  const parts = routes[0]?.split(/\s+[-↔]\s+/).map((part: string) => part.trim()).filter(Boolean) || [];
+  return parts.length >= 2 ? `${parts[0]} ↔ ${parts[parts.length - 1]}` : item?.name || '상품';
 }
 
 function issueView(record: any, quoteId: string) {
   const items = Array.isArray(record.items) ? record.items.filter((item: any) => item?.metadata?.managerQuoteId === quoteId) : [];
-  return { quote_number: record.quote_number, quote_title: items[0]?.metadata?.quoteTitle || '', recipient_name: record.recipient_name || '', memo: record.memo || '', items: items.map((item: any) => ({ category: item.serviceLabel || '여행 상품', name: homepageQuoteItemName(item), details: item.optionName || '', total: Number(item.unitPrice) * Number(item.quantity || 1) })), totals: record.totals || {}, item_count: record.item_count, issued_at: record.issued_at };
+  return { quote_number: record.quote_number, quote_title: items[0]?.metadata?.quoteTitle || '', recipient_name: recipientLabel(record.recipient_name), memo: record.memo || '', items: items.map((item: any) => ({ category: item.serviceLabel || '여행 상품', name: homepageQuoteItemName(item), details: item.optionName || '', total: Number(item.unitPrice) * Number(item.quantity || 1) })), totals: record.totals || {}, item_count: record.item_count, issued_at: record.issued_at };
 }
 
 export async function GET(request: NextRequest) {
@@ -72,7 +80,7 @@ export async function POST(request: NextRequest) {
     const issuedAt = new Date().toISOString();
     const items = rows.map((row, index) => ({ id: `${body.quoteId}-${index + 1}`, serviceType: 'manager_quote', serviceLabel: row.category, name: row.name, optionName: row.details, startDate: '', endDate: '', adults: 0, children: 0, infants: 0, quantity: 1, unitPrice: row.total, currency: 'VND', metadata: { managerQuoteId: body.quoteId, quoteTitle: text(body.quoteTitle, 240), issuedBy: access.userId } }));
     const totals = { VND: Math.max(0, Number(body?.totals?.VND) || 0), KRW: Math.max(0, Number(body?.totals?.KRW) || 0) };
-    const { data, error } = await serviceSupabase!.from('homepage_cart_quotes').insert({ quote_number: quoteNumber(), platform_user_id: quote.user_id, recipient_name: text(body.recipientName, 160), memo: text(body.memo, 1000), items, totals, item_count: items.length, issued_at: issuedAt }).select('quote_number,recipient_name,memo,items,totals,item_count,issued_at').single();
+    const { data, error } = await serviceSupabase!.from('homepage_cart_quotes').insert({ quote_number: quoteNumber(), platform_user_id: quote.user_id, recipient_name: recipientLabel(body.recipientName), memo: text(body.memo, 1000), items, totals, item_count: items.length, issued_at: issuedAt }).select('quote_number,recipient_name,memo,items,totals,item_count,issued_at').single();
     if (error || !data) throw error || new Error('발행 이력 저장 결과가 없습니다.');
     return NextResponse.json({ issue: issueView(data, body.quoteId) });
   } catch (error) {
