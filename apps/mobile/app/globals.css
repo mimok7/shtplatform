@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@source "../../manager/src/components/QuoteIssueModal.tsx";
 
 :root {
   --background: #edf2f7;

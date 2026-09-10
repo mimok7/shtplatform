@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { ArrowLeft, Home } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import supabase from '@/lib/supabase';
+import QuoteIssueModal from '../_components/QuoteIssueModal';
 import { getExchangeRate, formatExchangeRate } from '../../../lib/exchangeRate';
 import { vndToKrw, roundKrwToHundred } from '../../../lib/exchangeRate';
 import { resolveLocalQuoteTitle, ensureQuoteTitle } from '../../../lib/getQuoteTitle';
@@ -203,6 +204,26 @@ function ManagerCruiseQuoteForm() {
     const [isCarComparisonMode, setIsCarComparisonMode] = useState<boolean>(false); // 차량 비교 모드
     // 합계 요약 상태: 동화 합계와 원화 합계
     const [totalSummary, setTotalSummary] = useState<{ totalDong: number; totalWon: number }>({ totalDong: 0, totalWon: 0 });
+
+    const getQuoteAccessToken = useCallback(async () => {
+        const { data } = await supabase.auth.getSession();
+        return data.session?.access_token || null;
+    }, []);
+
+    const quotePreviewRows = useMemo(() => {
+        const rows: Array<{ category: string; name: string; details: string; total: number }> = [];
+        const add = (category: string, values: any[], nameFor: (value: any) => string, detailsFor: (value: any) => string) => values.forEach((value) => {
+            const total = Number(value.calculated_total ?? value.item?.total_price ?? (Number(value.calculated_unit ?? value.item?.unit_price ?? 0) * Number(value.calculated_count ?? value.item?.quantity ?? 1))) || 0;
+            rows.push({ category, name: nameFor(value) || `${category} 상품`, details: detailsFor(value), total });
+        });
+        add('크루즈 객실', detailedServices.rooms || [], (row) => { const price = row.priceInfo?.[0] || {}; return [price.cruise || row.roomInfo?.cruise_name, price.room_type || row.roomInfo?.room_name, price.room_category].filter(Boolean).join(' · '); }, (row) => { const price = row.priceInfo?.[0] || {}; return [price.schedule, `수량 ${row.calculated_count ?? row.item?.quantity ?? 1}`].filter(Boolean).join(' · '); });
+        add('차량', detailedServices.cars || [], (row) => { const price = row.priceInfo?.[0] || {}; return [price.cruise || row.carInfo?.cruise_name, price.vehicle_type || price.car_type || row.carInfo?.car_code].filter(Boolean).join(' · '); }, (row) => [row.priceInfo?.[0]?.route, `수량 ${row.calculated_count ?? row.item?.quantity ?? 1}`].filter(Boolean).join(' · '));
+        add('공항 이동', detailedServices.airports || [], (row) => [row.priceInfo?.[0]?.airport_route, row.priceInfo?.[0]?.airport_car_type || row.airportInfo?.airport_code].filter(Boolean).join(' · '), (row) => `수량 ${row.calculated_count ?? row.item?.quantity ?? 1}`);
+        add('호텔', detailedServices.hotels || [], (row) => [row.priceInfo?.[0]?.hotel_name, row.priceInfo?.[0]?.room_name || row.hotelInfo?.hotel_code].filter(Boolean).join(' · '), (row) => `수량 ${row.calculated_count ?? row.item?.quantity ?? 1}`);
+        add('렌트카', detailedServices.rentcars || [], (row) => [row.priceInfo?.[0]?.route, row.priceInfo?.[0]?.vehicle_type || row.rentcarInfo?.rentcar_code].filter(Boolean).join(' · '), (row) => `수량 ${row.calculated_count ?? row.item?.quantity ?? 1}`);
+        add('투어', detailedServices.tours || [], (row) => row.priceInfo?.[0]?.tour_name || row.tourInfo?.tour_code || '', (row) => [row.tourInfo?.tour_date, `수량 ${row.calculated_count ?? row.item?.quantity ?? 1}`].filter(Boolean).join(' · '));
+        return rows;
+    }, [detailedServices]);
 
     // 차량구분 (하드코딩)
     const carCategoryHardcoded = ['편도', '당일왕복', '다른날왕복'];
@@ -2174,6 +2195,7 @@ function ManagerCruiseQuoteForm() {
                         
                         {/* 액션 버튼 그룹 (1행 4열 - 파스텔 톤) */}
                         <div className="flex flex-wrap gap-2 mb-3">
+                            <QuoteIssueModal quoteId={quoteId} quoteTitle={quote?.title || resolveLocalQuoteTitle(quote) || '크루즈 견적'} rows={quotePreviewRows} totalDong={totalSummary.totalDong} totalWon={totalSummary.totalWon} defaultRecipient={quote?.title || resolveLocalQuoteTitle(quote) || ''} defaultMemo={formData.special_requests} getAccessToken={getQuoteAccessToken} />
                             <button
                                 type="button"
                                 onClick={copyNaturalOnly}
