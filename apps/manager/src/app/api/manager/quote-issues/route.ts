@@ -33,9 +33,13 @@ function normalizeRows(value: unknown): QuoteIssueRow[] {
   return value.slice(0, 40).map((row) => ({ category: text(row?.category, 80), name: text(row?.name, 240), details: text(row?.details, 500), total: Number(row?.total) || 0 })).filter((row) => row.category && row.name && row.total >= 0);
 }
 
+function homepageQuoteItemName(item: any) {
+  return item?.serviceType === 'airport' && item?.metadata?.airportRoute ? item.metadata.airportRoute : item?.name || '상품';
+}
+
 function issueView(record: any, quoteId: string) {
   const items = Array.isArray(record.items) ? record.items.filter((item: any) => item?.metadata?.managerQuoteId === quoteId) : [];
-  return { quote_number: record.quote_number, quote_title: items[0]?.metadata?.quoteTitle || '', recipient_name: record.recipient_name || '', memo: record.memo || '', items: items.map((item: any) => ({ category: item.serviceLabel || '여행 상품', name: item.name || '상품', details: item.optionName || '', total: Number(item.unitPrice) * Number(item.quantity || 1) })), totals: record.totals || {}, item_count: record.item_count, issued_at: record.issued_at };
+  return { quote_number: record.quote_number, quote_title: items[0]?.metadata?.quoteTitle || '', recipient_name: record.recipient_name || '', memo: record.memo || '', items: items.map((item: any) => ({ category: item.serviceLabel || '여행 상품', name: homepageQuoteItemName(item), details: item.optionName || '', total: Number(item.unitPrice) * Number(item.quantity || 1) })), totals: record.totals || {}, item_count: record.item_count, issued_at: record.issued_at };
 }
 
 export async function GET(request: NextRequest) {
