@@ -113,13 +113,10 @@ Why: agents read files selectively, not whole codebases. A one-line Korean heade
 
 ## 9. Plan + Checklist + Context Notes
 
-**Before any non-trivial task, produce three artifacts. Don't start coding without them.**
+**계획서·체크리스트·컨텍스트 노트는 사용자가 명시적으로 요청하거나 인수인계 문서 자체가 산출물일 때만 작성한다.**
 
-- **Plan** - what we're building and why.
-- **Checklist** (`checklist.md`) - concrete tasks as checkboxes. Tick as you go.
-- **Context Notes** (`context-notes.md`) - decisions made during the work and the reasoning behind them. Append continuously.
-
-If the user gives only a plan and asks you to start coding, stop and ask: "Should I create the checklist and context notes first?" The next session needs the notes to pick up without re-deriving every decision.
+- 일반 구현·점검 작업에서는 `plan.md`, `checklist.md`, `context-notes.md`를 새로 만들거나 갱신하지 않는다.
+- 작업 중 필요한 계획은 대화 안에서 짧게 정리하고, 코드와 검증 결과를 우선한다.
 
 ## 10. Run Tests Before Marking Complete
 
@@ -284,13 +281,10 @@ Why: agents read files selectively, not whole codebases. A one-line Korean heade
 
 ## 9. Plan + Checklist + Context Notes
 
-**Before any non-trivial task, produce three artifacts. Don't start coding without them.**
+**계획서·체크리스트·컨텍스트 노트는 사용자가 명시적으로 요청하거나 인수인계 문서 자체가 산출물일 때만 작성한다.**
 
-- **Plan** - what we're building and why.
-- **Checklist** (`checklist.md`) - concrete tasks as checkboxes. Tick as you go.
-- **Context Notes** (`context-notes.md`) - decisions made during the work and the reasoning behind them. Append continuously.
-
-If the user gives only a plan and asks you to start coding, stop and ask: "Should I create the checklist and context notes first?" The next session needs the notes to pick up without re-deriving every decision.
+- 일반 구현·점검 작업에서는 `plan.md`, `checklist.md`, `context-notes.md`를 새로 만들거나 갱신하지 않는다.
+- 작업 중 필요한 계획은 대화 안에서 짧게 정리하고, 코드와 검증 결과를 우선한다.
 
 ## 10. Run Tests Before Marking Complete
 

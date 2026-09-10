@@ -60,6 +60,21 @@ interface ReservationItem {
     services: ServiceReservation[];
 }
 
+interface HomepageCartQuoteSummary {
+    id: string;
+    quote_number: string;
+    platform_user_id: string;
+    recipient_name: string;
+    item_count: number;
+    issued_at: string;
+}
+
+interface HomepageCartQuoteDetail extends HomepageCartQuoteSummary {
+    memo: string;
+    items: any[];
+    totals: Record<string, number>;
+}
+
 interface LatestChangeInfo {
     request_id: string;
     re_type: string;
@@ -111,6 +126,9 @@ const sortServices = (services: ServiceReservation[]) => {
     });
 };
 
+const formatQuoteAmount = (value: unknown, currency: string) => `${Math.max(0, Number(value) || 0).toLocaleString('ko-KR')} ${currency}`;
+const quoteItemDetails = (item: any) => [item?.optionName, item?.startDate, item?.endDate && `~ ${item.endDate}`, item?.adults ? `성인 ${item.adults}` : '', item?.children ? `아동 ${item.children}` : '', item?.infants ? `유아 ${item.infants}` : '', `수량 ${item?.quantity || 1}`].filter(Boolean).join(' · ');
+
 
 export default function BulkReservationPage() {
     return (
@@ -140,6 +158,10 @@ function BulkReservationContent() {
     const [pendingDetailUserInfo, setPendingDetailUserInfo] = useState<any>(null);
     const [reservationDetails, setReservationDetails] = useState<any>(null);
     const [promotionSequenceMap, setPromotionSequenceMap] = useState<Map<string, number>>(new Map());
+    const [homepageQuoteSummaries, setHomepageQuoteSummaries] = useState<Record<string, HomepageCartQuoteSummary>>({});
+    const [homepageQuotePreview, setHomepageQuotePreview] = useState<HomepageCartQuoteDetail | null>(null);
+    const [homepageQuoteLoading, setHomepageQuoteLoading] = useState(false);
+    const [homepageQuoteError, setHomepageQuoteError] = useState<string | null>(null);
 
     const totalServiceCount = useMemo(
         () => reservations.reduce((sum, r) => sum + r.services.length, 0),
@@ -164,6 +186,44 @@ function BulkReservationContent() {
     useEffect(() => {
         loadReservations();
     }, [filter, serviceFilter, searchTrigger, sortType]);
+
+    useEffect(() => {
+        let cancelled = false;
+        const userIds = Array.from(new Set(reservations.map((reservation) => reservation.users?.id).filter(Boolean))) as string[];
+        if (!userIds.length) {
+            setHomepageQuoteSummaries({});
+            return;
+        }
+
+        const loadHomepageQuoteSummaries = async () => {
+            try {
+                const { data: sessionData } = await supabase.auth.getSession();
+                const token = sessionData.session?.access_token;
+                if (!token) throw new Error('로그인 정보를 확인하지 못했습니다.');
+                const chunks = Array.from({ length: Math.ceil(userIds.length / 100) }, (_, index) => userIds.slice(index * 100, index * 100 + 100));
+                const responses = await Promise.all(chunks.map(async (chunk) => {
+                    const response = await fetch('/api/manager/homepage-cart-quotes', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                        body: JSON.stringify({ action: 'summaries', userIds: chunk }),
+                    });
+                    const result = await response.json();
+                    if (!response.ok) throw new Error(result.error || '발행 견적서를 불러오지 못했습니다.');
+                    return result.summaries || [];
+                }));
+                if (cancelled) return;
+                const next: Record<string, HomepageCartQuoteSummary> = {};
+                responses.flat().forEach((quote: HomepageCartQuoteSummary) => { next[quote.platform_user_id] = quote; });
+                setHomepageQuoteSummaries(next);
+            } catch (loadError) {
+                console.warn('홈페이지 발행 견적서 목록 조회 실패:', loadError);
+                if (!cancelled) setHomepageQuoteSummaries({});
+            }
+        };
+
+        void loadHomepageQuoteSummaries();
+        return () => { cancelled = true; };
+    }, [reservations]);
 
     // 권한 확인 변수
     const emailLower = (userEmail || '').toLowerCase();
@@ -485,6 +545,29 @@ function BulkReservationContent() {
             setSelectedItems(new Set());
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleOpenHomepageQuote = async (quoteId: string) => {
+        setHomepageQuoteLoading(true);
+        setHomepageQuoteError(null);
+        setHomepageQuotePreview(null);
+        try {
+            const { data: sessionData } = await supabase.auth.getSession();
+            const token = sessionData.session?.access_token;
+            if (!token) throw new Error('로그인 정보를 확인하지 못했습니다.');
+            const response = await fetch('/api/manager/homepage-cart-quotes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ action: 'detail', quoteId }),
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || '발행 견적서를 불러오지 못했습니다.');
+            setHomepageQuotePreview(result.quote as HomepageCartQuoteDetail);
+        } catch (previewError) {
+            setHomepageQuoteError(previewError instanceof Error ? previewError.message : '발행 견적서를 불러오지 못했습니다.');
+        } finally {
+            setHomepageQuoteLoading(false);
         }
     };
 
@@ -2130,6 +2213,7 @@ function BulkReservationContent() {
                                                     const normalizedEmail = String(reservation.users?.email || '').trim().toLowerCase();
                                                     const totalByEmail = normalizedEmail ? (emailReservationCountMap[normalizedEmail] || 0) : 0;
                                                     const hasPastReservations = totalByEmail > reservation.services.length;
+                                                    const homepageQuote = reservation.users?.id ? homepageQuoteSummaries[reservation.users.id] : null;
                                                     return (
                                                         <div
                                                             key={reservation.re_quote_id || reservation.services[0]?.re_id}
@@ -2194,6 +2278,10 @@ function BulkReservationContent() {
                                                                                     <span className="text-xs text-gray-500">예약일시:</span>
                                                                                     <span className="ml-2 text-xs text-gray-600">{new Date(reservation.re_update_at || reservation.re_created_at).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
                                                                                 </div>
+                                                                                <div className="text-sm text-gray-600 truncate">
+                                                                                    <span className="text-xs text-gray-500">견적서 발행자:</span>
+                                                                                    <span className="ml-2 text-xs font-medium text-gray-700">{homepageQuote ? (reservation.users?.name || homepageQuote.recipient_name || '고객') : '발행 이력 없음'}</span>
+                                                                                </div>
                                                                             </div>
                                                                         </div>
                                                                         <div className="text-right flex flex-col items-end gap-2">
@@ -2207,6 +2295,15 @@ function BulkReservationContent() {
                                                                             >
                                                                                 <Eye className="w-4 h-4 text-blue-600" />
                                                                             </button>
+                                                                            {homepageQuote && (
+                                                                                <button
+                                                                                    onClick={() => void handleOpenHomepageQuote(homepageQuote.id)}
+                                                                                    className="px-2 py-1 text-[11px] rounded-full bg-violet-50 text-violet-700 border border-violet-200 hover:bg-violet-100 transition-colors whitespace-nowrap"
+                                                                                    title={`발행 견적서 ${homepageQuote.quote_number} 열기`}
+                                                                                >
+                                                                                    견적서
+                                                                                </button>
+                                                                            )}
                                                                             <button
                                                                                 onClick={() => {
                                                                                     if (reservation.re_quote_id) {
@@ -2249,7 +2346,29 @@ function BulkReservationContent() {
                     )}
                 </div>
 
-                {/* 상세보기 모달 */}
+                {(homepageQuoteLoading || homepageQuotePreview || homepageQuoteError) && (
+                    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/55 p-4 sm:items-center" role="dialog" aria-modal="true" aria-labelledby="homepage-quote-preview-title">
+                        <div className="w-full max-w-3xl rounded-xl bg-white p-5 shadow-2xl">
+                            <div className="flex items-start justify-between gap-4 border-b border-slate-200 pb-4">
+                                <div>
+                                    <p className="text-xs font-semibold tracking-wider text-violet-700">STAY HALONG</p>
+                                    <h2 id="homepage-quote-preview-title" className="mt-1 text-2xl font-bold text-slate-900">고객 발행 견적서</h2>
+                                    {homepageQuotePreview && <p className="mt-1 text-sm text-slate-500">{homepageQuotePreview.quote_number} · {new Date(homepageQuotePreview.issued_at).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })}</p>}
+                                </div>
+                                <button type="button" onClick={() => { setHomepageQuotePreview(null); setHomepageQuoteError(null); setHomepageQuoteLoading(false); }} className="rounded border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">닫기</button>
+                            </div>
+                            {homepageQuoteLoading && <p className="py-12 text-center text-sm text-slate-500">발행 견적서를 불러오는 중입니다.</p>}
+                            {homepageQuoteError && <p className="py-12 text-center text-sm text-red-600">{homepageQuoteError}</p>}
+                            {homepageQuotePreview && <>
+                                <dl className="mt-5 grid gap-3 border border-slate-200 p-4 text-sm sm:grid-cols-2"><div><dt className="text-xs text-slate-500">견적 받는 분</dt><dd className="mt-1 font-semibold text-slate-900">{homepageQuotePreview.recipient_name || '고객님'}</dd></div><div><dt className="text-xs text-slate-500">상품 수</dt><dd className="mt-1 font-semibold text-slate-900">{homepageQuotePreview.item_count}개 서비스</dd></div></dl>
+                                <div className="mt-5 overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="border-y-2 border-slate-800 text-xs text-slate-600"><tr><th className="py-2 pr-3">구분</th><th className="py-2 pr-3">상품 및 이용 정보</th><th className="py-2 text-right">참고 금액</th></tr></thead><tbody>{(homepageQuotePreview.items || []).map((item: any, index: number) => <tr key={item.id || index} className="border-b border-slate-200"><td className="py-3 pr-3 font-medium text-violet-700">{item.serviceLabel || '여행 상품'}</td><td className="py-3 pr-3"><div className="font-semibold text-slate-900">{item.name || '상품 정보'}</div><div className="mt-1 text-xs text-slate-500">{quoteItemDetails(item)}</div></td><td className="py-3 text-right font-semibold text-slate-900">{formatQuoteAmount((Number(item.unitPrice) || 0) * (Number(item.quantity) || 1), item.currency || 'VND')}</td></tr>)}</tbody></table></div>
+                                <div className="mt-5 bg-slate-900 p-4 text-right text-white"><span className="text-xs font-semibold tracking-wider text-lime-200">ESTIMATED TOTAL</span><div className="mt-1 space-y-1">{Object.entries(homepageQuotePreview.totals || {}).filter(([, total]) => Number(total) > 0).map(([currency, total]) => <strong key={currency} className="block text-xl">{formatQuoteAmount(total, currency)}</strong>)}</div></div>
+                                {homepageQuotePreview.memo && <p className="mt-4 border-l-4 border-violet-500 bg-violet-50 p-3 text-sm text-slate-700">메모. {homepageQuotePreview.memo}</p>}
+                                <p className="mt-4 text-xs leading-5 text-slate-500">이 문서는 고객이 장바구니에서 발행한 당시의 상품과 참고 금액을 보관한 견적서입니다. 최종 예약 금액과 가능 여부는 예약 확정 전에 다시 확인합니다.</p>
+                            </>}
+                        </div>
+                    </div>
+                )}
             </div>
         );
     }
