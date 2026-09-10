@@ -1,5 +1,5 @@
 // Service Worker for PWA offline support
-const CACHE_NAME = 'sht-manag-cache-v2';
+const CACHE_NAME = 'sht-manag-cache-v3';
 const ASSETS_TO_CACHE = [
   '/',
   '/icon-192.png',
@@ -36,11 +36,15 @@ self.addEventListener('activate', event => {
 
 // Fetch event - serve from cache, fallback to network
 self.addEventListener('fetch', event => {
-  // Skip non-GET requests and external requests
+  // Skip non-GET requests, external requests, and navigation(HTML) requests.
+  // Navigation must always hit network directly so new deploys aren't served
+  // stale HTML that references removed build chunk files (fixes 404 on old
+  // layout/webpack/css hashes after a redeploy).
   const url = new URL(event.request.url);
   const path = url.pathname || '/';
   if (event.request.method !== 'GET' || 
-      !event.request.url.startsWith(self.location.origin)) {
+      !event.request.url.startsWith(self.location.origin) ||
+      event.request.mode === 'navigate') {
     return;
   }
 
