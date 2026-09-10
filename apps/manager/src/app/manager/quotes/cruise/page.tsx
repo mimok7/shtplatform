@@ -168,8 +168,35 @@ function ManagerCruiseQuoteForm() {
     const [regenerating, setRegenerating] = useState<boolean>(false);
     const [isComparisonMode, setIsComparisonMode] = useState<boolean>(false);
     const [isCarComparisonMode, setIsCarComparisonMode] = useState<boolean>(false); // 차량 비교 모드
+    const [quotePreviewOpen, setQuotePreviewOpen] = useState(false);
     // 합계 요약 상태: 동화 합계와 원화 합계
     const [totalSummary, setTotalSummary] = useState<{ totalDong: number; totalWon: number }>({ totalDong: 0, totalWon: 0 });
+
+    const quotePreviewRows = useMemo(() => {
+        const rows: Array<{ category: string; name: string; details: string; total: number }> = [];
+        const add = (category: string, values: any[], nameFor: (value: any) => string, detailsFor: (value: any) => string) => {
+            values.forEach((value) => {
+                const total = Number(value.calculated_total ?? value.item?.total_price ?? (Number(value.calculated_unit ?? value.item?.unit_price ?? 0) * Number(value.calculated_count ?? value.item?.quantity ?? 1))) || 0;
+                rows.push({ category, name: nameFor(value) || `${category} 상품`, details: detailsFor(value), total });
+            });
+        };
+        add('크루즈 객실', detailedServices.rooms || [], (row) => {
+            const price = row.priceInfo?.[0] || {};
+            return [price.cruise || row.roomInfo?.cruise_name, price.room_type || row.roomInfo?.room_name, price.room_category].filter(Boolean).join(' · ');
+        }, (row) => {
+            const price = row.priceInfo?.[0] || {};
+            return [price.schedule, `수량 ${row.calculated_count ?? row.item?.quantity ?? 1}`].filter(Boolean).join(' · ');
+        });
+        add('차량', detailedServices.cars || [], (row) => {
+            const price = row.priceInfo?.[0] || {};
+            return [price.cruise || row.carInfo?.cruise_name, price.vehicle_type || price.car_type || row.carInfo?.car_code].filter(Boolean).join(' · ');
+        }, (row) => [row.priceInfo?.[0]?.route, `수량 ${row.calculated_count ?? row.item?.quantity ?? 1}`].filter(Boolean).join(' · '));
+        add('공항 이동', detailedServices.airports || [], (row) => [row.priceInfo?.[0]?.airport_route, row.priceInfo?.[0]?.airport_car_type || row.airportInfo?.airport_code].filter(Boolean).join(' · '), (row) => `수량 ${row.calculated_count ?? row.item?.quantity ?? 1}`);
+        add('호텔', detailedServices.hotels || [], (row) => [row.priceInfo?.[0]?.hotel_name, row.priceInfo?.[0]?.room_name || row.hotelInfo?.hotel_code].filter(Boolean).join(' · '), (row) => `수량 ${row.calculated_count ?? row.item?.quantity ?? 1}`);
+        add('렌트카', detailedServices.rentcars || [], (row) => [row.priceInfo?.[0]?.route, row.priceInfo?.[0]?.vehicle_type || row.rentcarInfo?.rentcar_code].filter(Boolean).join(' · '), (row) => `수량 ${row.calculated_count ?? row.item?.quantity ?? 1}`);
+        add('투어', detailedServices.tours || [], (row) => row.priceInfo?.[0]?.tour_name || row.tourInfo?.tour_code || '', (row) => [row.tourInfo?.tour_date, `수량 ${row.calculated_count ?? row.item?.quantity ?? 1}`].filter(Boolean).join(' · '));
+        return rows;
+    }, [detailedServices]);
 
     // 차량구분 (하드코딩)
     const carCategoryHardcoded = ['편도', '당일왕복', '다른날왕복'];
@@ -2159,6 +2186,7 @@ function ManagerCruiseQuoteForm() {
                         <div className="flex items-center justify-between">
                             <h5 className="text-sm font-medium text-gray-700 mb-2">자연어 요약</h5>
                             <div className="flex flex-wrap items-center gap-2">
+                                <button type="button" onClick={() => setQuotePreviewOpen(true)} disabled={!quoteId || loading || quotePreviewRows.length === 0} title={!quoteId ? '먼저 견적을 저장하세요.' : quotePreviewRows.length === 0 ? '추가된 상품이 없습니다.' : ''} className="text-xs bg-emerald-600 text-white px-2 py-1 rounded disabled:cursor-not-allowed disabled:opacity-50">견적서 보기</button>
                                 <button type="button" onClick={copyNaturalOnly} className="text-xs bg-blue-500 text-white px-2 py-1 rounded">자연어 복사</button>
                                 <button type="button" onClick={regenerateNatural} disabled={regenerating} className="text-xs bg-gray-200 text-gray-800 px-2 py-1 rounded">
                                     {regenerating ? '생성중...' : '자연어 생성'}
@@ -2395,6 +2423,19 @@ function ManagerCruiseQuoteForm() {
                     </div>
                 </div>
             </div>
+            {quotePreviewOpen && (
+                <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/55 p-4 sm:items-center" role="dialog" aria-modal="true" aria-labelledby="manager-quote-preview-title">
+                    <div className="w-full max-w-3xl rounded-xl bg-white p-5 shadow-2xl">
+                        <div className="flex items-start justify-between gap-4 border-b border-slate-200 pb-4">
+                            <div><p className="text-xs font-semibold tracking-wider text-emerald-700">STAY HALONG</p><h2 id="manager-quote-preview-title" className="mt-1 text-2xl font-bold text-slate-900">여행 견적서</h2><p className="mt-1 text-sm text-slate-500">{quote?.title || '크루즈 견적'} · {new Date().toLocaleDateString('ko-KR')}</p></div>
+                            <button type="button" onClick={() => setQuotePreviewOpen(false)} className="rounded border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">닫기</button>
+                        </div>
+                        <div className="mt-5 overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="border-y-2 border-slate-800 text-xs text-slate-600"><tr><th className="py-2 pr-3">구분</th><th className="py-2 pr-3">상품 및 이용 정보</th><th className="py-2 text-right">참고 금액</th></tr></thead><tbody>{quotePreviewRows.map((row, index) => <tr key={`${row.category}-${index}`} className="border-b border-slate-200"><td className="py-3 pr-3 font-medium text-emerald-700">{row.category}</td><td className="py-3 pr-3"><div className="font-semibold text-slate-900">{row.name}</div>{row.details && <div className="mt-1 text-xs text-slate-500">{row.details}</div>}</td><td className="py-3 text-right font-semibold text-slate-900">{formatVND(row.total)}</td></tr>)}</tbody></table></div>
+                        <div className="mt-5 flex flex-col gap-1 bg-slate-900 p-4 text-right text-white sm:items-end"><span className="text-xs font-semibold tracking-wider text-lime-200">ESTIMATED TOTAL</span><strong className="text-xl">{formatVND(totalSummary.totalDong)}</strong><span className="text-sm text-slate-300">{totalSummary.totalWon.toLocaleString()}원</span></div>
+                        <p className="mt-4 text-xs leading-5 text-slate-500">본 견적서는 현재 저장된 상품과 참고 금액을 기준으로 작성됩니다. 최종 예약 금액과 가능 여부는 예약 확정 전에 다시 확인합니다.</p>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
