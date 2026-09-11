@@ -286,6 +286,11 @@ Why: agents read files selectively, not whole codebases. A one-line Korean heade
 - 일반 구현·점검 작업에서는 `plan.md`, `checklist.md`, `context-notes.md`를 새로 만들거나 갱신하지 않는다.
 - 작업 중 필요한 계획은 대화 안에서 짧게 정리하고, 코드와 검증 결과를 우선한다.
 
+## 견적서 일관성
+
+- 견적서 본문, 푸터, 인쇄 또는 PDF 출력을 수정할 때는 홈페이지·매니저·매니저1·모바일 네 앱에 동일하게 반영한다.
+- 매니저1과 모바일이 매니저 공통 견적서 컴포넌트를 재사용하는 경우에도, 세 앱에서 동일하게 적용되는지 확인한다.
+
 ## 10. Run Tests Before Marking Complete
 
 **If you touched code, run the relevant tests before saying "done".**
