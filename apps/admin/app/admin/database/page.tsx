@@ -49,6 +49,30 @@ function formatValue(value: unknown) {
   return String(value);
 }
 
+// 운영자가 바로 읽기 어려운 식별자·연동 코드·주소는 기본 표에서 숨긴다.
+// 컬럼 표시 메뉴에서는 언제든 다시 열어볼 수 있다.
+const TECHNICAL_COLUMN_NAME = /(^id$|_id$|(^|_)(code|key|uuid|slug|token|hash|secret|url|uri|path|ref)($|_))/i;
+const UUID_VALUE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const URL_VALUE = /^(?:https?:\/\/|s3:\/\/|data:)/i;
+const DELIMITED_CODE_VALUE = /^(?=.*[A-Za-z])[A-Za-z0-9]+(?:[_-][A-Za-z0-9]+)+$/;
+const OPAQUE_CODE_VALUE = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z0-9_-]{16,}$/;
+
+function isTechnicalValue(value: unknown) {
+  if (typeof value !== 'string') return false;
+  const text = value.trim();
+  return Boolean(text) && (UUID_VALUE.test(text) || URL_VALUE.test(text) || DELIMITED_CODE_VALUE.test(text) || OPAQUE_CODE_VALUE.test(text));
+}
+
+function technicalColumns(columns: DbColumn[], rows: DbRow[]) {
+  return columns
+    .filter((column) => {
+      if (TECHNICAL_COLUMN_NAME.test(column.column_name)) return true;
+      const values = rows.map((row) => row[column.column_name]).filter((value): value is string => typeof value === 'string' && value.trim() !== '').slice(0, 40);
+      return values.length >= 2 && values.filter(isTechnicalValue).length / values.length >= 0.8;
+    })
+    .map((column) => column.column_name);
+}
+
 function inputType(column: DbColumn) {
   if (column.data_type.includes('int') || column.data_type === 'numeric' || column.data_type === 'double precision' || column.data_type === 'real') return 'number';
   if (column.data_type === 'date') return 'date';
@@ -79,6 +103,8 @@ export function DatabaseManagementPage({ source = 'platform' }: { source?: Datab
   const [rowSearch, setRowSearch] = useState('');
   const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
   const [hiddenColumns, setHiddenColumns] = useState<string[]>([]);
+  const [technicalColumnNames, setTechnicalColumnNames] = useState<string[]>([]);
+  const [revealedTechnicalColumns, setRevealedTechnicalColumns] = useState<string[]>([]);
   const [columnPickerOpen, setColumnPickerOpen] = useState(false);
   const [sort, setSort] = useState<SortState>({ column: '', direction: 'asc' });
   const [page, setPage] = useState(0);
@@ -122,8 +148,11 @@ export function DatabaseManagementPage({ source = 'platform' }: { source?: Datab
       const response = await fetch(`${database.apiPath}?${params}`, { headers: await authHeaders(), cache: 'no-store' });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || '테이블 행을 불러오지 못했습니다.');
-      setColumns(Array.isArray(result.columns) ? result.columns : []);
-      setRows(Array.isArray(result.rows) ? result.rows : []);
+      const nextColumns = Array.isArray(result.columns) ? result.columns as DbColumn[] : [];
+      const nextRows = Array.isArray(result.rows) ? result.rows as DbRow[] : [];
+      setColumns(nextColumns);
+      setRows(nextRows);
+      setTechnicalColumnNames(technicalColumns(nextColumns, nextRows));
       setTotalRows(Number(result.count || 0));
       setHasMore(Boolean(result.hasMore));
       setPage(nextPage);
@@ -143,7 +172,7 @@ export function DatabaseManagementPage({ source = 'platform' }: { source?: Datab
     return () => window.clearTimeout(timer);
   }, [columnFilters, loadRows, rowSearch, selectedTable, sort]);
 
-  const visibleColumns = useMemo(() => columns.filter((column) => !hiddenColumns.includes(column.column_name)), [columns, hiddenColumns]);
+  const visibleColumns = useMemo(() => columns.filter((column) => !hiddenColumns.includes(column.column_name) && (!technicalColumnNames.includes(column.column_name) || revealedTechnicalColumns.includes(column.column_name))), [columns, hiddenColumns, revealedTechnicalColumns, technicalColumnNames]);
   const filterOptions = useMemo(() => {
     const options: Record<string, string[]> = {};
     for (const column of columns) {
@@ -203,13 +232,25 @@ export function DatabaseManagementPage({ source = 'platform' }: { source?: Datab
     setRowSearch('');
     setColumnFilters({});
     setHiddenColumns([]);
+    setTechnicalColumnNames([]);
+    setRevealedTechnicalColumns([]);
     setSort({ column: '', direction: 'asc' });
     setPage(0);
     setNotice(null);
   };
   const toggleSort = (column: string) => setSort((current) => current.column === column ? { column, direction: current.direction === 'asc' ? 'desc' : 'asc' } : { column, direction: 'asc' });
   const updateColumnFilter = (column: string, value: string) => setColumnFilters((current) => ({ ...current, [column]: value }));
-  const toggleColumn = (column: string) => setHiddenColumns((current) => current.includes(column) ? current.filter((name) => name !== column) : visibleColumns.length <= 1 ? current : [...current, column]);
+  const toggleColumn = (column: string) => {
+    const visible = visibleColumns.some((item) => item.column_name === column);
+    if (visible) {
+      if (visibleColumns.length <= 1) return;
+      setHiddenColumns((current) => current.includes(column) ? current : [...current, column]);
+      setRevealedTechnicalColumns((current) => current.filter((name) => name !== column));
+      return;
+    }
+    setHiddenColumns((current) => current.filter((name) => name !== column));
+    if (technicalColumnNames.includes(column)) setRevealedTechnicalColumns((current) => current.includes(column) ? current : [...current, column]);
+  };
 
   const openAdd = () => {
     const initial: Record<string, string> = {};
@@ -276,7 +317,7 @@ export function DatabaseManagementPage({ source = 'platform' }: { source?: Datab
 
         <section className="w-full min-w-0 max-w-full border border-[var(--sht-border)] bg-[var(--sht-surface)]"><div className="flex flex-col gap-2 border-b border-[var(--sht-border)] p-3 lg:flex-row lg:items-center lg:justify-between"><div><h2 className="text-sm font-semibold text-[var(--sht-heading)]">{selectedTable || '테이블을 선택하세요'}</h2>{selectedTable && <p className="mt-0.5 text-xs text-[var(--sht-text-muted)]">{describeTable(selectedTable)} · {totalRows.toLocaleString('ko-KR')}건 · 머릿글에서 값 선택 필터·정렬</p>}</div><div className="flex flex-wrap justify-end gap-1.5">{selectedTable && <><button type="button" onClick={() => setColumnPickerOpen((open) => !open)} disabled={columns.length === 0} className="inline-flex h-9 items-center gap-1.5 border border-[var(--sht-border)] px-3 text-xs font-semibold text-[var(--sht-text)] hover:bg-[var(--sht-surface-muted)]"><Columns3 size={14} />컬럼 표시</button><button type="button" onClick={openAdd} disabled={loadingRows || saving || columns.length === 0} className="inline-flex h-9 items-center gap-1.5 bg-[var(--sht-primary)] px-3 text-xs font-semibold text-[var(--sht-primary-text)] hover:bg-[var(--sht-primary-hover)] disabled:opacity-50"><Plus size={14} />행 추가</button><button type="button" onClick={() => void exportTable()} disabled={loadingRows || exporting} className="inline-flex h-9 items-center gap-1.5 bg-green-600 px-3 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-50"><Download size={14} />{exporting ? '내보내는 중...' : '구글시트 내보내기'}<ExternalLink size={13} /></button></>}</div></div>
           {selectedTable && <div className="flex flex-col gap-2 border-b border-[var(--sht-border)] bg-[var(--sht-surface-muted)] p-3 sm:flex-row sm:items-center sm:justify-between"><label className="relative block w-full max-w-xl"><span className="sr-only">행 전체 검색</span><Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--sht-text-muted)]" /><input value={rowSearch} onChange={(event) => setRowSearch(event.target.value)} placeholder="전체 문자열 검색 (선택 필터와 함께 적용)" className="h-9 w-full border border-[var(--sht-border)] bg-[var(--sht-surface)] pl-8 pr-2 text-xs text-[var(--sht-text)] focus:outline-none focus:ring-2 focus:ring-[var(--sht-focus)]" /></label><button type="button" onClick={() => { setRowSearch(''); setColumnFilters({}); }} className="h-9 border border-[var(--sht-border)] px-3 text-xs text-[var(--sht-text)] hover:bg-[var(--sht-surface)]">필터 초기화</button></div>}
-          {columnPickerOpen && <div className="border-b border-[var(--sht-border)] bg-[var(--sht-surface-muted)] p-3"><div className="mb-2 flex items-center justify-between"><p className="text-xs font-semibold text-[var(--sht-heading)]">표시할 컬럼 선택</p><button type="button" onClick={() => setHiddenColumns([])} className="text-xs font-semibold text-[var(--sht-primary)]">모두 표시</button></div><div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-5">{columns.map((column) => { const visible = !hiddenColumns.includes(column.column_name); return <label key={column.column_name} className="flex min-w-0 items-center gap-1.5 text-xs text-[var(--sht-text)]"><input type="checkbox" checked={visible} onChange={() => toggleColumn(column.column_name)} disabled={visible && visibleColumns.length <= 1} /><span className="truncate">{column.column_name}</span></label>; })}</div></div>}
+          {columnPickerOpen && <div className="border-b border-[var(--sht-border)] bg-[var(--sht-surface-muted)] p-3"><div className="mb-2 flex items-center justify-between"><div><p className="text-xs font-semibold text-[var(--sht-heading)]">표시할 컬럼 선택</p><p className="mt-0.5 text-xs text-[var(--sht-text-muted)]">식별자·코드·URL 컬럼은 기본 숨김 처리됩니다.</p></div><button type="button" onClick={() => { setHiddenColumns([]); setRevealedTechnicalColumns(technicalColumnNames); }} className="text-xs font-semibold text-[var(--sht-primary)]">모두 표시</button></div><div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-5">{columns.map((column) => { const visible = visibleColumns.some((item) => item.column_name === column.column_name); return <label key={column.column_name} className="flex min-w-0 items-center gap-1.5 text-xs text-[var(--sht-text)]"><input type="checkbox" checked={visible} onChange={() => toggleColumn(column.column_name)} disabled={visible && visibleColumns.length <= 1} /><span className="truncate">{column.column_name}{technicalColumnNames.includes(column.column_name) ? ' · 코드' : ''}</span></label>; })}</div></div>}
           <div ref={tableViewportRef} onScroll={syncFromTable} className="w-full max-w-full overflow-x-auto"><table className="min-w-full border-collapse text-left text-xs"><thead className="bg-[var(--sht-surface-muted)]"><tr>{visibleColumns.map((column) => { const isSorted = sort.column === column.column_name; const SortIcon = !isSorted ? ArrowUpDown : sort.direction === 'asc' ? ArrowUp : ArrowDown; const values = filterOptions[column.column_name] || []; const currentFilter = columnFilters[column.column_name] || ''; const shownValues = currentFilter && !values.includes(currentFilter) ? [currentFilter, ...values] : values; return <th key={column.column_name} className="min-w-[170px] border-b border-[var(--sht-border)] px-3 py-2 align-top font-semibold text-[var(--sht-text-muted)]"><button type="button" onClick={() => toggleSort(column.column_name)} className="flex max-w-full items-center gap-1 text-left hover:text-[var(--sht-heading)]" title={`${column.column_name} ${isSorted && sort.direction === 'asc' ? '내림차순' : '오름차순'} 정렬`}><span className="truncate">{column.column_name}</span><SortIcon size={14} aria-hidden="true" /></button><select value={currentFilter} onChange={(event) => updateColumnFilter(column.column_name, event.target.value)} aria-label={`${column.column_name} 값 필터`} className="mt-2 h-8 w-full border border-[var(--sht-border)] bg-[var(--sht-surface)] px-1 text-xs font-normal text-[var(--sht-text)] focus:outline-none focus:ring-2 focus:ring-[var(--sht-focus)]"><option value="">모든 값</option>{shownValues.map((value) => <option key={value} value={value}>{value}</option>)}</select></th>; })}</tr></thead><tbody>{loadingRows ? <tr><td colSpan={Math.max(visibleColumns.length, 1)} className="h-48 text-center text-sm text-[var(--sht-text-muted)]">행을 불러오는 중...</td></tr> : rows.length === 0 ? <tr><td colSpan={Math.max(visibleColumns.length, 1)} className="h-48 text-center text-sm text-[var(--sht-text-muted)]">데이터가 없습니다.</td></tr> : rows.map((row, index) => <tr key={`${selectedTable}-${index}`} className="border-b border-[var(--sht-border)] last:border-0 hover:bg-[var(--sht-surface-muted)]">{visibleColumns.map((column) => <td key={column.column_name} className="max-w-[280px] truncate whitespace-nowrap px-3 py-3 text-[var(--sht-text)]" title={formatValue(row[column.column_name])}>{formatValue(row[column.column_name])}</td>)}</tr>)}</tbody></table></div>
           {selectedTable && <div className="flex items-center justify-between border-t border-[var(--sht-border)] px-4 py-3"><button type="button" onClick={() => void loadRows(selectedTable, rowSearch, columnFilters, sort, page - 1)} disabled={page === 0 || loadingRows} className="h-9 border border-[var(--sht-border)] px-3 text-xs text-[var(--sht-text)] disabled:opacity-40">이전</button><span className="text-xs text-[var(--sht-text-muted)]">{page + 1} / {Math.max(1, Math.ceil(totalRows / 100))}</span><button type="button" onClick={() => void loadRows(selectedTable, rowSearch, columnFilters, sort, page + 1)} disabled={!hasMore || loadingRows} className="h-9 border border-[var(--sht-border)] px-3 text-xs text-[var(--sht-text)] disabled:opacity-40">다음</button></div>}
         </section>
