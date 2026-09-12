@@ -1,7 +1,8 @@
 'use client';
-import { useEffect, useState, Suspense, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import ManagerLayout from '@/components/ManagerLayout';
+import QuoteIssueModal from '@/components/QuoteIssueModal';
 import { safeWriteClipboard } from '@/lib/browserCompat';
 import supabase from '@/lib/supabase';
 import { getExchangeRate, vndToKrw, roundKrwToHundred, formatExchangeRate } from '../../../../lib/exchangeRate';
@@ -190,6 +191,38 @@ function ManagerComprehensiveQuoteForm() {
     const [isComparisonMode, setIsComparisonMode] = useState<boolean>(false);
 
     const [totalSummary, setTotalSummary] = useState<{ totalDong: number; totalWon: number }>({ totalDong: 0, totalWon: 0 });
+
+    const getQuoteAccessToken = useCallback(async () => {
+        const { data } = await supabase.auth.getSession();
+        return data.session?.access_token || null;
+    }, []);
+
+    // 전체 탭도 크루즈 탭과 동일하게 모든 저장 상품을 한 장의 견적서로 표시한다.
+    const quotePreviewRows = useMemo(() => {
+        const rows: Array<{ category: string; name: string; details: string; total: number }> = [];
+        const add = (category: string, values: any[], nameFor: (value: any) => string, detailsFor: (value: any) => string) => {
+            values.forEach((value) => {
+                const total = Number(value.calculated_total ?? value.item?.total_price ?? (Number(value.calculated_unit ?? value.item?.unit_price ?? 0) * Number(value.calculated_count ?? value.item?.quantity ?? 1))) || 0;
+                rows.push({ category, name: nameFor(value) || `${category} 상품`, details: detailsFor(value), total });
+            });
+        };
+        add('크루즈 객실', detailedServices.rooms || [], (row) => {
+            const price = row.priceInfo?.[0] || {};
+            return [price.cruise || row.roomInfo?.cruise_name, price.room_type || row.roomInfo?.room_name, price.room_category].filter(Boolean).join(' · ');
+        }, (row) => {
+            const price = row.priceInfo?.[0] || {};
+            return [price.schedule, `수량 ${row.calculated_count ?? row.item?.quantity ?? 1}`].filter(Boolean).join(' · ');
+        });
+        add('차량', detailedServices.cars || [], (row) => {
+            const price = row.priceInfo?.[0] || {};
+            return [price.cruise || row.carInfo?.cruise_name, price.vehicle_type || price.car_type || row.carInfo?.car_code].filter(Boolean).join(' · ');
+        }, (row) => [row.priceInfo?.[0]?.route, `수량 ${row.calculated_count ?? row.item?.quantity ?? 1}`].filter(Boolean).join(' · '));
+        add('공항 이동', detailedServices.airports || [], (row) => [row.priceInfo?.[0]?.airport_route, row.priceInfo?.[0]?.airport_car_type || row.airportInfo?.airport_code].filter(Boolean).join(' · '), (row) => `수량 ${row.calculated_count ?? row.item?.quantity ?? 1}`);
+        add('호텔', detailedServices.hotels || [], (row) => [row.priceInfo?.[0]?.hotel_name, row.priceInfo?.[0]?.room_name || row.hotelInfo?.hotel_code].filter(Boolean).join(' · '), (row) => `수량 ${row.calculated_count ?? row.item?.quantity ?? 1}`);
+        add('렌트카', detailedServices.rentcars || [], (row) => [row.priceInfo?.[0]?.route, row.priceInfo?.[0]?.vehicle_type || row.rentcarInfo?.rentcar_code].filter(Boolean).join(' · '), (row) => `수량 ${row.calculated_count ?? row.item?.quantity ?? 1}`);
+        add('투어', detailedServices.tours || [], (row) => row.priceInfo?.[0]?.tour_name || row.tourInfo?.tour_code || '', (row) => [row.tourInfo?.tour_date, `수량 ${row.calculated_count ?? row.item?.quantity ?? 1}`].filter(Boolean).join(' · '));
+        return rows;
+    }, [detailedServices]);
 
     // 타이틀 검색 상태 및 결과
     const [titleSearch, setTitleSearch] = useState<string>('');
@@ -1133,7 +1166,17 @@ function ManagerComprehensiveQuoteForm() {
                     <div ref={naturalRef} className="mt-4 border-t pt-3 bg-white p-3 rounded">
                         <div className="flex items-center justify-between">
                             <h5 className="text-sm font-medium text-gray-700 mb-2">자연어 요약</h5>
-                            <div className="flex items-center gap-2">
+                            <div className="flex flex-wrap items-center justify-end gap-2">
+                                <QuoteIssueModal
+                                    quoteId={quoteId}
+                                    quoteTitle={quote?.title || '전체 견적'}
+                                    rows={quotePreviewRows}
+                                    totalDong={totalSummary.totalDong}
+                                    totalWon={totalSummary.totalWon}
+                                    defaultRecipient={quote?.title || ''}
+                                    defaultMemo={selectedDiscount ? `${selectedDiscount}% 할인 적용 견적` : ''}
+                                    getAccessToken={getQuoteAccessToken}
+                                />
                                 <button
                                     type="button"
                                     onClick={() => setIsComparisonMode(!isComparisonMode)}
