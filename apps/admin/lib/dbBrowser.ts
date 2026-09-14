@@ -197,6 +197,42 @@ export async function insertTableRow(table: string, values: Record<string, unkno
   return data;
 }
 
+function rowKeyColumn(columns: DbColumn[]) {
+  const exact = columns.find((column) => column.column_name === 'id');
+  if (exact) return exact;
+  const idColumns = columns.filter((column) => column.column_name.endsWith('_id'));
+  if (idColumns.length === 1) return idColumns[0];
+  return columns.find((column) => ['code', 'key', 'setting_key'].includes(column.column_name)) || null;
+}
+
+// 단일 행 식별 키가 확인되는 공개 테이블만 수정한다. 복합 키 테이블은 오수정을 막기 위해 이 도구에서 읽기 전용으로 둔다.
+export async function updateTableRow(table: string, keyValue: unknown, values: Record<string, unknown>, source: DbDataSource = 'platform') {
+  assertTableName(table);
+  const columns = await getPublicTableColumns(table, source);
+  const key = rowKeyColumn(columns);
+  if (!key) throw new Error('단일 행 식별 키를 확인할 수 없는 테이블은 이 화면에서 수정할 수 없습니다.');
+  if (keyValue === null || keyValue === undefined || keyValue === '') throw new Error('수정할 행 식별 키가 없습니다.');
+
+  const allowed = new Set(columns.map((column) => column.column_name));
+  const payload: Record<string, unknown> = {};
+  for (const [name, value] of Object.entries(values || {})) {
+    if (!allowed.has(name)) throw new Error(`허용되지 않은 컬럼입니다: ${name}`);
+    if (name === key.column_name) throw new Error('행 식별 키는 수정할 수 없습니다.');
+    payload[name] = value;
+  }
+  if (Object.keys(payload).length === 0) throw new Error('수정할 값을 하나 이상 입력해 주세요.');
+
+  const client = getServiceClient(source);
+  const { data: found, error: findError } = await client.from(table).select(key.column_name).eq(key.column_name, keyValue).limit(2);
+  if (findError) throw new Error(findError.message || '수정할 행을 확인하지 못했습니다.');
+  if ((found || []).length !== 1) throw new Error('수정할 행을 하나로 확인할 수 없습니다.');
+
+  const { data, error } = await client.from(table).update(payload).eq(key.column_name, keyValue).select('*').maybeSingle();
+  if (error) throw new Error(error.message || '행 수정에 실패했습니다.');
+  if (!data) throw new Error('수정 결과를 확인하지 못했습니다.');
+  return { data, keyColumn: key.column_name };
+}
+
 export async function fetchTableRowsForExport(table: string, options: DbTableQueryOptions = {}, source: DbDataSource = 'platform') {
   const first = await fetchTablePage(table, { ...options, offset: 0, limit: 500 }, source);
   const rows = [...first.rows];

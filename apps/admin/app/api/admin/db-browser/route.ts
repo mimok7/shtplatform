@@ -1,7 +1,7 @@
 // 관리자 DB 도구의 테이블 목록, 행 조회, 행 추가를 제공한다.
 import { NextRequest, NextResponse } from 'next/server';
 import { checkAdmin } from '@/lib/exportAuth';
-import { fetchTablePage, insertTableRow, listPublicTables } from '@/lib/dbBrowser';
+import { fetchTablePage, insertTableRow, listPublicTables, updateTableRow } from '@/lib/dbBrowser';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -59,5 +59,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, data });
   } catch (error: unknown) {
     return NextResponse.json({ error: error instanceof Error ? error.message : '행 추가에 실패했습니다.' }, { status: 400 });
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  const auth = await checkAdmin(request);
+  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
+
+  try {
+    const body = await request.json();
+    const table = typeof body?.table === 'string' ? body.table.trim() : '';
+    const result = await updateTableRow(table, body?.keyValue, body?.values && typeof body.values === 'object' ? body.values : {});
+    return NextResponse.json({ ok: true, ...result });
+  } catch (error: unknown) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : '행 수정에 실패했습니다.' }, { status: 400 });
   }
 }
