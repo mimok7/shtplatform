@@ -245,6 +245,7 @@ export default function AdminLayout({ children, title, activeTab }: AdminLayoutP
     },
     {
       id: 'group-reservation', label: '예약/운영', icon: '📋', items: [
+        { id: 'reservation-status-handlers', label: '처리자 조회', path: '/admin/reservation-status-handlers', icon: '👤' },
         { id: 'reservation-settings', label: '알림 설정', path: '/admin/reservation-settings', icon: '🧭' },
         { id: 'reservation-total-system', label: '총금액 계산', path: '/admin/reservation-total-system', icon: '💰' },
         { id: 'sht-seat', label: '스하좌석', path: '/admin/sht-seat', icon: '💺' },
