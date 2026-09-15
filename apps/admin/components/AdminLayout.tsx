@@ -260,7 +260,6 @@ export default function AdminLayout({ children, title, activeTab }: AdminLayoutP
     {
       id: 'group-db', label: 'DB 도구', icon: '🗃️', items: [
         { id: 'database', label: '플랫폼 DB 관리', path: '/admin/database', icon: '🔧' },
-        { id: 'homepage-database', label: '홈페이지 DB 관리', path: '/admin/homepage-database', icon: '🏠' },
       ]
     },
     {
