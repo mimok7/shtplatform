@@ -115,6 +115,23 @@ async function createCabin(source: Source, values: Values) {
   await mergeOverride('homepage_cruise_cabin_overrides', { cruise_name: source.cruiseName, room_name: row.room_name }, values);
 }
 
+async function cloneCabin(source: Source, values: Values) {
+  if (!serviceSupabase || !source.cruiseName || !source.roomName) throw new Error('복사할 객실 원본을 확인해 주세요.');
+  const { data: template, error: readError } = await serviceSupabase.from('cruise_info').select('*').eq('cruise_name', source.cruiseName).eq('room_name', source.roomName).maybeSingle();
+  if (readError || !template) throw readError || new Error('복사할 객실 원본을 찾을 수 없습니다.');
+  const roomName = text(values.name_ko);
+  if (!roomName) throw new Error('새 객실명을 입력해 주세요.');
+  const row: Values = { ...template };
+  for (const key of ['id', 'created_at', 'updated_at']) delete row[key];
+  row.cruise_code = `WEB-${randomUUID().slice(0, 12).toUpperCase()}`;
+  row.room_name = roomName;
+  row.created_at = new Date().toISOString();
+  row.updated_at = row.created_at;
+  const { error } = await serviceSupabase.from('cruise_info').insert(row);
+  if (error) throw error;
+  await mergeOverride('homepage_cruise_cabin_overrides', { cruise_name: source.cruiseName, room_name: roomName }, values);
+}
+
 async function createRateOnlyCruise(source: Source, values: Values) {
   if (!serviceSupabase || !source.cruiseName) throw new Error('크루즈 원본을 확인해 주세요.');
   const { data: existing, error: readError } = await serviceSupabase.from('cruise_info').select('id').eq('cruise_name', source.cruiseName).limit(1);
@@ -153,6 +170,16 @@ async function updateRate(source: Source, values: Values) {
     extra_bed_available: Boolean(values.extra_bed_available), is_active: Boolean(values.is_active), updated_at: new Date().toISOString(),
   };
   const { error } = await serviceSupabase.from('cruise_rate_card').update(updates).eq('id', source.sourceId);
+  if (error) throw error;
+}
+
+async function cloneRate(source: Source, values: Values) {
+  if (!serviceSupabase || !source.sourceId) throw new Error('복사할 요금 원본을 확인해 주세요.');
+  const { data: template, error: readError } = await serviceSupabase.from('cruise_rate_card').select('*').eq('id', source.sourceId).maybeSingle();
+  if (readError || !template) throw readError || new Error('복사할 요금 원본을 찾을 수 없습니다.');
+  const row: Values = { ...template, valid_from: null, valid_to: null, price_adult: number(values.price_adult), price_child: number(values.price_child), price_infant: number(values.price_infant), price_single: number(values.price_single), price_extra_bed: number(values.price_extra_bed), season_name: text(values.season_name), single_available: Boolean(values.single_available), extra_bed_available: Boolean(values.extra_bed_available), is_active: false, updated_at: new Date().toISOString() };
+  for (const key of ['id', 'created_at']) delete row[key];
+  const { error } = await serviceSupabase.from('cruise_rate_card').insert(row);
   if (error) throw error;
 }
 
@@ -337,7 +364,9 @@ async function mutate(action: string, source: Source, values: Values) {
   if (action === 'updateCruise') return updateCruise(source, values);
   if (action === 'updateCabin') return updateCabin(source, values);
   if (action === 'createCabin') return createCabin(source, values);
+  if (action === 'cloneCabin') return cloneCabin(source, values);
   if (action === 'updateRate') return updateRate(source, values);
+  if (action === 'cloneRate') return cloneRate(source, values);
   if (action === 'updateItinerary') return updateItinerary(source, values);
   if (action === 'upsertCruiseTag') return updateTag(source, values);
   if (action === 'updateCatalogProduct') return updateCatalogProduct(source, values);
