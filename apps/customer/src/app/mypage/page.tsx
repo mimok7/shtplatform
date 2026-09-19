@@ -221,6 +221,7 @@ export default function MyPage() {
   const quickActions = useMemo(() => [
     { icon: '🎯', label: '예약 하기', desc: '새로운 예약 신청', href: '/mypage/direct-booking', bg: 'bg-blue-100', color: 'text-blue-600' },
     { icon: '📋', label: '예약 내역', desc: '예약 조회 및 관리', href: '/mypage/reservations/list', bg: 'bg-green-100', color: 'text-green-600' },
+    { icon: '💳', label: '결제하기', desc: 'OnePay 결제 확인', href: '/mypage/payments', bg: 'bg-emerald-100', color: 'text-emerald-600' },
     { icon: '🤝', label: '제휴 업체', desc: '파트너사 예약', href: 'partner', bg: 'bg-orange-100', color: 'text-orange-600' },
     { icon: '📍', label: '장소 추가', desc: '여행 위치 정보', href: '/mypage/location-updates', bg: 'bg-purple-100', color: 'text-purple-600' },
     { icon: '🔔', label: '알림', desc: unreadCount > 0 ? `새 알림 ${unreadCount}개` : '알림 확인', href: '/mypage/notifications', bg: 'bg-red-100', color: 'text-red-600' },

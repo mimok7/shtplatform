@@ -22,6 +22,22 @@ import {
 type TicketPriceItem = 'adult' | 'child_under_1_2m' | 'shuttle';
 type PriceChannel = 'official' | 'card' | 'krw';
 
+const ONEPAY_INVOICE_PORTAL_URL = 'https://onepay.vn/auth-invoice/realms/invoice/protocol/openid-connect/auth?client_id=invoice-client&redirect_uri=https%3A%2F%2Fonepay.vn%2Finvoice%2Fwelcome.op&response_type=code&scope=openid%20profile%20email';
+
+const getInvoicePaymentUrl = (payment: any): string => {
+  const value = payment?.raw_response?.invoice_payment_url;
+  return typeof value === 'string' ? value : '';
+};
+
+const isOnepayCustomerPaymentUrl = (value: string): boolean => {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && (url.hostname === 'onepay.vn' || url.hostname.endsWith('.onepay.vn'));
+  } catch {
+    return false;
+  }
+};
+
 interface TicketPriceOption {
   ticket_price_code: string;
   ticket_type: string;
@@ -2001,47 +2017,78 @@ export default function ManagerPaymentsPage() {
     return group.pendingAmount;
   };
 
-  // 통합 결제창 링크 생성 (선택된 또는 미결제 항목 합산)
-  const createGroupPaymentLink = async (group: any): Promise<string | null> => {
+  const getGroupTargetPayments = (group: any) => {
     const selectedInGroup = group.payments.filter((p: any) => selectedPayments.has(p.id));
-    const targetPayments = selectedInGroup.length > 0
-      ? selectedInGroup
+    return selectedInGroup.length > 0
+      ? selectedInGroup.filter((p: any) => p.payment_status === 'pending')
       : group.payments.filter((p: any) => p.payment_status === 'pending');
+  };
+
+  const openOnepayInvoicePortal = () => {
+    window.open(ONEPAY_INVOICE_PORTAL_URL, '_blank', 'noopener,noreferrer');
+  };
+
+  const registerGroupPaymentLink = async (group: any) => {
+    const targetPayments = getGroupTargetPayments(group);
     if (targetPayments.length === 0) {
       alert('결제 대기 중인 항목이 없습니다.');
-      return null;
+      return;
     }
 
-    const totalAmount = targetPayments.reduce((sum: number, p: any) => sum + getPreferredAmount(p), 0);
+    const paymentUrl = window.prompt('OnePay Invoice에서 발급한 고객 결제 링크를 붙여넣으세요.');
+    if (paymentUrl === null) return;
+    const normalizedUrl = paymentUrl.trim();
+    if (!isOnepayCustomerPaymentUrl(normalizedUrl)) {
+      alert('https://onepay.vn 또는 OnePay 하위 도메인의 고객 결제 링크만 등록할 수 있습니다.');
+      return;
+    }
+
     setCreatingGroupLinkId(group.quoteId);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
-      if (!token) throw new Error('로그인이 필요합니다.');
-
-      const res = await fetch('/api/payments/onepay/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          paymentIds: targetPayments.map((p: any) => p.id),
-          amount: totalAmount
+      const updatedAt = new Date().toISOString();
+      const results = await Promise.all(targetPayments.map((payment: any) => supabase
+        .from('reservation_payment')
+        .update({
+          gateway: 'onepay_invoice',
+          raw_response: {
+            ...(payment.raw_response && typeof payment.raw_response === 'object' ? payment.raw_response : {}),
+            invoice_payment_url: normalizedUrl,
+            invoice_link_updated_at: updatedAt,
+          },
+          updated_at: updatedAt,
         })
-      });
-      const json = await res.json();
-      if (!res.ok || !json?.url) {
-        const required = Array.isArray(json?.required) ? `\n필수 환경변수: ${json.required.join(', ')}` : '';
-        const code = json?.code ? `\n오류코드: ${json.code}` : '';
-        alert(`${json?.error || '결제 링크 생성에 실패했습니다.'}${code}${required}`);
-        return null;
+        .eq('id', payment.id)
+        .select('id,gateway,raw_response,updated_at')
+        .maybeSingle()));
+      const failed = results.find((result) => result.error || !result.data);
+      if (failed) {
+        throw failed.error || new Error('결제 링크 저장 결과를 확인하지 못했습니다.');
       }
-      return json.url as string;
+
+      const savedById = new Map(results.map((result) => [result.data!.id, result.data!]));
+      setPayments((current) => current.map((payment: any) => targetPayments.some((target: any) => target.id === payment.id)
+        ? { ...payment, ...savedById.get(payment.id) }
+        : payment));
+      alert(`${targetPayments.length}건에 고객 결제 링크를 등록했습니다.`);
     } catch (e) {
-      console.error('통합 결제 링크 생성 실패:', e);
-      alert('결제 링크 생성 중 오류가 발생했습니다.');
-      return null;
+      console.error('고객 결제 링크 등록 실패:', e);
+      alert('고객 결제 링크를 저장하지 못했습니다.');
     } finally {
       setCreatingGroupLinkId(null);
     }
+  };
+
+  const copyGroupPaymentLink = async (group: any) => {
+    const links = [...new Set(getGroupTargetPayments(group).map(getInvoicePaymentUrl).filter(Boolean))];
+    if (links.length === 0) {
+      alert('먼저 OnePay 고객 결제 링크를 등록해 주세요.');
+      return;
+    }
+    if (links.length > 1) {
+      alert('선택한 결제 항목에 서로 다른 링크가 등록되어 있습니다. 항목을 다시 선택해 주세요.');
+      return;
+    }
+    await copyToClipboard(String(links[0]));
   };
 
   // 일괄 결제완료 처리
@@ -2359,33 +2406,26 @@ export default function ManagerPaymentsPage() {
                           {group.payments.every((p: any) => selectedPayments.has(p.id)) ? '전체 선택 해제' : '견적 전체 선택'}
                         </button>
                         {group.pendingCount > 0 && (
-                          <div className="flex gap-1">
+                          <div className="flex flex-wrap gap-1">
                             <button
-                              disabled={!!creatingGroupLinkId}
-                              onClick={async () => {
-                                const url = await createGroupPaymentLink(group);
-                                if (url) window.open(url, '_blank');
-                              }}
+                              onClick={openOnepayInvoicePortal}
                               className="px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-bold hover:bg-green-700 disabled:bg-gray-300 shadow-sm transition-all"
                             >
-                              {creatingGroupLinkId === group.quoteId ? (
-                                <span className="flex items-center gap-1">
-                                  <span className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></span>
-                                  생성 중...
-                                </span>
-                              ) : (
-                                '통합 결제창'
-                              )}
+                              OnePay 결제창
                             </button>
                             <button
                               disabled={!!creatingGroupLinkId}
-                              onClick={async () => {
-                                const url = await createGroupPaymentLink(group);
-                                if (url) await copyToClipboard(url);
-                              }}
+                              onClick={() => registerGroupPaymentLink(group)}
                               className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-700 disabled:bg-gray-300 shadow-sm transition-all"
                             >
-                              {creatingGroupLinkId === group.quoteId ? '...' : '링크 복사'}
+                              {creatingGroupLinkId === group.quoteId ? '저장 중...' : '고객 링크 등록'}
+                            </button>
+                            <button
+                              disabled={!!creatingGroupLinkId}
+                              onClick={() => copyGroupPaymentLink(group)}
+                              className="px-3 py-1.5 bg-slate-700 text-white rounded-lg text-xs font-bold hover:bg-slate-800 disabled:bg-gray-300 shadow-sm transition-all"
+                            >
+                              고객 링크 복사
                             </button>
                           </div>
                         )}
