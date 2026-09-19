@@ -94,6 +94,32 @@ const debugLog = (...args: any[]) => {
   }
 };
 
+const ONEPAY_INVOICE_LOGIN_URL = 'https://onepay.vn/auth-invoice/realms/invoice/protocol/openid-connect/auth?client_id=invoice-client&redirect_uri=https://onepay.vn/invoice/welcome.op&response_type=code&scope=openid%20profile%20email';
+const ONEPAY_AUTOFILL_EXTENSION_ID = 'kihedaabidghjlkcpbmkjalmppbfjidm';
+
+const sendOnepayAutofillPayload = (payload: Record<string, unknown>) => new Promise<void>((resolve, reject) => {
+  const runtime = (window as any)?.chrome?.runtime;
+  if (!runtime?.sendMessage) {
+    reject(new Error('OnePay 자동입력 확장 기능을 찾지 못했습니다.'));
+    return;
+  }
+
+  const timer = window.setTimeout(() => reject(new Error('OnePay 자동입력 확장 기능이 응답하지 않습니다.')), 4000);
+  runtime.sendMessage(
+    ONEPAY_AUTOFILL_EXTENSION_ID,
+    { type: 'SHT_ONEPAY_INVOICE_PREPARE', payload },
+    (response: { ok?: boolean; error?: string } | undefined) => {
+      window.clearTimeout(timer);
+      const errorMessage = runtime.lastError?.message || response?.error;
+      if (errorMessage || !response?.ok) {
+        reject(new Error(errorMessage || 'OnePay 자동입력 데이터를 저장하지 못했습니다.'));
+        return;
+      }
+      resolve();
+    },
+  );
+});
+
 export default function ManagerPaymentsPage() {
   const router = useRouter();
   const [payments, setPayments] = useState<any[]>([]);
@@ -106,6 +132,7 @@ export default function ManagerPaymentsPage() {
   const [generating, setGenerating] = useState(false);
   const [bulkCompleting, setBulkCompleting] = useState(false);
   const [publishingPaymentRequestId, setPublishingPaymentRequestId] = useState<string | null>(null);
+  const [preparingOnepayInvoiceId, setPreparingOnepayInvoiceId] = useState<string | null>(null);
   // 페이지네이션 상태
   const PAGE_SIZE = 50;
   const [hasMore, setHasMore] = useState(true);
@@ -907,7 +934,7 @@ export default function ManagerPaymentsPage() {
       // 사용자 정보 매핑
       const userIds = Array.from(new Set(rows.map((r: any) => r.user_id).filter(Boolean)));
       const { data: users } = userIds.length > 0
-        ? await supabase.from('users').select('id, name, email').in('id', userIds as string[])
+        ? await supabase.from('users').select('id, name, email, phone_number').in('id', userIds as string[])
         : { data: [] };
 
       const usersMap = new Map((users || []).map((u: any) => [u.id, u]));
@@ -1086,7 +1113,7 @@ export default function ManagerPaymentsPage() {
 
       const userIds = Array.from(new Set(rows.map((r: any) => r.user_id).filter(Boolean)));
       const { data: users } = userIds.length > 0
-        ? await supabase.from('users').select('id, name, email').in('id', userIds as string[])
+        ? await supabase.from('users').select('id, name, email, phone_number').in('id', userIds as string[])
         : { data: [] };
       const usersMap = new Map((users || []).map((u: any) => [u.id, u]));
 
@@ -2075,6 +2102,53 @@ export default function ManagerPaymentsPage() {
     }
   };
 
+  const prepareOnepayInvoice = async (group: any) => {
+    const targetPayments = getGroupTargetPayments(group);
+    if (targetPayments.length === 0) {
+      alert('결제 대기 중인 항목이 없습니다.');
+      return;
+    }
+
+    const customerName = String(group.user?.name || '').trim();
+    const customerEmail = String(group.user?.email || '').trim();
+    const customerPhone = String(group.user?.phone_number || '').trim();
+    const totalAmount = targetPayments.reduce((sum: number, payment: any) => sum + getPreferredAmount(payment), 0);
+    if (!customerName || totalAmount <= 0) {
+      alert('고객명과 결제 금액을 확인할 수 없습니다.');
+      return;
+    }
+
+    const onepayWindow = window.open(ONEPAY_INVOICE_LOGIN_URL, '_blank');
+    if (!onepayWindow) {
+      alert('팝업이 차단되어 OnePay 화면을 열지 못했습니다. 이 사이트의 팝업을 허용해 주세요.');
+      return;
+    }
+    onepayWindow.opener = null;
+
+    setPreparingOnepayInvoiceId(group.quoteId);
+    try {
+      const referenceSource = String(group.quoteId || targetPayments[0]?.reservation_id || '').replace(/[^a-zA-Z0-9]/g, '');
+      const serviceLabels = Array.from(new Set(targetPayments.map((payment: any) => (
+        getReservationServiceLabel(payment.reservation?.re_type || payment.re_type)
+      ))));
+      await sendOnepayAutofillPayload({
+        customerName,
+        customerEmail,
+        customerPhone,
+        amount: totalAmount,
+        currency: 'VND',
+        reference: `SHT-${referenceSource.slice(0, 30)}`,
+        description: `${group.quoteTitle || 'Stay Halong 예약'} - ${serviceLabels.join(', ')}`,
+      });
+      alert(`${customerName}님의 ${totalAmount.toLocaleString()}동 데이터를 준비했습니다. OnePay 로그인 후 인보이스 신규 작성 화면으로 이동해 주세요.`);
+    } catch (error) {
+      console.error('OnePay 인보이스 자동입력 준비 실패:', error);
+      alert('OnePay 자동입력 확장 기능이 설치되어 있지 않거나 응답하지 않습니다. 확장 기능을 설치한 뒤 다시 눌러 주세요.');
+    } finally {
+      setPreparingOnepayInvoiceId(null);
+    }
+  };
+
   // 일괄 결제완료 처리
   const handleBulkComplete = async () => {
     if (selectedPayments.size === 0) {
@@ -2391,6 +2465,13 @@ export default function ManagerPaymentsPage() {
                         </button>
                         {group.pendingCount > 0 && (
                           <div className="flex flex-wrap gap-1">
+                            <button
+                              disabled={!!preparingOnepayInvoiceId}
+                              onClick={() => prepareOnepayInvoice(group)}
+                              className="px-3 py-1.5 bg-orange-600 text-white rounded-lg text-xs font-bold hover:bg-orange-700 disabled:bg-gray-300 shadow-sm transition-all"
+                            >
+                              {preparingOnepayInvoiceId === group.quoteId ? 'OnePay 준비 중...' : 'OnePay 자동입력'}
+                            </button>
                             <button
                               disabled={!!publishingPaymentRequestId}
                               onClick={() => publishGroupPaymentRequest(group)}
