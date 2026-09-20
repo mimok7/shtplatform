@@ -1,7 +1,8 @@
 // OnePay Invoice 작성 화면의 빈 고객·금액 필드를 매니저 데이터로 자동 입력합니다.
 
 (() => {
-  const STORAGE_KEY = 'sht_onepay_invoice_payload';
+  const PAYLOAD_STORAGE_KEY = 'sht_onepay_invoice_payload';
+  const LINK_STORAGE_KEY = 'sht_onepay_invoice_link';
   const PANEL_ID = 'sht-onepay-autofill-panel';
   const LOGIN_PATH = '/auth-invoice/';
   const RETRY_LIMIT = 30;
@@ -20,6 +21,49 @@
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+
+  const normalizePaymentUrl = (value) => {
+    try {
+      const cleaned = String(value || '')
+        .replace(/&amp;/g, '&')
+        .replace(/[),.;]+$/, '')
+        .trim();
+      const url = new URL(cleaned, location.href);
+      if (url.protocol !== 'https:' || url.hostname !== 'onepay.vn') return '';
+      if (url.pathname !== '/invoice-pay/payment.op' || !url.searchParams.get('i')) return '';
+      return url.toString();
+    } catch {
+      return '';
+    }
+  };
+
+  const findPaymentUrl = () => {
+    const candidates = [
+      location.href,
+      ...Array.from(document.querySelectorAll('a[href]')).map((item) => item.getAttribute('href')),
+      ...Array.from(document.querySelectorAll('input, textarea')).map((item) => item.value),
+    ];
+    const bodyMatches = (document.body?.innerText || '').match(/https:\/\/onepay\.vn\/invoice-pay\/payment\.op\?[^\s"'<>]+/gi) || [];
+    candidates.push(...bodyMatches);
+    return candidates.map(normalizePaymentUrl).find(Boolean) || '';
+  };
+
+  const capturePaymentLink = async (payload) => {
+    const url = findPaymentUrl();
+    if (!url || !payload.reference) return false;
+
+    const capturedAt = Date.now();
+    await chrome.storage.local.set({
+      [LINK_STORAGE_KEY]: {
+        url,
+        reference: payload.reference,
+        capturedAt,
+        expiresAt: Math.min(payload.expiresAt, capturedAt + 2 * 60 * 60 * 1000),
+      },
+    });
+    renderPanel(payload, '결제 링크를 확인했습니다. 매니저 화면에서 링크 복사를 눌러 주세요.', 'success');
+    return true;
+  };
 
   const visibleControls = () => Array.from(document.querySelectorAll('input, textarea, select'))
     .filter((control) => {
@@ -131,13 +175,15 @@
   };
 
   const fillCurrentPage = async (manual = false) => {
-    const stored = await chrome.storage.local.get(STORAGE_KEY);
-    const payload = stored[STORAGE_KEY];
+    const stored = await chrome.storage.local.get(PAYLOAD_STORAGE_KEY);
+    const payload = stored[PAYLOAD_STORAGE_KEY];
     if (!payload) return false;
     if (!payload.expiresAt || payload.expiresAt < Date.now()) {
-      await chrome.storage.local.remove(STORAGE_KEY);
+      await chrome.storage.local.remove([PAYLOAD_STORAGE_KEY, LINK_STORAGE_KEY]);
       return false;
     }
+
+    if (await capturePaymentLink(payload)) return true;
 
     if (location.pathname.includes(LOGIN_PATH)) {
       renderPanel(payload, '로그인 후 인보이스 작성 화면으로 이동하면 자동 입력됩니다.');

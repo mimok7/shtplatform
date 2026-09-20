@@ -119,6 +119,46 @@ const sendOnepayAutofillPayload = (payload: Record<string, unknown>) => new Prom
   );
 });
 
+const getOnepayCapturedLink = (reference: string) => new Promise<string>((resolve, reject) => {
+  const runtime = (window as any)?.chrome?.runtime;
+  if (!runtime?.sendMessage) {
+    reject(new Error('extension_not_found'));
+    return;
+  }
+
+  const timer = window.setTimeout(() => reject(new Error('extension_timeout')), 4000);
+  runtime.sendMessage(
+    ONEPAY_AUTOFILL_EXTENSION_ID,
+    { type: 'SHT_ONEPAY_INVOICE_GET_LINK', reference },
+    (response: { ok?: boolean; error?: string; link?: { url?: string } } | undefined) => {
+      window.clearTimeout(timer);
+      const errorMessage = runtime.lastError?.message || response?.error;
+      if (errorMessage || !response?.ok || !response.link?.url) {
+        reject(new Error(errorMessage || 'link_not_found'));
+        return;
+      }
+      resolve(response.link.url);
+    },
+  );
+});
+
+const getOnepayInvoiceReference = (group: any, targetPayments: any[]) => {
+  const source = String(group.quoteId || targetPayments[0]?.reservation_id || '').replace(/[^a-zA-Z0-9]/g, '');
+  return `SHT-${source.slice(0, 30)}`;
+};
+
+const isValidOnepayInvoiceUrl = (value: string) => {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:'
+      && url.hostname === 'onepay.vn'
+      && url.pathname === '/invoice-pay/payment.op'
+      && Boolean(url.searchParams.get('i'));
+  } catch {
+    return false;
+  }
+};
+
 export default function ManagerPaymentsPage() {
   const router = useRouter();
   const [payments, setPayments] = useState<any[]>([]);
@@ -132,6 +172,7 @@ export default function ManagerPaymentsPage() {
   const [bulkCompleting, setBulkCompleting] = useState(false);
   const [publishingPaymentRequestId, setPublishingPaymentRequestId] = useState<string | null>(null);
   const [preparingOnepayInvoiceId, setPreparingOnepayInvoiceId] = useState<string | null>(null);
+  const [copyingOnepayLinkId, setCopyingOnepayLinkId] = useState<string | null>(null);
   // 페이지네이션 상태
   const PAGE_SIZE = 50;
   const [hasMore, setHasMore] = useState(true);
@@ -2058,6 +2099,7 @@ export default function ManagerPaymentsPage() {
           ? { ...payment.raw_response }
           : {};
         delete rawResponse.invoice_payment_url;
+        delete rawResponse.invoice_reference;
         delete rawResponse.invoice_link_updated_at;
 
         return supabase
@@ -2125,7 +2167,6 @@ export default function ManagerPaymentsPage() {
 
     setPreparingOnepayInvoiceId(group.quoteId);
     try {
-      const referenceSource = String(group.quoteId || targetPayments[0]?.reservation_id || '').replace(/[^a-zA-Z0-9]/g, '');
       const serviceLabels = Array.from(new Set(targetPayments.map((payment: any) => (
         getReservationServiceLabel(payment.reservation?.re_type || payment.re_type)
       ))));
@@ -2135,7 +2176,7 @@ export default function ManagerPaymentsPage() {
         customerPhone,
         amount: totalAmount,
         currency: 'VND',
-        reference: `SHT-${referenceSource.slice(0, 30)}`,
+        reference: getOnepayInvoiceReference(group, targetPayments),
         description: `${group.quoteTitle || 'Stay Halong 예약'} - ${serviceLabels.join(', ')}`,
       });
       alert(`${customerName}님의 ${totalAmount.toLocaleString()}동 데이터를 준비했습니다. OnePay 로그인 후 인보이스 신규 작성 화면으로 이동해 주세요.`);
@@ -2144,6 +2185,76 @@ export default function ManagerPaymentsPage() {
       alert('OnePay 자동입력 확장 기능이 설치되어 있지 않거나 응답하지 않습니다. 확장 기능을 설치한 뒤 다시 눌러 주세요.');
     } finally {
       setPreparingOnepayInvoiceId(null);
+    }
+  };
+
+  const copyOnepayInvoiceLink = async (group: any) => {
+    const targetPayments = getGroupTargetPayments(group);
+    if (targetPayments.length === 0) {
+      alert('결제 대기 중인 항목이 없습니다.');
+      return;
+    }
+
+    setCopyingOnepayLinkId(group.quoteId);
+    try {
+      const reference = getOnepayInvoiceReference(group, targetPayments);
+      const paymentUrl = await getOnepayCapturedLink(reference);
+      if (!isValidOnepayInvoiceUrl(paymentUrl)) {
+        throw new Error('invalid_payment_url');
+      }
+
+      const updatedAt = new Date().toISOString();
+      const paymentIds = targetPayments.map((payment: any) => payment.id);
+      const updates = await Promise.all(targetPayments.map((payment: any) => {
+        const rawResponse = payment.raw_response && typeof payment.raw_response === 'object'
+          ? { ...payment.raw_response }
+          : {};
+        return supabase
+          .from('reservation_payment')
+          .update({
+            gateway: 'onepay',
+            raw_response: {
+              ...rawResponse,
+              invoice_payment_url: paymentUrl,
+              invoice_reference: reference,
+              invoice_link_updated_at: updatedAt,
+            },
+            updated_at: updatedAt,
+          })
+          .eq('id', payment.id);
+      }));
+      const failedUpdate = updates.find((result) => result.error);
+      if (failedUpdate?.error) throw failedUpdate.error;
+
+      const { data: savedPayments, error: readError } = await supabase
+        .from('reservation_payment')
+        .select('id,gateway,raw_response,updated_at')
+        .in('id', paymentIds);
+      if (readError) throw readError;
+      if (!savedPayments || savedPayments.length !== paymentIds.length || savedPayments.some((payment: any) => (
+        payment.raw_response?.invoice_payment_url !== paymentUrl
+        || payment.raw_response?.invoice_reference !== reference
+      ))) {
+        throw new Error('saved_link_mismatch');
+      }
+
+      const savedById = new Map(savedPayments.map((payment: any) => [payment.id, payment]));
+      setPayments((current) => current.map((payment: any) => savedById.has(payment.id)
+        ? { ...payment, ...savedById.get(payment.id) }
+        : payment));
+      await copyToClipboard(paymentUrl);
+    } catch (error) {
+      console.error('OnePay 결제 링크 복사 실패:', error);
+      const reason = error instanceof Error ? error.message : '';
+      if (reason === 'link_not_found') {
+        alert('생성된 결제 링크를 찾지 못했습니다. OnePay에서 인보이스를 발행해 결제 링크가 표시된 뒤 다시 눌러 주세요.');
+      } else if (reason === 'extension_not_found' || reason === 'extension_timeout') {
+        alert('OnePay 자동입력 확장 기능이 설치되어 있지 않거나 응답하지 않습니다.');
+      } else {
+        alert('결제 링크를 저장하거나 복사하지 못했습니다.');
+      }
+    } finally {
+      setCopyingOnepayLinkId(null);
     }
   };
 
@@ -2469,6 +2580,13 @@ export default function ManagerPaymentsPage() {
                               className="px-3 py-1.5 bg-orange-600 text-white rounded-lg text-xs font-bold hover:bg-orange-700 disabled:bg-gray-300 shadow-sm transition-all"
                             >
                               {preparingOnepayInvoiceId === group.quoteId ? 'OnePay 준비 중...' : 'OnePay 자동입력'}
+                            </button>
+                            <button
+                              disabled={!!copyingOnepayLinkId}
+                              onClick={() => copyOnepayInvoiceLink(group)}
+                              className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 disabled:bg-gray-300 shadow-sm transition-all"
+                            >
+                              {copyingOnepayLinkId === group.quoteId ? '링크 확인 중...' : '링크 복사'}
                             </button>
                             <button
                               disabled={!!publishingPaymentRequestId}

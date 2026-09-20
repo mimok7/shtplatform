@@ -1,7 +1,6 @@
 // 고객 본인의 OnePay Invoice 결제 정보만 안전하게 제공하는 API
 import { NextRequest, NextResponse } from 'next/server';
 import serviceSupabase from '@/lib/serviceSupabase';
-import { getOnepayConfigFromEnv } from '@/lib/onepay';
 
 function getBearerToken(req: NextRequest): string {
   const authorization = req.headers.get('authorization') || '';
@@ -54,7 +53,7 @@ export async function GET(req: NextRequest) {
 
   const reservationRows = reservations || [];
   if (reservationRows.length === 0) {
-    return NextResponse.json({ payments: [], onepayReady: Boolean(getOnepayConfigFromEnv()) });
+    return NextResponse.json({ payments: [] });
   }
 
   const { data: profile } = await serviceSupabase
@@ -102,7 +101,7 @@ export async function GET(req: NextRequest) {
   }).filter(Boolean);
 
   return NextResponse.json(
-    { payments: safePayments, onepayReady: Boolean(getOnepayConfigFromEnv()) },
+    { payments: safePayments },
     { headers: { 'Cache-Control': 'private, no-store' } },
   );
 }

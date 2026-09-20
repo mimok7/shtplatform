@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Stay Halong OnePay Invoice Auto Fill",
-  "version": "1.0.0",
-  "description": "Stay Halong 매니저의 고객명과 결제금액을 OnePay Invoice 작성 화면에 자동 입력합니다.",
+  "version": "1.1.0",
+  "description": "Stay Halong 매니저의 OnePay Invoice 자동입력과 발급 링크 복사를 지원합니다.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvcVdVqaHCcwUCYVVfxkYCzpZ03nWsKoKq/ZjnFIMcj7kLaF1w0Jb5NS+V7ErBLT7McswWetTW8T5g//090fe6XNTiXG6qoYceQXIwJ9zQ51MDq9MYWTrkDJivVfS7Aq2O9pj1rvnA1qvEIqGS3yoigKInGfnbVRuzS2EiYJBP3DsLMtqEroVm9//hGqyU9bErnA0Z5BHpTrAsQ8mwOlmWI29GTLsSdMDG1I4uLF/jCgWc5PnLOmdZ+EhGfGzI0hBx9Jzez7IhFIrFr10hGpnDRwOgkq4xXuy3y1U15sm8xzYO4W8S31oj57ms5xLYTSJwiTqws5+ImQNibMx61365wIDAQAB",
   "permissions": ["storage"],
   "host_permissions": [
@@ -16,7 +16,8 @@
       "matches": [
         "https://onepay.vn/auth-invoice/*",
         "https://onepay.vn/invoice/*",
-        "https://onepay.vn/invoice20/*"
+        "https://onepay.vn/invoice20/*",
+        "https://onepay.vn/invoice-pay/*"
       ],
       "js": ["onepay-autofill.js"],
       "run_at": "document_idle"
