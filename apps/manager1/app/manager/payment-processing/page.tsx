@@ -179,17 +179,11 @@ const getOnepayCapturedLink = (reference: string) => new Promise<string>((resolv
   );
 });
 
-const formatOnepayDateParts = (value: Date) => {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Ho_Chi_Minh',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(value).reduce<Record<string, string>>((result, part) => {
-    result[part.type] = part.value;
-    return result;
-  }, {});
-  return { compact: `${parts.year}${parts.month}${parts.day}`, display: `${parts.year}.${parts.month}.${parts.day}.` };
+const formatOnepayCheckinDate = (value: string) => {
+  const matched = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!matched) return null;
+  const [, year, month, day] = matched;
+  return { compact: `${year}${month}${day}`, display: `${year}.${month}.${day}.` };
 };
 
 const normalizeOnepayReferencePart = (value: string) => String(value || '')
@@ -197,10 +191,10 @@ const normalizeOnepayReferencePart = (value: string) => String(value || '')
   .replace(/[^a-zA-Z0-9]/g, '')
   .toUpperCase();
 
-const buildOnepayInvoiceReference = (cruiseName: string, customerName: string, invoiceCreatedAt: Date) => {
+const buildOnepayInvoiceReference = (cruiseName: string, customerName: string, checkinDate: string) => {
   const cruise = normalizeOnepayReferencePart(cruiseName);
   const customer = normalizeOnepayReferencePart(customerName);
-  const date = formatOnepayDateParts(invoiceCreatedAt).compact;
+  const date = checkinDate;
   const fullReference = `${cruise}${date}${customer}`;
   if (fullReference.length <= 30) return fullReference;
 
@@ -2181,7 +2175,7 @@ export default function ManagerPaymentsPage() {
 
     const { data: cruises, error: cruiseError } = await supabase
       .from('reservation_cruise')
-      .select('reservation_id,room_price_code')
+      .select('reservation_id,room_price_code,checkin')
       .in('reservation_id', reservationIds);
     if (cruiseError) throw cruiseError;
 
@@ -2200,6 +2194,7 @@ export default function ManagerPaymentsPage() {
       .map((roomPriceCode) => rates?.find((item: any) => item.id === roomPriceCode))
       .find(Boolean) as { cruise_name?: string } | undefined;
     const cruiseName = String(rate?.cruise_name || '').trim();
+    const checkin = String(cruises?.find((cruise: any) => cruise.reservation_id === reservationIds[0])?.checkin || '').trim();
     if (!cruiseName) return null;
 
     const { data: content, error: contentError } = await supabase
@@ -2212,6 +2207,7 @@ export default function ManagerPaymentsPage() {
     return {
       koreanName: String(content?.name_ko || cruiseName).trim(),
       englishName: String(content?.name_en || '').trim(),
+      checkin,
     };
   };
 
@@ -2320,13 +2316,14 @@ export default function ManagerPaymentsPage() {
     setPreparingOnepayInvoiceId(group.quoteId);
     try {
       const cruiseInfo = await resolveOnepayCruiseInfo(targetPayments);
-      if (!cruiseInfo?.koreanName || !normalizeOnepayReferencePart(cruiseInfo.englishName)) {
+      const checkinDate = formatOnepayCheckinDate(cruiseInfo?.checkin || '');
+      if (!cruiseInfo?.koreanName || !normalizeOnepayReferencePart(cruiseInfo.englishName) || !checkinDate) {
         onepayWindow.close();
-        alert('크루즈 한글명·영문명을 확인할 수 없어 송장을 만들 수 없습니다. 크루즈 정보를 확인해 주세요.');
+        alert('크루즈 한글명·영문명 또는 체크인 일자를 확인할 수 없어 송장을 만들 수 없습니다. 크루즈 정보를 확인해 주세요.');
         return;
       }
-      const reference = buildOnepayInvoiceReference(cruiseInfo.englishName, customerEnglishName, invoiceCreatedAt);
-      const description = `${formatOnepayDateParts(invoiceCreatedAt).display} ${customerName} 회원님 - ${cruiseInfo.koreanName}`;
+      const reference = buildOnepayInvoiceReference(cruiseInfo.englishName, customerEnglishName, checkinDate.compact);
+      const description = `${checkinDate.display} ${customerName} 회원님 - ${cruiseInfo.koreanName}`;
       await sendOnepayAutofillPayload({
         customerName,
         customerEmail,
