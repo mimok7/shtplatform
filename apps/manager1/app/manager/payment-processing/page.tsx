@@ -97,6 +97,16 @@ const debugLog = (...args: any[]) => {
 const ONEPAY_INVOICE_CREATE_URL = 'https://onepay.vn/invoice/create_order.op';
 const ONEPAY_INVOICE_TRANSACTION_URL = 'https://onepay.vn/invoice/transaction-management-2.op';
 const ONEPAY_AUTOFILL_EXTENSION_ID = 'kihedaabidghjlkcpbmkjalmppbfjidm';
+const MINIMUM_ONEPAY_EXTENSION_VERSION = [1, 2, 0];
+
+const supportsOnepayExtensionVersion = (value?: string) => {
+  const parts = String(value || '').split('.').map((part) => Number(part));
+  if (parts.length < 3 || parts.some((part) => !Number.isInteger(part) || part < 0)) return false;
+  return parts.some((part, index) => (
+    part > MINIMUM_ONEPAY_EXTENSION_VERSION[index]
+    && parts.slice(0, index).every((previous, previousIndex) => previous === MINIMUM_ONEPAY_EXTENSION_VERSION[previousIndex])
+  )) || MINIMUM_ONEPAY_EXTENSION_VERSION.every((part, index) => parts[index] === part);
+};
 
 const sendOnepayAutofillPayload = (payload: Record<string, unknown>) => new Promise<void>((resolve, reject) => {
   const runtime = (window as any)?.chrome?.runtime;
@@ -105,18 +115,41 @@ const sendOnepayAutofillPayload = (payload: Record<string, unknown>) => new Prom
     return;
   }
 
-  const timer = window.setTimeout(() => reject(new Error('OnePay 자동입력 확장 기능이 응답하지 않습니다.')), 4000);
+  let settled = false;
+  const finishWithError = (message: string) => {
+    if (settled) return;
+    settled = true;
+    window.clearTimeout(timer);
+    reject(new Error(message));
+  };
+  const finishSuccessfully = () => {
+    if (settled) return;
+    settled = true;
+    window.clearTimeout(timer);
+    resolve();
+  };
+  const timer = window.setTimeout(() => finishWithError('extension_timeout'), 5000);
   runtime.sendMessage(
     ONEPAY_AUTOFILL_EXTENSION_ID,
-    { type: 'SHT_ONEPAY_INVOICE_PREPARE', payload },
-    (response: { ok?: boolean; error?: string } | undefined) => {
-      window.clearTimeout(timer);
-      const errorMessage = runtime.lastError?.message || response?.error;
-      if (errorMessage || !response?.ok) {
-        reject(new Error(errorMessage || 'OnePay 자동입력 데이터를 저장하지 못했습니다.'));
+    { type: 'SHT_ONEPAY_EXTENSION_STATUS' },
+    (statusResponse: { ok?: boolean; error?: string; version?: string } | undefined) => {
+      const statusError = runtime.lastError?.message || statusResponse?.error;
+      if (statusError || !statusResponse?.ok || !supportsOnepayExtensionVersion(statusResponse.version)) {
+        finishWithError(statusError === 'invalid_request' ? 'extension_outdated' : (statusError || 'extension_outdated'));
         return;
       }
-      resolve();
+      runtime.sendMessage(
+        ONEPAY_AUTOFILL_EXTENSION_ID,
+        { type: 'SHT_ONEPAY_INVOICE_PREPARE', payload },
+        (response: { ok?: boolean; error?: string } | undefined) => {
+          const errorMessage = runtime.lastError?.message || response?.error;
+          if (errorMessage || !response?.ok) {
+            finishWithError(errorMessage || 'OnePay 자동입력 데이터를 저장하지 못했습니다.');
+            return;
+          }
+          finishSuccessfully();
+        },
+      );
     },
   );
 });
@@ -2196,7 +2229,12 @@ export default function ManagerPaymentsPage() {
       alert(`${customerName}님의 ${totalAmount.toLocaleString()}동 송장 데이터와 고객 결제 요청을 준비했습니다. OnePay에서 내용을 확인한 뒤 송장을 발행해 주세요.`);
     } catch (error) {
       console.error('OnePay 인보이스 자동입력 준비 실패:', error);
-      alert('OnePay 자동입력 확장 기능이 설치되어 있지 않거나 응답하지 않습니다. 확장 기능을 설치한 뒤 다시 눌러 주세요.');
+      const reason = error instanceof Error ? error.message : '';
+      if (reason === 'extension_outdated') {
+        alert('설치된 OnePay 확장 기능이 이전 버전입니다. chrome://extensions에서 확장 기능을 다시 로드한 뒤 송장 생성을 다시 눌러 주세요.');
+      } else {
+        alert('OnePay 자동입력 확장 기능이 설치되어 있지 않거나 응답하지 않습니다. 확장 기능을 설치한 뒤 다시 눌러 주세요.');
+      }
     } finally {
       setPreparingOnepayInvoiceId(null);
     }
