@@ -54,6 +54,7 @@ type PaymentGroup = {
 };
 
 type PreparedInvoice = {
+  paymentIds: string[];
   customerName: string;
   customerEmail: string;
   reference: string;
@@ -98,6 +99,18 @@ const formatDateTime = (value?: string | null) => value
   ? new Intl.DateTimeFormat('ko-KR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
   : '-';
 
+const isValidOnepayInvoiceUrl = (value: string) => {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:'
+      && url.hostname === 'onepay.vn'
+      && url.pathname === '/invoice-pay/payment.op'
+      && Boolean(url.searchParams.get('i'));
+  } catch {
+    return false;
+  }
+};
+
 const copyText = async (value: string) => {
   if (navigator.clipboard?.writeText) {
     await navigator.clipboard.writeText(value);
@@ -123,6 +136,7 @@ export default function MobilePaymentProcessingPage() {
   const [expiryHours, setExpiryHours] = useState(DEFAULT_EXPIRY_HOURS);
   const [workingGroup, setWorkingGroup] = useState('');
   const [preparedInvoice, setPreparedInvoice] = useState<PreparedInvoice | null>(null);
+  const [manualPaymentUrl, setManualPaymentUrl] = useState('');
 
   const loadPayments = async () => {
     setLoading(true);
@@ -280,8 +294,11 @@ export default function MobilePaymentProcessingPage() {
       .select('id,onepay_invoice_reference,onepay_invoice_expires_at')
       .in('id', paymentIds);
     if (readError) throw readError;
+    // timestamptz는 Z/+00:00 표기나 초 단위 정밀도가 달라질 수 있어 시각값으로 비교한다
+    const expectedExpiresAtMs = new Date(invoice.expiresAt).getTime();
     if (!saved || saved.length !== paymentIds.length || saved.some((row: any) => (
-      row.onepay_invoice_reference !== invoice.reference || row.onepay_invoice_expires_at !== invoice.expiresAt
+      row.onepay_invoice_reference !== invoice.reference
+      || new Date(row.onepay_invoice_expires_at).getTime() !== expectedExpiresAtMs
     ))) throw new Error('saved_invoice_mismatch');
   };
 
@@ -305,6 +322,7 @@ export default function MobilePaymentProcessingPage() {
       const createdAt = new Date().toISOString();
       const expiresAt = new Date(Date.now() + expiryHours * 60 * 60 * 1000).toISOString();
       const invoice: PreparedInvoice = {
+        paymentIds: group.pendingPayments.map((payment) => payment.id),
         customerName,
         customerEmail,
         reference: buildInvoiceReference(cruise.englishName, customerEnglishName, checkin.compact),
@@ -313,6 +331,7 @@ export default function MobilePaymentProcessingPage() {
         expiresAt,
       };
       await savePreparedInvoice(group, invoice, createdAt);
+      setManualPaymentUrl('');
       setPreparedInvoice(invoice);
       await loadPayments();
     } catch (prepareError) {
@@ -392,6 +411,52 @@ export default function MobilePaymentProcessingPage() {
       `만료일: ${formatDateTime(preparedInvoice.expiresAt)}`,
     ].join('\n'));
     alert('송장 정보를 모두 복사했습니다.');
+  };
+
+  const saveManualPaymentUrl = async () => {
+    if (!preparedInvoice) return;
+    const paymentUrl = manualPaymentUrl.trim();
+    if (!isValidOnepayInvoiceUrl(paymentUrl)) {
+      alert('OnePay에서 발급된 올바른 결제 링크를 입력해 주세요.');
+      return;
+    }
+    try {
+      const updatedAt = new Date().toISOString();
+      const targetPayments = payments.filter((payment) => preparedInvoice.paymentIds.includes(payment.id));
+      const results = await Promise.all(targetPayments.map((payment) => supabase
+        .from('reservation_payment')
+        .update({
+          gateway: 'onepay',
+          onepay_invoice_reference: preparedInvoice.reference,
+          raw_response: {
+            ...(payment.raw_response && typeof payment.raw_response === 'object' ? payment.raw_response : {}),
+            invoice_payment_url: paymentUrl,
+            invoice_reference: preparedInvoice.reference,
+            invoice_link_updated_at: updatedAt,
+          },
+          updated_at: updatedAt,
+        })
+        .eq('id', payment.id)));
+      const failed = results.find((result) => result.error);
+      if (failed?.error) throw failed.error;
+
+      const { data: saved, error: readError } = await supabase
+        .from('reservation_payment')
+        .select('id,raw_response')
+        .in('id', preparedInvoice.paymentIds);
+      if (readError) throw readError;
+      if (!saved || saved.length !== preparedInvoice.paymentIds.length || saved.some((row: any) => row.raw_response?.invoice_payment_url !== paymentUrl)) {
+        throw new Error('saved_payment_url_mismatch');
+      }
+      await copyText(paymentUrl);
+      setPreparedInvoice(null);
+      setManualPaymentUrl('');
+      await loadPayments();
+      alert('결제 링크를 저장하고 클립보드에 복사했습니다.');
+    } catch (saveError) {
+      console.error('모바일 OnePay 결제 링크 저장 실패:', saveError);
+      alert('결제 링크를 저장하지 못했습니다. 다시 시도해 주세요.');
+    }
   };
 
   return (
@@ -524,7 +589,7 @@ export default function MobilePaymentProcessingPage() {
                 <h2 className="text-lg font-bold text-slate-900">송장 정보 준비 완료</h2>
                 <p className="text-xs text-slate-500">아래 내용을 OnePay 송장 생성 화면에 입력하세요.</p>
               </div>
-              <button type="button" onClick={() => setPreparedInvoice(null)} aria-label="닫기" className="rounded-full bg-slate-100 p-2"><X className="h-4 w-4" /></button>
+              <button type="button" onClick={() => { setPreparedInvoice(null); setManualPaymentUrl(''); }} aria-label="닫기" className="rounded-full bg-slate-100 p-2"><X className="h-4 w-4" /></button>
             </div>
             <dl className="mt-4 space-y-3 text-sm">
               {[
@@ -547,6 +612,20 @@ export default function MobilePaymentProcessingPage() {
               </button>
               <button type="button" onClick={() => window.open(ONEPAY_INVOICE_CREATE_URL, '_blank', 'noopener,noreferrer')} className="rounded-xl bg-blue-600 px-3 py-3 text-sm font-semibold text-white">
                 <CreditCard className="mr-1 inline h-4 w-4" />OnePay 열기
+              </button>
+            </div>
+            <div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 p-3">
+              <label htmlFor="onepay-payment-url" className="text-xs font-semibold text-blue-900">OnePay 발행 후 결제 링크 붙여넣기</label>
+              <input
+                id="onepay-payment-url"
+                type="url"
+                value={manualPaymentUrl}
+                onChange={(event) => setManualPaymentUrl(event.target.value)}
+                placeholder="https://onepay.vn/invoice-pay/payment.op?i=..."
+                className="mt-2 w-full rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm"
+              />
+              <button type="button" onClick={() => void saveManualPaymentUrl()} className="mt-2 w-full rounded-xl bg-blue-700 px-3 py-2.5 text-sm font-semibold text-white">
+                링크 저장하고 복사
               </button>
             </div>
           </div>
