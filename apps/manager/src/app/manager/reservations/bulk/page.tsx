@@ -163,6 +163,7 @@ function BulkReservationContent() {
     const [homepageQuotePreview, setHomepageQuotePreview] = useState<HomepageCartQuoteDetail | null>(null);
     const [homepageQuoteLoading, setHomepageQuoteLoading] = useState(false);
     const [homepageQuoteError, setHomepageQuoteError] = useState<string | null>(null);
+    const [completedPaymentReservationIds, setCompletedPaymentReservationIds] = useState<Set<string>>(new Set());
 
     const totalServiceCount = useMemo(
         () => reservations.reduce((sum, r) => sum + r.services.length, 0),
@@ -187,6 +188,46 @@ function BulkReservationContent() {
     useEffect(() => {
         loadReservations();
     }, [filter, serviceFilter, searchTrigger, sortType]);
+
+    useEffect(() => {
+        let cancelled = false;
+        const reservationIds = Array.from(new Set(reservations.flatMap((reservation) => (
+            reservation.services.map((service) => service.re_id)
+        ))));
+        if (reservationIds.length === 0) {
+            setCompletedPaymentReservationIds(new Set());
+            return;
+        }
+
+        const loadCompletedPayments = async () => {
+            try {
+                const chunks: string[][] = [];
+                for (let index = 0; index < reservationIds.length; index += 100) {
+                    chunks.push(reservationIds.slice(index, index + 100));
+                }
+                const results = await Promise.all(chunks.map((chunk) => supabase
+                    .from('reservation_payment')
+                    .select('reservation_id')
+                    .in('reservation_id', chunk)
+                    .eq('payment_status', 'completed')));
+                const failed = results.find((result) => result.error);
+                if (failed?.error) throw failed.error;
+                if (!cancelled) {
+                    setCompletedPaymentReservationIds(new Set(results.flatMap((result) => (
+                        (result.data || []).map((payment: any) => String(payment.reservation_id || '')).filter(Boolean)
+                    ))));
+                }
+            } catch (paymentError) {
+                console.error('결제완료 상태 조회 실패:', paymentError);
+                if (!cancelled) setCompletedPaymentReservationIds(new Set());
+            }
+        };
+
+        void loadCompletedPayments();
+        return () => {
+            cancelled = true;
+        };
+    }, [reservations]);
 
     useEffect(() => {
         let cancelled = false;
@@ -2259,6 +2300,12 @@ function BulkReservationContent() {
                                                                                         <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] ${getStatusColor(service.re_status)}`}>
                                                                                             {getStatusText(service.re_status)}
                                                                                         </span>
+                                                                                        {completedPaymentReservationIds.has(service.re_id) && (
+                                                                                            <span className="inline-flex items-center gap-0.5 rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 whitespace-nowrap">
+                                                                                                <CheckCircle className="h-3 w-3" />
+                                                                                                결제완료
+                                                                                            </span>
+                                                                                        )}
                                                                                     </span>
                                                                                 ))}
                                                                             </div>

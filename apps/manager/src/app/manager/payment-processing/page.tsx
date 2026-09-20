@@ -94,6 +94,7 @@ const debugLog = (...args: any[]) => {
 };
 
 const ONEPAY_INVOICE_LOGIN_URL = 'https://onepay.vn/auth-invoice/realms/invoice/protocol/openid-connect/auth?client_id=invoice-client&redirect_uri=https://onepay.vn/invoice/welcome.op&response_type=code&scope=openid%20profile%20email';
+const ONEPAY_INVOICE_TRANSACTION_URL = 'https://onepay.vn/invoice/transaction-management-2.op';
 const ONEPAY_AUTOFILL_EXTENSION_ID = 'kihedaabidghjlkcpbmkjalmppbfjidm';
 
 const sendOnepayAutofillPayload = (payload: Record<string, unknown>) => new Promise<void>((resolve, reject) => {
@@ -147,6 +148,10 @@ const getOnepayInvoiceReference = (group: any, targetPayments: any[]) => {
   return `SHT-${source.slice(0, 30)}`;
 };
 
+const getStoredOnepayInvoiceReference = (group: any) => String(
+  group.payments.find((payment: any) => payment.raw_response?.invoice_reference)?.raw_response?.invoice_reference || '',
+).trim();
+
 const isValidOnepayInvoiceUrl = (value: string) => {
   try {
     const url = new URL(value);
@@ -170,7 +175,6 @@ export default function ManagerPaymentsPage() {
   const [selectedPayments, setSelectedPayments] = useState<Set<string>>(new Set());
   const [generating, setGenerating] = useState(false);
   const [bulkCompleting, setBulkCompleting] = useState(false);
-  const [publishingPaymentRequestId, setPublishingPaymentRequestId] = useState<string | null>(null);
   const [preparingOnepayInvoiceId, setPreparingOnepayInvoiceId] = useState<string | null>(null);
   const [copyingOnepayLinkId, setCopyingOnepayLinkId] = useState<string | null>(null);
   // 페이지네이션 상태
@@ -2074,72 +2078,64 @@ export default function ManagerPaymentsPage() {
       : group.payments.filter((p: any) => p.payment_status === 'pending');
   };
 
-  const publishGroupPaymentRequest = async (group: any) => {
-    const targetPayments = getGroupTargetPayments(group);
-    if (targetPayments.length === 0) {
-      alert('결제 대기 중인 항목이 없습니다.');
-      return;
-    }
+  const saveGroupPaymentRequest = async (
+    targetPayments: any[],
+    paymentRequestId: string,
+    customerName: string,
+    customerEmail: string,
+    totalAmount: number,
+    reference: string,
+  ) => {
+    const updatedAt = new Date().toISOString();
+    const paymentIds = targetPayments.map((payment: any) => payment.id);
+    const results = await Promise.all(targetPayments.map((payment: any) => {
+      const rawResponse = payment.raw_response && typeof payment.raw_response === 'object'
+        ? { ...payment.raw_response }
+        : {};
+      delete rawResponse.invoice_payment_url;
+      delete rawResponse.invoice_link_updated_at;
 
-    const paymentRequestId = targetPayments[0]?.id;
-    const customerName = String(group.user?.name || '').trim();
-    const customerEmail = String(group.user?.email || '').trim();
-    const totalAmount = targetPayments.reduce((sum: number, payment: any) => sum + getPreferredAmount(payment), 0);
-    if (!customerName || !paymentRequestId || totalAmount <= 0) {
-      alert('고객명과 결제 금액을 확인할 수 없습니다.');
-      return;
-    }
-
-    setPublishingPaymentRequestId(group.quoteId);
-    try {
-      const updatedAt = new Date().toISOString();
-      const paymentIds = targetPayments.map((payment: any) => payment.id);
-      const results = await Promise.all(targetPayments.map((payment: any) => {
-        const rawResponse = payment.raw_response && typeof payment.raw_response === 'object'
-          ? { ...payment.raw_response }
-          : {};
-        delete rawResponse.invoice_payment_url;
-        delete rawResponse.invoice_reference;
-        delete rawResponse.invoice_link_updated_at;
-
-        return supabase
-          .from('reservation_payment')
-          .update({
-            amount: getPreferredAmount(payment),
-            gateway: 'onepay',
-            raw_response: {
-              ...rawResponse,
-              onepay_payment_request: {
-                id: paymentRequestId,
-                customer_name: customerName,
-                customer_email: customerEmail,
-                total_amount: totalAmount,
-                payment_ids: paymentIds,
-                requested_at: updatedAt,
-              },
+      return supabase
+        .from('reservation_payment')
+        .update({
+          amount: getPreferredAmount(payment),
+          gateway: 'onepay',
+          raw_response: {
+            ...rawResponse,
+            invoice_reference: reference,
+            onepay_payment_request: {
+              id: paymentRequestId,
+              customer_name: customerName,
+              customer_email: customerEmail,
+              total_amount: totalAmount,
+              payment_ids: paymentIds,
+              requested_at: updatedAt,
             },
-            updated_at: updatedAt,
-          })
-          .eq('id', payment.id)
-          .select('id,amount,gateway,raw_response,updated_at')
-          .maybeSingle();
-      }));
-      const failed = results.find((result) => result.error || !result.data);
-      if (failed) {
-        throw failed.error || new Error('결제 요청 저장 결과를 확인하지 못했습니다.');
-      }
+          },
+          updated_at: updatedAt,
+        })
+        .eq('id', payment.id);
+    }));
+    const failed = results.find((result) => result.error);
+    if (failed?.error) throw failed.error;
 
-      const savedById = new Map(results.map((result) => [result.data!.id, result.data!]));
-      setPayments((current) => current.map((payment: any) => targetPayments.some((target: any) => target.id === payment.id)
-        ? { ...payment, ...savedById.get(payment.id) }
-        : payment));
-      alert(`${customerName}님의 결제 요청 ${totalAmount.toLocaleString()}동을 고객 앱에 등록했습니다.`);
-    } catch (e) {
-      console.error('고객 결제 요청 등록 실패:', e);
-      alert('고객 결제 요청을 저장하지 못했습니다.');
-    } finally {
-      setPublishingPaymentRequestId(null);
+    const { data: savedPayments, error: readError } = await supabase
+      .from('reservation_payment')
+      .select('id,amount,gateway,raw_response,updated_at')
+      .in('id', paymentIds);
+    if (readError) throw readError;
+    if (!savedPayments || savedPayments.length !== paymentIds.length || savedPayments.some((payment: any) => (
+      payment.gateway !== 'onepay'
+      || payment.raw_response?.invoice_reference !== reference
+      || payment.raw_response?.onepay_payment_request?.id !== paymentRequestId
+    ))) {
+      throw new Error('saved_payment_request_mismatch');
     }
+
+    const savedById = new Map<string, any>(savedPayments.map((payment: any) => [payment.id, payment]));
+    setPayments((current) => current.map((payment: any) => savedById.has(payment.id)
+      ? { ...payment, ...savedById.get(payment.id) }
+      : payment));
   };
 
   const prepareOnepayInvoice = async (group: any) => {
@@ -2153,7 +2149,9 @@ export default function ManagerPaymentsPage() {
     const customerEmail = String(group.user?.email || '').trim();
     const customerPhone = String(group.user?.phone_number || '').trim();
     const totalAmount = targetPayments.reduce((sum: number, payment: any) => sum + getPreferredAmount(payment), 0);
-    if (!customerName || totalAmount <= 0) {
+    const paymentRequestId = String(targetPayments[0]?.id || '');
+    const reference = getOnepayInvoiceReference(group, targetPayments);
+    if (!customerName || !paymentRequestId || totalAmount <= 0) {
       alert('고객명과 결제 금액을 확인할 수 없습니다.');
       return;
     }
@@ -2176,10 +2174,24 @@ export default function ManagerPaymentsPage() {
         customerPhone,
         amount: totalAmount,
         currency: 'VND',
-        reference: getOnepayInvoiceReference(group, targetPayments),
+        reference,
         description: `${group.quoteTitle || 'Stay Halong 예약'} - ${serviceLabels.join(', ')}`,
       });
-      alert(`${customerName}님의 ${totalAmount.toLocaleString()}동 데이터를 준비했습니다. OnePay 로그인 후 인보이스 신규 작성 화면으로 이동해 주세요.`);
+      try {
+        await saveGroupPaymentRequest(
+          targetPayments,
+          paymentRequestId,
+          customerName,
+          customerEmail,
+          totalAmount,
+          reference,
+        );
+      } catch (error) {
+        console.error('고객 결제 요청 등록 실패:', error);
+        alert('OnePay 송장 데이터는 준비했지만 고객 결제 요청을 저장하지 못했습니다. 다시 시도해 주세요.');
+        return;
+      }
+      alert(`${customerName}님의 ${totalAmount.toLocaleString()}동 송장 데이터와 고객 결제 요청을 준비했습니다. OnePay에서 내용을 확인한 뒤 송장을 발행해 주세요.`);
     } catch (error) {
       console.error('OnePay 인보이스 자동입력 준비 실패:', error);
       alert('OnePay 자동입력 확장 기능이 설치되어 있지 않거나 응답하지 않습니다. 확장 기능을 설치한 뒤 다시 눌러 주세요.');
@@ -2581,7 +2593,7 @@ export default function ManagerPaymentsPage() {
                               onClick={() => prepareOnepayInvoice(group)}
                               className="px-3 py-1.5 bg-orange-600 text-white rounded-lg text-xs font-bold hover:bg-orange-700 disabled:bg-gray-300 shadow-sm transition-all"
                             >
-                              {preparingOnepayInvoiceId === group.quoteId ? 'OnePay 준비 중...' : 'OnePay 자동입력'}
+                              {preparingOnepayInvoiceId === group.quoteId ? '송장 준비 중...' : '송장 생성'}
                             </button>
                             <button
                               disabled={!!copyingOnepayLinkId}
@@ -2590,13 +2602,24 @@ export default function ManagerPaymentsPage() {
                             >
                               {copyingOnepayLinkId === group.quoteId ? '링크 확인 중...' : '링크 복사'}
                             </button>
-                            <button
-                              disabled={!!publishingPaymentRequestId}
-                              onClick={() => publishGroupPaymentRequest(group)}
-                              className="px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-bold hover:bg-green-700 disabled:bg-gray-300 shadow-sm transition-all"
+                          </div>
+                        )}
+                        {getStoredOnepayInvoiceReference(group) && (
+                          <div className="flex flex-col items-end gap-0.5">
+                            <a
+                              href={ONEPAY_INVOICE_TRANSACTION_URL}
+                              target="_blank"
+                              rel="noreferrer"
+                              onClick={() => {
+                                void navigator.clipboard?.writeText(getStoredOnepayInvoiceReference(group)).catch(() => undefined);
+                              }}
+                              className="px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-bold border border-emerald-200 hover:bg-emerald-100 transition-colors"
                             >
-                              {publishingPaymentRequestId === group.quoteId ? '결제창 등록 중...' : '고객 결제창 등록'}
-                            </button>
+                              OnePay 결제 확인
+                            </a>
+                            <span className="max-w-48 truncate text-[10px] text-gray-500" title={getStoredOnepayInvoiceReference(group)}>
+                              송장 {getStoredOnepayInvoiceReference(group)}
+                            </span>
                           </div>
                         )}
                       </div>
