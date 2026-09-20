@@ -2,10 +2,12 @@
 
 const PAYLOAD_STORAGE_KEY = 'sht_onepay_invoice_payload';
 const LINK_STORAGE_KEY = 'sht_onepay_invoice_link';
+const STATUS_LOOKUP_STORAGE_KEY = 'sht_onepay_status_lookup';
 const PREPARE_MESSAGE_TYPE = 'SHT_ONEPAY_INVOICE_PREPARE';
 const GET_LINK_MESSAGE_TYPE = 'SHT_ONEPAY_INVOICE_GET_LINK';
+const STATUS_LOOKUP_MESSAGE_TYPE = 'SHT_ONEPAY_INVOICE_STATUS_LOOKUP';
 const STATUS_MESSAGE_TYPE = 'SHT_ONEPAY_EXTENSION_STATUS';
-const EXTENSION_VERSION = '1.2.0';
+const EXTENSION_VERSION = '1.3.0';
 const ALLOWED_ORIGINS = new Set([
   'https://manager.stayhalong.com',
   'https://manag.stayhalong.com',
@@ -19,6 +21,11 @@ const isValidPayload = (payload) => {
   if (typeof payload.customerName !== 'string' || !payload.customerName.trim()) return false;
   if (!Number.isFinite(payload.amount) || payload.amount <= 0) return false;
   if (payload.amount > 999999999999) return false;
+  if (!String(payload.reference || '').trim()) return false;
+  const invoiceExpiresAt = Date.parse(String(payload.invoiceExpiresAt || ''));
+  const expiryHours = Number(payload.invoiceExpiryHours);
+  if (!Number.isFinite(invoiceExpiresAt) || invoiceExpiresAt <= Date.now()) return false;
+  if (!Number.isInteger(expiryHours) || expiryHours < 1 || expiryHours > 8760) return false;
   return true;
 };
 
@@ -76,6 +83,25 @@ chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => 
     return true;
   }
 
+  if (message?.type === STATUS_LOOKUP_MESSAGE_TYPE) {
+    const reference = String(message.reference || '').trim().slice(0, 40);
+    if (!reference) {
+      sendResponse({ ok: false, error: 'invalid_reference' });
+      return false;
+    }
+
+    chrome.storage.local.set({
+      [STATUS_LOOKUP_STORAGE_KEY]: {
+        reference,
+        expiresAt: Date.now() + 10 * 60 * 1000,
+      },
+    }, () => {
+      const error = chrome.runtime.lastError;
+      sendResponse(error ? { ok: false, error: error.message } : { ok: true, version: EXTENSION_VERSION });
+    });
+    return true;
+  }
+
   if (message?.type !== PREPARE_MESSAGE_TYPE || !isValidPayload(message.payload)) {
     sendResponse({ ok: false, error: 'invalid_request' });
     return false;
@@ -90,6 +116,8 @@ chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => 
     currency: 'VND',
     reference: String(message.payload.reference || '').trim().slice(0, 40),
     description: String(message.payload.description || '').trim().slice(0, 500),
+    invoiceExpiresAt: String(message.payload.invoiceExpiresAt || '').trim(),
+    invoiceExpiryHours: Math.round(Number(message.payload.invoiceExpiryHours) || 0),
     preparedAt: now,
     expiresAt: now + MAX_AGE_MS,
   };

@@ -96,7 +96,9 @@ const debugLog = (...args: any[]) => {
 const ONEPAY_INVOICE_CREATE_URL = 'https://onepay.vn/invoice/create_order.op';
 const ONEPAY_INVOICE_TRANSACTION_URL = 'https://onepay.vn/invoice/transaction-management-2.op';
 const ONEPAY_AUTOFILL_EXTENSION_ID = 'kihedaabidghjlkcpbmkjalmppbfjidm';
-const MINIMUM_ONEPAY_EXTENSION_VERSION = [1, 2, 0];
+const MINIMUM_ONEPAY_EXTENSION_VERSION = [1, 3, 0];
+const ONEPAY_EXPIRY_HOURS_STORAGE_KEY = 'sht_onepay_invoice_expiry_hours';
+const DEFAULT_ONEPAY_EXPIRY_HOURS = 24;
 
 const supportsOnepayExtensionVersion = (value?: string) => {
   const parts = String(value || '').split('.').map((part) => Number(part));
@@ -182,8 +184,33 @@ const getOnepayInvoiceReference = (group: any, targetPayments: any[]) => {
 };
 
 const getStoredOnepayInvoiceReference = (group: any) => String(
-  group.payments.find((payment: any) => payment.raw_response?.invoice_reference)?.raw_response?.invoice_reference || '',
+  group.payments.find((payment: any) => payment.onepay_invoice_reference)?.onepay_invoice_reference
+  || group.payments.find((payment: any) => payment.raw_response?.invoice_reference)?.raw_response?.invoice_reference
+  || '',
 ).trim();
+
+const sendOnepayStatusLookup = (reference: string) => new Promise<void>((resolve, reject) => {
+  const runtime = (window as any)?.chrome?.runtime;
+  if (!runtime?.sendMessage) {
+    reject(new Error('extension_not_found'));
+    return;
+  }
+
+  const timer = window.setTimeout(() => reject(new Error('extension_timeout')), 5000);
+  runtime.sendMessage(
+    ONEPAY_AUTOFILL_EXTENSION_ID,
+    { type: 'SHT_ONEPAY_INVOICE_STATUS_LOOKUP', reference },
+    (response: { ok?: boolean; error?: string; version?: string } | undefined) => {
+      window.clearTimeout(timer);
+      const errorMessage = runtime.lastError?.message || response?.error;
+      if (errorMessage || !response?.ok || !supportsOnepayExtensionVersion(response.version)) {
+        reject(new Error(errorMessage === 'invalid_request' ? 'extension_outdated' : (errorMessage || 'extension_outdated')));
+        return;
+      }
+      resolve();
+    },
+  );
+});
 
 const isValidOnepayInvoiceUrl = (value: string) => {
   try {
@@ -210,6 +237,7 @@ export default function ManagerPaymentsPage() {
   const [bulkCompleting, setBulkCompleting] = useState(false);
   const [preparingOnepayInvoiceId, setPreparingOnepayInvoiceId] = useState<string | null>(null);
   const [copyingOnepayLinkId, setCopyingOnepayLinkId] = useState<string | null>(null);
+  const [invoiceExpiryHours, setInvoiceExpiryHours] = useState(DEFAULT_ONEPAY_EXPIRY_HOURS);
   // 페이지네이션 상태
   const PAGE_SIZE = 50;
   const [hasMore, setHasMore] = useState(true);
@@ -221,6 +249,13 @@ export default function ManagerPaymentsPage() {
     zeroAmountCount: 0
   });
   const ticketPriceCacheRef = useRef<TicketPriceOption[] | null>(null);
+
+  useEffect(() => {
+    const savedHours = Number(window.localStorage.getItem(ONEPAY_EXPIRY_HOURS_STORAGE_KEY));
+    if (Number.isInteger(savedHours) && savedHours >= 1 && savedHours <= 8760) {
+      setInvoiceExpiryHours(savedHours);
+    }
+  }, []);
 
   const resolveVehicleQuantity = (row: any, unitPrice = 0) => {
     const carCount = Number(row?.car_count) || 0;
@@ -2118,6 +2153,10 @@ export default function ManagerPaymentsPage() {
     customerEmail: string,
     totalAmount: number,
     reference: string,
+    description: string,
+    invoiceCreatedAt: string,
+    invoiceExpiresAt: string,
+    expiryHours: number,
   ) => {
     const updatedAt = new Date().toISOString();
     const paymentIds = targetPayments.map((payment: any) => payment.id);
@@ -2133,15 +2172,23 @@ export default function ManagerPaymentsPage() {
         .update({
           amount: getPreferredAmount(payment),
           gateway: 'onepay',
+          onepay_invoice_reference: reference,
+          onepay_invoice_created_at: invoiceCreatedAt,
+          onepay_invoice_expires_at: invoiceExpiresAt,
+          onepay_invoice_expiry_hours: expiryHours,
           raw_response: {
             ...rawResponse,
             invoice_reference: reference,
+            invoice_created_at: invoiceCreatedAt,
+            invoice_expires_at: invoiceExpiresAt,
+            invoice_expiry_hours: expiryHours,
             onepay_payment_request: {
               id: paymentRequestId,
               customer_name: customerName,
               customer_email: customerEmail,
               total_amount: totalAmount,
               payment_ids: paymentIds,
+              description,
               requested_at: updatedAt,
             },
           },
@@ -2154,11 +2201,15 @@ export default function ManagerPaymentsPage() {
 
     const { data: savedPayments, error: readError } = await supabase
       .from('reservation_payment')
-      .select('id,amount,gateway,raw_response,updated_at')
+      .select('id,amount,gateway,raw_response,onepay_invoice_reference,onepay_invoice_created_at,onepay_invoice_expires_at,onepay_invoice_expiry_hours,updated_at')
       .in('id', paymentIds);
     if (readError) throw readError;
     if (!savedPayments || savedPayments.length !== paymentIds.length || savedPayments.some((payment: any) => (
       payment.gateway !== 'onepay'
+      || payment.onepay_invoice_reference !== reference
+      || new Date(payment.onepay_invoice_created_at).getTime() !== new Date(invoiceCreatedAt).getTime()
+      || new Date(payment.onepay_invoice_expires_at).getTime() !== new Date(invoiceExpiresAt).getTime()
+      || payment.onepay_invoice_expiry_hours !== expiryHours
       || payment.raw_response?.invoice_reference !== reference
       || payment.raw_response?.onepay_payment_request?.id !== paymentRequestId
     ))) {
@@ -2184,6 +2235,8 @@ export default function ManagerPaymentsPage() {
     const totalAmount = targetPayments.reduce((sum: number, payment: any) => sum + getPreferredAmount(payment), 0);
     const paymentRequestId = String(targetPayments[0]?.id || '');
     const reference = getOnepayInvoiceReference(group, targetPayments);
+    const invoiceCreatedAt = new Date();
+    const invoiceExpiresAt = new Date(invoiceCreatedAt.getTime() + invoiceExpiryHours * 60 * 60 * 1000);
     if (!customerName || !paymentRequestId || totalAmount <= 0) {
       alert('고객명과 결제 금액을 확인할 수 없습니다.');
       return;
@@ -2198,9 +2251,27 @@ export default function ManagerPaymentsPage() {
 
     setPreparingOnepayInvoiceId(group.quoteId);
     try {
-      const serviceLabels = Array.from(new Set(targetPayments.map((payment: any) => (
-        getReservationServiceLabel(payment.reservation?.re_type || payment.re_type)
-      ))));
+      const reservationDetails = targetPayments.map((payment: any) => {
+        const serviceLabel = getReservationServiceLabel(payment.reservation?.re_type || payment.re_type);
+        return `${serviceLabel} ${String(payment.reservation_id || '').trim()}`.trim();
+      });
+      const serviceDetails = Array.from(new Set(targetPayments.flatMap((payment: any) => {
+        const services = Array.isArray(payment.serviceData?.services) ? payment.serviceData.services : [];
+        if (services.length === 0) {
+          return [getReservationServiceLabel(payment.reservation?.re_type || payment.re_type)];
+        }
+        return services.map((service: any) => {
+          const quantity = Number(service.quantity) > 0
+            ? ` ${service.quantity}${formatQuantityUnit(service.quantityUnit)}`
+            : '';
+          return `${String(service.type || '').trim()}${quantity}`.trim();
+        });
+      })));
+      const description = [
+        `견적 ID: ${group.hasQuote ? group.quoteId : '없음'}`,
+        `예약정보: ${reservationDetails.join(', ')}`,
+        `서비스 내역: ${serviceDetails.join(', ')}`,
+      ].join('\n').slice(0, 500);
       await sendOnepayAutofillPayload({
         customerName,
         customerEmail,
@@ -2208,7 +2279,9 @@ export default function ManagerPaymentsPage() {
         amount: totalAmount,
         currency: 'VND',
         reference,
-        description: `${group.quoteTitle || 'Stay Halong 예약'} - ${serviceLabels.join(', ')}`,
+        description,
+        invoiceExpiresAt: invoiceExpiresAt.toISOString(),
+        invoiceExpiryHours,
       });
       try {
         await saveGroupPaymentRequest(
@@ -2218,6 +2291,10 @@ export default function ManagerPaymentsPage() {
           customerEmail,
           totalAmount,
           reference,
+          description,
+          invoiceCreatedAt.toISOString(),
+          invoiceExpiresAt.toISOString(),
+          invoiceExpiryHours,
         );
       } catch (error) {
         console.error('고객 결제 요청 등록 실패:', error);
@@ -2235,6 +2312,34 @@ export default function ManagerPaymentsPage() {
       }
     } finally {
       setPreparingOnepayInvoiceId(null);
+    }
+  };
+
+  const openOnepayPaymentStatus = async (group: any) => {
+    const reference = getStoredOnepayInvoiceReference(group);
+    if (!reference) {
+      alert('저장된 OnePay 송장 참조번호가 없습니다. 먼저 송장을 생성해 주세요.');
+      return;
+    }
+
+    const onepayWindow = window.open(ONEPAY_INVOICE_TRANSACTION_URL, '_blank');
+    if (!onepayWindow) {
+      alert('팝업이 차단되어 OnePay 결제 조회 화면을 열지 못했습니다. 이 사이트의 팝업을 허용해 주세요.');
+      return;
+    }
+    onepayWindow.opener = null;
+
+    try {
+      await sendOnepayStatusLookup(reference);
+    } catch (error) {
+      console.error('OnePay 송장 결제 조회 준비 실패:', error);
+      const reason = error instanceof Error ? error.message : '';
+      await navigator.clipboard?.writeText(reference).catch(() => undefined);
+      if (reason === 'extension_outdated') {
+        alert('설치된 OnePay 확장 기능이 이전 버전입니다. 확장 기능을 다시 로드하면 송장 참조번호가 자동 입력됩니다. 현재 참조번호는 클립보드에 복사했습니다.');
+      } else {
+        alert('OnePay 자동입력 확장 기능이 응답하지 않아 송장 참조번호를 클립보드에 복사했습니다. 열린 조회 화면에 붙여 넣어 주세요.');
+      }
     }
   };
 
@@ -2263,6 +2368,7 @@ export default function ManagerPaymentsPage() {
           .from('reservation_payment')
           .update({
             gateway: 'onepay',
+            onepay_invoice_reference: reference,
             raw_response: {
               ...rawResponse,
               invoice_payment_url: paymentUrl,
@@ -2278,12 +2384,13 @@ export default function ManagerPaymentsPage() {
 
       const { data: savedPayments, error: readError } = await supabase
         .from('reservation_payment')
-        .select('id,gateway,raw_response,updated_at')
+        .select('id,gateway,raw_response,onepay_invoice_reference,updated_at')
         .in('id', paymentIds);
       if (readError) throw readError;
       if (!savedPayments || savedPayments.length !== paymentIds.length || savedPayments.some((payment: any) => (
         payment.raw_response?.invoice_payment_url !== paymentUrl
         || payment.raw_response?.invoice_reference !== reference
+        || payment.onepay_invoice_reference !== reference
       ))) {
         throw new Error('saved_link_mismatch');
       }
@@ -2478,6 +2585,24 @@ export default function ManagerPaymentsPage() {
                 </button>
               ))}
             </div>
+            <label className="flex items-center gap-2 rounded border border-orange-200 bg-orange-50 px-3 py-2 text-sm text-orange-900">
+              <span className="font-bold whitespace-nowrap">청구서 만료시간</span>
+              <input
+                type="number"
+                min={1}
+                max={8760}
+                step={1}
+                value={invoiceExpiryHours}
+                onChange={(event) => {
+                  const nextHours = Math.min(8760, Math.max(1, Number.parseInt(event.target.value, 10) || 1));
+                  setInvoiceExpiryHours(nextHours);
+                  window.localStorage.setItem(ONEPAY_EXPIRY_HOURS_STORAGE_KEY, String(nextHours));
+                }}
+                className="w-20 rounded border border-orange-300 bg-white px-2 py-1 text-right font-bold text-gray-900 focus:border-orange-500 focus:outline-none"
+                aria-label="OnePay 청구서 만료시간"
+              />
+              <span className="whitespace-nowrap">시간 후</span>
+            </label>
             <div className="flex items-center">
               <button
                 onClick={generatePaymentRecords}
@@ -2644,17 +2769,13 @@ export default function ManagerPaymentsPage() {
                         )}
                         {getStoredOnepayInvoiceReference(group) && (
                           <div className="flex flex-col items-end gap-0.5">
-                            <a
-                              href={ONEPAY_INVOICE_TRANSACTION_URL}
-                              target="_blank"
-                              rel="noreferrer"
-                              onClick={() => {
-                                void navigator.clipboard?.writeText(getStoredOnepayInvoiceReference(group)).catch(() => undefined);
-                              }}
+                            <button
+                              type="button"
+                              onClick={() => openOnepayPaymentStatus(group)}
                               className="px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-bold border border-emerald-200 hover:bg-emerald-100 transition-colors"
                             >
                               OnePay 결제 확인
-                            </a>
+                            </button>
                             <span className="max-w-48 truncate text-[10px] text-gray-500" title={getStoredOnepayInvoiceReference(group)}>
                               송장 {getStoredOnepayInvoiceReference(group)}
                             </span>

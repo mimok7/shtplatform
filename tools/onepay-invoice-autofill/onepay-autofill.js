@@ -3,12 +3,14 @@
 (() => {
   const PAYLOAD_STORAGE_KEY = 'sht_onepay_invoice_payload';
   const LINK_STORAGE_KEY = 'sht_onepay_invoice_link';
+  const STATUS_LOOKUP_STORAGE_KEY = 'sht_onepay_status_lookup';
   const PANEL_ID = 'sht-onepay-autofill-panel';
   const LOGIN_PATH = '/auth-invoice/';
   const RETRY_LIMIT = 30;
   const RETRY_DELAY_MS = 1000;
   const LOGIN_SUBMITTED_KEY = 'sht-onepay-login-submitted';
   const CREATE_OPENED_KEY = 'sht-onepay-create-opened';
+  const STATUS_SEARCHED_KEY = 'sht-onepay-status-searched';
 
   const normalize = (value) => String(value || '')
     .toLowerCase()
@@ -37,6 +39,22 @@
     } catch {
       return '';
     }
+  };
+
+  const formatOnepayExpiry = (value) => {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+      day: '2-digit',
+      month: '2-digit',
+      year: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    }).formatToParts(date);
+    const get = (type) => parts.find((part) => part.type === type)?.value || '';
+    return `${get('day')}/${get('month')}/${get('year')} ${get('hour')}:${get('minute')} ${get('dayPeriod')}`.trim();
   };
 
   const findPaymentUrl = () => {
@@ -188,6 +206,31 @@
     return true;
   };
 
+  const fillStatusLookup = async () => {
+    if (!/\/invoice\/transaction-management-2\.op$/i.test(location.pathname)) return false;
+
+    const stored = await chrome.storage.local.get(STATUS_LOOKUP_STORAGE_KEY);
+    const lookup = stored[STATUS_LOOKUP_STORAGE_KEY];
+    if (!lookup?.reference) return false;
+    if (!lookup.expiresAt || lookup.expiresAt < Date.now()) {
+      await chrome.storage.local.remove(STATUS_LOOKUP_STORAGE_KEY);
+      return false;
+    }
+
+    if (sessionStorage.getItem(STATUS_SEARCHED_KEY) === lookup.reference) {
+      await chrome.storage.local.remove(STATUS_LOOKUP_STORAGE_KEY);
+      return true;
+    }
+
+    const referenceInput = document.querySelector('#strOrderInfo, input[name="strOrderInfo"]');
+    const submit = document.querySelector('#btsubmit, button[type="submit"], input[type="submit"]');
+    if (!setControlValue(referenceInput, lookup.reference, true) || !(submit instanceof HTMLElement)) return false;
+
+    sessionStorage.setItem(STATUS_SEARCHED_KEY, lookup.reference);
+    submit.click();
+    return true;
+  };
+
   const renderPanel = (payload, message, status = 'ready') => {
     let host = document.getElementById(PANEL_ID);
     if (!host) {
@@ -218,6 +261,8 @@
   };
 
   const fillCurrentPage = async (manual = false) => {
+    if (await fillStatusLookup()) return true;
+
     const stored = await chrome.storage.local.get(PAYLOAD_STORAGE_KEY);
     const payload = stored[PAYLOAD_STORAGE_KEY];
     if (!payload) return false;
@@ -234,7 +279,7 @@
     const results = [];
     const usedControls = new Set();
     const fillExact = (key, selector, value) => {
-      const control = visibleControls().find((candidate) => candidate.matches(selector));
+      const control = document.querySelector(selector);
       if (setControlValue(control, value, true)) {
         usedControls.add(control);
         results.push(key);
@@ -260,6 +305,7 @@
     fillExact('전화번호', '#customerPhone', payload.customerPhone);
     fillExact('설명', '#orderNote', payload.description);
     fillExact('금액', '#strAmount', payload.amount);
+    fillExact('만료일', '#strEndDate', formatOnepayExpiry(payload.invoiceExpiresAt));
 
     fill('고객명', ['customer name', 'customername', 'customer_name', 'full name', 'customer full name', 'ten khach hang', 'ho ten'], payload.customerName);
     fill('이메일', ['customer email', 'customeremail', 'customer_email', 'email address', 'email'], payload.customerEmail);
