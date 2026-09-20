@@ -18,6 +18,7 @@ import {
   LogOut,
   Home,
   Bell,
+  CreditCard,
   ShieldAlert,
   type LucideIcon,
 } from 'lucide-react';
@@ -39,6 +40,7 @@ type MenuItem = {
 const FAVORITES: MenuItem[] = [
   { href: '/schedule',              label: '예약일정', desc: '날짜별 예약 조회 (신규/기존)', icon: Calendar,      iconColor: 'text-blue-600',   bg: 'bg-blue-100' },
   { href: '/reservations',          label: '예약 처리',  desc: '예약 변경 및 일괄 처리',       icon: ClipboardList, iconColor: 'text-green-600',  bg: 'bg-green-100' },
+  { href: '/payment-processing',    label: '결제 처리',  desc: '송장 준비 / 결제 링크 관리',   icon: CreditCard,    iconColor: 'text-rose-600',   bg: 'bg-rose-100' },
   { href: '/confirmation',          label: '예약확인서', desc: '예약확인서 생성/미리보기',      icon: FileText,      iconColor: 'text-violet-600', bg: 'bg-violet-100' },
   { href: '/reservation-edit',      label: '예약 수정',  desc: '서비스별 상태 수정',            icon: ListChecks,    iconColor: 'text-amber-600',  bg: 'bg-amber-100' },
   { href: '/cruise-car-dates',      label: '크차 일자',  desc: '픽업/체크인 불일치 정리',       icon: CalendarDays,  iconColor: 'text-sky-600',   bg: 'bg-sky-100' },
