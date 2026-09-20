@@ -11,6 +11,8 @@
   const LOGIN_SUBMITTED_KEY = 'sht-onepay-login-submitted';
   const CREATE_OPENED_KEY = 'sht-onepay-create-opened';
   const STATUS_SEARCHED_KEY = 'sht-onepay-status-searched';
+  const STATUS_LOGIN_SUBMITTED_KEY = 'sht-onepay-status-login-submitted';
+  const TRANSACTION_MANAGEMENT_URL = 'https://onepay.vn/invoice/transaction-management-2.op';
 
   const normalize = (value) => String(value || '')
     .toLowerCase()
@@ -207,28 +209,47 @@
   };
 
   const fillStatusLookup = async () => {
-    if (!/\/invoice\/transaction-management-2\.op$/i.test(location.pathname)) return false;
-
     const stored = await chrome.storage.local.get(STATUS_LOOKUP_STORAGE_KEY);
     const lookup = stored[STATUS_LOOKUP_STORAGE_KEY];
-    if (!lookup?.reference) return false;
+    if (!lookup?.reference) return 'none';
     if (!lookup.expiresAt || lookup.expiresAt < Date.now()) {
       await chrome.storage.local.remove(STATUS_LOOKUP_STORAGE_KEY);
-      return false;
+      return 'none';
+    }
+
+    if (location.pathname.includes(LOGIN_PATH)) {
+      const username = document.querySelector('#username, input[name="username"]');
+      const password = document.querySelector('#password, input[name="password"]');
+      const submit = document.querySelector('#kc-login, button[type="submit"], input[type="submit"]');
+      const alreadySubmitted = sessionStorage.getItem(STATUS_LOGIN_SUBMITTED_KEY) === lookup.reference;
+      if (!alreadySubmitted && username?.value && password?.value && submit instanceof HTMLElement) {
+        sessionStorage.setItem(STATUS_LOGIN_SUBMITTED_KEY, lookup.reference);
+        submit.click();
+        return 'handled';
+      }
+      return 'pending';
+    }
+
+    if (!/\/invoice\/transaction-management-2\.op$/i.test(location.pathname)) {
+      if (location.pathname.startsWith('/invoice/')) {
+        location.href = TRANSACTION_MANAGEMENT_URL;
+        return 'handled';
+      }
+      return 'pending';
     }
 
     if (sessionStorage.getItem(STATUS_SEARCHED_KEY) === lookup.reference) {
       await chrome.storage.local.remove(STATUS_LOOKUP_STORAGE_KEY);
-      return true;
+      return 'handled';
     }
 
     const referenceInput = document.querySelector('#strOrderInfo, input[name="strOrderInfo"]');
     const submit = document.querySelector('#btsubmit, button[type="submit"], input[type="submit"]');
-    if (!setControlValue(referenceInput, lookup.reference, true) || !(submit instanceof HTMLElement)) return false;
+    if (!setControlValue(referenceInput, lookup.reference, true) || !(submit instanceof HTMLElement)) return 'pending';
 
     sessionStorage.setItem(STATUS_SEARCHED_KEY, lookup.reference);
     submit.click();
-    return true;
+    return 'handled';
   };
 
   const renderPanel = (payload, message, status = 'ready') => {
@@ -261,7 +282,9 @@
   };
 
   const fillCurrentPage = async (manual = false) => {
-    if (await fillStatusLookup()) return true;
+    const statusLookupResult = await fillStatusLookup();
+    if (statusLookupResult === 'handled') return true;
+    if (statusLookupResult === 'pending') return false;
 
     const stored = await chrome.storage.local.get(PAYLOAD_STORAGE_KEY);
     const payload = stored[PAYLOAD_STORAGE_KEY];

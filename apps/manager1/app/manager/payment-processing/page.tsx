@@ -2324,7 +2324,7 @@ export default function ManagerPaymentsPage() {
       return;
     }
 
-    const onepayWindow = window.open(ONEPAY_INVOICE_TRANSACTION_URL, '_blank');
+    const onepayWindow = window.open('', '_blank');
     if (!onepayWindow) {
       alert('팝업이 차단되어 OnePay 결제 조회 화면을 열지 못했습니다. 이 사이트의 팝업을 허용해 주세요.');
       return;
@@ -2333,10 +2333,12 @@ export default function ManagerPaymentsPage() {
 
     try {
       await sendOnepayStatusLookup(reference);
+      onepayWindow.location.href = ONEPAY_INVOICE_TRANSACTION_URL;
     } catch (error) {
       console.error('OnePay 송장 결제 조회 준비 실패:', error);
       const reason = error instanceof Error ? error.message : '';
       await safeWriteClipboard(reference).catch(() => undefined);
+      onepayWindow.location.href = ONEPAY_INVOICE_TRANSACTION_URL;
       if (reason === 'extension_outdated') {
         alert('설치된 OnePay 확장 기능이 이전 버전입니다. 확장 기능을 다시 로드하면 송장 참조번호가 자동 입력됩니다. 현재 참조번호는 클립보드에 복사했습니다.');
       } else {
