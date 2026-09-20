@@ -7,7 +7,7 @@ const PREPARE_MESSAGE_TYPE = 'SHT_ONEPAY_INVOICE_PREPARE';
 const GET_LINK_MESSAGE_TYPE = 'SHT_ONEPAY_INVOICE_GET_LINK';
 const STATUS_LOOKUP_MESSAGE_TYPE = 'SHT_ONEPAY_INVOICE_STATUS_LOOKUP';
 const STATUS_MESSAGE_TYPE = 'SHT_ONEPAY_EXTENSION_STATUS';
-const EXTENSION_VERSION = '1.3.0';
+const EXTENSION_VERSION = '1.3.1';
 const ALLOWED_ORIGINS = new Set([
   'https://manager.stayhalong.com',
   'https://manag.stayhalong.com',
@@ -111,7 +111,6 @@ chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => 
   const stored = {
     customerName: String(message.payload.customerName).trim().slice(0, 120),
     customerEmail: String(message.payload.customerEmail || '').trim().slice(0, 180),
-    customerPhone: String(message.payload.customerPhone || '').trim().slice(0, 40),
     amount: Math.round(Number(message.payload.amount)),
     currency: 'VND',
     reference: String(message.payload.reference || '').trim().slice(0, 40),

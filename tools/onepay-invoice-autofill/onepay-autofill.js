@@ -325,14 +325,12 @@
     fillExact('참조번호', '#invoiceRef', payload.reference);
     fillExact('고객명', '#customerName', payload.customerName);
     fillExact('이메일', '#customerEmail', payload.customerEmail);
-    fillExact('전화번호', '#customerPhone', payload.customerPhone);
     fillExact('설명', '#orderNote', payload.description);
     fillExact('금액', '#strAmount', payload.amount);
     fillExact('만료일', '#strEndDate', formatOnepayExpiry(payload.invoiceExpiresAt));
 
     fill('고객명', ['customer name', 'customername', 'customer_name', 'full name', 'customer full name', 'ten khach hang', 'ho ten'], payload.customerName);
     fill('이메일', ['customer email', 'customeremail', 'customer_email', 'email address', 'email'], payload.customerEmail);
-    fill('전화번호', ['customer phone', 'customerphone', 'customer_phone', 'phone number', 'mobile', 'dien thoai'], payload.customerPhone);
     fill('인보이스 번호', ['invoice ref', 'invoice reference', 'invoice no', 'order ref', 'order reference', 'order info', 'invoice id', 'ma hoa don'], payload.reference);
     fill('통화', ['currency', 'currency code', 'loai tien'], payload.currency, [], (control) => control instanceof HTMLSelectElement);
     fill('설명', ['item description', 'item name', 'product name', 'service name', 'order description', 'description', 'noi dung'], payload.description, ['merchant description']);

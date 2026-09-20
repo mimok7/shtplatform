@@ -96,7 +96,7 @@ const debugLog = (...args: any[]) => {
 const ONEPAY_INVOICE_CREATE_URL = 'https://onepay.vn/invoice/create_order.op';
 const ONEPAY_INVOICE_TRANSACTION_URL = 'https://onepay.vn/invoice/transaction-management-2.op';
 const ONEPAY_AUTOFILL_EXTENSION_ID = 'kihedaabidghjlkcpbmkjalmppbfjidm';
-const MINIMUM_ONEPAY_EXTENSION_VERSION = [1, 3, 0];
+const MINIMUM_ONEPAY_EXTENSION_VERSION = [1, 3, 1];
 const ONEPAY_EXPIRY_HOURS_STORAGE_KEY = 'sht_onepay_invoice_expiry_hours';
 const DEFAULT_ONEPAY_EXPIRY_HOURS = 24;
 
@@ -178,9 +178,34 @@ const getOnepayCapturedLink = (reference: string) => new Promise<string>((resolv
   );
 });
 
-const getOnepayInvoiceReference = (group: any, targetPayments: any[]) => {
-  const source = String(group.quoteId || targetPayments[0]?.reservation_id || '').replace(/[^a-zA-Z0-9]/g, '');
-  return `SHT-${source.slice(0, 30)}`;
+const formatOnepayDateParts = (value: Date) => {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(value).reduce<Record<string, string>>((result, part) => {
+    result[part.type] = part.value;
+    return result;
+  }, {});
+  return { compact: `${parts.year}${parts.month}${parts.day}`, display: `${parts.year}.${parts.month}.${parts.day}.` };
+};
+
+const normalizeOnepayReferencePart = (value: string) => String(value || '')
+  .normalize('NFKD')
+  .replace(/[^a-zA-Z0-9]/g, '')
+  .toUpperCase();
+
+const buildOnepayInvoiceReference = (cruiseName: string, customerName: string, invoiceCreatedAt: Date) => {
+  const cruise = normalizeOnepayReferencePart(cruiseName);
+  const customer = normalizeOnepayReferencePart(customerName);
+  const date = formatOnepayDateParts(invoiceCreatedAt).compact;
+  const fullReference = `${cruise}${date}${customer}`;
+  if (fullReference.length <= 30) return fullReference;
+
+  const customerPart = customer.slice(0, 21);
+  const availableCruiseLength = Math.max(1, 30 - date.length - customerPart.length);
+  return `${cruise.slice(0, availableCruiseLength)}${date}${customerPart}`;
 };
 
 const getStoredOnepayInvoiceReference = (group: any) => String(
@@ -1046,7 +1071,7 @@ export default function ManagerPaymentsPage() {
       // 사용자 정보 매핑
       const userIds = Array.from(new Set(rows.map((r: any) => r.user_id).filter(Boolean)));
       const { data: users } = userIds.length > 0
-        ? await supabase.from('users').select('id, name, email, phone_number').in('id', userIds as string[])
+        ? await supabase.from('users').select('id, name, english_name, email, phone_number').in('id', userIds as string[])
         : { data: [] };
 
       const usersMap = new Map((users || []).map((u: any) => [u.id, u]));
@@ -1225,7 +1250,7 @@ export default function ManagerPaymentsPage() {
 
       const userIds = Array.from(new Set(rows.map((r: any) => r.user_id).filter(Boolean)));
       const { data: users } = userIds.length > 0
-        ? await supabase.from('users').select('id, name, email, phone_number').in('id', userIds as string[])
+        ? await supabase.from('users').select('id, name, english_name, email, phone_number').in('id', userIds as string[])
         : { data: [] };
       const usersMap = new Map((users || []).map((u: any) => [u.id, u]));
 
@@ -2146,6 +2171,48 @@ export default function ManagerPaymentsPage() {
       : group.payments.filter((p: any) => p.payment_status === 'pending');
   };
 
+  const resolveOnepayCruiseInfo = async (targetPayments: any[]) => {
+    const reservationIds = targetPayments
+      .map((payment: any) => String(payment.reservation_id || '').trim())
+      .filter(Boolean);
+    if (reservationIds.length === 0) return null;
+
+    const { data: cruises, error: cruiseError } = await supabase
+      .from('reservation_cruise')
+      .select('reservation_id,room_price_code')
+      .in('reservation_id', reservationIds);
+    if (cruiseError) throw cruiseError;
+
+    const roomPriceCodes = reservationIds
+      .map((reservationId) => String(cruises?.find((cruise: any) => cruise.reservation_id === reservationId)?.room_price_code || '').trim())
+      .filter(Boolean);
+    if (roomPriceCodes.length === 0) return null;
+
+    const { data: rates, error: rateError } = await supabase
+      .from('cruise_rate_card')
+      .select('id,cruise_name')
+      .in('id', Array.from(new Set(roomPriceCodes)));
+    if (rateError) throw rateError;
+
+    const rate = roomPriceCodes
+      .map((roomPriceCode) => rates?.find((item: any) => item.id === roomPriceCode))
+      .find(Boolean) as { cruise_name?: string } | undefined;
+    const cruiseName = String(rate?.cruise_name || '').trim();
+    if (!cruiseName) return null;
+
+    const { data: content, error: contentError } = await supabase
+      .from('homepage_cruise_content')
+      .select('name_ko,name_en')
+      .eq('cruise_name', cruiseName)
+      .maybeSingle();
+    if (contentError) throw contentError;
+
+    return {
+      koreanName: String(content?.name_ko || cruiseName).trim(),
+      englishName: String(content?.name_en || '').trim(),
+    };
+  };
+
   const saveGroupPaymentRequest = async (
     targetPayments: any[],
     paymentRequestId: string,
@@ -2230,19 +2297,18 @@ export default function ManagerPaymentsPage() {
     }
 
     const customerName = String(group.user?.name || '').trim();
+    const customerEnglishName = String(group.user?.english_name || '').trim();
     const customerEmail = String(group.user?.email || '').trim();
-    const customerPhone = String(group.user?.phone_number || '').trim();
     const totalAmount = targetPayments.reduce((sum: number, payment: any) => sum + getPreferredAmount(payment), 0);
     const paymentRequestId = String(targetPayments[0]?.id || '');
-    const reference = getOnepayInvoiceReference(group, targetPayments);
     const invoiceCreatedAt = new Date();
     const invoiceExpiresAt = new Date(invoiceCreatedAt.getTime() + invoiceExpiryHours * 60 * 60 * 1000);
-    if (!customerName || !paymentRequestId || totalAmount <= 0) {
-      alert('고객명과 결제 금액을 확인할 수 없습니다.');
+    if (!customerName || !normalizeOnepayReferencePart(customerEnglishName) || !paymentRequestId || totalAmount <= 0) {
+      alert('고객 한글명·영문명과 결제 금액을 확인할 수 없습니다.');
       return;
     }
 
-    const onepayWindow = window.open(ONEPAY_INVOICE_CREATE_URL, '_blank');
+    const onepayWindow = window.open('', '_blank');
     if (!onepayWindow) {
       alert('팝업이 차단되어 OnePay 화면을 열지 못했습니다. 이 사이트의 팝업을 허용해 주세요.');
       return;
@@ -2251,31 +2317,17 @@ export default function ManagerPaymentsPage() {
 
     setPreparingOnepayInvoiceId(group.quoteId);
     try {
-      const reservationDetails = targetPayments.map((payment: any) => {
-        const serviceLabel = getReservationServiceLabel(payment.reservation?.re_type || payment.re_type);
-        return `${serviceLabel} ${String(payment.reservation_id || '').trim()}`.trim();
-      });
-      const serviceDetails = Array.from(new Set(targetPayments.flatMap((payment: any) => {
-        const services = Array.isArray(payment.serviceData?.services) ? payment.serviceData.services : [];
-        if (services.length === 0) {
-          return [getReservationServiceLabel(payment.reservation?.re_type || payment.re_type)];
-        }
-        return services.map((service: any) => {
-          const quantity = Number(service.quantity) > 0
-            ? ` ${service.quantity}${formatQuantityUnit(service.quantityUnit)}`
-            : '';
-          return `${String(service.type || '').trim()}${quantity}`.trim();
-        });
-      })));
-      const description = [
-        `견적 ID: ${group.hasQuote ? group.quoteId : '없음'}`,
-        `예약정보: ${reservationDetails.join(', ')}`,
-        `서비스 내역: ${serviceDetails.join(', ')}`,
-      ].join('\n').slice(0, 500);
+      const cruiseInfo = await resolveOnepayCruiseInfo(targetPayments);
+      if (!cruiseInfo?.koreanName || !normalizeOnepayReferencePart(cruiseInfo.englishName)) {
+        onepayWindow.close();
+        alert('크루즈 한글명·영문명을 확인할 수 없어 송장을 만들 수 없습니다. 크루즈 정보를 확인해 주세요.');
+        return;
+      }
+      const reference = buildOnepayInvoiceReference(cruiseInfo.englishName, customerEnglishName, invoiceCreatedAt);
+      const description = `${formatOnepayDateParts(invoiceCreatedAt).display} ${customerName} 회원님 - ${cruiseInfo.koreanName}`;
       await sendOnepayAutofillPayload({
         customerName,
         customerEmail,
-        customerPhone,
         amount: totalAmount,
         currency: 'VND',
         reference,
@@ -2298,11 +2350,14 @@ export default function ManagerPaymentsPage() {
         );
       } catch (error) {
         console.error('고객 결제 요청 등록 실패:', error);
+        onepayWindow.close();
         alert('OnePay 송장 데이터는 준비했지만 고객 결제 요청을 저장하지 못했습니다. 다시 시도해 주세요.');
         return;
       }
+      onepayWindow.location.href = ONEPAY_INVOICE_CREATE_URL;
       alert(`${customerName}님의 ${totalAmount.toLocaleString()}동 송장 데이터와 고객 결제 요청을 준비했습니다. OnePay에서 내용을 확인한 뒤 송장을 발행해 주세요.`);
     } catch (error) {
+      onepayWindow.close();
       console.error('OnePay 인보이스 자동입력 준비 실패:', error);
       const reason = error instanceof Error ? error.message : '';
       if (reason === 'extension_outdated') {
@@ -2354,7 +2409,11 @@ export default function ManagerPaymentsPage() {
 
     setCopyingOnepayLinkId(group.quoteId);
     try {
-      const reference = getOnepayInvoiceReference(group, targetPayments);
+      const reference = getStoredOnepayInvoiceReference(group);
+      if (!reference) {
+        alert('저장된 OnePay 송장 참조번호가 없습니다. 먼저 송장을 생성해 주세요.');
+        return;
+      }
       const paymentUrl = await getOnepayCapturedLink(reference);
       if (!isValidOnepayInvoiceUrl(paymentUrl)) {
         throw new Error('invalid_payment_url');
