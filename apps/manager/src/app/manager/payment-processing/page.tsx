@@ -93,7 +93,7 @@ const debugLog = (...args: any[]) => {
   }
 };
 
-const ONEPAY_INVOICE_LOGIN_URL = 'https://onepay.vn/auth-invoice/realms/invoice/protocol/openid-connect/auth?client_id=invoice-client&redirect_uri=https://onepay.vn/invoice/welcome.op&response_type=code&scope=openid%20profile%20email';
+const ONEPAY_INVOICE_CREATE_URL = 'https://onepay.vn/invoice/create_order.op';
 const ONEPAY_INVOICE_TRANSACTION_URL = 'https://onepay.vn/invoice/transaction-management-2.op';
 const ONEPAY_AUTOFILL_EXTENSION_ID = 'kihedaabidghjlkcpbmkjalmppbfjidm';
 
@@ -2156,7 +2156,7 @@ export default function ManagerPaymentsPage() {
       return;
     }
 
-    const onepayWindow = window.open(ONEPAY_INVOICE_LOGIN_URL, '_blank');
+    const onepayWindow = window.open(ONEPAY_INVOICE_CREATE_URL, '_blank');
     if (!onepayWindow) {
       alert('팝업이 차단되어 OnePay 화면을 열지 못했습니다. 이 사이트의 팝업을 허용해 주세요.');
       return;
