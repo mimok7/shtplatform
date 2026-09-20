@@ -2240,7 +2240,7 @@ export default function ManagerPaymentsPage() {
         throw new Error('saved_link_mismatch');
       }
 
-      const savedById = new Map(savedPayments.map((payment: any) => [payment.id, payment]));
+      const savedById = new Map<string, any>(savedPayments.map((payment: any) => [payment.id, payment]));
       setPayments((current) => current.map((payment: any) => savedById.has(payment.id)
         ? { ...payment, ...savedById.get(payment.id) }
         : payment));
