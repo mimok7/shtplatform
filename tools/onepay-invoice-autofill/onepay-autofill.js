@@ -7,6 +7,8 @@
   const LOGIN_PATH = '/auth-invoice/';
   const RETRY_LIMIT = 30;
   const RETRY_DELAY_MS = 1000;
+  const LOGIN_SUBMITTED_KEY = 'sht-onepay-login-submitted';
+  const CREATE_OPENED_KEY = 'sht-onepay-create-opened';
 
   const normalize = (value) => String(value || '')
     .toLowerCase()
@@ -73,6 +75,46 @@
       return style.display !== 'none' && style.visibility !== 'hidden';
     });
 
+  const maybeAutoSubmitLogin = (payload) => {
+    if (!location.pathname.includes(LOGIN_PATH)) return false;
+
+    const username = document.querySelector('#username, input[name="username"]');
+    const password = document.querySelector('#password, input[name="password"]');
+    const submit = document.querySelector('#kc-login, button[type="submit"], input[type="submit"]');
+    const alreadySubmitted = sessionStorage.getItem(LOGIN_SUBMITTED_KEY) === payload.reference;
+    if (!alreadySubmitted && username?.value && password?.value && submit instanceof HTMLElement) {
+      sessionStorage.setItem(LOGIN_SUBMITTED_KEY, payload.reference);
+      renderPanel(payload, 'Chrome에 저장된 OnePay 계정으로 자동 로그인합니다.', 'success');
+      submit.click();
+      return true;
+    }
+
+    renderPanel(payload, 'Chrome 비밀번호 관리자에서 OnePay 계정이 채워지면 자동으로 로그인합니다.');
+    return false;
+  };
+
+  const maybeOpenCreateInvoice = (payload) => {
+    if (!/\/invoice\/welcome\.op$/i.test(location.pathname)) return false;
+
+    const createLink = Array.from(document.querySelectorAll('a[href]')).find((link) => {
+      const href = String(link.getAttribute('href') || '');
+      const text = normalize(link.textContent);
+      return href.includes('/invoice/create_order.op')
+        || text.includes('create an invoice')
+        || text.includes('create invoice')
+        || text.includes('tao hoa don')
+        || text.includes('송장 생성');
+    });
+    const alreadyOpened = sessionStorage.getItem(CREATE_OPENED_KEY) === payload.reference;
+    if (!alreadyOpened && createLink instanceof HTMLElement) {
+      sessionStorage.setItem(CREATE_OPENED_KEY, payload.reference);
+      renderPanel(payload, '송장 생성 화면으로 자동 이동합니다.', 'success');
+      createLink.click();
+      return true;
+    }
+    return false;
+  };
+
   const describeControl = (control) => {
     const parts = [
       control.id,
@@ -115,10 +157,10 @@
     .filter(({ score }) => score > 0)
     .sort((a, b) => b.score - a.score)[0]?.control || null;
 
-  const setControlValue = (control, value) => {
+  const setControlValue = (control, value, overwrite = false) => {
     if (!control || value === undefined || value === null || String(value).trim() === '') return false;
     const currentValue = String(control.value || '').trim();
-    if (!(control instanceof HTMLSelectElement) && currentValue && !/^0(?:\.0+)?$/.test(currentValue)) return false;
+    if (!overwrite && !(control instanceof HTMLSelectElement) && currentValue && !/^0(?:\.0+)?$/.test(currentValue)) return false;
 
     if (control instanceof HTMLSelectElement) {
       const wanted = normalize(value);
@@ -127,7 +169,7 @@
         return optionText === wanted || optionText.includes(wanted);
       });
       if (!option) return false;
-      if (control.value === option.value) return false;
+      if (control.value === option.value) return overwrite;
       control.value = option.value;
     } else {
       const prototype = control instanceof HTMLTextAreaElement
@@ -140,6 +182,7 @@
 
     control.dispatchEvent(new Event('input', { bubbles: true }));
     control.dispatchEvent(new Event('change', { bubbles: true }));
+    control.dispatchEvent(new Event('blur', { bubbles: true }));
     control.style.outline = '2px solid #16a34a';
     control.style.outlineOffset = '2px';
     return true;
@@ -185,13 +228,18 @@
 
     if (await capturePaymentLink(payload)) return true;
 
-    if (location.pathname.includes(LOGIN_PATH)) {
-      renderPanel(payload, '로그인 후 인보이스 작성 화면으로 이동하면 자동 입력됩니다.');
-      return false;
-    }
+    if (location.pathname.includes(LOGIN_PATH)) return maybeAutoSubmitLogin(payload);
+    if (maybeOpenCreateInvoice(payload)) return true;
 
     const results = [];
     const usedControls = new Set();
+    const fillExact = (key, selector, value) => {
+      const control = visibleControls().find((candidate) => candidate.matches(selector));
+      if (setControlValue(control, value, true)) {
+        usedControls.add(control);
+        results.push(key);
+      }
+    };
     const fill = (key, patterns, value, exclusions = [], predicate) => {
       const control = findControl(
         patterns,
@@ -203,6 +251,15 @@
         results.push(key);
       }
     };
+
+    fillExact('송장 유형', '#invoiceType', 'IOQ');
+    fillExact('통화', '#comCurrencyExchange', payload.currency);
+    fillExact('참조번호', '#invoiceRef', payload.reference);
+    fillExact('고객명', '#customerName', payload.customerName);
+    fillExact('이메일', '#customerEmail', payload.customerEmail);
+    fillExact('전화번호', '#customerPhone', payload.customerPhone);
+    fillExact('설명', '#orderNote', payload.description);
+    fillExact('금액', '#strAmount', payload.amount);
 
     fill('고객명', ['customer name', 'customername', 'customer_name', 'full name', 'customer full name', 'ten khach hang', 'ho ten'], payload.customerName);
     fill('이메일', ['customer email', 'customeremail', 'customer_email', 'email address', 'email'], payload.customerEmail);
@@ -231,7 +288,7 @@
     }
 
     if (results.length > 0) {
-      renderPanel(payload, `${results.join(', ')} 필드를 자동 입력했습니다.`, 'success');
+      renderPanel(payload, `${[...new Set(results)].join(', ')} 필드를 자동 입력했습니다. 내용을 확인한 뒤 제출 버튼을 눌러 주세요.`, 'success');
       return true;
     }
     if (manual) renderPanel(payload, '현재 화면에서 입력할 인보이스 필드를 찾지 못했습니다. 인보이스 신규 작성 화면으로 이동해 주세요.');

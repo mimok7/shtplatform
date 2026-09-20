@@ -134,7 +134,7 @@ const getOnepayCapturedLink = (reference: string) => new Promise<string>((resolv
       window.clearTimeout(timer);
       const errorMessage = runtime.lastError?.message || response?.error;
       if (errorMessage || !response?.ok || !response.link?.url) {
-        reject(new Error(errorMessage || 'link_not_found'));
+        reject(new Error(errorMessage === 'invalid_request' ? 'extension_outdated' : (errorMessage || 'link_not_found')));
         return;
       }
       resolve(response.link.url);
@@ -2248,6 +2248,8 @@ export default function ManagerPaymentsPage() {
       const reason = error instanceof Error ? error.message : '';
       if (reason === 'link_not_found') {
         alert('생성된 결제 링크를 찾지 못했습니다. OnePay에서 인보이스를 발행해 결제 링크가 표시된 뒤 다시 눌러 주세요.');
+      } else if (reason === 'extension_outdated') {
+        alert('설치된 OnePay 확장 기능이 이전 버전입니다. chrome://extensions에서 확장 기능을 다시 로드해 주세요.');
       } else if (reason === 'extension_not_found' || reason === 'extension_timeout') {
         alert('OnePay 자동입력 확장 기능이 설치되어 있지 않거나 응답하지 않습니다.');
       } else {

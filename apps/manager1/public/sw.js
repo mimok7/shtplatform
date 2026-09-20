@@ -1,20 +1,7 @@
-// Service Worker for PWA offline support
-const CACHE_NAME = 'sht-manag-cache-v3';
-const ASSETS_TO_CACHE = [
-  '/',
-  '/icon-192.png',
-  '/offline.html'
-];
+// 매니저1 푸시 알림을 처리하고 오래된 오프라인 캐시를 정리하는 서비스 워커
 
 // Install event - cache essential assets
 self.addEventListener('install', event => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => {
-      return cache.addAll(ASSETS_TO_CACHE).catch(() => {
-        // Silently ignore if offline during install
-      });
-    })
-  );
   self.skipWaiting();
 });
 
@@ -23,74 +10,13 @@ self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(cacheNames => {
       return Promise.all(
-        cacheNames.map(cacheName => {
-          if (cacheName !== CACHE_NAME) {
-            return caches.delete(cacheName);
-          }
-        })
+        cacheNames
+          .filter(cacheName => cacheName.startsWith('sht-manag-cache'))
+          .map(cacheName => caches.delete(cacheName))
       );
     })
   );
   self.clients.claim();
-});
-
-// Fetch event - serve from cache, fallback to network
-self.addEventListener('fetch', event => {
-  // Skip non-GET requests, external requests, and navigation(HTML) requests.
-  // Navigation must always hit network directly so new deploys aren't served
-  // stale HTML that references removed build chunk files (fixes 404 on old
-  // layout/webpack/css hashes after a redeploy).
-  const url = new URL(event.request.url);
-  const path = url.pathname || '/';
-  if (event.request.method !== 'GET' || 
-      !event.request.url.startsWith(self.location.origin) ||
-      event.request.mode === 'navigate') {
-    return;
-  }
-
-  // Never intercept auth/login or framework/api requests.
-  // These must always hit network to avoid stale session and login issues.
-  if (
-    path === '/login' ||
-    path.startsWith('/auth') ||
-    path.startsWith('/api/') ||
-    path.startsWith('/_next/')
-  ) {
-    return;
-  }
-
-  event.respondWith(
-    caches.match(event.request).then(response => {
-      if (response) return response;
-      
-      return fetch(event.request).then(response => {
-        // Don't cache non-successful responses
-        if (!response || response.status !== 200) {
-          return response;
-        }
-        
-        // Cache successful responses
-        const responseToCache = response.clone();
-        caches.open(CACHE_NAME).then(cache => {
-          cache.put(event.request, responseToCache);
-        });
-        
-        return response;
-      }).catch(() => {
-        // Always resolve with a concrete Response (never undefined)
-        return caches.match('/offline.html').then(offlinePage => {
-          if (offlinePage) return offlinePage;
-          return caches.match('/').then(rootPage => {
-            if (rootPage) return rootPage;
-            return new Response('Offline - please check connection', {
-              status: 503,
-              headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-            });
-          });
-        });
-      });
-    })
-  );
 });
 
 // Push event - 백그라운드 푸시 알림 수신

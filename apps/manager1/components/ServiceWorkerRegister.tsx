@@ -44,8 +44,11 @@ export default function ServiceWorkerRegister() {
     }
 
     navigator.serviceWorker
-      .register('/sw.js')
+      .register('/sw.js', { updateViaCache: 'none' })
       .then((registration) => {
+        void registration.update().catch((error) => {
+          console.warn('⚠️ Service Worker update check failed (manager1):', error);
+        });
         console.log('✅ Service Worker registered (manager1):', registration);
       })
       .catch((error) => {

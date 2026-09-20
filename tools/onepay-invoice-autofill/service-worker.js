@@ -4,6 +4,8 @@ const PAYLOAD_STORAGE_KEY = 'sht_onepay_invoice_payload';
 const LINK_STORAGE_KEY = 'sht_onepay_invoice_link';
 const PREPARE_MESSAGE_TYPE = 'SHT_ONEPAY_INVOICE_PREPARE';
 const GET_LINK_MESSAGE_TYPE = 'SHT_ONEPAY_INVOICE_GET_LINK';
+const STATUS_MESSAGE_TYPE = 'SHT_ONEPAY_EXTENSION_STATUS';
+const EXTENSION_VERSION = '1.2.0';
 const ALLOWED_ORIGINS = new Set([
   'https://manager.stayhalong.com',
   'https://manag.stayhalong.com',
@@ -43,6 +45,11 @@ chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => 
 
   if (!ALLOWED_ORIGINS.has(origin)) {
     sendResponse({ ok: false, error: 'invalid_request' });
+    return false;
+  }
+
+  if (message?.type === STATUS_MESSAGE_TYPE) {
+    sendResponse({ ok: true, version: EXTENSION_VERSION });
     return false;
   }
 
