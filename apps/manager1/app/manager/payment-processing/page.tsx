@@ -2197,16 +2197,18 @@ export default function ManagerPaymentsPage() {
     const checkin = String(cruises?.find((cruise: any) => cruise.reservation_id === reservationIds[0])?.checkin || '').trim();
     if (!cruiseName) return null;
 
-    const { data: content, error: contentError } = await supabase
-      .from('homepage_cruise_content')
-      .select('name_ko,name_en')
-      .eq('cruise_name', cruiseName)
-      .maybeSingle();
-    if (contentError) throw contentError;
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+    if (!accessToken) throw new Error('onepay_cruise_info_unavailable');
+    const response = await fetch(`/api/manager/onepay-cruise-info?cruiseName=${encodeURIComponent(cruiseName)}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!response.ok) throw new Error('onepay_cruise_info_unavailable');
+    const content = await response.json();
 
     return {
-      koreanName: String(content?.name_ko || cruiseName).trim(),
-      englishName: String(content?.name_en || '').trim(),
+      koreanName: String(content?.koreanName || '').trim(),
+      englishName: String(content?.englishName || '').trim(),
       checkin,
     };
   };
@@ -2361,6 +2363,8 @@ export default function ManagerPaymentsPage() {
       const reason = error instanceof Error ? error.message : '';
       if (reason === 'extension_outdated') {
         alert('설치된 OnePay 확장 기능이 이전 버전입니다. chrome://extensions에서 확장 기능을 다시 로드한 뒤 송장 생성을 다시 눌러 주세요.');
+      } else if (reason === 'onepay_cruise_info_unavailable') {
+        alert('크루즈 한글명·영문명을 불러오지 못했습니다. 로그인 상태와 크루즈 정보를 확인한 뒤 다시 시도해 주세요.');
       } else {
         alert('OnePay 자동입력 확장 기능이 설치되어 있지 않거나 응답하지 않습니다. 확장 기능을 설치한 뒤 다시 눌러 주세요.');
       }
