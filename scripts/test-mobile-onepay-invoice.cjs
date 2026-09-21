@@ -11,7 +11,7 @@ const moduleContext = { exports: {} };
 vm.runInNewContext(ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2017 },
 }).outputText, moduleContext);
-const { buildOnepayAutofillBookmark, copyAndOpenOnepayInvoice, serializeOnepayInvoice, getOnepayInvoiceFields, formatOnepayExpiry } = moduleContext.exports;
+const { buildOnepayAutofillBookmark, buildOnepaySafariShortcutScript, copyAndOpenOnepayInvoice, serializeOnepayInvoice, getOnepayInvoiceFields, formatOnepayExpiry } = moduleContext.exports;
 const invoice = {
   customerName: '테스트 고객', customerEmail: 'invoice-test@example.com',
   reference: 'TEST20260922CUSTOMER', description: '2026.09.22. 테스트 고객 - 크루즈',
@@ -24,6 +24,7 @@ async function runCode(data = invoice, options = {}) {
   let confirmations = 0;
   let prompts = 0;
   let clipboardReads = 0;
+  const completions = [];
   const notice = { style: {}, setAttribute() {}, remove() {}, textContent: '' };
   class Control {
     constructor() { this.currentValue = options.empty ? '' : '기존 입력값'; this.events = []; this.disabled = false; }
@@ -61,9 +62,13 @@ async function runCode(data = invoice, options = {}) {
     } } },
     setTimeout() {},
     confirm: () => { confirmations += 1; return options.confirm !== false; },
+    completion: (result) => completions.push(result),
   };
-  await vm.runInNewContext(buildOnepayAutofillBookmark().slice('javascript:void'.length), context, { timeout: 1000 });
-  return { controls, alerts, confirmations, context, notice, prompts, clipboardReads };
+  const code = options.shortcut
+    ? buildOnepaySafariShortcutScript()
+    : buildOnepayAutofillBookmark().slice('javascript:void'.length);
+  await vm.runInNewContext(code, context, { timeout: 1000 });
+  return { controls, alerts, confirmations, context, notice, prompts, clipboardReads, completions };
 }
 
 test('개별 복사 값은 금액 숫자와 베트남 만료일을 사용한다', async () => {
@@ -127,6 +132,46 @@ test('클립보드에 다른 내용이 있으면 기존 값을 건드리지 않�
   const result = await runCode(invoice, { clipboard: true, paste: '다른 복사 내용' });
   assert.equal(result.prompts, 0);
   assert.ok([...result.controls.values()].every((c) => c.events.length === 0));
+});
+
+test('Safari 공유 단축어는 completion으로 종료하며 팝업 함수나 지연 타이머를 사용하지 않는다', async () => {
+  const code = buildOnepaySafariShortcutScript();
+  assert.match(code, /completion\(/);
+  for (const blocked of ['alert(', 'prompt(', 'confirm(', 'setTimeout(']) assert.equal(code.includes(blocked), false, blocked);
+  assert.equal(code.startsWith('javascript:'), false);
+});
+
+test('Safari 공유 단축어는 빈 송장 8개 항목을 입력하고 성공 결과를 한 번 반환한다', async () => {
+  const result = await runCode(invoice, { shortcut: true, clipboard: true, empty: true });
+  assert.equal(result.clipboardReads, 1);
+  assert.equal(result.completions.length, 1);
+  assert.equal(result.completions[0].ok, true);
+  assert.match(result.completions[0].message, /8개 항목 입력 완료/);
+  for (const field of getOnepayInvoiceFields(invoice)) assert.equal(result.controls.get(field.id).value, field.value);
+});
+
+test('Safari 공유 단축어는 실행 위치·클립보드·기존값 오류를 completion으로 알리고 입력하지 않는다', async () => {
+  const cases = [
+    { location: { origin: 'https://example.com', pathname: '/invoice/create_order.op' }, clipboard: true, empty: true },
+    { empty: true },
+    { clipboard: true, paste: '다른 복사 내용', empty: true },
+    { clipboard: true },
+    { clipboard: true, empty: true, missing: 'strAmount' },
+  ];
+  for (const options of cases) {
+    const result = await runCode(invoice, { ...options, shortcut: true });
+    assert.equal(result.completions.length, 1);
+    assert.equal(result.completions[0].ok, false);
+    assert.ok([...result.controls.values()].every((control) => control.events.length === 0));
+  }
+});
+
+test('Safari 공유 단축어에 삽입된 고객 문자열은 코드로 실행되지 않는다', async () => {
+  const data = { ...invoice, description: "\\');globalThis.shortcutInjected=true;//" };
+  const result = await runCode(data, { shortcut: true, clipboard: true, empty: true });
+  assert.equal(result.completions[0].ok, true);
+  assert.equal(result.context.shortcutInjected, undefined);
+  assert.equal(result.controls.get('orderNote').value, data.description);
 });
 
 test('복사와 새 탭 생성을 사용자 동작 안에서 시작하고 복사 완료 후에만 OnePay로 이동한다', async () => {
