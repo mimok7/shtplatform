@@ -7,6 +7,7 @@ import ManagerLayout from '@/components/ManagerLayout';
 import supabase from '@/lib/supabase';
 import { fetchTableInBatches } from '@/lib/fetchInBatches';
 import { getPreferredPaymentAmount } from '@sht/domain/reservation';
+import { buildOnepayAutofillBookmark, getOnepayInvoiceFields, serializeOnepayInvoice } from '@/lib/onepayInvoiceTransfer';
 
 const ONEPAY_INVOICE_CREATE_URL = 'https://onepay.vn/invoice/create_order.op';
 const ONEPAY_INVOICE_TRANSACTION_URL = 'https://onepay.vn/invoice/transaction-management-2.op';
@@ -95,10 +96,6 @@ const buildInvoiceReference = (cruiseName: string, customerName: string, checkin
   return `${cruise.slice(0, cruiseLength)}${checkinDate}${customerPart}`;
 };
 
-const formatDateTime = (value?: string | null) => value
-  ? new Intl.DateTimeFormat('ko-KR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
-  : '-';
-
 const isValidOnepayInvoiceUrl = (value: string) => {
   try {
     const url = new URL(value);
@@ -113,8 +110,12 @@ const isValidOnepayInvoiceUrl = (value: string) => {
 
 const copyText = async (value: string) => {
   if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(value);
-    return;
+    try {
+      await navigator.clipboard.writeText(value);
+      return;
+    } catch {
+      // 클립보드 권한이 차단된 브라우저는 선택 영역 복사로 재시도한다.
+    }
   }
   const textarea = document.createElement('textarea');
   textarea.value = value;
@@ -122,8 +123,11 @@ const copyText = async (value: string) => {
   textarea.style.opacity = '0';
   document.body.appendChild(textarea);
   textarea.select();
-  document.execCommand('copy');
-  textarea.remove();
+  try {
+    if (!document.execCommand('copy')) throw new Error('clipboard_unavailable');
+  } finally {
+    textarea.remove();
+  }
 };
 
 export default function MobilePaymentProcessingPage() {
@@ -137,6 +141,7 @@ export default function MobilePaymentProcessingPage() {
   const [workingGroup, setWorkingGroup] = useState('');
   const [preparedInvoice, setPreparedInvoice] = useState<PreparedInvoice | null>(null);
   const [manualPaymentUrl, setManualPaymentUrl] = useState('');
+  const [copyNotice, setCopyNotice] = useState('');
 
   const loadPayments = async () => {
     setLoading(true);
@@ -332,6 +337,7 @@ export default function MobilePaymentProcessingPage() {
       };
       await savePreparedInvoice(group, invoice, createdAt);
       setManualPaymentUrl('');
+      setCopyNotice('');
       setPreparedInvoice(invoice);
       await loadPayments();
     } catch (prepareError) {
@@ -400,17 +406,22 @@ export default function MobilePaymentProcessingPage() {
     alert('송장 참조번호를 복사했습니다. 열린 OnePay 조회 화면에 붙여 넣어 주세요.');
   };
 
+  const copyInvoiceValue = async (value: string, message: string) => {
+    try {
+      await copyText(value);
+      setCopyNotice(message);
+    } catch {
+      setCopyNotice('복사하지 못했습니다. 아래 항목의 값을 길게 눌러 직접 복사해 주세요.');
+    }
+  };
+
   const copyPreparedInvoice = async () => {
     if (!preparedInvoice) return;
-    await copyText([
-      `고객명: ${preparedInvoice.customerName}`,
-      `이메일: ${preparedInvoice.customerEmail}`,
-      `참조번호: ${preparedInvoice.reference}`,
-      `설명: ${preparedInvoice.description}`,
-      `금액: ${preparedInvoice.amount}`,
-      `만료일: ${formatDateTime(preparedInvoice.expiresAt)}`,
-    ].join('\n'));
-    alert('송장 정보를 모두 복사했습니다.');
+    try {
+      await copyInvoiceValue(serializeOnepayInvoice(preparedInvoice), '송장 전체를 복사했습니다. OnePay에서 일괄입력 북마크를 실행하고 안내창에 붙여넣으세요.');
+    } catch {
+      setCopyNotice('송장 정보를 확인할 수 없습니다. 송장 정보를 다시 준비해 주세요.');
+    }
   };
 
   const saveManualPaymentUrl = async () => {
@@ -463,7 +474,7 @@ export default function MobilePaymentProcessingPage() {
     <ManagerLayout title="결제 처리" activeTab="payment-processing">
       <div className="mx-auto max-w-2xl space-y-3 pb-8">
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">
-          모바일 Chrome은 확장 프로그램을 실행할 수 없습니다. 모바일에서는 송장 정보를 자동 생성·저장한 뒤 복사하여 OnePay에 입력하고, PC에서는 Chrome 확장 프로그램으로 자동입력할 수 있습니다.
+          OnePay의 일반 입력칸에 전체 내용을 붙여넣으면 한 칸에 모두 입력됩니다. 항목별 복사를 이용하거나, 송장 준비 화면에서 일괄입력 도구를 설정해 주세요.
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
@@ -587,33 +598,48 @@ export default function MobilePaymentProcessingPage() {
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-bold text-slate-900">송장 정보 준비 완료</h2>
-                <p className="text-xs text-slate-500">아래 내용을 OnePay 송장 생성 화면에 입력하세요.</p>
+                <p className="text-xs text-slate-500">각 항목의 복사 버튼으로 해당 OnePay 입력칸에 붙여넣으세요.</p>
               </div>
               <button type="button" onClick={() => { setPreparedInvoice(null); setManualPaymentUrl(''); }} aria-label="닫기" className="rounded-full bg-slate-100 p-2"><X className="h-4 w-4" /></button>
             </div>
             <dl className="mt-4 space-y-3 text-sm">
-              {[
-                ['고객명', preparedInvoice.customerName],
-                ['이메일', preparedInvoice.customerEmail],
-                ['참조번호', preparedInvoice.reference],
-                ['설명', preparedInvoice.description],
-                ['금액', `${preparedInvoice.amount.toLocaleString()} VND`],
-                ['만료일', formatDateTime(preparedInvoice.expiresAt)],
-              ].map(([label, value]) => (
-                <div key={label} className="rounded-xl bg-slate-50 p-3">
-                  <dt className="text-xs font-semibold text-slate-500">{label}</dt>
-                  <dd className="mt-1 break-words font-medium text-slate-900">{value}</dd>
+              {getOnepayInvoiceFields(preparedInvoice).map(({ id, label, value, display }) => (
+                <div key={id} className="rounded-xl bg-slate-50 p-3">
+                  <dt className="flex items-center justify-between gap-2 text-xs font-semibold text-slate-500">
+                    <span>{label}</span>
+                    <button type="button" disabled={!value} aria-label={`${label} 복사`} onClick={() => void copyInvoiceValue(value, `${label} 값을 복사했습니다. OnePay의 해당 입력칸에 붙여넣으세요.`)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 disabled:opacity-40">
+                      <Copy className="mr-1 inline h-3 w-3" />복사
+                    </button>
+                  </dt>
+                  <dd className={`mt-1 select-text break-words font-medium text-slate-900 ${id === 'strAmount' ? 'text-right tabular-nums' : ''}`}>{display || '미등록 — OnePay에서 직접 입력해 주세요.'}</dd>
                 </div>
               ))}
             </dl>
+            {copyNotice && <p role="status" className="mt-3 rounded-xl bg-slate-100 p-3 text-xs leading-5 text-slate-700">{copyNotice}</p>}
             <div className="mt-4 grid grid-cols-2 gap-2">
               <button type="button" onClick={() => void copyPreparedInvoice()} className="rounded-xl border border-slate-300 px-3 py-3 text-sm font-semibold text-slate-700">
-                <Copy className="mr-1 inline h-4 w-4" />전체 복사
+                <Copy className="mr-1 inline h-4 w-4" />전체 복사 (도구용)
               </button>
               <button type="button" onClick={() => window.open(ONEPAY_INVOICE_CREATE_URL, '_blank', 'noopener,noreferrer')} className="rounded-xl bg-blue-600 px-3 py-3 text-sm font-semibold text-white">
                 <CreditCard className="mr-1 inline h-4 w-4" />OnePay 열기
               </button>
             </div>
+            <details className="mt-3 rounded-xl border border-slate-200 p-3 text-xs leading-5 text-slate-700">
+              <summary className="cursor-pointer font-semibold">일괄입력 도구 설정 및 사용 방법</summary>
+              <p className="mt-2 font-semibold">처음 한 번만 설정</p>
+              <p className="mt-1">브라우저에 북마크를 하나 만든 뒤 이름을 ‘OnePay 일괄입력’으로 바꾸세요. 아래 버튼으로 도구 주소를 복사해 북마크의 URL 전체를 교체하고 저장하세요.</p>
+              <button type="button" onClick={() => void copyInvoiceValue(buildOnepayAutofillBookmark(), '도구 주소를 복사했습니다. 북마크의 URL 칸에 붙여넣고 저장한 뒤, 송장 전체를 다시 복사해 주세요.')} className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm font-semibold text-slate-700">
+                <Copy className="mr-1 inline h-4 w-4" />일괄입력 도구 주소 복사
+              </button>
+              <p className="mt-3 font-semibold">송장 작성할 때</p>
+              <ol className="mt-2 list-decimal space-y-1 pl-5">
+                <li>위의 ‘전체 복사 (도구용)’를 누르고 OnePay 송장 생성 화면을 엽니다.</li>
+                <li>같은 탭에서 ‘OnePay 일괄입력’ 북마크를 실행합니다.</li>
+                <li>표시된 안내창에 복사한 내용을 붙여넣고 확인을 누릅니다.</li>
+                <li>고객명·참조번호·금액을 확인하고 입력을 승인하면 각 항목이 채워집니다. 내용을 확인한 뒤 송장을 직접 발행하세요.</li>
+              </ol>
+              <p className="mt-2">북마크 실행을 지원하는 브라우저에서만 사용할 수 있습니다. 홈 화면 앱이면 브라우저로 OnePay를 여세요. 실행이 차단되면 항목별 복사를 이용하세요.</p>
+            </details>
             <div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 p-3">
               <label htmlFor="onepay-payment-url" className="text-xs font-semibold text-blue-900">OnePay 발행 후 결제 링크 붙여넣기</label>
               <input

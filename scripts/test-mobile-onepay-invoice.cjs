@@ -1,0 +1,134 @@
+// 모바일 송장 항목 복사와 OnePay 일괄입력 코드의 분배·실행 제한을 검증한다.
+const assert = require('node:assert/strict');
+const { readFileSync } = require('node:fs');
+const path = require('node:path');
+const { test } = require('node:test');
+const vm = require('node:vm');
+const ts = require('typescript');
+
+const source = readFileSync(path.join(__dirname, '../apps/mobile/lib/onepayInvoiceTransfer.ts'), 'utf8');
+const moduleContext = { exports: {} };
+vm.runInNewContext(ts.transpileModule(source, {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2017 },
+}).outputText, moduleContext);
+const { buildOnepayAutofillBookmark, serializeOnepayInvoice, getOnepayInvoiceFields, formatOnepayExpiry } = moduleContext.exports;
+const invoice = {
+  customerName: '테스트 고객', customerEmail: 'invoice-test@example.com',
+  reference: 'TEST20260922CUSTOMER', description: '2026.09.22. 테스트 고객 - 크루즈',
+  amount: 1234567, expiresAt: '2099-09-22T03:30:00Z',
+};
+
+function runCode(data = invoice, options = {}) {
+  const controls = new Map();
+  const alerts = [];
+  let confirmations = 0;
+  class Control {
+    constructor() { this.currentValue = '기존 입력값'; this.events = []; this.disabled = false; }
+    dispatchEvent(event) { this.events.push(event.type); }
+  }
+  class Input extends Control {}
+  class Textarea extends Control {}
+  class Select extends Control {}
+  for (const type of [Input, Textarea, Select]) {
+    Object.defineProperty(type.prototype, 'value', {
+      get() { return this.currentValue; }, set(value) { this.currentValue = value; },
+    });
+  }
+  for (const field of getOnepayInvoiceFields(data)) {
+    const type = ['invoiceType', 'comCurrencyExchange'].includes(field.id) ? Select : field.id === 'orderNote' ? Textarea : Input;
+    const control = new type();
+    control.options = [{ value: field.value }];
+    controls.set(field.id, control);
+  }
+  if (options.missing) controls.delete(options.missing);
+  if (options.disabled) controls.get(options.disabled).disabled = true;
+  if (options.unsupportedCurrency) controls.get('comCurrencyExchange').options = [{ value: 'USD' }];
+  if (options.rejectAmount) controls.get('strAmount').dispatchEvent = function () { this.currentValue = '0'; };
+  const context = {
+    location: options.location || { origin: 'https://onepay.vn', pathname: '/invoice/create_order.op' },
+    document: { getElementById: (id) => controls.get(id) },
+    HTMLInputElement: Input, HTMLTextAreaElement: Textarea, HTMLSelectElement: Select,
+    Event: class { constructor(type) { this.type = type; } },
+    alert: (message) => alerts.push(message),
+    prompt: () => Object.hasOwn(options, 'paste') ? options.paste : serializeOnepayInvoice(data),
+    confirm: () => { confirmations += 1; return options.confirm !== false; },
+  };
+  vm.runInNewContext(buildOnepayAutofillBookmark().slice('javascript:'.length), context, { timeout: 1000 });
+  return { controls, alerts, confirmations, context };
+}
+
+test('개별 복사 값은 금액 숫자와 베트남 만료일을 사용한다', () => {
+  const fields = getOnepayInvoiceFields(invoice);
+  assert.equal(fields.find((f) => f.id === 'strAmount').value, '1234567');
+  assert.equal(formatOnepayExpiry('2026-09-21T18:30:00Z'), '22/09/26 01:30 AM');
+  assert.equal(formatOnepayExpiry('invalid'), '');
+});
+
+test('전체 정보를 한 칸에 넣지 않고 8개 항목에 각각 전달하고 변경 이벤트를 보낸다', () => {
+  const result = runCode();
+  for (const field of getOnepayInvoiceFields(invoice)) {
+    assert.equal(result.controls.get(field.id).value, field.value, field.label);
+    assert.deepEqual(result.controls.get(field.id).events, ['input', 'change', 'blur']);
+  }
+  assert.equal(result.confirmations, 1);
+  assert.match(result.alerts[0], /송장 항목을 입력했습니다/);
+});
+
+test('고객 데이터의 따옴표·줄바꿈·코드는 실행되지 않고 값으로 전달된다', () => {
+  const data = { ...invoice, description: '한글 "quote" \\ 줄바꿈\n</script>\u2028\u2029\');globalThis.injected=true;//' };
+  const result = runCode(data);
+  assert.equal(result.controls.get('orderNote').value, data.description);
+  assert.equal(result.context.injected, undefined);
+  assert.ok(!buildOnepayAutofillBookmark().includes('\n'));
+  assert.ok(!buildOnepayAutofillBookmark().includes(data.customerEmail));
+});
+
+test('다른 사이트·로그인·결제 화면에서는 어떤 항목도 변경하지 않는다', () => {
+  for (const location of [
+    { origin: 'https://onepay.vn.evil.example', pathname: '/invoice/create_order.op' },
+    { origin: 'http://onepay.vn', pathname: '/invoice/create_order.op' },
+    { origin: 'https://onepay.vn', pathname: '/auth-invoice/login' },
+    { origin: 'https://onepay.vn', pathname: '/invoice-pay/payment.op' },
+  ]) {
+    const result = runCode(invoice, { location });
+    assert.equal(result.confirmations, 0);
+    assert.ok([...result.controls.values()].every((c) => c.events.length === 0));
+  }
+});
+
+test('만료·입력칸 누락·비활성·지원하지 않는 통화·사용자 취소 시 입력하지 않는다', () => {
+  for (const [data, options] of [
+    [{ ...invoice, expiresAt: '2020-01-01T00:00:00Z' }, {}],
+    [invoice, { missing: 'strAmount' }], [invoice, { disabled: 'customerName' }],
+    [invoice, { unsupportedCurrency: true }], [invoice, { confirm: false }],
+  ]) {
+    const result = runCode(data, options);
+    assert.ok([...result.controls.values()].every((c) => c.events.length === 0));
+  }
+});
+
+test('이메일이 없으면 이전 고객의 이메일을 남기지 않는다', () => {
+  const result = runCode({ ...invoice, customerEmail: '' });
+  assert.equal(result.controls.get('customerEmail').value, '');
+});
+
+test('OnePay가 금액을 거부하면 성공으로 안내하지 않는다', () => {
+  const result = runCode(invoice, { rejectAmount: true });
+  assert.match(result.alerts[0], /입력값 확인이 필요합니다: 금액/);
+});
+
+test('유효하지 않은 송장으로는 실행 코드를 생성하지 않는다', () => {
+  for (const values of [{ amount: 0 }, { amount: NaN }, { amount: -1 }, { reference: '' }, { customerName: '' }, { expiresAt: 'invalid' }]) {
+    assert.throws(() => serializeOnepayInvoice({ ...invoice, ...values }), /invalid_invoice/);
+  }
+});
+
+test('취소·일반 텍스트·잘못된 구조·허용하지 않는 입력칸은 변경하지 않는다', () => {
+  const changed = JSON.parse(serializeOnepayInvoice(invoice));
+  changed.fields[2].id = 'password';
+  for (const paste of [null, '', '고객명: 테스트', 'null', '{}', JSON.stringify(changed)]) {
+    const result = runCode(invoice, { paste });
+    assert.equal(result.confirmations, 0);
+    assert.ok([...result.controls.values()].every((c) => c.events.length === 0));
+  }
+});
