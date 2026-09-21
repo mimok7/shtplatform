@@ -46,14 +46,37 @@ export function serializeOnepayInvoice(invoice: InvoiceTransfer) {
   });
 }
 
+export async function copyAndOpenOnepayInvoice(invoice: InvoiceTransfer, copy: (value: string) => Promise<void>) {
+  // Safari의 사용자 동작이 유효할 때 복사와 새 탭 생성을 모두 시작한다.
+  const copying = copy(serializeOnepayInvoice(invoice));
+  let tab: Window | null = null;
+  try {
+    tab = window.open('about:blank', '_blank');
+    if (tab) tab.opener = null;
+  } catch {
+    // 팝업이 차단되어도 복사를 마치고 별도 열기 버튼으로 이어간다.
+  }
+  try {
+    await copying;
+    if (!tab || tab.closed) return false;
+    tab.location.replace('https://onepay.vn/invoice/create_order.op');
+    return true;
+  } catch (error) {
+    tab?.close();
+    throw error;
+  }
+}
+
 export function buildOnepayAutofillBookmark() {
   // 고객 정보가 없는 도구만 북마크에 저장한다. 붙여넣은 JSON은 코드로 실행하지 않는다.
   // 실행 코드는 문자열로 유지해 앱 번들러의 함수 이름 변경에 영향을 받지 않는다.
-  return `javascript:void(function(){
+  return `javascript:void(async function(){
     if(location.origin!=='https://onepay.vn'||location.pathname!=='/invoice/create_order.op'){
       alert('OnePay 로그인 후 송장 생성 화면에서 실행해 주세요.');return;
     }
-    var raw=prompt('모바일 앱에서 전체 복사한 송장 정보를 여기에 붙여넣으세요.');
+    var raw;
+    try{raw=await navigator.clipboard.readText();}
+    catch(e){raw=prompt('Safari에서 자동 읽기를 허용하지 않았습니다. 복사한 송장 전체를 한 번 붙여넣으세요.');}
     if(raw===null)return;
     var p;
     try{
@@ -75,7 +98,13 @@ export function buildOnepayAutofillBookmark() {
         ||(e instanceof HTMLSelectElement&&!Array.from(e.options).some(function(o){return o.value===f.value;}));
     });
     if(missing.length){alert('입력칸을 확인할 수 없습니다: '+missing.map(function(f){return f.label;}).join(', ')+'. 항목별 복사를 이용해 주세요.');return;}
-    if(!confirm('이 송장 정보로 각 입력칸을 채울까요? 기존 입력값이 변경됩니다.\\n'+p.fields.filter(function(f){return f.id==='customerName'||f.id==='invoiceRef'||f.id==='strAmount';}).map(function(f){return f.label+': '+f.value;}).join('\\n')))return;
+    var overwrite=p.fields.some(function(f){
+      if(['invoiceType','comCurrencyExchange','strEndDate'].includes(f.id))return false;
+      var current=document.getElementById(f.id).value.trim();
+      if(f.id==='strAmount')current=current.replace(/,/g,'');
+      return current&&current!==f.value&&!(f.id==='strAmount'&&Number(current)===0);
+    });
+    if(overwrite&&!confirm('작성 중인 송장 값을 변경할까요?\\n'+p.fields.filter(function(f){return f.id==='customerName'||f.id==='invoiceRef'||f.id==='strAmount';}).map(function(f){return f.label+': '+f.value;}).join('\\n')))return;
     p.fields.forEach(function(f){
       var e=document.getElementById(f.id);
       var proto=e instanceof HTMLSelectElement?HTMLSelectElement.prototype:e instanceof HTMLTextAreaElement?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;
@@ -86,6 +115,12 @@ export function buildOnepayAutofillBookmark() {
       var e=document.getElementById(f.id);
       return !e||(f.id==='strAmount'?e.value.replace(/,/g,'')!==f.value:e.value!==f.value);
     });
-    alert(failed.length?'입력값 확인이 필요합니다: '+failed.map(function(f){return f.label;}).join(', '):'송장 항목을 입력했습니다. 이메일, 금액과 만료일을 확인한 뒤 직접 발행해 주세요.');
+    if(failed.length){alert('입력값 확인이 필요합니다: '+failed.map(function(f){return f.label;}).join(', '));return;}
+    var notice=document.getElementById('sht-onepay-autofill-result');
+    if(!notice){notice=document.createElement('div');notice.id='sht-onepay-autofill-result';document.body.appendChild(notice);}
+    notice.setAttribute('role','status');
+    notice.style.cssText='position:fixed;bottom:16px;left:16px;right:16px;z-index:2147483647;padding:14px;border:1px solid #86efac;border-radius:12px;background:#f0fdf4;color:#14532d;font:14px/1.5 sans-serif;pointer-events:none';
+    notice.textContent='송장 8개 항목 입력 완료. 이메일, 금액과 만료일을 확인한 뒤 발행해 주세요.';
+    setTimeout(function(){notice.remove();},8000);
   })();`.replace(/\n\s*/g, '');
 }

@@ -7,7 +7,7 @@ import ManagerLayout from '@/components/ManagerLayout';
 import supabase from '@/lib/supabase';
 import { fetchTableInBatches } from '@/lib/fetchInBatches';
 import { getPreferredPaymentAmount } from '@sht/domain/reservation';
-import { buildOnepayAutofillBookmark, getOnepayInvoiceFields, serializeOnepayInvoice } from '@/lib/onepayInvoiceTransfer';
+import { buildOnepayAutofillBookmark, copyAndOpenOnepayInvoice, getOnepayInvoiceFields, serializeOnepayInvoice } from '@/lib/onepayInvoiceTransfer';
 
 const ONEPAY_INVOICE_CREATE_URL = 'https://onepay.vn/invoice/create_order.op';
 const ONEPAY_INVOICE_TRANSACTION_URL = 'https://onepay.vn/invoice/transaction-management-2.op';
@@ -122,7 +122,9 @@ const copyText = async (value: string) => {
   textarea.style.position = 'fixed';
   textarea.style.opacity = '0';
   document.body.appendChild(textarea);
+  textarea.focus();
   textarea.select();
+  textarea.setSelectionRange(0, value.length);
   try {
     if (!document.execCommand('copy')) throw new Error('clipboard_unavailable');
   } finally {
@@ -142,6 +144,7 @@ export default function MobilePaymentProcessingPage() {
   const [preparedInvoice, setPreparedInvoice] = useState<PreparedInvoice | null>(null);
   const [manualPaymentUrl, setManualPaymentUrl] = useState('');
   const [copyNotice, setCopyNotice] = useState('');
+  const [openingOnepay, setOpeningOnepay] = useState(false);
 
   const loadPayments = async () => {
     setLoading(true);
@@ -418,9 +421,24 @@ export default function MobilePaymentProcessingPage() {
   const copyPreparedInvoice = async () => {
     if (!preparedInvoice) return;
     try {
-      await copyInvoiceValue(serializeOnepayInvoice(preparedInvoice), '송장 전체를 복사했습니다. OnePay에서 일괄입력 북마크를 실행하고 안내창에 붙여넣으세요.');
+      await copyInvoiceValue(serializeOnepayInvoice(preparedInvoice), '송장 전체를 복사했습니다. OnePay에서 자동입력 북마크를 실행하고 Safari의 붙여넣기를 허용하세요.');
     } catch {
       setCopyNotice('송장 정보를 확인할 수 없습니다. 송장 정보를 다시 준비해 주세요.');
+    }
+  };
+
+  const openPreparedInvoice = async () => {
+    if (!preparedInvoice || openingOnepay) return;
+    setOpeningOnepay(true);
+    try {
+      const opened = await copyAndOpenOnepayInvoice(preparedInvoice, copyText);
+      setCopyNotice(opened
+        ? '전체 복사와 OnePay 열기를 마쳤습니다. OnePay 송장 생성 화면에서 자동입력 북마크를 실행하세요.'
+        : '송장 전체를 복사했습니다. 새 탭이 차단되어 아래 OnePay 열기를 눌러 주세요.');
+    } catch {
+      setCopyNotice('복사 또는 OnePay 열기에 실패했습니다. 전체 복사와 OnePay 열기 버튼으로 다시 시도해 주세요.');
+    } finally {
+      setOpeningOnepay(false);
     }
   };
 
@@ -474,7 +492,7 @@ export default function MobilePaymentProcessingPage() {
     <ManagerLayout title="결제 처리" activeTab="payment-processing">
       <div className="mx-auto max-w-2xl space-y-3 pb-8">
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">
-          OnePay의 일반 입력칸에 전체 내용을 붙여넣으면 한 칸에 모두 입력됩니다. 항목별 복사를 이용하거나, 송장 준비 화면에서 일괄입력 도구를 설정해 주세요.
+          아이폰 Safari에서는 송장 준비 후 ‘전체 복사하고 OnePay 열기’를 누르세요. OnePay 송장 생성 화면에서 자동입력 북마크를 실행하면 8개 항목이 한 번에 입력됩니다. 처음에는 아래 Safari 설정이 필요합니다.
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
@@ -598,11 +616,18 @@ export default function MobilePaymentProcessingPage() {
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-bold text-slate-900">송장 정보 준비 완료</h2>
-                <p className="text-xs text-slate-500">각 항목의 복사 버튼으로 해당 OnePay 입력칸에 붙여넣으세요.</p>
+                <p className="text-xs text-slate-500">Safari 자동입력으로 송장 8개 항목을 한 번에 입력하세요.</p>
               </div>
               <button type="button" onClick={() => { setPreparedInvoice(null); setManualPaymentUrl(''); }} aria-label="닫기" className="rounded-full bg-slate-100 p-2"><X className="h-4 w-4" /></button>
             </div>
-            <dl className="mt-4 space-y-3 text-sm">
+            <button type="button" disabled={openingOnepay} onClick={() => void openPreparedInvoice()} className="mt-4 w-full rounded-xl bg-blue-600 px-3 py-3 text-sm font-semibold text-white disabled:opacity-50">
+              <CreditCard className="mr-1 inline h-4 w-4" />{openingOnepay ? '준비 중...' : '전체 복사하고 OnePay 열기'}
+            </button>
+            {copyNotice && <p role="status" className="mt-3 rounded-xl bg-slate-100 p-3 text-xs leading-5 text-slate-700">{copyNotice}</p>}
+            <p className="mt-2 text-xs leading-5 text-slate-600">OnePay 송장 생성 화면에서 Safari 책갈피의 ‘OnePay 자동입력’을 실행하세요. Safari가 요청하면 ‘붙여넣기’를 허용하면 됩니다.</p>
+            <details className="mt-3 rounded-xl border border-slate-200 p-3">
+              <summary className="cursor-pointer text-xs font-semibold text-slate-700">송장 항목 확인 및 개별 복사</summary>
+              <dl className="mt-3 space-y-3 text-sm">
               {getOnepayInvoiceFields(preparedInvoice).map(({ id, label, value, display }) => (
                 <div key={id} className="rounded-xl bg-slate-50 p-3">
                   <dt className="flex items-center justify-between gap-2 text-xs font-semibold text-slate-500">
@@ -614,8 +639,8 @@ export default function MobilePaymentProcessingPage() {
                   <dd className={`mt-1 select-text break-words font-medium text-slate-900 ${id === 'strAmount' ? 'text-right tabular-nums' : ''}`}>{display || '미등록 — OnePay에서 직접 입력해 주세요.'}</dd>
                 </div>
               ))}
-            </dl>
-            {copyNotice && <p role="status" className="mt-3 rounded-xl bg-slate-100 p-3 text-xs leading-5 text-slate-700">{copyNotice}</p>}
+              </dl>
+            </details>
             <div className="mt-4 grid grid-cols-2 gap-2">
               <button type="button" onClick={() => void copyPreparedInvoice()} className="rounded-xl border border-slate-300 px-3 py-3 text-sm font-semibold text-slate-700">
                 <Copy className="mr-1 inline h-4 w-4" />전체 복사 (도구용)
@@ -625,20 +650,23 @@ export default function MobilePaymentProcessingPage() {
               </button>
             </div>
             <details className="mt-3 rounded-xl border border-slate-200 p-3 text-xs leading-5 text-slate-700">
-              <summary className="cursor-pointer font-semibold">일괄입력 도구 설정 및 사용 방법</summary>
-              <p className="mt-2 font-semibold">처음 한 번만 설정</p>
-              <p className="mt-1">브라우저에 북마크를 하나 만든 뒤 이름을 ‘OnePay 일괄입력’으로 바꾸세요. 아래 버튼으로 도구 주소를 복사해 북마크의 URL 전체를 교체하고 저장하세요.</p>
-              <button type="button" onClick={() => void copyInvoiceValue(buildOnepayAutofillBookmark(), '도구 주소를 복사했습니다. 북마크의 URL 칸에 붙여넣고 저장한 뒤, 송장 전체를 다시 복사해 주세요.')} className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm font-semibold text-slate-700">
-                <Copy className="mr-1 inline h-4 w-4" />일괄입력 도구 주소 복사
+              <summary className="cursor-pointer font-semibold">아이폰 Safari 자동입력 설정 (최초 1회)</summary>
+              <ol className="mt-2 list-decimal space-y-1 pl-5">
+                <li>Safari의 공유 메뉴에서 ‘책갈피 추가’를 누르고 이름을 ‘OnePay 자동입력’으로 저장합니다.</li>
+                <li>아래 버튼으로 도구 주소를 복사합니다.</li>
+                <li>Safari 책갈피 목록의 ‘편집’에서 방금 만든 책갈피를 선택하고, 주소 전체를 복사한 도구 주소로 교체한 뒤 저장합니다.</li>
+              </ol>
+              <button type="button" onClick={() => void copyInvoiceValue(buildOnepayAutofillBookmark(), '도구 주소를 복사했습니다. Safari 책갈피의 주소 전체를 교체해 저장한 뒤, 전체 복사하고 OnePay 열기를 누르세요.')} className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm font-semibold text-slate-700">
+                <Copy className="mr-1 inline h-4 w-4" />Safari 자동입력 도구 주소 복사
               </button>
+              <p className="mt-2">이전 도구를 등록했다면 책갈피 주소를 한 번 교체해 주세요. 홈 화면 앱을 사용 중이라면 이 설정은 Safari에서 진행하세요.</p>
               <p className="mt-3 font-semibold">송장 작성할 때</p>
               <ol className="mt-2 list-decimal space-y-1 pl-5">
-                <li>위의 ‘전체 복사 (도구용)’를 누르고 OnePay 송장 생성 화면을 엽니다.</li>
-                <li>같은 탭에서 ‘OnePay 일괄입력’ 북마크를 실행합니다.</li>
-                <li>표시된 안내창에 복사한 내용을 붙여넣고 확인을 누릅니다.</li>
-                <li>고객명·참조번호·금액을 확인하고 입력을 승인하면 각 항목이 채워집니다. 내용을 확인한 뒤 송장을 직접 발행하세요.</li>
+                <li>‘전체 복사하고 OnePay 열기’를 누릅니다. 로그인이 필요하면 로그인 후 송장 생성 화면을 여세요.</li>
+                <li>Safari 책갈피에서 ‘OnePay 자동입력’을 실행하고, Safari가 요청하면 ‘붙여넣기’를 허용합니다.</li>
+                <li>8개 항목이 자동 입력됩니다. 작성 중인 값이 있을 때만 변경 여부를 확인합니다.</li>
               </ol>
-              <p className="mt-2">북마크 실행을 지원하는 브라우저에서만 사용할 수 있습니다. 홈 화면 앱이면 브라우저로 OnePay를 여세요. 실행이 차단되면 항목별 복사를 이용하세요.</p>
+              <p className="mt-2">Safari의 최초 설정과 붙여넣기 허용은 직접 진행해야 합니다. 자동 읽기가 차단되면 안내창에 전체 내용을 한 번 붙여넣으세요. 최종 발행은 입력 내용을 확인한 뒤 직접 누르세요.</p>
             </details>
             <div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 p-3">
               <label htmlFor="onepay-payment-url" className="text-xs font-semibold text-blue-900">OnePay 발행 후 결제 링크 붙여넣기</label>
