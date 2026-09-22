@@ -651,14 +651,13 @@ export default function MobilePaymentProcessingPage() {
             </div>
             <details className="mt-3 rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs leading-5 text-slate-700">
               <summary className="cursor-pointer font-semibold text-blue-900">아이폰 Safari 공유 단축어 설치 (최초 1회)</summary>
-              <ol className="mt-2 list-decimal space-y-1 pl-5">
-                <li>아이폰 설정 → 단축어 → 고급에서 ‘스크립트 실행 허용’을 켭니다.</li>
-                <li>아래 ‘공유 단축어 스크립트 복사’를 누릅니다.</li>
-                <li>‘단축어 앱에서 새로 만들기’를 누르고 작업 추가에서 ‘웹 페이지에서 JavaScript 실행’을 선택합니다.</li>
-                <li>기본 JavaScript를 모두 지우고 복사한 스크립트를 붙여넣습니다.</li>
-                <li>단축어 세부사항에서 ‘공유 시트에서 보기’를 켜고 입력 유형은 ‘Safari 웹 페이지’만 선택합니다.</li>
-                <li>이름을 ‘OnePay 자동입력’으로 지정하고 완료를 누릅니다.</li>
+              <p className="mt-2 font-semibold text-blue-900">1단계. 스크립트 실행을 허용합니다.</p>
+              <ol className="mt-1 list-decimal space-y-1 pl-5">
+                <li>아이폰의 ‘설정’ 앱을 엽니다.</li>
+                <li>최신 iOS에서는 ‘앱 → 단축어 → 고급’을 엽니다. ‘앱’ 메뉴가 없는 iOS에서는 ‘단축어 → 고급’을 엽니다.</li>
+                <li>‘스크립트 실행 허용’을 켭니다. 이 설정은 단축어를 실행할 때 필요합니다.</li>
               </ol>
+              <p className="mt-3 font-semibold text-blue-900">2단계. OnePay 자동입력 단축어를 만듭니다.</p>
               <div className="mt-3 grid grid-cols-2 gap-2">
                 <button type="button" onClick={() => void copyInvoiceValue(buildOnepaySafariShortcutScript(), 'Safari 공유 단축어 스크립트를 복사했습니다. 단축어 앱의 ‘웹 페이지에서 JavaScript 실행’ 작업에 붙여넣으세요.')} className="rounded-xl border border-blue-200 bg-white px-2 py-3 text-xs font-semibold text-blue-800">
                   <Copy className="mr-1 inline h-4 w-4" />공유 단축어 스크립트 복사
@@ -667,11 +666,36 @@ export default function MobilePaymentProcessingPage() {
                   단축어 앱에서 새로 만들기
                 </a>
               </div>
+              <ol className="mt-2 list-decimal space-y-1 pl-5">
+                <li>위의 ‘공유 단축어 스크립트 복사’를 먼저 누릅니다.</li>
+                <li>‘단축어 앱에서 새로 만들기’를 누르거나 단축어 앱에서 오른쪽 위의 ‘+’를 누릅니다.</li>
+                <li>‘동작 추가’를 누르고 검색창에 전체 이름 대신 <strong>JavaScript</strong>만 입력합니다.</li>
+                <li>Safari 아이콘이 붙은 ‘웹 페이지에서 JavaScript 실행’을 선택합니다.</li>
+                <li>추가된 작업의 기본 JavaScript를 길게 눌러 ‘전체 선택 → 붙여넣기’를 누릅니다.</li>
+                <li>작업에 표시되는 웹 페이지 입력값은 ‘단축어 입력’으로 둡니다.</li>
+                <li>화면 위의 단축어 이름이나 아래의 정보 버튼을 누르고 ‘공유 시트에서 보기’를 켭니다.</li>
+                <li>‘공유 시트 입력 유형’ 또는 ‘받는 항목’에서 ‘Safari 웹 페이지’만 선택합니다.</li>
+                <li>이름을 ‘OnePay 자동입력’으로 지정하고 ‘완료’를 누릅니다.</li>
+              </ol>
               <p className="mt-2">공유 단축어는 OnePay 송장 생성 화면에서만 작동하며 송장을 발행하거나 전송하지 않습니다.</p>
-              <p className="mt-3 font-semibold">송장 작성할 때</p>
+              <details className="mt-3 rounded-lg border border-blue-200 bg-white p-2">
+                <summary className="cursor-pointer font-semibold text-blue-900">‘웹 페이지에서 JavaScript 실행’이 안 보일 때</summary>
+                <ul className="mt-2 list-disc space-y-1 pl-5">
+                  <li>검색창에는 한글 전체 문장 대신 ‘JavaScript’만 입력해 보세요.</li>
+                  <li>검색 결과에서 Safari 아이콘이 붙은 작업을 찾으세요. 아이폰 작업 이름은 ‘웹 페이지에서 JavaScript 실행’입니다.</li>
+                  <li>단축어 앱이 삭제되어 있으면 App Store에서 Apple의 ‘단축어’ 앱을 다시 설치하고 iOS와 앱을 최신 버전으로 업데이트하세요.</li>
+                  <li>단축어 앱과 설정 앱을 완전히 닫았다가 다시 열고 같은 순서로 검색하세요.</li>
+                  <li>Mac의 ‘활성화된 Safari 탭에서 JavaScript 실행’과 이름이 다르므로 아이폰에서는 해당 Mac 작업을 찾지 않아도 됩니다.</li>
+                </ul>
+                <a href="https://support.apple.com/ko-kr/guide/shortcuts/apdb71a01d93/ios" target="_blank" rel="noreferrer" className="mt-2 inline-block font-semibold text-blue-700 underline">
+                  Apple 공식 사용 방법 열기
+                </a>
+              </details>
+              <p className="mt-3 font-semibold">3단계. 송장을 작성할 때 실행합니다.</p>
               <ol className="mt-2 list-decimal space-y-1 pl-5">
                 <li>‘전체 복사하고 OnePay 열기’를 누릅니다. 로그인이 필요하면 로그인 후 송장 생성 화면을 여세요.</li>
-                <li>Safari 공유 버튼을 누르고 ‘OnePay 자동입력’을 실행합니다.</li>
+                <li>OnePay 송장 생성 화면에서 Safari의 공유 버튼을 누르고 ‘OnePay 자동입력’을 실행합니다.</li>
+                <li>단축어가 보이지 않으면 공유 시트 맨 아래의 ‘동작 편집’을 누르고 ‘OnePay 자동입력’을 추가합니다.</li>
                 <li>처음 표시되는 웹페이지 접근과 붙여넣기 요청을 허용하면 8개 항목이 자동 입력됩니다.</li>
               </ol>
               <p className="mt-2">작성 중인 값이 있으면 기존 내용을 보호하기 위해 자동입력을 중단합니다. 입력 내용을 확인한 뒤 최종 발행은 직접 누르세요.</p>
