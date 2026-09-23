@@ -32,30 +32,10 @@
 html[data-sht-theme] body {
   background-color: var(--sht-canvas);
   color: var(--sht-text);
-  font-family: var(--sht-font-family);
-  font-size: var(--sht-font-size-body);
-  word-break: keep-all;
 }
 
 html[data-sht-theme] :where(h1, h2, h3, h4, h5, h6):not([data-sht-theme-ignore]) {
   color: var(--sht-heading);
-  font-family: var(--sht-font-family);
-  letter-spacing: -0.035em;
-}
-
-html[data-sht-theme] h1:not([data-sht-theme-ignore]) {
-  font-size: var(--sht-font-size-title);
-  font-weight: 750;
-  line-height: 1.05;
-}
-
-html[data-sht-theme] :where(h2, h3):not([data-sht-theme-ignore]) {
-  font-size: var(--sht-font-size-heading);
-  line-height: 1.2;
-}
-
-html[data-sht-theme] :where(button, [role='button'], input, textarea, select) {
-  font-family: var(--sht-font-family);
 }
 
 html[data-sht-typography='custom'][data-sht-type-body='custom'] body {
@@ -88,18 +68,6 @@ html[data-sht-typography='custom'][data-sht-type-main-menu='custom'] [data-sht-m
 
 html[data-sht-typography='custom'][data-sht-type-sub-menu='custom'] [data-sht-menu='sub'] {
   font-size: var(--sht-sub-menu-font-size) !important;
-}
-
-html[data-sht-theme] :where(button:not([data-sht-theme-ignore]), [role='button']:not([data-sht-theme-ignore])) {
-  border-radius: var(--sht-button-radius) !important;
-  font-size: var(--sht-button-font-size);
-  font-weight: var(--sht-button-font-weight);
-  letter-spacing: var(--sht-button-letter-spacing);
-}
-
-html[data-sht-theme] :where(button:not([aria-label]):not([data-sht-theme-ignore]), [role='button']:not([aria-label]):not([data-sht-theme-ignore])) {
-  min-height: var(--sht-button-height);
-  padding-inline: var(--sht-button-padding-x);
 }
 
 html[data-sht-theme] :where(
@@ -146,7 +114,6 @@ html[data-sht-theme] :where(
 
 html[data-sht-theme] :where(input, textarea, select) {
   border-color: var(--sht-border);
-  border-radius: var(--sht-input-radius) !important;
   background-color: var(--sht-surface);
   color: var(--sht-text);
 }
@@ -159,9 +126,13 @@ html[data-sht-theme] :where(input, textarea, select):focus {
 
 html[data-sht-theme] :where(.card, [class*='bg-white'][class*='rounded'][class*='border']) {
   border-color: var(--sht-border) !important;
-  border-radius: var(--sht-card-radius) !important;
   background-color: var(--sht-surface) !important;
-  box-shadow: var(--sht-card-shadow) !important;
+}
+
+html[data-sht-theme] :where(.card, [class*='bg-white'][class*='rounded'][class*='border']) > :first-child:has(> :is(h2, h3, h4)),
+html[data-sht-theme] :where(.card, [class*='bg-white'][class*='rounded'][class*='border']) > :is(h2, h3, h4):first-child {
+  background-color: var(--sht-primary-soft) !important;
+  border-color: var(--sht-border) !important;
 }
 
 html[data-sht-theme] :where(table) {
@@ -172,8 +143,6 @@ html[data-sht-theme] :where(table) {
 html[data-sht-theme] :where(thead, th) {
   background-color: var(--sht-surface-muted);
   color: var(--sht-heading);
-  font-size: var(--sht-font-size-label);
-  letter-spacing: 0.04em;
 }
 
 html[data-sht-theme] :where(td, th) {
@@ -195,7 +164,6 @@ html[data-sht-theme][data-sht-app='mobile'] {
 .sht-theme-preview {
   background: var(--sht-canvas);
   color: var(--sht-text);
-  font-family: var(--sht-font-family);
 }
 
 .sht-theme-preview__heading {
@@ -213,15 +181,14 @@ html[data-sht-theme][data-sht-app='mobile'] {
 }
 
 .sht-theme-preview__button {
-  min-height: var(--sht-button-height);
-  padding-inline: var(--sht-button-padding-x);
+  min-height: 40px;
+  padding-inline: 16px;
   border: 1px solid var(--sht-primary);
-  border-radius: var(--sht-button-radius);
+  border-radius: 2px;
   background: var(--sht-primary);
   color: var(--sht-primary-text);
   font-size: var(--sht-button-font-size);
-  font-weight: var(--sht-button-font-weight);
-  letter-spacing: var(--sht-button-letter-spacing);
+  font-weight: 700;
 }
 
 .sht-theme-preview__button--secondary {
@@ -242,16 +209,26 @@ html[data-sht-theme][data-sht-app='mobile'] {
 
 .sht-theme-preview__input {
   border: 1px solid var(--sht-border);
-  border-radius: var(--sht-input-radius);
+  border-radius: 2px;
   background: var(--sht-surface);
   color: var(--sht-text);
 }
 
 .sht-theme-preview__card {
   border: 1px solid var(--sht-border);
-  border-radius: var(--sht-card-radius);
+  border-radius: 2px;
   background: var(--sht-surface);
-  box-shadow: var(--sht-card-shadow);
+  overflow: hidden;
+}
+
+.sht-theme-preview__card-header {
+  border-bottom: 1px solid var(--sht-border);
+  background: var(--sht-primary-soft);
+  color: var(--sht-heading);
+}
+
+.sht-theme-preview__card-body {
+  background: var(--sht-surface);
 }
 
 @media (prefers-reduced-motion: reduce) {

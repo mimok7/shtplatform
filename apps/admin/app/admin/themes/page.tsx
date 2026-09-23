@@ -201,8 +201,7 @@ export default function ThemeManagementPage() {
             <div>
               <h1 data-sht-theme-ignore className="text-xl font-extrabold tracking-tight text-gray-900">앱별 테마 설정</h1>
               <p className="mt-3 max-w-3xl text-sm leading-7 text-gray-600">
-                기능과 문구는 그대로 유지하면서 앱별 글꼴, 글씨 크기, 버튼 색상과 모양,
-                입력창, 카드, 표, 내비게이션 디자인을 한 번에 변경합니다.
+                계절 테마는 앱의 색상만 변경합니다. 글씨 크기는 아래 항목에서 별도로 선택한 경우에만 변경됩니다.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -311,7 +310,7 @@ export default function ThemeManagementPage() {
               <div className="mb-4">
                 <p className="mb-2 text-xs font-bold tracking-[0.14em] text-gray-500">03 / 글씨 크기</p>
                 <h2 className="text-xl font-bold text-gray-900">{SHT_APP_LABELS[selectedApp]} 앱의 글씨 크기</h2>
-                <p className="mt-2 text-sm text-gray-600">기본값은 모든 계절 테마에서 동일합니다. 항목별로 선택하면 저장 전 미리보기에 바로 반영되며, 테마 복원 시에도 유지됩니다.</p>
+                <p className="mt-2 text-sm text-gray-600">기본값은 각 앱의 기존 글씨 크기를 유지합니다. 항목별로 선택하면 저장 전 미리보기에 바로 반영되며, 테마 복원 시에도 유지됩니다.</p>
               </div>
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 {SHT_TYPOGRAPHY_FIELDS.map((field) => (
@@ -349,7 +348,7 @@ export default function ThemeManagementPage() {
                     <p className="sht-theme-preview__label">{selectedTheme.eyebrow} / STAY HALONG</p>
                     <h3 className="sht-theme-preview__heading mt-3">여행을 더 선명하게 준비하세요.</h3>
                     <p className="mt-3 max-w-2xl text-sm leading-7" style={{ color: 'var(--sht-text-muted)' }}>
-                      제목과 본문 글꼴, 글씨 크기, 버튼 안의 글자 굵기와 간격까지 선택한 테마 토큰으로 표시됩니다.
+                      계절 테마의 색상과 별도로 선택한 글씨 크기를 확인할 수 있습니다.
                     </p>
                     <div className="mt-6 flex flex-wrap gap-3">
                       <button type="button" data-sht-theme-ignore className="sht-theme-preview__button">예약 확인</button>
@@ -366,22 +365,25 @@ export default function ThemeManagementPage() {
                       <p className="sht-theme-preview__menu-sub mt-2">예약 목록 · 예약 수정 · 결제 관리</p>
                     </div>
                   </div>
-                  <div className="sht-theme-preview__card p-5">
-                    <label className="sht-theme-preview__label block" htmlFor="theme-preview-name">CUSTOMER NAME</label>
-                    <input
-                      id="theme-preview-name"
-                      readOnly
-                      value="홍길동"
-                      className="sht-theme-preview__input mt-2 w-full px-3 py-2 text-sm"
-                    />
-                    <div className="mt-5 border-t pt-4" style={{ borderColor: 'var(--sht-border)' }}>
-                      <div className="flex items-center justify-between text-sm">
-                        <span style={{ color: 'var(--sht-text-muted)' }}>선택 테마</span>
-                        <strong style={{ color: 'var(--sht-heading)' }}>{selectedTheme.label}</strong>
-                      </div>
-                      <div className="mt-3 flex items-center justify-between text-sm">
-                        <span style={{ color: 'var(--sht-text-muted)' }}>버튼 모서리</span>
-                        <strong style={{ color: 'var(--sht-heading)' }}>{selectedTheme.tokens.buttonRadius}</strong>
+                  <div className="sht-theme-preview__card">
+                    <div className="sht-theme-preview__card-header px-5 py-3 font-bold">예약 정보</div>
+                    <div className="sht-theme-preview__card-body p-5">
+                      <label className="sht-theme-preview__label block" htmlFor="theme-preview-name">고객 이름</label>
+                      <input
+                        id="theme-preview-name"
+                        readOnly
+                        value="홍길동"
+                        className="sht-theme-preview__input mt-2 w-full px-3 py-2 text-sm"
+                      />
+                      <div className="mt-5 border-t pt-4" style={{ borderColor: 'var(--sht-border)' }}>
+                        <div className="flex items-center justify-between text-sm">
+                          <span style={{ color: 'var(--sht-text-muted)' }}>선택 테마</span>
+                          <strong style={{ color: 'var(--sht-heading)' }}>{selectedTheme.label}</strong>
+                        </div>
+                        <div className="mt-3 flex items-center justify-between text-sm">
+                          <span style={{ color: 'var(--sht-text-muted)' }}>카드 제목 색상</span>
+                          <strong style={{ color: 'var(--sht-heading)' }}>{selectedTheme.tokens.primarySoft}</strong>
+                        </div>
                       </div>
                     </div>
                   </div>

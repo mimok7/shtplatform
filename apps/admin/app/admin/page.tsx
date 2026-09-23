@@ -1127,19 +1127,17 @@ export default function AdminDashboard() {
                 key={card.key}
                 type="button"
                 onClick={() => handleStatClick(card.key)}
-                className={`bg-white border border-gray-100 rounded-md shadow-sm p-3 text-left transition hover:shadow-md hover:border-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 ${active ? 'ring-2 ring-blue-500 border-blue-200' : ''}`}
+                className={`bg-white border border-gray-100 rounded-md shadow-sm text-left transition hover:shadow-md hover:border-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 overflow-hidden ${active ? 'ring-2 ring-blue-500 border-blue-200' : ''}`}
               >
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 border-b border-gray-100 bg-gray-50 px-3 py-2">
                   <div className={`w-7 h-7 ${card.color} rounded-md flex items-center justify-center text-white text-sm flex-none`}>
                     {card.icon}
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium text-gray-600 truncate">{card.title}</p>
-                    <p className="text-base font-bold text-gray-900 leading-tight truncate" title={typeof card.value === 'string' ? card.value : ''}>
-                      {typeof card.value === 'string' ? card.value : card.value.toLocaleString()}
-                    </p>
-                  </div>
+                  <h3 className="min-w-0 text-xs font-medium text-gray-600">{card.title}</h3>
                 </div>
+                <p className="px-3 py-2 text-base font-bold text-gray-900 leading-tight break-words" title={typeof card.value === 'string' ? card.value : ''}>
+                  {typeof card.value === 'string' ? card.value : card.value.toLocaleString()}
+                </p>
               </button>
             );
           })}
