@@ -4,15 +4,22 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   DEFAULT_SHT_THEME,
+  getShtThemeDefinition,
   getShtThemeStyle,
   isShtThemeId,
   notifyShtThemeUpdated,
+  normalizeShtAppearanceOverrides,
+  SHT_APPEARANCE_COLOR_FIELDS,
   SHT_APP_IDS,
   SHT_APP_LABELS,
+  SHT_FONT_OPTIONS,
   SHT_THEME_DEFINITIONS,
+  SHT_THEME_PREVIEW_PARAM,
   SHT_TYPOGRAPHY_FIELDS,
   SHT_TYPOGRAPHY_OPTIONS,
   type ShtAppId,
+  type ShtAppearanceColorField,
+  type ShtAppearanceOverrides,
   type ShtThemeId,
   type ShtTypographyField,
   type ShtTypographyOverrides,
@@ -24,6 +31,7 @@ import supabase from '@/lib/supabase';
 type ThemeSetting = {
   themeId: ShtThemeId;
   typography: ShtTypographyOverrides;
+  appearance: ShtAppearanceOverrides;
 };
 
 type ThemeSettings = Record<ShtAppId, ThemeSetting>;
@@ -32,8 +40,58 @@ const TYPOGRAPHY_COLUMN_SQL = 'sql/122-app-theme-typography-settings-20260718.sq
 const THEME_SAVE_TIMEOUT_MS = 8_000;
 
 const INITIAL_SETTINGS = Object.fromEntries(
-  SHT_APP_IDS.map((appId) => [appId, { themeId: DEFAULT_SHT_THEME, typography: {} }]),
+  SHT_APP_IDS.map((appId) => [appId, { themeId: DEFAULT_SHT_THEME, typography: {}, appearance: {} }]),
 ) as ThemeSettings;
+
+const APP_PREVIEW_URLS: Record<ShtAppId, string> = {
+  admin: '/admin',
+  customer: 'https://staycruise.kr/',
+  customer1: 'https://legacy.staycruise.kr/',
+  manager: 'https://manager.stayhalong.com/manager/dashboard',
+  manager1: 'https://manag.stayhalong.com/manager/dashboard',
+  mobile: 'https://newmobile.stayhalong.com/manager/dashboard',
+  partner: 'https://partner.stayhalong.com/partner/dashboard',
+  quote: 'https://quote.stayhalong.com/',
+  cancel: 'https://cancel.stayhalong.com/',
+};
+
+const APPEARANCE_COLOR_LABELS: Record<ShtAppearanceColorField, string> = {
+  heading: '제목 글자색',
+  headingBackground: '제목 바탕색',
+  text: '본문 글자색',
+  primary: '주요 버튼·머릿글 색상',
+  primaryText: '주요 버튼·머릿글 글자색',
+  surface: '카드 바탕색',
+  cardHeaderBackground: '카드 제목 바탕색',
+  cardHeaderText: '카드 제목 글자색',
+};
+
+function getAppearanceBaseColor(field: ShtAppearanceColorField, themeId: ShtThemeId): string {
+  const tokens = getShtThemeDefinition(themeId).tokens;
+  const colors: Record<ShtAppearanceColorField, string> = {
+    heading: tokens.heading,
+    headingBackground: tokens.primarySoft,
+    text: tokens.text,
+    primary: tokens.primary,
+    primaryText: tokens.primaryText,
+    surface: tokens.surface,
+    cardHeaderBackground: tokens.primarySoft,
+    cardHeaderText: tokens.heading,
+  };
+  return colors[field];
+}
+
+function getContrastRatio(first: string, second: string): number {
+  const luminance = (hex: string) => {
+    const channels = [1, 3, 5].map((index) => parseInt(hex.slice(index, index + 2), 16) / 255);
+    const [red, green, blue] = channels.map((channel) => (
+      channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4
+    ));
+    return red * 0.2126 + green * 0.7152 + blue * 0.0722;
+  };
+  const [lighter, darker] = [luminance(first), luminance(second)].sort((a, b) => b - a);
+  return (lighter + 0.05) / (darker + 0.05);
+}
 
 const TYPOGRAPHY_LABELS: Record<ShtTypographyField, string> = {
   body: '본문 글씨',
@@ -84,6 +142,9 @@ export default function ThemeManagementPage() {
         nextSettings[row.app_id as ShtAppId] = {
           themeId: row.theme_id,
           typography: normalizeShtTypographyOverrides(row.typography),
+          appearance: normalizeShtAppearanceOverrides(
+            (row.typography as Record<string, unknown> | null)?.appearance,
+          ),
         };
       }
     });
@@ -104,6 +165,15 @@ export default function ThemeManagementPage() {
       ?? SHT_THEME_DEFINITIONS[0]!,
     [selectedThemeId],
   );
+  const contrastWarnings = [
+    ['주요 버튼·머릿글', selectedSetting.appearance.primary ?? selectedTheme.tokens.primary, selectedSetting.appearance.primaryText ?? selectedTheme.tokens.primaryText],
+    ['카드 제목', selectedSetting.appearance.cardHeaderBackground ?? selectedTheme.tokens.primarySoft, selectedSetting.appearance.cardHeaderText ?? selectedTheme.tokens.heading],
+    ['카드 내용', selectedSetting.appearance.surface ?? selectedTheme.tokens.surface, selectedSetting.appearance.text ?? selectedTheme.tokens.text],
+    ...(selectedSetting.appearance.headingBackground
+      ? [['제목', selectedSetting.appearance.headingBackground, selectedSetting.appearance.heading ?? selectedTheme.tokens.heading]]
+      : []),
+  ].filter(([, background, foreground]) => getContrastRatio(background, foreground) < 4.5)
+    .map(([label]) => label);
 
   const selectTheme = (themeId: ShtThemeId) => {
     setSettings((current) => ({
@@ -129,11 +199,37 @@ export default function ThemeManagementPage() {
     setMessage('글씨 크기는 미리보기에서만 변경했습니다. 저장하기 전에는 실제 앱에 적용되지 않습니다.');
   };
 
+  const selectAppearance = (field: ShtAppearanceColorField | 'fontFamily', value: string) => {
+    setSettings((current) => ({
+      ...current,
+      [selectedApp]: {
+        ...current[selectedApp],
+        appearance: normalizeShtAppearanceOverrides({
+          ...current[selectedApp].appearance,
+          [field]: value,
+        }),
+      },
+    }));
+    setDirtyApps((current) => new Set(current).add(selectedApp));
+    setMessage('세부 디자인은 미리보기에서만 변경했습니다. 저장해야 실제 앱에 반영됩니다.');
+  };
+
+  const openPreview = () => {
+    const url = new URL(APP_PREVIEW_URLS[selectedApp], window.location.origin);
+    url.searchParams.set(SHT_THEME_PREVIEW_PARAM, JSON.stringify({
+      appId: selectedApp,
+      themeId: selectedSetting.themeId,
+      typography: selectedSetting.typography,
+      appearance: selectedSetting.appearance,
+    }));
+    window.open(url.toString(), '_blank', 'noopener,noreferrer');
+  };
+
   const resetAllThemes = () => {
     const themeChangedApps = SHT_APP_IDS.filter((appId) => settings[appId].themeId !== DEFAULT_SHT_THEME);
 
     if (themeChangedApps.length === 0) {
-      setMessage('모든 앱이 이미 기본 테마입니다. 글씨 크기와 메뉴 설정은 그대로 유지했습니다.');
+      setMessage('모든 앱이 이미 기본 테마입니다. 글씨 크기와 세부 디자인 설정은 그대로 유지했습니다.');
       return;
     }
 
@@ -141,7 +237,7 @@ export default function ThemeManagementPage() {
       SHT_APP_IDS.map((appId) => [appId, { ...current[appId], themeId: DEFAULT_SHT_THEME }]),
     ) as ThemeSettings);
     setDirtyApps((current) => new Set([...current, ...themeChangedApps]));
-    setMessage('테마만 변경 전 기본 상태로 표시했습니다. 글씨 크기와 메뉴 설정은 유지됩니다. 저장해야 실제 앱에 반영됩니다.');
+    setMessage('테마만 변경 전 기본 상태로 표시했습니다. 글씨 크기와 세부 디자인 설정은 유지됩니다. 저장해야 실제 앱에 반영됩니다.');
   };
 
   const saveSettings = async () => {
@@ -156,7 +252,12 @@ export default function ThemeManagementPage() {
     const rows = Array.from(dirtyApps).map((appId) => ({
       app_id: appId,
       theme_id: settings[appId].themeId,
-      typography: settings[appId].typography,
+      typography: {
+        ...settings[appId].typography,
+        ...(Object.keys(settings[appId].appearance).length > 0
+          ? { appearance: settings[appId].appearance }
+          : {}),
+      },
       updated_at: new Date().toISOString(),
     }));
     const controller = new AbortController();
@@ -177,13 +278,38 @@ export default function ThemeManagementPage() {
         return;
       }
 
-      rows.forEach((row) => notifyShtThemeUpdated(row.app_id, row.theme_id, row.typography));
+      const { data: savedRows, error: verifyError } = await supabase
+        .from('app_theme_settings')
+        .select('app_id, theme_id, typography')
+        .in('app_id', rows.map((row) => row.app_id))
+        .abortSignal(controller.signal);
+      const savedMatches = !verifyError && rows.every((row) => {
+        const saved = savedRows?.find((item) => item.app_id === row.app_id);
+        if (!saved || saved.theme_id !== row.theme_id) return false;
+        const savedTypography = normalizeShtTypographyOverrides(saved.typography);
+        const savedAppearance = normalizeShtAppearanceOverrides(
+          (saved.typography as Record<string, unknown> | null)?.appearance,
+        );
+        return JSON.stringify(savedTypography) === JSON.stringify(normalizeShtTypographyOverrides(settings[row.app_id].typography))
+          && JSON.stringify(savedAppearance) === JSON.stringify(normalizeShtAppearanceOverrides(settings[row.app_id].appearance));
+      });
+      if (!savedMatches) {
+        setMessage(`저장 후 설정을 확인하지 못했습니다. ${verifyError?.message ?? '화면을 새로고침해 설정을 확인해 주세요.'}`);
+        return;
+      }
+
+      rows.forEach((row) => notifyShtThemeUpdated(
+        row.app_id,
+        row.theme_id,
+        settings[row.app_id].typography,
+        settings[row.app_id].appearance,
+      ));
       setDirtyApps(new Set());
       setMessage(`${rows.length}개 앱의 테마를 저장했습니다.`);
     } catch (error) {
       setMessage(
         error instanceof DOMException && error.name === 'AbortError'
-          ? '저장 요청이 8초 안에 완료되지 않았습니다. 네트워크와 데이터베이스 연결을 확인한 뒤 다시 시도해 주세요.'
+          ? '저장 또는 확인 요청이 8초 안에 완료되지 않았습니다. 네트워크와 데이터베이스 연결을 확인한 뒤 다시 시도해 주세요.'
           : `저장하지 못했습니다. ${error instanceof Error ? error.message : '알 수 없는 오류입니다.'}`,
       );
     } finally {
@@ -205,6 +331,15 @@ export default function ThemeManagementPage() {
               </p>
             </div>
             <div className="flex shrink-0 flex-wrap gap-2">
+              <button
+                type="button"
+                data-sht-theme-ignore
+                onClick={openPreview}
+                disabled={loading}
+                className="min-h-11 rounded-lg border border-[var(--sht-primary)] bg-[var(--sht-surface)] px-4 py-2 text-sm font-semibold text-[var(--sht-primary)] transition-colors hover:bg-[var(--sht-primary-soft)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--sht-focus)] disabled:pointer-events-none disabled:opacity-40"
+              >
+                선택 앱 미리보기
+              </button>
               <button
                 type="button"
                 data-sht-theme-ignore
@@ -330,6 +465,64 @@ export default function ThemeManagementPage() {
                   </label>
                 ))}
               </div>
+              <div className="mt-5 border-t border-[var(--sht-border)] pt-5">
+                <h3 className="text-sm font-bold text-[var(--sht-heading)]">글꼴 모양</h3>
+                <label className="mt-2 block max-w-sm text-sm font-semibold text-[var(--sht-heading)]">
+                  <span className="mb-1.5 block">앱 글꼴</span>
+                  <select
+                    data-sht-theme-ignore
+                    value={selectedSetting.appearance.fontFamily ?? ''}
+                    onChange={(event) => selectAppearance('fontFamily', event.target.value)}
+                    className="min-h-11 w-full rounded-lg border border-[var(--sht-border)] bg-[var(--sht-surface)] px-3 py-2 text-sm font-medium text-[var(--sht-text)]"
+                  >
+                    {SHT_FONT_OPTIONS.map((option) => (
+                      <option key={option.label} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <div className="mt-5 border-t border-[var(--sht-border)] pt-5">
+                <h3 className="text-sm font-bold text-[var(--sht-heading)]">세부 색상</h3>
+                <p className="mt-1 text-xs text-[var(--sht-text-muted)]">기본값은 선택한 테마의 색상을 유지합니다. 색상을 지정한 항목만 별도로 적용됩니다.</p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  {SHT_APPEARANCE_COLOR_FIELDS.map((field) => (
+                    <div key={field} className="flex min-w-0 items-center justify-between gap-2 rounded-lg border border-[var(--sht-border)] px-3 py-2">
+                      <div className="min-w-0">
+                        <label className="block text-sm font-semibold text-[var(--sht-heading)]" htmlFor={`theme-color-${field}`}>
+                          {APPEARANCE_COLOR_LABELS[field]}
+                        </label>
+                        <span className="text-xs text-[var(--sht-text-muted)]">
+                          {selectedSetting.appearance[field] ?? (field === 'headingBackground' ? '배경 없음' : '테마 기본값')}
+                        </span>
+                      </div>
+                      <input
+                        id={`theme-color-${field}`}
+                        type="color"
+                        data-sht-theme-ignore
+                        value={selectedSetting.appearance[field] ?? getAppearanceBaseColor(field, selectedThemeId)}
+                        onChange={(event) => selectAppearance(field, event.target.value)}
+                        className="h-11 w-12 shrink-0 cursor-pointer rounded-md border border-[var(--sht-border)] bg-[var(--sht-surface)] p-1"
+                      />
+                      <button
+                        type="button"
+                        data-sht-theme-ignore
+                        onClick={() => selectAppearance(
+                          field,
+                          selectedSetting.appearance[field] ? '' : getAppearanceBaseColor(field, selectedThemeId),
+                        )}
+                        className="min-h-11 shrink-0 text-xs font-medium text-[var(--sht-text-muted)] underline underline-offset-2"
+                      >
+                        {selectedSetting.appearance[field] ? '기본' : '적용'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                {contrastWarnings.length > 0 && (
+                  <p role="status" className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                    {contrastWarnings.join(', ')} 색상 대비가 낮습니다. 글자색이나 바탕색을 조정해 주세요.
+                  </p>
+                )}
+              </div>
             </section>
           </div>
 
@@ -342,14 +535,15 @@ export default function ThemeManagementPage() {
               </div>
               <div
                 data-sht-theme={selectedTheme.id}
+                data-sht-preview-font={selectedSetting.appearance.fontFamily ? 'custom' : undefined}
                 className="sht-theme-preview min-w-0 overflow-hidden rounded-lg border p-5"
-                style={getShtThemeStyle(selectedTheme.id, selectedSetting.typography)}
+                style={getShtThemeStyle(selectedTheme.id, selectedSetting.typography, selectedSetting.appearance)}
               >
                 <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(230px,0.8fr)] 2xl:grid-cols-1">
                   <div>
                     <p className="sht-theme-preview__label">{selectedTheme.eyebrow} / STAY HALONG</p>
                     <h3 className="sht-theme-preview__heading mt-3">여행을 더 선명하게 준비하세요.</h3>
-                    <p className="mt-3 max-w-2xl text-sm leading-7" style={{ color: 'var(--sht-text-muted)' }}>
+                    <p className="mt-3 max-w-2xl text-sm leading-7" style={{ color: 'var(--sht-text)' }}>
                       계절 테마의 색상과 별도로 선택한 글씨 크기를 확인할 수 있습니다.
                     </p>
                     <div className="mt-5 flex flex-wrap gap-2">

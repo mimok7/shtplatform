@@ -292,3 +292,21 @@ select {
 .admin-root button {
   font-size: 0.85rem;
 }
+
+html:is([data-sht-theme], [data-sht-style-primary='custom']) .sht-admin-header {
+  background-color: var(--sht-primary);
+  color: var(--sht-primary-text);
+}
+
+html:is([data-sht-theme], [data-sht-style-primary='custom']) .sht-admin-header__mark {
+  background-color: var(--sht-primary-soft);
+  color: var(--sht-primary);
+}
+
+html:is([data-sht-theme], [data-sht-style-primary='custom']) :is(.sht-admin-header__title, .sht-admin-header__subtitle, .sht-admin-header__identity) {
+  color: var(--sht-primary-text);
+}
+
+html[data-sht-style-primary-text='custom'] :is(.sht-admin-header__title, .sht-admin-header__subtitle, .sht-admin-header__identity) {
+  color: var(--sht-primary-text);
+}

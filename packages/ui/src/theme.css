@@ -10,6 +10,9 @@
   --sht-primary-hover: #0a464b;
   --sht-primary-text: #ffffff;
   --sht-primary-soft: #e4eed4;
+  --sht-heading-background: transparent;
+  --sht-card-header-background: var(--sht-primary-soft);
+  --sht-card-header-text: var(--sht-heading);
   --sht-accent: #d9ff72;
   --sht-border: rgba(6, 47, 51, 0.18);
   --sht-focus: #bce94b;
@@ -34,8 +37,20 @@ html[data-sht-theme] body {
   color: var(--sht-text);
 }
 
-html[data-sht-theme] :where(h1, h2, h3, h4, h5, h6):not([data-sht-theme-ignore]) {
+html:is([data-sht-theme], [data-sht-style-heading='custom']) :where(h1, h2, h3, h4, h5, h6):not([data-sht-theme-ignore]) {
   color: var(--sht-heading);
+}
+
+html[data-sht-style-font-family='custom'] body {
+  font-family: var(--sht-font-family);
+}
+
+html[data-sht-style-heading-background='custom'] :where(h1, h2, h3):not([data-sht-theme-ignore]) {
+  background-color: var(--sht-heading-background);
+}
+
+html[data-sht-style-text='custom'] body {
+  color: var(--sht-text);
 }
 
 html[data-sht-typography='custom'][data-sht-type-body='custom'] body {
@@ -70,7 +85,7 @@ html[data-sht-typography='custom'][data-sht-type-sub-menu='custom'] [data-sht-me
   font-size: var(--sht-sub-menu-font-size) !important;
 }
 
-html[data-sht-theme] :where(
+html:is([data-sht-theme], [data-sht-style-primary='custom']) :where(
   button[class*='bg-blue-'],
   button[class*='bg-indigo-'],
   button[class*='bg-cyan-'],
@@ -87,7 +102,7 @@ html[data-sht-theme] :where(
   color: var(--sht-primary-text) !important;
 }
 
-html[data-sht-theme] :where(
+html:is([data-sht-theme], [data-sht-style-primary='custom']) :where(
   button[class*='bg-blue-'],
   button[class*='bg-indigo-'],
   button[class*='bg-cyan-'],
@@ -102,7 +117,7 @@ html[data-sht-theme] :where(
   background-color: var(--sht-primary-hover) !important;
 }
 
-html[data-sht-theme] :where(
+html:is([data-sht-theme], [data-sht-style-primary='custom']) :where(
   button[class*='text-blue-'],
   button[class*='text-indigo-'],
   a[class*='text-blue-'],
@@ -131,8 +146,27 @@ html[data-sht-theme] :where(.card, [class*='bg-white'][class*='rounded'][class*=
 
 html[data-sht-theme] :where(.card, [class*='bg-white'][class*='rounded'][class*='border']) > :first-child:has(> :is(h2, h3, h4)),
 html[data-sht-theme] :where(.card, [class*='bg-white'][class*='rounded'][class*='border']) > :is(h2, h3, h4):first-child {
-  background-color: var(--sht-primary-soft) !important;
+  background-color: var(--sht-card-header-background, var(--sht-primary-soft)) !important;
   border-color: var(--sht-border) !important;
+  color: var(--sht-card-header-text, var(--sht-heading)) !important;
+}
+
+html[data-sht-style-primary-text='custom'] :where(button[class*='bg-blue-'], button[class*='bg-indigo-'], button[class*='bg-cyan-'], button[class*='bg-teal-']) {
+  color: var(--sht-primary-text) !important;
+}
+
+html[data-sht-style-surface='custom'] :where(.card, [class*='bg-white'][class*='rounded'][class*='border']) {
+  background-color: var(--sht-surface) !important;
+}
+
+html[data-sht-style-card-header-background='custom'] :where(.card, [class*='bg-white'][class*='rounded'][class*='border']) > :first-child:has(> :is(h2, h3, h4)),
+html[data-sht-style-card-header-background='custom'] :where(.card, [class*='bg-white'][class*='rounded'][class*='border']) > :is(h2, h3, h4):first-child {
+  background-color: var(--sht-card-header-background) !important;
+}
+
+html[data-sht-style-card-header-text='custom'] :where(.card, [class*='bg-white'][class*='rounded'][class*='border']) > :first-child:has(> :is(h2, h3, h4)),
+html[data-sht-style-card-header-text='custom'] :where(.card, [class*='bg-white'][class*='rounded'][class*='border']) > :is(h2, h3, h4):first-child {
+  color: var(--sht-card-header-text) !important;
 }
 
 html[data-sht-theme] :where(table) {
@@ -164,6 +198,15 @@ html[data-sht-theme][data-sht-app='mobile'] {
 .sht-theme-preview {
   background: var(--sht-canvas);
   color: var(--sht-text);
+  font-family: 'Pretendard Variable', 'Pretendard', 'Noto Sans KR', sans-serif;
+}
+
+.sht-theme-preview[data-sht-preview-font='custom'] {
+  font-family: var(--sht-font-family);
+}
+
+.sht-theme-preview .sht-theme-preview__heading {
+  background: var(--sht-heading-background) !important;
 }
 
 .sht-theme-preview__heading {
@@ -223,12 +266,45 @@ html[data-sht-theme][data-sht-app='mobile'] {
 
 .sht-theme-preview__card-header {
   border-bottom: 1px solid var(--sht-border);
-  background: var(--sht-primary-soft);
-  color: var(--sht-heading);
+  background: var(--sht-card-header-background, var(--sht-primary-soft));
+  color: var(--sht-card-header-text, var(--sht-heading));
 }
 
 .sht-theme-preview__card-body {
   background: var(--sht-surface);
+}
+
+.sht-theme-preview-notice {
+  position: fixed;
+  z-index: 2147483647;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  max-width: calc(100vw - 32px);
+  padding: 10px 12px;
+  border: 1px solid #c4d5df;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #243f57;
+  box-shadow: 0 8px 24px rgba(36, 63, 87, 0.15);
+  font-size: 13px;
+}
+
+.sht-theme-preview-notice button {
+  min-height: 44px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: #243f57;
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.sht-theme-preview-notice button:focus-visible {
+  outline: 2px solid #70b8e4;
+  outline-offset: 2px;
 }
 
 @media (prefers-reduced-motion: reduce) {

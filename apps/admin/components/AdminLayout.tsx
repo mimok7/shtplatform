@@ -372,21 +372,21 @@ export default function AdminLayout({ children, title, activeTab }: AdminLayoutP
     <SecurityProvider>
       <div className="admin-root min-h-screen bg-gray-100">
         {/* Admin Header */}
-        <header className="sticky top-0 z-50 bg-blue-100 text-blue-900 shadow-sm">
+        <header className="sht-admin-header sticky top-0 z-50 bg-blue-100 text-blue-900 shadow-sm">
           <div className="mx-auto w-full max-w-[1920px] px-2 sm:px-4 lg:px-6">
             <div className="flex min-h-14 flex-wrap items-center justify-between gap-2 py-2 sm:min-h-16">
               <div className="flex min-w-0 items-center space-x-3 sm:space-x-4">
-                <div className="w-10 h-10 bg-blue-200 rounded-full flex items-center justify-center text-blue-900 text-xl font-bold">
+                <div className="sht-admin-header__mark w-10 h-10 bg-blue-200 rounded-full flex items-center justify-center text-blue-900 text-xl font-bold">
                   A
                 </div>
                 <div>
-                  <h1 data-sht-theme-ignore className="text-sm font-bold text-blue-900">관리자 패널</h1>
-                  <p className="text-blue-700 text-sm">스테이하롱 크루즈</p>
+                  <h1 data-sht-theme-ignore className="sht-admin-header__title text-sm font-bold text-blue-900">관리자 패널</h1>
+                  <p className="sht-admin-header__subtitle text-blue-700 text-sm">스테이하롱 크루즈</p>
                 </div>
               </div>
 
               <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-4">
-                <span className="hidden text-sm text-blue-700 sm:inline">{user?.email} (관리자)</span>
+                <span className="sht-admin-header__identity hidden text-sm text-blue-700 sm:inline">{user?.email} (관리자)</span>
                 <button
                   onClick={handleLogout}
                   className="px-3 py-2 rounded-md text-sm bg-blue-600 text-white hover:bg-blue-700 transition-colors"

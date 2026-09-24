@@ -68,6 +68,59 @@ export const SHT_TYPOGRAPHY_FIELDS = [
 export type ShtTypographyField = (typeof SHT_TYPOGRAPHY_FIELDS)[number];
 export type ShtTypographyOverrides = Partial<Record<ShtTypographyField, string>>;
 
+export const SHT_FONT_OPTIONS = [
+  { label: '기본 글꼴', value: '' },
+  { label: '프리텐다드 고딕', value: "'Pretendard Variable', 'Pretendard', 'Noto Sans KR', sans-serif" },
+  { label: '한글 고딕', value: "'Noto Sans KR', 'Malgun Gothic', sans-serif" },
+  { label: '한글 명조', value: "'Noto Serif KR', 'Nanum Myeongjo', serif" },
+] as const;
+
+export const SHT_APPEARANCE_COLOR_FIELDS = [
+  'heading',
+  'headingBackground',
+  'text',
+  'primary',
+  'primaryText',
+  'surface',
+  'cardHeaderBackground',
+  'cardHeaderText',
+] as const;
+
+export type ShtAppearanceColorField = (typeof SHT_APPEARANCE_COLOR_FIELDS)[number];
+export type ShtAppearanceOverrides = Partial<Record<ShtAppearanceColorField | 'fontFamily', string>>;
+
+export function normalizeShtAppearanceOverrides(value: unknown): ShtAppearanceOverrides {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const raw = value as Record<string, unknown>;
+  const overrides: ShtAppearanceOverrides = {};
+  if (SHT_FONT_OPTIONS.some((option) => option.value && option.value === raw.fontFamily)) {
+    overrides.fontFamily = raw.fontFamily as string;
+  }
+  SHT_APPEARANCE_COLOR_FIELDS.forEach((field) => {
+    const color = raw[field];
+    if (typeof color === 'string' && /^#[0-9a-fA-F]{6}$/.test(color)) overrides[field] = color.toLowerCase();
+  });
+  return overrides;
+}
+
+export function getShtAppearanceStyle(appearanceOverrides: ShtAppearanceOverrides): CSSProperties {
+  const appearance = normalizeShtAppearanceOverrides(appearanceOverrides);
+  return {
+    ...(appearance.fontFamily ? { '--sht-font-family': appearance.fontFamily } : {}),
+    ...(appearance.heading ? { '--sht-heading': appearance.heading } : {}),
+    ...(appearance.headingBackground ? { '--sht-heading-background': appearance.headingBackground } : {}),
+    ...(appearance.text ? { '--sht-text': appearance.text } : {}),
+    ...(appearance.primary ? {
+      '--sht-primary': appearance.primary,
+      '--sht-primary-hover': `color-mix(in srgb, ${appearance.primary} 85%, black)`,
+    } : {}),
+    ...(appearance.primaryText ? { '--sht-primary-text': appearance.primaryText } : {}),
+    ...(appearance.surface ? { '--sht-surface': appearance.surface } : {}),
+    ...(appearance.cardHeaderBackground ? { '--sht-card-header-background': appearance.cardHeaderBackground } : {}),
+    ...(appearance.cardHeaderText ? { '--sht-card-header-text': appearance.cardHeaderText } : {}),
+  } as CSSProperties;
+}
+
 export const SHT_TYPOGRAPHY_OPTIONS: Record<
   ShtTypographyField,
   ReadonlyArray<{ label: string; value: string }>
@@ -390,9 +443,11 @@ export function getShtTypographyStyle(typographyOverrides: ShtTypographyOverride
 export function getShtThemeStyle(
   themeId: ShtThemeId,
   typographyOverrides: ShtTypographyOverrides = {},
+  appearanceOverrides: ShtAppearanceOverrides = {},
 ): CSSProperties {
   const tokens = getShtThemeDefinition(themeId).tokens;
   const typography = normalizeShtTypographyOverrides(typographyOverrides);
+  const appearance = getShtAppearanceStyle(appearanceOverrides);
 
   return {
     '--sht-canvas': tokens.canvas,
@@ -401,10 +456,13 @@ export function getShtThemeStyle(
     '--sht-text': tokens.text,
     '--sht-text-muted': tokens.textMuted,
     '--sht-heading': tokens.heading,
+    '--sht-heading-background': 'transparent',
     '--sht-primary': tokens.primary,
     '--sht-primary-hover': tokens.primaryHover,
     '--sht-primary-text': tokens.primaryText,
     '--sht-primary-soft': tokens.primarySoft,
+    '--sht-card-header-background': tokens.primarySoft,
+    '--sht-card-header-text': tokens.heading,
     '--sht-accent': tokens.accent,
     '--sht-border': tokens.border,
     '--sht-focus': tokens.focus,
@@ -424,5 +482,6 @@ export function getShtThemeStyle(
     '--sht-input-radius': tokens.inputRadius,
     '--sht-card-radius': tokens.cardRadius,
     '--sht-card-shadow': tokens.cardShadow,
+    ...appearance,
   } as CSSProperties;
 }
