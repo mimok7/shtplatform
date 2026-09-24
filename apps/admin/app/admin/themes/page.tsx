@@ -193,24 +193,24 @@ export default function ThemeManagementPage() {
   };
 
   return (
-    <AdminLayout title="테마 관리" activeTab="themes">
-      <div className="mx-auto max-w-[1440px] space-y-8 px-4 py-6 md:px-8">
-        <header className="border-b border-gray-300 pb-6">
-          <p className="mb-3 text-xs font-bold tracking-[0.16em] text-gray-500">DESIGN SYSTEM / APP THEMES</p>
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+    <AdminLayout activeTab="themes">
+      <div className="mx-auto max-w-[1440px] space-y-5 px-2 pb-6 sm:px-4">
+        <header className="rounded-xl border border-slate-200 bg-[var(--sht-surface)] px-5 py-5 sm:px-6">
+          <p className="mb-2 text-xs font-semibold tracking-[0.14em] text-[var(--sht-text-muted)]">테마 관리 · DESIGN SYSTEM / APP THEMES</p>
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <h1 data-sht-theme-ignore className="text-xl font-extrabold tracking-tight text-gray-900">앱별 테마 설정</h1>
-              <p className="mt-3 max-w-3xl text-sm leading-7 text-gray-600">
+              <h1 data-sht-theme-ignore className="text-xl font-bold tracking-tight text-[var(--sht-heading)]">앱별 테마 설정</h1>
+              <p className="mt-1.5 max-w-3xl text-sm leading-6 text-[var(--sht-text-muted)]">
                 계절 테마는 앱의 색상만 변경합니다. 글씨 크기는 아래 항목에서 별도로 선택한 경우에만 변경됩니다.
               </p>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex shrink-0 flex-wrap gap-2">
               <button
                 type="button"
                 data-sht-theme-ignore
                 onClick={resetAllThemes}
                 disabled={saving || loading}
-                className="border border-gray-400 bg-white px-5 py-3 text-sm font-bold text-gray-700 disabled:cursor-not-allowed disabled:opacity-40"
+                className="min-h-11 rounded-lg border border-[var(--sht-border)] bg-[var(--sht-surface)] px-4 py-2 text-sm font-semibold text-[var(--sht-heading)] transition-colors hover:bg-[var(--sht-surface-muted)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--sht-focus)] disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-40"
               >
                 전체 테마만 변경 전으로 표시
               </button>
@@ -219,20 +219,19 @@ export default function ThemeManagementPage() {
                 data-sht-theme-ignore
                 onClick={saveSettings}
                 disabled={saving || loading || dirtyApps.size === 0}
-                className="border border-[#062f33] bg-[#062f33] px-6 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40"
+                className="min-h-11 rounded-lg border border-[var(--sht-primary)] bg-[var(--sht-primary)] px-5 py-2 text-sm font-semibold text-[var(--sht-primary-text)] transition-colors hover:bg-[var(--sht-primary-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--sht-focus)] disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {saving ? '저장 중' : `변경사항 저장 ${dirtyApps.size > 0 ? `(${dirtyApps.size})` : ''}`}
               </button>
             </div>
           </div>
-          {message && <p className="mt-4 border-l-4 border-[#d9ff72] pl-3 text-sm text-gray-700">{message}</p>}
-          {loadError && <p className="mt-4 border-l-4 border-red-500 pl-3 text-sm text-red-700">{loadError}</p>}
+          {message && <p role="status" className="mt-4 rounded-lg border border-[var(--sht-border)] bg-[var(--sht-surface-muted)] px-3 py-2 text-sm text-[var(--sht-text)]">{message}</p>}
+          {loadError && <p role="alert" className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{loadError}</p>}
         </header>
 
-        <section className="grid gap-8 xl:grid-cols-[260px_minmax(0,1fr)]">
-          <aside>
-            <p className="mb-3 text-xs font-bold tracking-[0.14em] text-gray-500">01 / 앱 선택</p>
-            <div className="border-y border-gray-300">
+        <section className="rounded-xl border border-slate-200 bg-[var(--sht-surface)] p-4 sm:p-5">
+          <p className="mb-3 text-xs font-semibold tracking-[0.12em] text-[var(--sht-text-muted)]">01 / 앱 선택</p>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
               {SHT_APP_IDS.map((appId) => {
                 const active = selectedApp === appId;
                 const theme = SHT_THEME_DEFINITIONS.find((item) => item.id === settings[appId].themeId);
@@ -241,35 +240,37 @@ export default function ThemeManagementPage() {
                     key={appId}
                     type="button"
                     data-sht-theme-ignore
+                    aria-pressed={active}
                     onClick={() => setSelectedApp(appId)}
-                    className={`flex min-h-[58px] w-full items-center justify-between border-b border-gray-200 px-3 text-left transition-colors last:border-b-0 ${
-                      active ? 'border-l-4 border-l-[#062f33] bg-[#e4eed4]' : 'hover:bg-gray-50'
+                    className={`flex min-h-[58px] min-w-0 items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--sht-focus)] ${
+                      active ? 'border-[var(--sht-primary)] bg-[var(--sht-primary-soft)]' : 'border-[var(--sht-border)] bg-[var(--sht-surface)] hover:bg-[var(--sht-surface-muted)]'
                     }`}
                   >
-                    <span>
-                      <span className="block text-sm font-bold text-gray-900">{SHT_APP_LABELS[appId]}</span>
-                      <span className="mt-1 block text-xs text-gray-500">{theme?.label}</span>
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold text-[var(--sht-heading)]">{SHT_APP_LABELS[appId]}</span>
+                      <span className="mt-0.5 block text-xs text-[var(--sht-text-muted)]">{theme?.label}</span>
                     </span>
                     {dirtyApps.has(appId) && (
-                      <span className="h-2 w-2 bg-[#ff725e]" aria-label="저장되지 않은 변경사항" />
+                      <span className="h-2 w-2 shrink-0 rounded-full bg-amber-500" aria-label="저장되지 않은 변경사항" />
                     )}
                   </button>
                 );
               })}
-            </div>
-          </aside>
+          </div>
+        </section>
 
-          <div className="min-w-0 space-y-10">
-            <section>
+        <div className="grid min-w-0 gap-5 2xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.75fr)] 2xl:items-start">
+          <div className="min-w-0 space-y-5">
+            <section className="rounded-xl border border-slate-200 bg-[var(--sht-surface)] p-4 sm:p-5">
               <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
                 <div>
-                  <p className="mb-2 text-xs font-bold tracking-[0.14em] text-gray-500">02 / 계절 테마</p>
-                  <h2 className="text-xl font-bold text-gray-900">{SHT_APP_LABELS[selectedApp]} 앱에 적용할 테마</h2>
+                  <p className="mb-1 text-xs font-semibold tracking-[0.12em] text-[var(--sht-text-muted)]">02 / 계절 테마</p>
+                  <h2 className="text-lg font-bold text-[var(--sht-heading)]">{SHT_APP_LABELS[selectedApp]} 앱에 적용할 테마</h2>
                 </div>
                 <p className="text-xs font-medium text-amber-700">선택은 미리보기만 바꾸며 저장 전에는 실제 앱에 적용되지 않습니다.</p>
               </div>
 
-              <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
+              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-2">
                 {SHT_THEME_DEFINITIONS.map((theme) => {
                   const active = selectedThemeId === theme.id;
                   return (
@@ -279,24 +280,24 @@ export default function ThemeManagementPage() {
                       data-sht-theme-ignore
                       aria-pressed={active}
                       onClick={() => selectTheme(theme.id)}
-                      className={`min-h-[152px] border p-5 text-left transition-colors ${
-                        active ? 'border-[#062f33] bg-[#f4f4ed]' : 'border-gray-300 bg-white hover:border-gray-500'
+                      className={`min-h-[136px] rounded-lg border p-4 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--sht-focus)] ${
+                        active ? 'border-[var(--sht-primary)] bg-[var(--sht-primary-soft)]' : 'border-[var(--sht-border)] bg-[var(--sht-surface)] hover:bg-[var(--sht-surface-muted)]'
                       }`}
                     >
-                      <span className="mb-5 flex items-center gap-2">
+                      <span className="mb-3 flex items-center gap-1.5">
                         {[theme.tokens.primary, theme.tokens.accent, theme.tokens.canvas].map((color) => (
                           <span
                             key={color}
-                            className="h-5 w-5 border border-black/10"
+                            className="h-4 w-4 rounded-full border border-black/10"
                             style={{ backgroundColor: color }}
                           />
                         ))}
                       </span>
-                      <span className="block text-[10px] font-bold tracking-[0.16em] text-gray-500">{theme.eyebrow}</span>
-                      <span className="mt-1 block text-base font-extrabold text-gray-900">{theme.label}</span>
-                      <span className="mt-2 block text-xs leading-5 text-gray-600">{theme.description}</span>
+                      <span className="block text-[10px] font-semibold tracking-[0.14em] text-[var(--sht-text-muted)]">{theme.eyebrow}</span>
+                      <span className="mt-0.5 block text-base font-bold text-[var(--sht-heading)]">{theme.label}</span>
+                      <span className="mt-1 block text-xs leading-5 text-[var(--sht-text-muted)]">{theme.description}</span>
                       {theme.id === DEFAULT_SHT_THEME && (
-                        <span className="mt-3 inline-block bg-gray-100 px-2 py-1 text-[11px] font-bold text-gray-600">
+                        <span className="mt-2 inline-block rounded bg-[var(--sht-surface-muted)] px-2 py-0.5 text-[11px] font-semibold text-[var(--sht-text-muted)]">
                           원래 UI 유지
                         </span>
                       )}
@@ -306,21 +307,21 @@ export default function ThemeManagementPage() {
               </div>
             </section>
 
-            <section>
+            <section className="rounded-xl border border-slate-200 bg-[var(--sht-surface)] p-4 sm:p-5">
               <div className="mb-4">
-                <p className="mb-2 text-xs font-bold tracking-[0.14em] text-gray-500">03 / 글씨 크기</p>
-                <h2 className="text-xl font-bold text-gray-900">{SHT_APP_LABELS[selectedApp]} 앱의 글씨 크기</h2>
-                <p className="mt-2 text-sm text-gray-600">기본값은 각 앱의 기존 글씨 크기를 유지합니다. 항목별로 선택하면 저장 전 미리보기에 바로 반영되며, 테마 복원 시에도 유지됩니다.</p>
+                <p className="mb-1 text-xs font-semibold tracking-[0.12em] text-[var(--sht-text-muted)]">03 / 글씨 크기</p>
+                <h2 className="text-lg font-bold text-[var(--sht-heading)]">{SHT_APP_LABELS[selectedApp]} 앱의 글씨 크기</h2>
+                <p className="mt-1.5 text-sm leading-6 text-[var(--sht-text-muted)]">기본값은 각 앱의 기존 글씨 크기를 유지합니다. 항목별로 선택하면 저장 전 미리보기에 바로 반영되며, 테마 복원 시에도 유지됩니다.</p>
               </div>
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-2">
                 {SHT_TYPOGRAPHY_FIELDS.map((field) => (
-                  <label key={field} className="border border-gray-300 bg-white p-4 text-sm font-bold text-gray-800">
-                    <span className="mb-2 block">{TYPOGRAPHY_LABELS[field]}</span>
+                  <label key={field} className="block text-sm font-semibold text-[var(--sht-heading)]">
+                    <span className="mb-1.5 block">{TYPOGRAPHY_LABELS[field]}</span>
                     <select
                       data-sht-theme-ignore
                       value={selectedSetting.typography[field] ?? SHT_TYPOGRAPHY_OPTIONS[field].find((option) => option.label === '기본')?.value ?? ''}
                       onChange={(event) => selectTypography(field, event.target.value)}
-                      className="w-full border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-800"
+                      className="min-h-11 w-full rounded-lg border border-[var(--sht-border)] bg-[var(--sht-surface)] px-3 py-2 text-sm font-medium text-[var(--sht-text)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--sht-focus)]"
                     >
                       {SHT_TYPOGRAPHY_OPTIONS[field].map((option) => (
                         <option key={option.value} value={option.value}>{option.label}</option>
@@ -330,27 +331,28 @@ export default function ThemeManagementPage() {
                 ))}
               </div>
             </section>
+          </div>
 
-            <section>
+          <section className="min-w-0 rounded-xl border border-slate-200 bg-[var(--sht-surface)] p-4 sm:p-5 2xl:sticky 2xl:top-24">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <p className="text-xs font-bold tracking-[0.14em] text-gray-500">04 / 저장 전 미리보기</p>
-                <span className="bg-amber-50 px-2 py-1 text-xs font-bold text-amber-700">
+                <p className="text-xs font-semibold tracking-[0.12em] text-[var(--sht-text-muted)]">04 / 저장 전 미리보기</p>
+                <span className="rounded-md bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700">
                   미리보기 전용 · 아직 적용되지 않음
                 </span>
               </div>
               <div
                 data-sht-theme={selectedTheme.id}
-                className="sht-theme-preview border p-5 md:p-8"
+                className="sht-theme-preview min-w-0 overflow-hidden rounded-lg border p-5"
                 style={getShtThemeStyle(selectedTheme.id, selectedSetting.typography)}
               >
-                <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
+                <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(230px,0.8fr)] 2xl:grid-cols-1">
                   <div>
                     <p className="sht-theme-preview__label">{selectedTheme.eyebrow} / STAY HALONG</p>
                     <h3 className="sht-theme-preview__heading mt-3">여행을 더 선명하게 준비하세요.</h3>
                     <p className="mt-3 max-w-2xl text-sm leading-7" style={{ color: 'var(--sht-text-muted)' }}>
                       계절 테마의 색상과 별도로 선택한 글씨 크기를 확인할 수 있습니다.
                     </p>
-                    <div className="mt-6 flex flex-wrap gap-3">
+                    <div className="mt-5 flex flex-wrap gap-2">
                       <button type="button" data-sht-theme-ignore className="sht-theme-preview__button">예약 확인</button>
                       <button
                         type="button"
@@ -360,12 +362,12 @@ export default function ThemeManagementPage() {
                         상세 보기
                       </button>
                     </div>
-                    <div className="mt-6 border-t pt-4" style={{ borderColor: 'var(--sht-border)' }}>
+                    <div className="mt-5 border-t pt-4" style={{ borderColor: 'var(--sht-border)' }}>
                       <p className="sht-theme-preview__menu-main">예약 관리</p>
                       <p className="sht-theme-preview__menu-sub mt-2">예약 목록 · 예약 수정 · 결제 관리</p>
                     </div>
                   </div>
-                  <div className="sht-theme-preview__card">
+                  <div className="sht-theme-preview__card min-w-0">
                     <div className="sht-theme-preview__card-header px-5 py-3 font-bold">예약 정보</div>
                     <div className="sht-theme-preview__card-body p-5">
                       <label className="sht-theme-preview__label block" htmlFor="theme-preview-name">고객 이름</label>
@@ -389,9 +391,8 @@ export default function ThemeManagementPage() {
                   </div>
                 </div>
               </div>
-            </section>
-          </div>
-        </section>
+          </section>
+        </div>
       </div>
     </AdminLayout>
   );
