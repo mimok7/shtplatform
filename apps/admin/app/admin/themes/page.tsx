@@ -45,7 +45,7 @@ const INITIAL_SETTINGS = Object.fromEntries(
 
 const APP_PREVIEW_URLS: Record<ShtAppId, string> = {
   admin: '/admin',
-  customer: 'https://staycruise.kr/',
+  customer: 'https://customer.stayhalong.com/',
   customer1: 'https://legacy.staycruise.kr/',
   manager: 'https://manager.stayhalong.com/manager/dashboard',
   manager1: 'https://manag.stayhalong.com/manager/dashboard',
