@@ -44,6 +44,13 @@ type OtherDayRoundTripForm = {
 
 const carCategoryHardcoded = ['편도', '당일왕복', '일정왕복', '다른날왕복'];
 
+const getCruiseNameVariants = (value: string) => {
+    const name = String(value || '').trim();
+    if (!name) return [];
+    const withoutSuffix = name.replace(/\s*(?:크루즈|cruise)$/i, '').trim();
+    return [...new Set([name, withoutSuffix, `${withoutSuffix} 크루즈`].filter(Boolean))];
+};
+
 const isShtVehicleType = (vehicleType?: string) =>
     !!vehicleType && vehicleType.includes('스테이하롱 셔틀 리무진');
 
@@ -613,14 +620,14 @@ function CruiseVehicleContent() {
     const applyCruiseFilterToRentcarQuery = useCallback((query: any) => {
         const name = (cruiseName || '').trim();
         if (!name) return query.eq('cruise', '공통');
-        return query.in('cruise', ['공통', name]);
+        return query.in('cruise', ['공통', ...getCruiseNameVariants(name)]);
     }, [cruiseName]);
 
     const applyVehicleServiceFilter = useCallback((query: any) => {
         if (vehicleServiceType === 'cruise_shuttle') {
             return query
                 .ilike('vehicle_type', '%셔틀%')
-                .eq('cruise', cruiseName);
+                .in('cruise', getCruiseNameVariants(cruiseName));
         }
         if (vehicleServiceType === 'private_rental') {
             return query.eq('rental_type', '단독대여');
@@ -1107,7 +1114,7 @@ function CruiseVehicleContent() {
             const { data, error } = await supabase
                 .from('rentcar_price')
                 .select('rent_code')
-                .eq('cruise', cruiseName)
+                .in('cruise', getCruiseNameVariants(cruiseName))
                 .ilike('vehicle_type', '%셔틀%')
                 .limit(1);
             if (cancelled) return;
