@@ -257,7 +257,7 @@ export default function MobileQuotesPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 pb-20">
       {/* 상단 헤더 */}
-      <header className="bg-white border-b shadow-sm px-2 py-2">
+      <header data-sht-app-header className="bg-white border-b shadow-sm px-2 py-2">
         <div className="flex items-center gap-2">
           <button onClick={() => router.back()} className="p-1.5 rounded-lg hover:bg-gray-100">
             <ArrowLeft className="w-5 h-5 text-gray-600" />

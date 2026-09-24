@@ -9,7 +9,7 @@ export default function Header() {
   const router = useRouter();
 
   return (
-    <header className="bg-blue-300 shadow-sm border-b">
+    <header data-sht-app-header className="bg-blue-300 shadow-sm border-b">
       <div className="w-full px-4">
         <div className="flex items-center h-16">
           {/* 로고만 좌측 정렬 */}
@@ -24,7 +24,7 @@ export default function Header() {
                 className="h-8 w-auto object-contain"
                 unoptimized
               />
-              <span className="text-xl font-bold text-black-600">
+              <span data-sht-header-text className="text-xl font-bold text-black-600">
                 스테이하롱 관리자
               </span>
             </Link>

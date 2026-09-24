@@ -190,13 +190,13 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-gray-50 pb-10">
       {/* 헤더 */}
-      <div className="bg-white border-b shadow-sm px-2 py-2.5">
+      <div data-sht-app-header className="bg-white border-b shadow-sm px-2 py-2.5">
         <div className="flex items-center gap-2">
-          <Link href="/settings" className="p-1.5 rounded-lg hover:bg-gray-100">
+          <Link href="/settings" data-sht-header-control className="p-1.5 rounded-lg hover:bg-gray-100">
             <Settings className="w-5 h-5 text-gray-600" />
           </Link>
           <h1 className="text-base font-bold text-gray-800 flex-1 text-center">스테이하롱 매니저</h1>
-          <button type="button" onClick={handleLogout} className="p-1.5 rounded-lg hover:bg-gray-100">
+          <button type="button" onClick={handleLogout} data-sht-header-control className="p-1.5 rounded-lg hover:bg-gray-100">
             <LogOut className="w-5 h-5 text-gray-600" />
           </button>
         </div>

@@ -426,7 +426,7 @@ export default function MobileCruiseCarDatesPage() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <header className="sticky top-0 z-10 flex items-center gap-2 border-b bg-white p-3">
+      <header data-sht-app-header className="sticky top-0 z-10 flex items-center gap-2 border-b bg-white p-3">
         <Link href="/" className="rounded-lg p-1.5 hover:bg-gray-100" aria-label="뒤로">
           <ArrowLeft className="h-5 w-5 text-gray-600" />
         </Link>

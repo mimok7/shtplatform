@@ -21,7 +21,7 @@ export default function MobileReservationLayout({
 }) {
     return (
         <div className="min-h-screen bg-slate-50 pb-20 overflow-x-hidden text-xs">
-            <header className="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-slate-200">
+            <header data-sht-app-header className="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-slate-200">
                 <div className="mx-auto flex items-center justify-between px-3 py-2.5">
                     <Link href="/reservation-edit" className="text-slate-600 active:text-slate-900 p-1.5 rounded-lg hover:bg-gray-100">
                         <ArrowLeft className="w-5 h-5" />

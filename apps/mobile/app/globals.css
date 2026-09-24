@@ -70,9 +70,8 @@ html, body {
 }
 
 html[data-sht-app='mobile'][data-sht-theme] .mobile-ui :where(
-  .sht-mobile-logo-header,
   [class*='bg-white'][class*='rounded'],
-  [class*='bg-white'][class*='border-b']
+  [class*='bg-white'][class*='border-b']:not([data-sht-app-header])
 ) {
   background-color: var(--sht-surface) !important;
   border-color: var(--sht-border) !important;

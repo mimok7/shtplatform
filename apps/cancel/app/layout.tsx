@@ -24,6 +24,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <ShtThemeProvider appId="cancel">
                     <ServiceWorkerRegister />
                     <header
+                        data-sht-app-header
                         className="w-full relative bg-[#0052cc] bg-cover bg-center"
                         style={{ backgroundImage: "url('/images/index_15.gif')" }}
                     >

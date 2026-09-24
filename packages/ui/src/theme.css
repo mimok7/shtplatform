@@ -41,6 +41,41 @@ html:is([data-sht-theme], [data-sht-style-heading='custom']) :where(h1, h2, h3, 
   color: var(--sht-heading);
 }
 
+html:is([data-sht-theme], [data-sht-style-primary='custom']) [data-sht-app-header] {
+  background-image: none !important;
+  background-color: var(--sht-primary) !important;
+  border-color: var(--sht-border) !important;
+  color: var(--sht-primary-text) !important;
+}
+
+html:is([data-sht-theme], [data-sht-style-primary='custom']) [data-sht-app-header] :is(h1, h2, h3, p, [data-sht-header-text], [data-sht-header-control], [data-sht-header-control] svg) {
+  color: var(--sht-primary-text) !important;
+}
+
+html:is([data-sht-theme], [data-sht-style-primary='custom']) [data-sht-app-header] :is(a, button):is(:not([class*='bg-']), [class*='hover:bg-gray-'], [class*='hover:bg-slate-'], [data-sht-header-control]),
+html:is([data-sht-theme], [data-sht-style-primary='custom']) [data-sht-app-header] :is(a, button):is(:not([class*='bg-']), [class*='hover:bg-gray-'], [class*='hover:bg-slate-'], [data-sht-header-control]) :where(span, svg) {
+  color: var(--sht-primary-text) !important;
+}
+
+html:is([data-sht-theme], [data-sht-style-primary='custom']) [data-sht-app-header] [data-sht-header-control]:hover {
+  background-color: color-mix(in srgb, var(--sht-primary-text) 16%, transparent) !important;
+}
+
+html:is([data-sht-theme], [data-sht-style-primary='custom']) [data-sht-app-header] :is(a, button):is([class*='hover:bg-gray-'], [class*='hover:bg-slate-']):hover {
+  background-color: color-mix(in srgb, var(--sht-primary-text) 16%, transparent) !important;
+}
+
+html:is([data-sht-theme], [data-sht-style-primary='custom']) [data-sht-app-header] img {
+  background-color: var(--sht-surface);
+  border-radius: 4px;
+  padding: 2px 4px;
+}
+
+html:is([data-sht-theme], [data-sht-style-primary='custom']) [data-sht-app-header][data-sht-header-panel] {
+  border-radius: 8px;
+  padding: 16px;
+}
+
 html[data-sht-style-font-family='custom'] body {
   font-family: var(--sht-font-family);
 }

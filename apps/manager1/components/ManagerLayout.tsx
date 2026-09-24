@@ -266,9 +266,10 @@ function ManagerLayoutContent({ children, title, activeTab }: ManagerLayoutProps
           />
         </div>
         <div className="flex-1 flex flex-col min-w-0">
-          <div className="h-16 flex items-center px-4 border-b border-gray-200 bg-white/90 backdrop-blur supports-[backdrop-filter]:backdrop-blur-sm sticky top-0 z-30 print:hidden">
+          <div data-sht-app-header className="h-16 flex items-center px-4 border-b border-gray-200 bg-white/90 backdrop-blur supports-[backdrop-filter]:backdrop-blur-sm sticky top-0 z-30 print:hidden">
             <button
               onClick={() => setIsSidebarOpen(prev => !prev)}
+              data-sht-header-control
               className="mr-3 p-2 rounded-md hover:bg-gray-100 text-gray-600"
               aria-label="사이드바 토글"
             >
@@ -279,6 +280,7 @@ function ManagerLayoutContent({ children, title, activeTab }: ManagerLayoutProps
 
             <button
               onClick={() => setSidebarMode(prev => (prev === 'auto' ? 'manual' : 'auto'))}
+              data-sht-header-control
               className="mr-3 px-2 py-1 text-xs border rounded text-gray-600"
               aria-label="사이드바 모드 전환"
             >

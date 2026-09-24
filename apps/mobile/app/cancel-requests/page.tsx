@@ -730,7 +730,7 @@ export default function MobileCancelRequestsPage() {
 
     return (
         <div className="min-h-screen bg-gray-50 pb-20">
-            <header className="sticky top-0 z-10 flex items-center gap-2 border-b bg-white p-3">
+            <header data-sht-app-header className="sticky top-0 z-10 flex items-center gap-2 border-b bg-white p-3">
                 <button onClick={() => window.history.back()} className="p-1.5 rounded-lg hover:bg-gray-100">
                     <ArrowLeft className="w-5 h-5 text-gray-600" />
                 </button>

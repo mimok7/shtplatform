@@ -31,7 +31,7 @@ function MobileQuoteLayout({ title, children }: { title: string; children: React
 
     return (
         <div className="min-h-screen bg-slate-50 pb-20 overflow-x-hidden text-xs">
-            <header className="bg-white border-b shadow-sm px-2 py-2">
+            <header data-sht-app-header className="bg-white border-b shadow-sm px-2 py-2">
                 <div className="flex items-center gap-2">
                     <button type="button" onClick={() => router.back()} className="p-1.5 rounded-lg hover:bg-gray-100">
                         <ArrowLeft className="w-5 h-5 text-gray-600" />

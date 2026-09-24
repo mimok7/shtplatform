@@ -31,10 +31,11 @@ export default function PartnerLayout({ children, title, subtitle, requiredRoles
 
                 <div className="flex-1 min-w-0 flex flex-col min-h-screen">
                     {/* 모바일 상단 헤더 */}
-                    <header className="lg:hidden sticky top-0 z-20 bg-white/90 backdrop-blur-xl border-b border-gray-200">
+                    <header data-sht-app-header className="lg:hidden sticky top-0 z-20 bg-white/90 backdrop-blur-xl border-b border-gray-200">
                         <div className="flex items-center justify-between px-4 py-3">
                             <button
                                 onClick={() => setSidebarOpen(true)}
+                                data-sht-header-control
                                 className="p-2 -ml-2 rounded-lg hover:bg-gray-100 text-gray-700"
                                 aria-label="메뉴 열기"
                             >
@@ -44,7 +45,7 @@ export default function PartnerLayout({ children, title, subtitle, requiredRoles
                                 <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
                                     <Sparkles className="w-4 h-4 text-white" />
                                 </div>
-                                <span className="text-sm font-bold text-gray-900">제휴 시스템</span>
+                                <span data-sht-header-text className="text-sm font-bold text-gray-900">제휴 시스템</span>
                             </div>
                             <div className="w-9" />
                         </div>
@@ -53,7 +54,7 @@ export default function PartnerLayout({ children, title, subtitle, requiredRoles
                     {/* 본문 */}
                     <main className="flex-1 px-4 sm:px-6 lg:px-10 py-5 lg:py-8 pb-24 lg:pb-8 max-w-7xl w-full mx-auto">
                         {(title || headerActions) && (
-                            <div className="mb-5 lg:mb-7 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+                            <div data-sht-app-header data-sht-header-panel className="mb-5 lg:mb-7 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
                                 <div>
                                     {title && (
                                         <h1 className="text-xl lg:text-2xl font-bold text-gray-900 tracking-tight">

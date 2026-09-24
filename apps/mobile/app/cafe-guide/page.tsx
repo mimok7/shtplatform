@@ -814,7 +814,7 @@ ${totalAmount > 0 ? `${formatAmount(totalAmount)}동` : '-'}
 
     return (
         <div className="min-h-screen bg-gray-50 pb-20">
-            <div className="bg-white border-b shadow-sm px-2 py-2">
+            <div data-sht-app-header className="bg-white border-b shadow-sm px-2 py-2">
                 <div className="flex items-center gap-2">
                     <button onClick={() => router.back()} className="p-1.5 rounded-lg hover:bg-gray-100">
                         <ArrowLeft className="w-5 h-5 text-gray-600" />

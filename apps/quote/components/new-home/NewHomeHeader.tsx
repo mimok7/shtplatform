@@ -4,6 +4,7 @@ import Link from 'next/link';
 export default function NewHomeHeader() {
     return (
         <header
+            data-sht-app-header
             className="w-full relative bg-[#0052cc] bg-cover bg-center"
             style={{ backgroundImage: "url('/images/index_15.gif')" }}
         >
