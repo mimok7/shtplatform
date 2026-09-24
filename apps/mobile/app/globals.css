@@ -16,6 +16,13 @@
   --ui-card-shadow-soft: 0 4px 10px rgba(15, 23, 42, 0.04);
 }
 
+html[data-sht-app='mobile'][data-sht-theme] .mobile-ui {
+  --ui-label: var(--sht-primary);
+  --ui-app-bg: var(--sht-canvas);
+  --ui-subtle-bg: var(--sht-surface-muted);
+  --ui-card-border: var(--sht-border);
+}
+
 html, body {
   margin: 0;
   padding: 0;
@@ -60,4 +67,31 @@ html, body {
 
 .mobile-ui :where(.bg-slate-100, .bg-gray-100) {
   background-color: var(--ui-subtle-bg) !important;
+}
+
+html[data-sht-app='mobile'][data-sht-theme] .mobile-ui :where(
+  .sht-mobile-logo-header,
+  [class*='bg-white'][class*='rounded'],
+  [class*='bg-white'][class*='border-b']
+) {
+  background-color: var(--sht-surface) !important;
+  border-color: var(--sht-border) !important;
+}
+
+html[data-sht-app='mobile'][data-sht-theme] .mobile-ui :where(
+  div[class*='bg-blue-50'], div[class*='bg-blue-100'],
+  div[class*='bg-indigo-50'], div[class*='bg-indigo-100'],
+  div[class*='bg-cyan-50'], div[class*='bg-cyan-100'],
+  div[class*='bg-teal-50'], div[class*='bg-teal-100']
+) {
+  background-color: var(--sht-primary-soft) !important;
+}
+
+html[data-sht-app='mobile'][data-sht-theme] .mobile-ui :where(
+  div[class*='bg-blue-100'] > svg,
+  div[class*='bg-indigo-100'] > svg,
+  div[class*='bg-cyan-100'] > svg,
+  div[class*='bg-teal-100'] > svg
+) {
+  color: var(--sht-primary) !important;
 }

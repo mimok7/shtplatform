@@ -23,6 +23,7 @@ function NavItem({ icon, label, path, isActive, onClick }: NavItemProps) {
         <button
             onClick={onClick}
             data-sht-menu="sub"
+            aria-current={isActive ? 'page' : undefined}
             className={`w-full flex items-center px-2.5 py-2 text-xs leading-tight rounded-md transition-colors ${isActive
                 ? 'bg-blue-100 text-blue-700 font-semibold'
                 : 'text-gray-600 hover:bg-gray-50 hover:text-gray-700'

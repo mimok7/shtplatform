@@ -127,6 +127,33 @@ html:is([data-sht-theme], [data-sht-style-primary='custom']) :where(
   color: var(--sht-primary) !important;
 }
 
+/* Filled controls keep a readable foreground even when they also have a blue text class. */
+html:is([data-sht-theme], [data-sht-style-primary='custom']) :is(
+  button[class*='bg-blue-'],
+  button[class*='bg-indigo-'],
+  button[class*='bg-cyan-'],
+  button[class*='bg-teal-'],
+  a[class*='bg-blue-'],
+  a[class*='bg-indigo-'],
+  a[class*='bg-cyan-'],
+  a[class*='bg-teal-'],
+  input[type='submit'],
+  .btn-selected
+),
+html:is([data-sht-theme], [data-sht-style-primary='custom']) :is(
+  button[class*='bg-blue-'],
+  button[class*='bg-indigo-'],
+  button[class*='bg-cyan-'],
+  button[class*='bg-teal-'],
+  a[class*='bg-blue-'],
+  a[class*='bg-indigo-'],
+  a[class*='bg-cyan-'],
+  a[class*='bg-teal-'],
+  .btn-selected
+) * {
+  color: var(--sht-primary-text) !important;
+}
+
 html[data-sht-theme] :where(input, textarea, select) {
   border-color: var(--sht-border);
   background-color: var(--sht-surface);
