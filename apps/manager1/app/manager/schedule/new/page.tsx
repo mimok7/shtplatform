@@ -2712,8 +2712,8 @@ export default function ManagerSchedulePage() {
   };
 
   const renderDbScheduleCard = (schedule: any, idx: number) => (
-    <div key={`${schedule.re_id}-${schedule.service_table}-${schedule.segment_type || schedule.rentcar_phase || 'default'}-${idx}`} className="bg-gray-50 border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-all p-3 flex flex-col h-full">
-      <div className="flex items-center gap-2 mb-2 pb-1 border-b border-gray-100">
+    <div key={`${schedule.re_id}-${schedule.service_table}-${schedule.segment_type || schedule.rentcar_phase || 'default'}-${idx}`} data-sht-service-card={getScheduleServiceType(schedule)} className="bg-gray-50 border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-all p-3 flex flex-col h-full">
+      <div data-sht-service-card-header className="flex items-center gap-2 mb-2 pb-1 border-b border-gray-100">
         <div className="flex items-center justify-center w-9 h-9 rounded-full bg-gray-50 border border-gray-200">
           {getDisplayTypeIcon(schedule)}
         </div>
@@ -3616,9 +3616,10 @@ export default function ManagerSchedulePage() {
       return (
         <div
           key={`${reservation.orderId}-${index}`}
+          data-sht-service-card="cruise"
           className={`bg-gray-50 border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-all p-3 flex flex-col h-full ${isPast ? 'opacity-60' : ''}`}
         >
-          <div className="flex items-center gap-2 mb-2 pb-1 border-b border-gray-100">
+          <div data-sht-service-card-header className="flex items-center gap-2 mb-2 pb-1 border-b border-gray-100">
             <div className="flex items-center justify-center w-9 h-9 rounded-full bg-blue-50 border border-blue-200">
               <Ship className="w-5 h-5 text-blue-600" />
             </div>
@@ -3732,9 +3733,10 @@ export default function ManagerSchedulePage() {
       return (
         <div
           key={`${reservation.orderId}-${index}`}
+          data-sht-service-card="sht"
           className={`bg-gray-50 border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-all p-3 flex flex-col h-full ${isPast ? 'opacity-60' : ''}`}
         >
-          <div className="flex items-center gap-2 mb-2 pb-1 border-b border-gray-100">
+          <div data-sht-service-card-header className="flex items-center gap-2 mb-2 pb-1 border-b border-gray-100">
             <div className="flex items-center justify-center w-9 h-9 rounded-full bg-purple-50 border border-purple-200">
               <Car className="w-5 h-5 text-purple-600" />
             </div>
@@ -3821,9 +3823,10 @@ export default function ManagerSchedulePage() {
       return (
         <div
           key={`${reservation.orderId}-${index}`}
+          data-sht-service-card="airport"
           className={`bg-gray-50 border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-all p-3 flex flex-col h-full ${isPast ? 'opacity-60' : ''}`}
         >
-          <div className="flex items-center gap-2 mb-2 pb-1 border-b border-gray-100">
+          <div data-sht-service-card-header className="flex items-center gap-2 mb-2 pb-1 border-b border-gray-100">
             <div className="flex items-center justify-center w-9 h-9 rounded-full bg-green-50 border border-green-200">
               <Plane className="w-5 h-5 text-green-600" />
             </div>
@@ -3896,9 +3899,10 @@ export default function ManagerSchedulePage() {
       return (
         <div
           key={`${reservation.orderId}-${index}`}
+          data-sht-service-card="hotel"
           className={`bg-gray-50 border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-all p-3 flex flex-col h-full ${isPast ? 'opacity-60' : ''}`}
         >
-          <div className="flex items-center gap-2 mb-2 pb-1 border-b border-gray-100">
+          <div data-sht-service-card-header className="flex items-center gap-2 mb-2 pb-1 border-b border-gray-100">
             <div className="flex items-center justify-center w-9 h-9 rounded-full bg-orange-50 border border-orange-200">
               <Building className="w-5 h-5 text-orange-600" />
             </div>
@@ -3972,9 +3976,10 @@ export default function ManagerSchedulePage() {
       return (
         <div
           key={`${reservation.orderId}-${index}`}
+          data-sht-service-card="tour"
           className={`bg-gray-50 border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-all p-3 flex flex-col h-full ${isPast ? 'opacity-60' : ''}`}
         >
-          <div className="flex items-center gap-2 mb-2 pb-1 border-b border-gray-100">
+          <div data-sht-service-card-header className="flex items-center gap-2 mb-2 pb-1 border-b border-gray-100">
             <div className="flex items-center justify-center w-9 h-9 rounded-full bg-pink-50 border border-pink-200">
               <MapPin className="w-5 h-5 text-pink-600" />
             </div>
@@ -4043,9 +4048,10 @@ export default function ManagerSchedulePage() {
       return (
         <div
           key={`${reservation.orderId}-${index}`}
+          data-sht-service-card="rentcar"
           className={`bg-gray-50 border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-all p-3 flex flex-col h-full ${isPast ? 'opacity-60' : ''}`}
         >
-          <div className="flex items-center gap-2 mb-2 pb-1 border-b border-gray-100">
+          <div data-sht-service-card-header className="flex items-center gap-2 mb-2 pb-1 border-b border-gray-100">
             <div className="flex items-center justify-center w-9 h-9 rounded-full bg-indigo-50 border border-indigo-200">
               <Car className="w-5 h-5 text-indigo-600" />
             </div>
@@ -4124,9 +4130,10 @@ export default function ManagerSchedulePage() {
       return (
         <div
           key={`${reservation.orderId}-${index}`}
+          data-sht-service-card="vehicle"
           className={`bg-gray-50 border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-all p-3 flex flex-col h-full ${isPast ? 'opacity-60' : ''}`}
         >
-          <div className="flex items-center gap-2 mb-2 pb-1 border-b border-gray-100">
+          <div data-sht-service-card-header className="flex items-center gap-2 mb-2 pb-1 border-b border-gray-100">
             <div className="flex items-center justify-center w-9 h-9 rounded-full bg-blue-50 border border-blue-200">
               <Car className="w-5 h-5 text-blue-600" />
             </div>
